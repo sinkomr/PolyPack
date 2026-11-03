@@ -922,8 +922,9 @@ let startLane: Lane | null = null;
 
 /**
  * Load all for a space problem: the worker's start (a seed layout, else a random start, spread out so
- * that the first Compact has room to remove), which is the free floor and is never sent, as for polygons. When none can be made the
- * problem stays bare, and its first run opens fresh: its Compact gives the board.
+ * that the first Compact has room to remove), which is the free floor and is never sent, as for
+ * polygons. When none can be made the problem stays bare, and its first run opens fresh: its Compact
+ * gives the board.
  */
 function loadAllSpace(p: ProblemState & SpaceKey): Promise<boolean> {
   if (p.phase !== "bare") return Promise.resolve(true);
@@ -945,7 +946,7 @@ function loadAllSpace(p: ProblemState & SpaceKey): Promise<boolean> {
       reveal(state, "score");
       if (p.key === state.focus)
         say(
-          `${p.P} pieces placed loosely. The ${sideWord(p)} is ${show6(a.score)}, ${fmtPct(a.score / rulesOf(p).bound(p)! - 1)} above the bound. ` +
+          `${p.P} pieces placed${a.loose ? " loosely" : ""}. The ${sideWord(p)} is ${show6(a.score)}, ${fmtPct(a.score / rulesOf(p).bound(p)! - 1)} above the bound. ` +
             `Your first record must beat this ${sideWord(p)}. This board is not sent. Press Evolve to compact it.`,
         );
       persist();
@@ -1327,7 +1328,8 @@ async function runJob(lv: LaneView, job: Job): Promise<boolean> {
     }
     const done = Math.max(0, t.state.evaluations - run.evaluations);
     const counted = countedEvals(done, job.compact && !isPolygon(p), COMPACT_EVALS);
-    observeSpeed(run, p, done, ms);
+    // a space Compact is mostly its finish, which says little of the run's speed afterwards
+    if (!(job.compact && !isPolygon(p))) observeSpeed(run, p, done, ms);
     if (!job.click) autoMeter.addRan(now(), counted);
     track(run, t.state);
     if (t.state.ended) lv.run = null;
@@ -1432,15 +1434,24 @@ function settle(
     event(`${ended}${smaller ? ` ${smaller}` : ""} The next click starts a new run${nextStageText(p)}.`);
   }
   // after Stop, the click that was already running does not write over "Stopped"
-  if (job.click && p.key === state.focus && !stopped) say(stepMessage(p, change, run, job, counted));
+  if (job.click && p.key === state.focus && !stopped) say(stepMessage(p, change, run, job, done, counted));
   persist();
   scheduleRender();
   void submitTick();
   void dealTick();
 }
 
-function stepMessage(p: ProblemState, c: StepChange, run: OpenRunView, job: Job, done: number): string {
-  const what = `${job.compact ? "Compact" : `Click ${fmtInt(state.stats.clicks)}`} ran ${evals(done)} of ${methodLabel(run.method)}.`;
+function stepMessage(
+  p: ProblemState,
+  c: StepChange,
+  run: OpenRunView,
+  job: Job,
+  done: number,
+  counted: number,
+): string {
+  // a space Compact ran to its first finished packing, and counts as less
+  const as = counted < done ? ` It counts as ${evals(counted)}.` : "";
+  const what = `${job.compact ? "Compact" : `Click ${fmtInt(state.stats.clicks)}`} ran ${evals(done)} of ${methodLabel(run.method)}.${as}`;
   if (!c.improved || c.before === null || c.after === null) {
     const note = methodGame(run.method).stepNote?.(runView(run, p));
     return `${what} No improvement on ${show6(p.best ?? 0)}.${note ? ` ${note}` : ""}`;

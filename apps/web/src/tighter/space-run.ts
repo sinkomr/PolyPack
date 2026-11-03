@@ -188,7 +188,6 @@ export class SpaceRun {
   }
 }
 
-/** A start for a space problem: the kernel's first seed layout, else a random start, finished and checked strict. */
 /**
  * How much more room the loose start has than the smallest size at which every piece is clear: the
  * board is grown by this factor once more, so that Compact has open space to remove.
@@ -250,7 +249,8 @@ export function spaceStart(request: SpaceStartRequest): SpaceStartAnswer {
         const f = s ? kernel.finish(s) : null;
         if (!f) continue;
         const c = checkSpaceConfig(p.space, p.id, f.config, RULE);
-        if (c.valid && c.score !== null) return { ok: true, config: f.config as SpaceConfig, score: c.score, loose: false };
+        if (c.valid && c.score !== null)
+          return { ok: true, config: f.config as SpaceConfig, score: c.score, loose: false };
       } catch {
         // a kernel that cannot make this start: the next try
       }

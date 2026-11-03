@@ -773,7 +773,7 @@ export function advanceHow(warm: readonly Warmup[] = warmups()): How {
  * What a slice card costs, as a share of the cycle's reset threshold T [SPEC]: the ladder of each
  * dimension is priced against the cycle it opens in, so that it is bought in that cycle's first
  * hours (2D on 3D) or its middle (3D in 3D), and the late cards near its end. One table, to tune.
- * Curved costs 1,500,000,000 in the first cycle, 1.5 times the Standing card (SLICE_FIRST_CYCLE).
+ * Curved costs 300,000,000 in the first cycle, less than the Standing card (1,000,000,000).
  */
 export const SLICE_SHARE: Readonly<Record<CardSliceId, number>> = {
   curved: 0.3,
@@ -795,17 +795,12 @@ export const SLICE_SHARE: Readonly<Record<CardSliceId, number>> = {
   "poly-duals": 0.4,
   balls: 0.5,
 };
-/** Curved's price in the first cycle, where a share of T (1,000,000,000) would be too little. */
-export const SLICE_FIRST_CYCLE: Partial<Record<CardSliceId, number>> = { curved: 1_500_000_000 };
-
 /** The record points a reset needs in the cycle after `resets` resets (standing.ts resetThreshold). */
 const thresholdAfter = (resets: number) => RESET_MIN * Math.pow(RESET_GROWTH, resets);
 
 /** The price of a slice card in a cycle, before Quick study. */
 export function slicePrice(id: CardSliceId, resets: number): number {
-  return SLICE_FIRST_CYCLE[id] !== undefined && resets === 0
-    ? SLICE_FIRST_CYCLE[id]!
-    : Math.round(SLICE_SHARE[id] * thresholdAfter(resets));
+  return Math.round(SLICE_SHARE[id] * thresholdAfter(resets));
 }
 
 /** The reset count a dimension is first open in (its cards are priced for that cycle in the tree's layout). */
@@ -818,16 +813,10 @@ export function exists(o: Owned, id: UpgradeId): boolean {
   return !isCardSlice(id) || (o.dimensions ?? ["2-in-2"]).includes(sliceById(id).dimension);
 }
 
-const SLICE_FORMULA = (id: CardSliceId): string[] =>
-  id === "curved"
-    ? [
-        `${sym("p")} = ${SLICE_FIRST_CYCLE.curved!.toLocaleString("en-US")} in the first cycle, and ${SLICE_SHARE[id]} × ${sym("T")} in later ones`,
-        `${sym("T")} = ${RESET_MIN.toLocaleString("en-US")} × ${RESET_GROWTH}<sup>${sym("r")}</sup>`,
-      ]
-    : [
-        `${sym("p")} = ${SLICE_SHARE[id]} × ${sym("T")}`,
-        `${sym("T")} = ${RESET_MIN.toLocaleString("en-US")} × ${RESET_GROWTH}<sup>${sym("r")}</sup>`,
-      ];
+const SLICE_FORMULA = (id: CardSliceId): string[] => [
+  `${sym("p")} = ${SLICE_SHARE[id]} × ${sym("T")}`,
+  `${sym("T")} = ${RESET_MIN.toLocaleString("en-US")} × ${RESET_GROWTH}<sup>${sym("r")}</sup>`,
+];
 const SLICE_VARS: readonly Var[] = [
   [sym("p"), "the price in record points, before Quick study"],
   [sym("T"), "the record points the cycle needs for a reset"],

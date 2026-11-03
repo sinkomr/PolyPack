@@ -585,9 +585,10 @@ describe("Tighter dimension cards", () => {
       expect(card(w, id)).toMatchObject({ state: "buyable", needs: [] });
   });
 
-  it("are priced from the cycle's threshold, Curved at 1,500,000,000 in the first cycle", () => {
+  it("are priced from the cycle's threshold, Curved at 300,000,000 in the first cycle, under the Standing card", () => {
     const o = (resets: number) => rest([], resets, ["2-in-2", "2-on-3", "3-in-3"]);
-    expect(costOf(o(0), "curved")).toBe(1_500_000_000);
+    expect(costOf(o(0), "curved")).toBe(300_000_000);
+    expect(costOf(o(0), "curved")).toBeLessThan(resetThreshold(0));
     expect(costOf(o(1), "curved")).toBe(0.3 * resetThreshold(1));
     expect(costOf(o(2), "curved")).toBe(0.3 * resetThreshold(2));
     const T1 = resetThreshold(1);

@@ -35,43 +35,58 @@ describe("Tighter loose starts", () => {
     expect(LOOSE_ROOM).toBeGreaterThan(1);
   });
 
-  it.each(PROBLEMS)("%s: %s is served loose, valid and well above the finished start", (family, id) => {
-    const a = spaceStart({ family, id, seed: 1 });
-    expect(a.ok).toBe(true);
-    if (!a.ok) return;
-    expect(a.loose).toBe(true);
-    const c = checkSpaceConfig(parseSearchProblem(id)!.space, id, a.config, { noRecord: true });
-    expect(c.valid).toBe(true);
-    expect(c.score).toBe(a.score);
-    const today = finishedStartScore(id, 1);
-    if (today !== null) expect(a.score).toBeGreaterThanOrEqual(1.2 * today);
-  }, 30_000);
+  it.each(PROBLEMS)(
+    "%s: %s is served loose, valid and well above the finished start",
+    (family, id) => {
+      const a = spaceStart({ family, id, seed: 1 });
+      expect(a.ok).toBe(true);
+      if (!a.ok) return;
+      expect(a.loose).toBe(true);
+      const c = checkSpaceConfig(parseSearchProblem(id)!.space, id, a.config, { noRecord: true });
+      expect(c.valid).toBe(true);
+      expect(c.score).toBe(a.score);
+      const today = finishedStartScore(id, 1);
+      if (today !== null) expect(a.score).toBeGreaterThanOrEqual(1.2 * today);
+    },
+    30_000,
+  );
 
-  it.each(PROBLEMS)("%s: %s mc_compress hands back a finished packing below the loose start", (family, id) => {
-    const a = spaceStart({ family, id, seed: 1 });
-    if (!a.ok) throw new Error(a.message);
-    const p = parseSearchProblem(id)!;
-    const k = spaceKernel(p)!;
-    const unit = unitsFor(UNITS_AT_20[unitsRow({ family, id, P: (p as { P: number }).P } as never)], (p as { P: number }).P);
-    let offers = 0;
-    let stop = false;
-    let best = Infinity;
-    runMethod({ ...k, validate: (c: never) => checkSpaceConfig(p.space, id, c, { noRecord: true }) as never }, "mc_compress", {
-      seed: 7,
-      start: a.config,
-      budget: { evals: 20_000 * unit, time_s: 60 },
-      onOffer: () => {
-        offers++;
-        stop = true;
-      },
-      onImprove: (f: { score: number }) => {
-        best = Math.min(best, f.score);
-      },
-      shouldStop: (_u: number, fin: boolean) => stop && !fin,
-    } as never);
-    expect(offers).toBeGreaterThanOrEqual(1);
-    expect(best).toBeLessThan(a.score);
-  }, 60_000);
+  it.each(PROBLEMS)(
+    "%s: %s mc_compress hands back a finished packing below the loose start",
+    (family, id) => {
+      const a = spaceStart({ family, id, seed: 1 });
+      if (!a.ok) throw new Error(a.message);
+      const p = parseSearchProblem(id)!;
+      const k = spaceKernel(p)!;
+      const unit = unitsFor(
+        UNITS_AT_20[unitsRow({ family, id, P: (p as { P: number }).P } as never)],
+        (p as { P: number }).P,
+      );
+      let offers = 0;
+      let stop = false;
+      let best = Infinity;
+      runMethod(
+        { ...k, validate: (c: never) => checkSpaceConfig(p.space, id, c, { noRecord: true }) as never },
+        "mc_compress",
+        {
+          seed: 7,
+          start: a.config,
+          budget: { evals: 20_000 * unit, time_s: 60 },
+          onOffer: () => {
+            offers++;
+            stop = true;
+          },
+          onImprove: (f: { score: number }) => {
+            best = Math.min(best, f.score);
+          },
+          shouldStop: (_u: number, fin: boolean) => stop && !fin,
+        } as never,
+      );
+      expect(offers).toBeGreaterThanOrEqual(1);
+      expect(best).toBeLessThan(a.score);
+    },
+    60_000,
+  );
 });
 
 describe("Tighter Compact's count", () => {

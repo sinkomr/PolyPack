@@ -55,5 +55,11 @@ export interface SpaceStartRequest {
   seed: number;
 }
 export type SpaceStartAnswer =
-  | { ok: true; config: SpaceConfig; score: number; /** Spread out, not finished: the first Compact has room to remove. */ loose?: boolean }
+  | {
+      ok: true;
+      config: SpaceConfig;
+      score: number;
+      /** Spread out, not finished: the first Compact has room to remove. */
+      loose?: boolean;
+    }
   | { ok: false; message: string };
