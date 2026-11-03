@@ -452,6 +452,7 @@ export function resetCycle(s: GameState, now: number): number {
   s.levels = tree.levels;
   // rent accrued and not paid is lost; with Rent back (Head start), the records held start earning now
   s.economy.checks = {};
+  delete s.economy.paydayAt;
   if (s.owned.includes("rent"))
     for (const p of [...s.queue, ...s.past]) if (p.ourId !== null) s.economy.checks[p.key] = now;
   s.rp = Math.min(s.rp, waiting);

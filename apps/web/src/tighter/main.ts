@@ -96,8 +96,6 @@ import {
 import {
   COMBO_BONUS,
   COMBO_RECORDS,
-  RENT_PAYDAY_MS,
-  RENT_RETRY_MS,
   SHAPE_BONUS,
   SHAPE_MILESTONES,
   TIER_BONUS,
@@ -107,6 +105,8 @@ import {
   rentWaiting,
   syncEconomy,
   tidyRent,
+  nextPaydayAfter,
+  paydayDueAt,
 } from "./economy";
 import { Lane, NOT_ISOLATED, isSpaceRunState } from "./lanes";
 import { methodGame, methodLabel, runSetup, warmIn, warmupOf } from "./methods";
@@ -2919,18 +2919,17 @@ async function refreshHeld(): Promise<void> {
 
 // ---------- rent: a payday once a day ----------
 
-/** When the next payday runs (0: at once, which is how the page opens). */
-let paydayAt = 0;
 let paydayRunning = false;
 
 /**
- * With Rent: at page load and every 24 hours, all records held are looked up in batches (payday.ts)
+ * With Rent: when the saved payday time (economy.paydayAt) has come, all records held are looked up in batches (payday.ts)
  * and the ones still ours pay the rent since their last payday. Records the server did not answer
  * are tried again 10 minutes later.
+ * A save without a payday time runs one at its next load.
  */
 async function paydayTick(): Promise<void> {
   const o = owned();
-  if (!ownsGame || paydayRunning || !o.has("rent") || now() < paydayAt) return;
+  if (!ownsGame || paydayRunning || !o.has("rent") || now() < paydayDueAt(state.economy, now())) return;
   paydayRunning = true;
   try {
     const r = await runPayday({
@@ -2947,7 +2946,8 @@ async function paydayTick(): Promise<void> {
         render();
       },
     });
-    paydayAt = now() + (r.unanswered > 0 ? RENT_RETRY_MS : RENT_PAYDAY_MS);
+    state.economy.paydayAt = nextPaydayAfter(now(), r.unanswered);
+    persist();
     if (r.paying > 0)
       event(
         `Payday. ${fmtInt(r.paying)} ${r.paying === 1 ? "record paid" : "records paid"} ${fmtRP(r.paid)} RP in rent.`,
@@ -4372,7 +4372,8 @@ function renderRecords(o: Owned): void {
   if (rent) {
     rows.push(["Rent per hour", `${fmtRP(rentRate(state, o))} RP`]);
     rows.push(["Rent waiting for payday", `about ${fmtRP(rentWaiting(state, o, now()))} RP`]);
-    rows.push(["Next payday", paydayAt <= now() ? "now" : `in ${fmtSpan(paydayAt - now())}`]);
+    const due = paydayDueAt(state.economy, now());
+    rows.push(["Next payday", due <= now() ? "now" : `in ${fmtSpan(due - now())}`]);
     rows.push(["Rent paid", `${fmtRP(state.economy.rentPaid)} RP`]);
   }
   const c = collections(state.economy);

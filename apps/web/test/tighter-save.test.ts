@@ -41,6 +41,7 @@ import {
   upgrade,
 } from "../src/tighter/upgrades";
 import { readFileSync } from "node:fs";
+import { RENT_PAYDAY_MS, paydayDueAt } from "../src/tighter/economy";
 
 const T0 = 1_700_000_000_000;
 
@@ -107,6 +108,7 @@ function played(): GameState {
   s.standing = { ...s.standing, points: 3, total: 5, resets: 1, cycleEarned: 1234.5, rule: "circles" };
   s.economy.recorded.push("21/21/40");
   s.economy.rentPaid = 12.5;
+  s.economy.paydayAt = T0 + 5 * 3_600_000;
   s.picks.bandit.open = { n: 3, mean: 0.25, m2: 0.01 };
   s.picks.retake.push("21/21/40");
   s.picks.rivals.push({ name: "Ada Lovelace", took: 3 }, { name: "Bob", took: 1 });
@@ -283,6 +285,22 @@ describe("Tighter saves", () => {
     const o = owning(r.state.owned, r.state.levels, r.state.standing.rule, r.state.standing.rulesDone);
     expect(evalsPerClick(o)).toBe(evalsPerClick(owning(s.owned, s.levels)) + 1);
     expect(o.rule).toBeNull();
+  });
+
+  it("keeps the next payday, defaults it when missing and clamps a far-future one", () => {
+    const s = played();
+    const raw = JSON.parse(toJson(s));
+    const r = readSave(raw, T0);
+    expect(r.ok && r.state.economy.paydayAt).toBe(T0 + 5 * 3_600_000);
+    delete raw.economy.paydayAt;
+    const m = readSave(raw, T0);
+    expect(m.ok && m.state.economy.paydayAt).toBeUndefined();
+    raw.economy.paydayAt = "soon";
+    const b = readSave(raw, T0);
+    expect(b.ok && b.state.economy.paydayAt).toBeUndefined();
+    raw.economy.paydayAt = T0 + 10 * RENT_PAYDAY_MS;
+    const f = readSave(raw, T0);
+    expect(f.ok && paydayDueAt(f.state.economy, T0)).toBe(T0 + RENT_PAYDAY_MS);
   });
 
   it("keep levels only for owned levelled upgrades, within their range", () => {

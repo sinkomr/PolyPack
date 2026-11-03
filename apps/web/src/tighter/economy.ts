@@ -35,6 +35,8 @@ export interface EconomyState {
   rentPaid: number;
   /** The last rent paid, for the panel. */
   lastRent: { key: string; rp: number; at: number } | null;
+  /** When the next payday is due (epoch ms), while Rent is owned. Missing: one payday at the next load. */
+  paydayAt?: number;
 }
 
 export const newEconomy = (): EconomyState => ({
@@ -83,6 +85,9 @@ export function normalizeEconomy(v: unknown): EconomyState {
       last && isKey(last.key) && typeof last.rp === "number" && last.rp >= 0 && typeof last.at === "number"
         ? { key: last.key, rp: last.rp, at: last.at }
         : null,
+    ...(typeof v.paydayAt === "number" && Number.isFinite(v.paydayAt) && v.paydayAt >= 0
+      ? { paydayAt: v.paydayAt }
+      : {}),
   };
 }
 
@@ -267,12 +272,28 @@ export function rentWaiting(s: GameState, o: Owned, now: number): number {
 }
 
 /**
+ * When the next payday is due: 0 (at once) without a saved time. A saved time more than a day away
+ * (the clock moved, or a bad save) counts as a day from now.
+ */
+export function paydayDueAt(e: EconomyState, now: number): number {
+  if (e.paydayAt === undefined) return 0;
+  return Math.min(e.paydayAt, now + RENT_PAYDAY_MS);
+}
+
+/** When the payday after one that just ran is due: sooner if the server left records unanswered. */
+export function nextPaydayAfter(now: number, unanswered: number): number {
+  return now + (unanswered > 0 ? RENT_RETRY_MS : RENT_PAYDAY_MS);
+}
+
+/**
  * Starts the rent of records held that have none running (Rent just bought, or a record seen as
  * ours by a check), and forgets checks and bases of problems no longer held or in the queue.
  */
 export function tidyRent(s: GameState, o: Owned, now: number): void {
   const e = s.economy;
   const held = new Set(heldRecords(s).map((p) => p.key));
+  // Rent just bought (or back after a reset): the first payday is a day away, there is nothing to pay yet
+  if (o.has("rent") && e.paydayAt === undefined) e.paydayAt = now + RENT_PAYDAY_MS;
   if (o.has("rent")) for (const k of held) if (e.checks[k] === undefined) e.checks[k] = now;
   for (const k of Object.keys(e.checks)) if (!held.has(k)) delete e.checks[k];
   const queued = new Set(s.queue.map((p) => p.key));

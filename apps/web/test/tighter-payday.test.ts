@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { LeadersAnswer } from "../src/api";
-import { RENT_PAYDAY_MS, RENT_WINDOW_MS, rentPerHour } from "../src/tighter/economy";
+import { RENT_PAYDAY_MS, RENT_RETRY_MS, RENT_WINDOW_MS, nextPaydayAfter, newEconomy, paydayDueAt, tidyRent, rentPerHour } from "../src/tighter/economy";
 import { newGame, ownedSet } from "../src/tighter/game";
 import type { GameState, Leader, PastProblem } from "../src/tighter/game";
 import { paydayDue, runPayday } from "../src/tighter/payday";
@@ -166,5 +166,34 @@ describe("Tighter payday", () => {
     // the backlog is not paid again: the next payday pays only the day since
     expect(r2.paid).toBeCloseTo((hourly * (D - 1)) / H, 6);
     expect(RENT_PAYDAY_MS).toBe(D);
+  });
+});
+
+describe("the saved payday time", () => {
+  const T = 1_000_000_000_000;
+  it("is due at once without a saved time, not before it, and after it", () => {
+    const e = newEconomy();
+    expect(paydayDueAt(e, T)).toBe(0);
+    e.paydayAt = T + 1000;
+    expect(paydayDueAt(e, T)).toBeGreaterThan(T);
+    expect(paydayDueAt(e, T + 1000)).toBeLessThanOrEqual(T + 1000);
+    expect(paydayDueAt(e, T + 5000)).toBeLessThanOrEqual(T + 5000);
+  });
+  it("clamps a time further away than a day", () => {
+    const e = newEconomy();
+    e.paydayAt = T + 5 * RENT_PAYDAY_MS;
+    expect(paydayDueAt(e, T)).toBe(T + RENT_PAYDAY_MS);
+  });
+  it("spaces the next payday by a day, or by the retry time when records were unanswered", () => {
+    expect(nextPaydayAfter(T, 0)).toBe(T + RENT_PAYDAY_MS);
+    expect(nextPaydayAfter(T, 3)).toBe(T + RENT_RETRY_MS);
+  });
+  it("starts the first payday a day after Rent is bought, only once", () => {
+    const s = newGame(T, 1);
+    s.owned.push("rent");
+    tidyRent(s, ownedSet(s), T);
+    expect(s.economy.paydayAt).toBe(T + RENT_PAYDAY_MS);
+    tidyRent(s, ownedSet(s), T + 1000);
+    expect(s.economy.paydayAt).toBe(T + RENT_PAYDAY_MS);
   });
 });
