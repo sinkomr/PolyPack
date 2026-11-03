@@ -1,4 +1,5 @@
 import type { LeaderValue, LeadersAnswer } from "../api";
+import { archiveOf } from "./archive";
 import { RENT_BATCH, heldRecords, settleRent, tidyRent } from "./economy";
 import type { GameState, Leader, PastProblem, ProblemState } from "./game";
 import type { Owned } from "./upgrades";
@@ -13,6 +14,8 @@ export interface PaydayResult {
   paying: number;
   /** Records the server said somebody else leads. */
   lost: number;
+  /** Of `lost`, the archived records: the caller tells the player of them in one line. */
+  archivedLost: number;
   /** Records the batch could not answer, or that were busy: they stay unsettled for a retry. */
   unanswered: number;
 }
@@ -24,7 +27,7 @@ export interface PaydayDeps {
   /** GET /api/leaders for these keys; null when the request failed. */
   getLeaders: (keys: string[]) => Promise<LeadersAnswer | null>;
   /** Feeds a leader into the game's usual handling (held, lost, Retake, a send whose answer was lost). */
-  noteLeader: (p: Held, leader: Leader | null) => void;
+  noteLeader: (p: Held, leader: Leader | null, quiet?: boolean) => void;
   /** The record has a send under way, so its state is not settled: it waits for the next payday. */
   busy: (p: Held) => boolean;
   /** This tab still runs the game. */
@@ -35,7 +38,10 @@ export interface PaydayDeps {
 
 /** Records held with rent running: every one is settled at each payday, for the time since its own last settlement. */
 export function paydayDue(s: GameState): Held[] {
-  return heldRecords(s).filter((p) => s.economy.checks[p.key] !== undefined);
+  const due: Held[] = heldRecords(s).filter((p) => s.economy.checks[p.key] !== undefined);
+  const a = archiveOf(s);
+  if (a) for (const r of a.values()) if (r.check !== undefined) due.push(r);
+  return due;
 }
 
 const asLeader = (v: LeaderValue | null): Leader | null => (v ? { score: v.score, name: v.name, id: v.id } : null);
@@ -49,7 +55,7 @@ const asLeader = (v: LeaderValue | null): Leader | null => (v ? { score: v.score
  */
 export async function runPayday(d: PaydayDeps): Promise<PaydayResult> {
   const { state: s, owned: o } = d;
-  const result: PaydayResult = { paid: 0, paying: 0, lost: 0, unanswered: 0 };
+  const result: PaydayResult = { paid: 0, paying: 0, lost: 0, archivedLost: 0, unanswered: 0 };
   tidyRent(s, o, d.now());
   const due = paydayDue(s);
   const keys = [...new Set(due.map((p) => p.key))];
@@ -70,9 +76,15 @@ export async function runPayday(d: PaydayDeps): Promise<PaydayResult> {
           result.unanswered++;
           continue;
         }
-        d.noteLeader(p, asLeader(answer.leaders[k]));
+        // an archived record found lost is told in one line for all of them, not one each
+        const archived = archiveOf(s)?.get(k) === p;
+        d.noteLeader(p, asLeader(answer.leaders[k]), archived);
         if (p.ourId === null) {
           result.lost++;
+          if (archived) {
+            result.archivedLost++;
+            archiveOf(s)!.remove(k);
+          }
           continue;
         }
         const rp = settleRent(s, o, p, d.now());

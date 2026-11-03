@@ -1,9 +1,11 @@
+import { archiveOf } from "./archive";
+import type { ArchiveRow } from "./archive";
 import { parseDealtKey } from "./catalogue";
 import { ProblemKey, isPolygon, parseKey } from "./frontier";
 import type { GameState, PastProblem, ProblemState } from "./game";
 import { income } from "./income";
 import { COMBO_RECORDS } from "./points";
-import { ruleRewardFactor, standingMultiplier } from "./standing";
+import { RENT_CLASSES, rentClassFactor, ruleRewardFactor, standingMultiplier } from "./standing";
 import { level } from "./upgrades";
 import type { Owned } from "./upgrades";
 
@@ -237,7 +239,10 @@ export const RENT_BATCH = 200;
 
 type Held = ProblemState | PastProblem;
 
-/** Records the player leads, as far as the game has seen: the queue's, then the past's. */
+/**
+ * Records the player leads that are in the save: the queue's, then the past's. The ones past the
+ * save's limit are in the archive (archive.ts), which the totals below add.
+ */
 export function heldRecords(s: GameState): Held[] {
   return [...s.queue.filter((p) => p.ourId !== null), ...s.past.filter((p) => p.ourId !== null)];
 }
@@ -249,14 +254,36 @@ export function rentPerHour(s: GameState, o: Owned, p: Held): number {
   if (!o.has("rent")) return 0;
   const m = pointsMultiplier(s, o, p, methodOf(p));
   // a record from before the base was kept: its points, as earned (multipliers were 1 then)
-  const base = s.economy.base[p.key] ?? p.rp;
+  const base = (p as ArchiveRow).base ?? s.economy.base[p.key] ?? p.rp;
   return RENT_SHARE * base * Math.pow(RENT_GROWTH, level(o, "rentx")) * m;
 }
 
 /** Rent of every record held, per hour. */
 export function rentRate(s: GameState, o: Owned): number {
   if (!o.has("rent")) return 0;
-  return heldRecords(s).reduce((t, p) => t + rentPerHour(s, o, p), 0);
+  return heldRecords(s).reduce((t, p) => t + rentPerHour(s, o, p), 0) + archiveRate(s, o);
+}
+
+/** What every archived record shares in its rent: the level of Higher rent and the multipliers that do not depend on the problem. */
+function archiveShare(s: GameState, o: Owned): number {
+  return (
+    RENT_SHARE *
+    Math.pow(RENT_GROWTH, level(o, "rentx")) *
+    standingMultiplier(s.standing) *
+    (1 + collectionsBonus(s, o))
+  );
+}
+
+/**
+ * Rent per hour of the archived records, from the archive's sums of base per class of problem (a
+ * pass over five numbers, not over the rows): the rules' rewards depend on the class alone.
+ */
+function archiveRate(s: GameState, o: Owned): number {
+  const a = archiveOf(s);
+  if (!a || a.size === 0) return 0;
+  let sum = 0;
+  for (let c = 0; c < RENT_CLASSES; c++) sum += a.baseSum(c) * rentClassFactor(s.standing, c);
+  return archiveShare(s, o) * sum;
 }
 
 /** Rent accrued and not yet paid, across the records held (paid at the next payday). */
@@ -267,6 +294,13 @@ export function rentWaiting(s: GameState, o: Owned, now: number): number {
     const at = s.economy.checks[p.key];
     if (at === undefined) continue;
     t += (rentPerHour(s, o, p) * Math.min(RENT_WINDOW_MS, Math.max(0, now - at))) / 3_600_000;
+  }
+  const a = archiveOf(s);
+  if (a && a.size > 0) {
+    const sums = a.waitingSums(now, RENT_WINDOW_MS);
+    let sum = 0;
+    for (let c = 0; c < RENT_CLASSES; c++) sum += sums[c] * rentClassFactor(s.standing, c);
+    t += archiveShare(s, o) * sum;
   }
   return t;
 }
@@ -298,6 +332,14 @@ export function tidyRent(s: GameState, o: Owned, now: number): void {
   for (const k of Object.keys(e.checks)) if (!held.has(k)) delete e.checks[k];
   const queued = new Set(s.queue.map((p) => p.key));
   for (const k of Object.keys(e.base)) if (!held.has(k) && !queued.has(k)) delete e.base[k];
+  // archived records carry their own check and base
+  const a = archiveOf(s);
+  if (a && o.has("rent"))
+    for (const r of a.values())
+      if (r.check === undefined) {
+        r.check = now;
+        a.touch(r.key);
+      }
 }
 
 /**
@@ -307,8 +349,13 @@ export function tidyRent(s: GameState, o: Owned, now: number): void {
 export function settleRent(s: GameState, o: Owned, p: Held, now: number): number {
   const e = s.economy;
   if (!o.has("rent") || p.ourId === null) return 0;
-  const at = e.checks[p.key];
-  e.checks[p.key] = now;
+  const a = archiveOf(s);
+  const row = a?.get(p.key) === p ? (p as ArchiveRow) : null;
+  const at = row ? row.check : e.checks[p.key];
+  if (row) {
+    row.check = now;
+    a!.touch(row.key);
+  } else e.checks[p.key] = now;
   if (at === undefined) return 0;
   const rp = (rentPerHour(s, o, p) * Math.min(RENT_WINDOW_MS, Math.max(0, now - at))) / 3_600_000;
   if (!(rp > 0)) return 0;

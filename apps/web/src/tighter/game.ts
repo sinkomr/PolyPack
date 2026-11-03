@@ -1,6 +1,8 @@
 import { containerArea, improvesOn, pieceArea } from "@polypack/geometry";
 import type { PackingConfig } from "@polypack/geometry";
 import type { SpaceConfig } from "@polypack/spaces";
+import { archivedCount, archiveOf, ensureArchive } from "./archive";
+import type { ArchiveRow } from "./archive";
 import { DealerState, canDeal, creditOf, earn, newDealer } from "./dealer";
 import { income } from "./income";
 import { PolygonKey, ProblemKey, isPolygon, keyOf, keyPart, poly } from "./frontier";
@@ -98,6 +100,11 @@ export interface ProblemFields {
   /** Our score that the server last made leader, and its entry id while it is kept. */
   verified: number | null;
   ourId: number | null;
+  /**
+   * When the record became the player's (first record, taking the lead, regaining it); kept through
+   * the player's own improvements, cleared when it is lost. Missing for a record from before it was kept.
+   */
+  heldSince?: number;
   /** The server took a problem out of play (409), or refused this score (400/422). */
   closed: boolean;
   refused: { score: number; reasons: string[] } | null;
@@ -154,6 +161,8 @@ export interface PastFields {
   best: number | null;
   verified: number | null;
   ourId: number | null;
+  /** See ProblemFields.heldSince. */
+  heldSince?: number;
   rp: number;
   leftAt: number;
 }
@@ -237,6 +246,8 @@ export interface GameState {
    * and nothing needs clearing at a reset.
    */
   bonusPaid: Record<string, number>;
+  /** Set once the records lost from the save were looked for on the server (recovery.ts). */
+  archiveRecovered?: boolean;
 }
 
 export const TRACE_LIMIT = 400;
@@ -392,7 +403,7 @@ export function problem(s: GameState, key: string | null): ProblemState | undefi
 
 /** Keys of every problem dealt so far: never dealt again. */
 export function seenKeys(s: GameState): Set<string> {
-  return new Set([...s.queue.map((p) => p.key), ...s.past.map((p) => p.key)]);
+  return new Set([...s.queue.map((p) => p.key), ...s.past.map((p) => p.key), ...(archiveOf(s)?.keys() ?? [])]);
 }
 
 /** Problems in the queue that hold a slot (those leaving do not). */
@@ -830,6 +841,8 @@ export function applyAnswer(
     if (leaderBefore === null && p.verified === null) s.stats.firstRecords++;
     s.stats.verifiedImprovements++;
     p.verified = outcome.score;
+    // the record became ours now, unless it already was (an improvement of our own keeps its date)
+    if (p.ourId === null || p.heldSince === undefined) p.heldSince = now;
     p.ourId = outcome.id;
     p.leader = { score: outcome.score, name: sanitizeName(s.name), id: outcome.id };
     p.refused = null;
@@ -845,6 +858,7 @@ export function applyAnswer(
     // a record of ours it overtook is lost now: no rent for it from its last check on
     if (p.ourId !== null) forgetHeld(s.economy, p.key);
     p.ourId = null;
+    delete p.heldSince;
     if (outcome.leaderScore !== null) {
       // it is now the one to beat (whose it is, the next read says); what the board still beats it by pays
       p.leader = { score: outcome.leaderScore, name: isPolygon(p) ? "another name" : "the research record", id: null };
@@ -912,7 +926,10 @@ export function applyLeader(
   const held = p.ourId !== null;
   const ours = leader !== null && leader.id !== null && leader.id === p.ourId;
   const lost = held && !ours;
-  if (!ours) p.ourId = null;
+  if (!ours) {
+    p.ourId = null;
+    delete p.heldSince;
+  }
   // a record lost pays no rent, not even for the time since its last check
   if (lost && s) forgetHeld(s.economy, p.key);
   if ("leader" in p) p.leader = leader;
@@ -921,7 +938,9 @@ export function applyLeader(
 
 /** Problems where the player is the current leader, as far as the game has seen. */
 export function recordsHeld(s: GameState): number {
-  return s.queue.filter((p) => p.ourId !== null).length + s.past.filter((p) => p.ourId !== null).length;
+  return (
+    s.queue.filter((p) => p.ourId !== null).length + s.past.filter((p) => p.ourId !== null).length + archivedCount(s)
+  );
 }
 
 /**
@@ -992,6 +1011,26 @@ export function drop(s: GameState, key: string, now: number): boolean {
   return true;
 }
 
+/**
+ * Past entries beyond PAST_LIMIT leave the save. A record still held goes to the archive with its
+ * rent (base and check, taken out of the economy); an entry that is not held is dropped.
+ */
+function archiveTrimmed(s: GameState, trimmed: PastProblem[]): void {
+  const held = trimmed.filter((p) => p.ourId !== null);
+  if (!held.length) return;
+  const a = ensureArchive(s);
+  for (const p of held) {
+    const row: ArchiveRow = { ...p };
+    const base = s.economy.base[p.key];
+    const check = s.economy.checks[p.key];
+    if (base !== undefined) row.base = base;
+    if (check !== undefined) row.check = check;
+    delete s.economy.base[p.key];
+    delete s.economy.checks[p.key];
+    a.put(row);
+  }
+}
+
 /** Moves a problem from the queue to the past. */
 export function leave(s: GameState, key: string, now: number): void {
   const i = s.queue.findIndex((q) => q.key === key);
@@ -1006,10 +1045,11 @@ export function leave(s: GameState, key: string, now: number): void {
     best: p.phase === "ready" ? p.best : null,
     verified: p.verified,
     ourId: p.ourId,
+    ...(p.heldSince !== undefined && p.ourId !== null ? { heldSince: p.heldSince } : {}),
     rp: p.rp,
     leftAt: now,
   });
-  if (s.past.length > PAST_LIMIT) s.past.splice(0, s.past.length - PAST_LIMIT);
+  if (s.past.length > PAST_LIMIT) archiveTrimmed(s, s.past.splice(0, s.past.length - PAST_LIMIT));
   if (s.focus === key) s.focus = slotted(s)[0]?.key ?? null;
 }
 

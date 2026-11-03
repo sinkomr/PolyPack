@@ -24,6 +24,7 @@ import { generatePlayerName, sanitizeName } from "./names";
 import { PacerState, newPacer } from "./pacer";
 import { Tier, isTier } from "./points";
 import type { RunRecord } from "./submission";
+import type { ArchiveRow } from "./archive";
 import { normalizeEconomy } from "./economy";
 import { normalizePicks } from "./picks";
 import { normalizeRunPlan } from "./runplan";
@@ -708,6 +709,8 @@ export type LoadResult =
       standing?: { standing: number; rp: number; resets: number };
       /** The cards a save owning Head start was missing, given at load: how many. */
       headStart?: number;
+      /** The archive rows of an export (only exports carry them, see toExportJson), without those whose problem is in the save. */
+      archive?: ArchiveRow[];
     }
   | { ok: false; error: string };
 
@@ -851,6 +854,7 @@ function problemState(v: unknown, now: number): ProblemState | null {
     leader: leader(v.leader),
     verified: posOrNull(v.verified),
     ourId: idOrNull(v.ourId),
+    ...heldSinceOf(v),
     closed: bool(v.closed, false),
     refused,
     leaving: bool(v.leaving, false),
@@ -884,9 +888,35 @@ function pastProblem(v: unknown, now: number): PastProblem | null {
     best: posOrNull(v.best),
     verified: posOrNull(v.verified),
     ourId: idOrNull(v.ourId),
+    ...heldSinceOf(v),
     rp: num(v.rp, 0, 0),
     leftAt: num(v.leftAt, now),
   };
+}
+
+/** The optional `heldSince` of a problem or past entry: kept when it is a time, left out otherwise. */
+function heldSinceOf(v: Record<string, unknown>): { heldSince?: number } {
+  return typeof v.heldSince === "number" && Number.isFinite(v.heldSince) && v.heldSince >= 0
+    ? { heldSince: v.heldSince }
+    : {};
+}
+
+/** Rows of the record archive in an export: past entries with their rent fields. Rows that are not valid are dropped. */
+export function archiveRows(v: unknown, now: number): ArchiveRow[] {
+  const out: ArchiveRow[] = [];
+  const seen = new Set<string>();
+  if (!Array.isArray(v)) return out;
+  for (const r of v.slice(0, 1_000_000)) {
+    const p = pastProblem(r, now);
+    if (!p || p.ourId === null || seen.has(p.key)) continue;
+    seen.add(p.key);
+    const x = r as Record<string, unknown>;
+    const row: ArchiveRow = { ...p };
+    if (typeof x.base === "number" && Number.isFinite(x.base) && x.base >= 0) row.base = x.base;
+    if (typeof x.check === "number" && Number.isFinite(x.check) && x.check >= 0) row.check = x.check;
+    out.push(row);
+  }
+  return out;
 }
 
 /**
@@ -1039,6 +1069,8 @@ export function normalize(save: Record<string, unknown>, now: number): GameState
     runplan: normalizeRunPlan(save.runplan, treeMethods()),
     // optional: a save without it has paid no bonus
     bonusPaid: readBonusPaid(save.bonusPaid),
+    // optional: set once the records lost from the save were looked for on the server
+    ...(save.archiveRecovered === true ? { archiveRecovered: true } : {}),
   };
 }
 
@@ -1071,9 +1103,12 @@ export function readSave(raw: unknown, now: number, migrations: Record<number, M
   if ((raw.version as number) < 7 && m.save.payWaiting === true) payAll(state);
   // Head start works in the cycle it is bought in: a save that owns it without its cards gets them now
   const headGiven = grantHeadStart(state, now).length;
+  const inSave = new Set([...state.queue, ...state.past].map((p) => p.key));
+  const archive = archiveRows(raw.archive, now).filter((r) => !inSave.has(r.key));
   return {
     ok: true,
     state,
+    ...(archive.length ? { archive } : {}),
     ...(rescaled > 0 ? { rescaled } : {}),
     ...(refunded > 0 ? { refunded } : {}),
     ...(retired.groups.length ? { retired } : {}),
@@ -1112,6 +1147,12 @@ export function toJson(state: GameState): string {
   return JSON.stringify({ ...state, version: SAVE_VERSION });
 }
 
+/** The save with the archive's rows, for an export: the archive is not part of the save itself (toJson). */
+export function toExportJson(state: GameState, archive: Iterable<ArchiveRow>): string {
+  const rows = [...archive];
+  return JSON.stringify({ ...state, version: SAVE_VERSION, ...(rows.length ? { archive: rows } : {}) });
+}
+
 export function fromJson(text: string, now: number): LoadResult {
   let raw: unknown;
   try {
@@ -1148,14 +1189,16 @@ async function pipe(bytes: Uint8Array, stream: CompressionStream | Decompression
 const canCompress = () => typeof CompressionStream === "function" && typeof DecompressionStream === "function";
 
 /** The save as one line of text: deflated where the browser can, plain JSON otherwise. */
-export async function exportString(state: GameState): Promise<string> {
-  const bytes = new TextEncoder().encode(toJson(state));
+export async function exportString(state: GameState, archive: Iterable<ArchiveRow> = []): Promise<string> {
+  const bytes = new TextEncoder().encode(toExportJson(state, archive));
   if (canCompress())
     return `${PREFIX}:${SAVE_VERSION}:z:${toBase64Url(await pipe(bytes, new CompressionStream("deflate-raw")))}`;
   return `${PREFIX}:${SAVE_VERSION}:j:${toBase64Url(bytes)}`;
 }
 
 export async function importString(text: string, now: number): Promise<LoadResult> {
+  // an export too big for the clipboard is a .json file holding the save document itself
+  if (text.trimStart().startsWith("{")) return fromJson(text, now);
   const m = /^tighter:(\d+):([zj]):([A-Za-z0-9_-]+)$/.exec(text.trim().replace(/\s+/g, ""));
   if (!m) return { ok: false, error: "that is not a Tighter save string" };
   try {

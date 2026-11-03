@@ -11,6 +11,7 @@ import {
 } from "./frontier";
 import { RESET_GROWTH, RESET_MIN } from "./points";
 import type { GameState } from "./game";
+import { archiveOf, archivedCount } from "./archive";
 import { tidyRent } from "./economy";
 import {
   EvolveMethod,
@@ -205,6 +206,22 @@ const isSmall = (p: ProblemKey) => {
   return q.N + q.M + q.P <= SMALL_TOTAL;
 };
 
+/** Classes of problems that the rules' rewards tell apart on rent (ruleRewardFactor with no method). */
+export const RENT_CLASSES = 5;
+/** A problem's class: for a polygon one bit for circles and one for small, 4 for any other family. */
+export function rentClass(p: ProblemKey): number {
+  return isPolygon(p) ? (hasCircles(p) ? 1 : 0) | (isSmall(p) ? 2 : 0) : 4;
+}
+/** The rules' reward factor shared by every problem of a class (the method rule needs a run, which a past entry has not). */
+export function rentClassFactor(s: StandingState, c: number): number {
+  let f = 1;
+  if (c < 4) {
+    if (s.rulesDone.includes("circles") && c & 1) f *= 1.5;
+    if (s.rulesDone.includes("small") && c & 2) f *= 1.5;
+  }
+  return f;
+}
+
 /**
  * Whether the cycle's rule lets the dealer deal or offer this problem (circles only, small problems
  * only, ...). The dealer calls it on every candidate.
@@ -273,9 +290,9 @@ export const DIMENSION_TEXT: Readonly<Record<DimensionId, { label: string; what:
   "3-on-4": { label: "3D on 4D", what: "solids packed on the surface of a 4D solid" },
 };
 
-/** Records the player leads, as far as the game has seen (queue and past). */
+/** Records the player leads, as far as the game has seen (queue, past and the archive). */
 export const heldCount = (s: GameState) =>
-  s.queue.filter((p) => p.ourId !== null).length + s.past.filter((p) => p.ourId !== null).length;
+  s.queue.filter((p) => p.ourId !== null).length + s.past.filter((p) => p.ourId !== null).length + archivedCount(s);
 
 /** Standing points a reset gives, and one more for finishing the cycle under a rule. */
 export const RESET_GAIN = 1;
@@ -455,6 +472,7 @@ export function resetCycle(s: GameState, now: number): number {
   delete s.economy.paydayAt;
   if (s.owned.includes("rent"))
     for (const p of [...s.queue, ...s.past]) if (p.ourId !== null) s.economy.checks[p.key] = now;
+  archiveOf(s)?.restartChecks(s.owned.includes("rent") ? now : null);
   s.rp = Math.min(s.rp, waiting);
   st.cycleEarned = waiting;
   st.cycleStartedAt = now;
