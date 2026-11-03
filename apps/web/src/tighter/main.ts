@@ -101,12 +101,12 @@ import {
   TIER_BONUS,
   collections,
   collectionsBonus,
+  nextPaydayAfter,
+  paydayDueAt,
   rentRate,
   rentWaiting,
   syncEconomy,
   tidyRent,
-  nextPaydayAfter,
-  paydayDueAt,
 } from "./economy";
 import { Lane, NOT_ISOLATED, isSpaceRunState } from "./lanes";
 import { methodGame, methodLabel, runSetup, warmIn, warmupOf } from "./methods";
@@ -2922,10 +2922,10 @@ async function refreshHeld(): Promise<void> {
 let paydayRunning = false;
 
 /**
- * With Rent: when the saved payday time (economy.paydayAt) has come, all records held are looked up in batches (payday.ts)
- * and the ones still ours pay the rent since their last payday. Records the server did not answer
- * are tried again 10 minutes later.
- * A save without a payday time runs one at its next load.
+ * With Rent: once the saved payday time (economy.paydayAt) has come, all records held are looked up
+ * in batches (payday.ts) and the ones still ours pay the rent since their last payday. Records the
+ * server did not answer are tried again 10 minutes later. A save without a payday time runs one at
+ * its next load.
  */
 async function paydayTick(): Promise<void> {
   const o = owned();

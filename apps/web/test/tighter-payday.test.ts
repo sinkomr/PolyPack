@@ -1,6 +1,15 @@
 import { describe, expect, it } from "vitest";
 import type { LeadersAnswer } from "../src/api";
-import { RENT_PAYDAY_MS, RENT_RETRY_MS, RENT_WINDOW_MS, nextPaydayAfter, newEconomy, paydayDueAt, tidyRent, rentPerHour } from "../src/tighter/economy";
+import {
+  RENT_PAYDAY_MS,
+  RENT_RETRY_MS,
+  RENT_WINDOW_MS,
+  nextPaydayAfter,
+  newEconomy,
+  paydayDueAt,
+  tidyRent,
+  rentPerHour,
+} from "../src/tighter/economy";
 import { newGame, ownedSet } from "../src/tighter/game";
 import type { GameState, Leader, PastProblem } from "../src/tighter/game";
 import { paydayDue, runPayday } from "../src/tighter/payday";
