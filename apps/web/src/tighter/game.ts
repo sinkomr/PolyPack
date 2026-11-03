@@ -430,6 +430,15 @@ export function applyLoadAll(
 }
 
 /**
+ * The evaluations a job counts for: a Compact outside 2D in 2D runs until mc_compress hands back its
+ * first finished packing, however long that takes, and counts as `compactEvals` (the Compact's price).
+ * Every other job counts what it ran.
+ */
+export function countedEvals(done: number, compactOnSpace: boolean, compactEvals: number): number {
+  return compactOnSpace ? Math.min(done, compactEvals) : done;
+}
+
+/**
  * Evaluations run, the player's (`click`) or auto-eval's: they count in all, and earn the dealer's
  * credit in clicks, the player's at the player's click size and auto-eval's at a fixed one (dealer.ts).
  */

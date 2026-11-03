@@ -63,6 +63,7 @@ import {
   applyStep,
   buy,
   countEvaluations,
+  countedEvals,
   density,
   endRunAtStall,
   drop,
@@ -920,8 +921,8 @@ const spaceLoads = new Map<string, Promise<boolean>>();
 let startLane: Lane | null = null;
 
 /**
- * Load all for a space problem: the worker's start (a finished seed layout, else a finished random
- * start), which is the free floor and is never sent, as for polygons. When none can be made the
+ * Load all for a space problem: the worker's start (a seed layout, else a random start, spread out so
+ * that the first Compact has room to remove), which is the free floor and is never sent, as for polygons. When none can be made the
  * problem stays bare, and its first run opens fresh: its Compact gives the board.
  */
 function loadAllSpace(p: ProblemState & SpaceKey): Promise<boolean> {
@@ -944,7 +945,7 @@ function loadAllSpace(p: ProblemState & SpaceKey): Promise<boolean> {
       reveal(state, "score");
       if (p.key === state.focus)
         say(
-          `${p.P} pieces placed. The ${sideWord(p)} is ${show6(a.score)}, ${fmtPct(a.score / rulesOf(p).bound(p)! - 1)} above the bound. ` +
+          `${p.P} pieces placed loosely. The ${sideWord(p)} is ${show6(a.score)}, ${fmtPct(a.score / rulesOf(p).bound(p)! - 1)} above the bound. ` +
             `Your first record must beat this ${sideWord(p)}. This board is not sent. Press Evolve to compact it.`,
         );
       persist();
@@ -1293,7 +1294,31 @@ async function runJob(lv: LaneView, job: Job): Promise<boolean> {
       r.evalsAt = r.evaluations;
     }
     const run = lv.run!;
-    const t = await lv.lane.step(job.evals);
+    let t = await lv.lane.step(job.evals);
+    let ms = t.ok ? t.ms : 0;
+    // a Compact outside 2D in 2D runs until the method's first finished packing, in steps of Compact's size
+    // so that its progress shows; it counts as COMPACT_EVALS however long it ran (countedEvals)
+    if (job.compact && !isPolygon(p)) {
+      while (
+        t.ok &&
+        isSpaceRunState(t.state) &&
+        t.state.offers < 1 &&
+        !t.state.ended &&
+        !t.state.closed &&
+        !t.state.error &&
+        !stopped &&
+        lv.lane.open &&
+        lv.run === run &&
+        problem(state, p.key) === p &&
+        !p.leaving &&
+        !p.closed
+      ) {
+        lv.progress = t.state as unknown as RunState;
+        scheduleRender();
+        t = await lv.lane.step(COMPACT_EVALS);
+        if (t.ok) ms += t.ms;
+      }
+    }
     if (!t.ok) {
       finishRun(run);
       lv.run = null;
@@ -1301,16 +1326,17 @@ async function runJob(lv: LaneView, job: Job): Promise<boolean> {
       return false;
     }
     const done = Math.max(0, t.state.evaluations - run.evaluations);
-    observeSpeed(run, p, done, t.ms);
-    if (!job.click) autoMeter.addRan(now(), done);
+    const counted = countedEvals(done, job.compact && !isPolygon(p), COMPACT_EVALS);
+    observeSpeed(run, p, done, ms);
+    if (!job.click) autoMeter.addRan(now(), counted);
     track(run, t.state);
     if (t.state.ended) lv.run = null;
     if (problem(state, p.key) !== p) {
       // the problem left the queue meanwhile; the work still counts as done
-      countEvaluations(state, done, job.click);
+      countEvaluations(state, counted, job.click);
       return true;
     }
-    settle(run, p, job, t.state, done, t.ms);
+    settle(run, p, job, t.state, done, ms);
     if (t.state.ended) finishRun(run);
     return true;
   } finally {
@@ -1351,6 +1377,8 @@ function settle(
   // a space problem compacted from nothing (its start could not be made): the Compact's board is its free floor, as Load all's
   if (!isPolygon(p) && p.phase === "bare" && st.best && st.score !== null && st.score > 0)
     applyLoadAll(p, st.best, st.score, null);
+  // a space Compact counts as COMPACT_EVALS however long it ran; the run's own count stays the real one
+  const counted = countedEvals(done, job.compact && !isPolygon(p), COMPACT_EVALS);
   const record: RunRecord = {
     method: run.method,
     params: run.params,
@@ -1361,7 +1389,7 @@ function settle(
     state,
     p,
     {
-      evaluations: done,
+      evaluations: counted,
       best: st.best,
       score: st.score,
       run: record,
@@ -1376,7 +1404,7 @@ function settle(
   );
   // the offers the stall rule waits for count from the problem's latest progress
   if (p.sinceGain === 0) run.offersAtGain = run.offers ?? 0;
-  lastChange.set(p.key, { ...change, evals: done, seed: run.seed, method: run.method });
+  lastChange.set(p.key, { ...change, evals: counted, seed: run.seed, method: run.method });
   if (change.firstRecord) {
     reveal(state, "log");
     banner = {
@@ -1404,7 +1432,7 @@ function settle(
     event(`${ended}${smaller ? ` ${smaller}` : ""} The next click starts a new run${nextStageText(p)}.`);
   }
   // after Stop, the click that was already running does not write over "Stopped"
-  if (job.click && p.key === state.focus && !stopped) say(stepMessage(p, change, run, job, done));
+  if (job.click && p.key === state.focus && !stopped) say(stepMessage(p, change, run, job, counted));
   persist();
   scheduleRender();
   void submitTick();
@@ -3099,7 +3127,9 @@ function renderToolbar(p: ProblemState | undefined, o: ReadonlySet<UpgradeId>): 
     : p.phase === "bare"
       ? "The pieces are being placed."
       : first
-        ? `Your first click compacts the board with ${evals(COMPACT_EVALS)} of mc_compress. After that, each click runs ${evals(k)}.`
+        ? isPolygon(p)
+          ? `Your first click compacts the board with ${evals(COMPACT_EVALS)} of mc_compress. After that, each click runs ${evals(k)}.`
+          : `Your first click compacts the loosely placed board. It runs until mc_compress hands back its first finished packing, however long that takes, and counts as ${evals(COMPACT_EVALS)}. After that, each click runs ${evals(k)}.`
         : `Each click runs ${evals(k)} on this board.`;
   // the method select: the owned methods (those the cycle's rule refuses greyed), and "Auto" with Method match
   const ms = methods(o);

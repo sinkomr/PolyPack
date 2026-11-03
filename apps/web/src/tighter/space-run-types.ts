@@ -48,10 +48,12 @@ export interface SpaceRunState {
   error?: string;
 }
 
-/** Load all for a space problem: a finished seed layout, else a finished random start, made in the worker. */
+/** Load all for a space problem: a seed layout, else a random start, spread out (loose) or finished, made in the worker. */
 export interface SpaceStartRequest {
   family: SpaceFamily;
   id: string;
   seed: number;
 }
-export type SpaceStartAnswer = { ok: true; config: SpaceConfig; score: number } | { ok: false; message: string };
+export type SpaceStartAnswer =
+  | { ok: true; config: SpaceConfig; score: number; /** Spread out, not finished: the first Compact has room to remove. */ loose?: boolean }
+  | { ok: false; message: string };
