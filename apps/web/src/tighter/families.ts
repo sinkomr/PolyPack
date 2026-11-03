@@ -146,8 +146,24 @@ export const LEVEL_AT_48: Record<string, number> = {
   "balls:solid": 5.9,
 };
 
-/** The level of a row at P pieces: it grows in proportion to P. */
-export const levelOf = (row: string, P: number): number => (LEVEL_AT_48[row] * P) / 48;
+/**
+ * The largest P each row's level was measured at (the problem sets of sphere, surface, curved and balls
+ * stop at 100; torus and polyhedra paid nothing past their first record at 500). The level stops growing
+ * there rather than extrapolating the fit; the cost factor still grows with P.
+ */
+export const LEVEL_TOP_P: Readonly<Record<string, number>> = {
+  sphere: 100,
+  torus: 200,
+  curved: 100,
+  "surface:fold": 100,
+  "surface:nofold": 100,
+  polyhedra: 200,
+  "balls:ball": 100,
+  "balls:solid": 100,
+};
+
+/** The level of a row at P pieces: it grows in proportion to P, up to LEVEL_TOP_P. */
+export const levelOf = (row: string, P: number): number => (LEVEL_AT_48[row] * Math.min(P, LEVEL_TOP_P[row])) / 48;
 
 /** The level of a problem: 1 for a polygon. */
 export const levelFactor = (p: ProblemKey): number => (isPolygon(p) ? 1 : levelOf(unitsRow(p), p.P));

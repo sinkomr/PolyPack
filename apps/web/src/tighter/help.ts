@@ -134,7 +134,7 @@ const POINTS: How[] = [
       `<var>t</var><sub>gap</sub> = ${int(GAP_WEIGHT)} × ln(<var>g</var><sub>prev</sub> / <var>g</var><sub>new</sub>)`,
       `<var>g</var><sub>prev</sub> = max(<var>s</var><sub>prev</sub> / <var>b</var> − 1, ${G_MIN}), <var>g</var><sub>new</sub> = max(<var>s</var><sub>new</sub> / <var>b</var> − 1, ${G_MIN})`,
       `<var>w</var> = <var>d</var>(<var>N</var>) × <var>d</var>(<var>M</var>), where <var>d</var>(<var>n</var>) = 1 for <var>n</var> ≤ 20 and 20 / <var>n</var> above. Outside 2D in 2D, <var>w</var> is also multiplied by 1.2 × <var>L</var>`,
-      `<var>L</var> = <var>a</var> × <var>P</var> / 48`,
+      `<var>L</var> = <var>a</var> × min(<var>P</var>, <var>P</var><sub>top</sub>) / 48`,
       `<var>m</var> = 2<sup><var>n</var></sup> × (1 + <var>C</var>) × <var>R</var>`,
     ],
     vars: [
@@ -167,7 +167,11 @@ const POINTS: How[] = [
         "<var>L</var>",
         "the level of a family outside 2D in 2D, which grows with the number of pieces",
       ],
-      ["<var>a</var>", "the family's level at 48 pieces, from 0.44 for tori to 24 for curved spaces"],
+      ["<var>a</var>", "the family's level at 48 pieces, from 0.44 for tori to 24 for curved geometries"],
+      [
+        "<var>P</var><sub>top</sub>",
+        "the largest number of pieces the level was measured at, 200 for tori and polyhedra and 100 for the others. Above it the level stays the same.",
+      ],
       ["<var>P</var>", "the number of pieces"],
       ["<var>d</var>(<var>n</var>)", "how distinct a shape with n sides is (n = 0 for a circle)"],
       ["<var>N</var>, <var>M</var>", "the number of sides of a piece and of the container (0 for a circle)"],

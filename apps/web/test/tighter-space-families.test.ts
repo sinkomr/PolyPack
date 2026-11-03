@@ -40,6 +40,7 @@ import {
   kernelMs,
   levelFactor,
   levelOf,
+  LEVEL_TOP_P,
   msPerEval,
   rulesOf,
   spaceFields,
@@ -139,6 +140,11 @@ describe("Tighter space weights, bounds and units", () => {
     expect(levelOf("torus", 48)).toBe(0.44);
     expect(levelOf("sphere", 96)).toBeCloseTo(3.2, 12);
     for (const row of Object.keys(LEVEL_AT_48)) expect(levelOf(row, 100) / levelOf(row, 25)).toBeCloseTo(4, 12);
+    // the level stops growing at the largest P it was measured at
+    expect(Object.keys(LEVEL_TOP_P).sort()).toEqual(Object.keys(LEVEL_AT_48).sort());
+    expect(levelOf("curved", 500)).toBe(levelOf("curved", 100));
+    expect(levelOf("torus", 500)).toBe(levelOf("torus", 200));
+    expect(levelOf("torus", 150)).toBeCloseTo(0.44 * (150 / 48), 12);
     const k = key("curved/-1/3/4/100");
     expect(rulesOf(k).weight(k)).toBeCloseTo(1.2 * 24 * (100 / 48), 12);
     expect(levelFactor(k)).toBeCloseTo(24 * (100 / 48), 12);
