@@ -88,7 +88,8 @@ export const REFERENCE_SIZE = 85;
  * The cost factor k of a problem: the ms one of its game evaluations takes (a fixed table for
  * polygons, the kernel evaluations a space problem's game evaluation is, measured, for the others) over the ms at N+M+P =
  * 85. Not the player's measured speed, so the pay is the same on every machine. Expected RP per
- * second of solver time then runs about level from N+M+P = 85 up [CALC, scratchpad w6/model.py].
+ * second of solver time then runs about level from N+M+P = 85 up for polygons [CALC, scratchpad w6/model.py]; for
+ * the others the level (families.ts levelOf) evens out RP per second against 2D in 2D.
  */
 export function costFactor(p: ProblemKey): number {
   return rulesOf(p).evalMs(p) / msPerEval(REFERENCE_SIZE);

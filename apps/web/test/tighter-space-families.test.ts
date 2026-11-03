@@ -33,12 +33,13 @@ import {
 import { costFactor, recordPoints } from "../src/tighter/points";
 import { newDealer } from "../src/tighter/dealer";
 import {
-  FAMILY_FACTOR,
   KERNEL_MS,
-  LEVEL,
+  LEVEL_AT_48,
   PREMIUM,
   SPACE_METHODS,
   kernelMs,
+  levelFactor,
+  levelOf,
   msPerEval,
   rulesOf,
   spaceFields,
@@ -50,7 +51,7 @@ import { newGame, newProblem, ownedSet } from "../src/tighter/game";
 import { noteRecorded, pointsMultiplier } from "../src/tighter/economy";
 import { ruleAllowsProblem, ruleRewardFactor } from "../src/tighter/standing";
 import { normalizeOffer } from "../src/tighter/picks";
-import { bucketOf, passes, rankCandidates } from "../src/tighter/rank";
+import { RP_PER_EVAL, bucketOf, passes, priorPerEval, rankCandidates } from "../src/tighter/rank";
 import { fromJson, toJson } from "../src/tighter/save";
 import { SLICES, SliceId } from "../src/tighter/slices";
 import {
@@ -118,10 +119,10 @@ describe("Tighter space titles and score words", () => {
 
 describe("Tighter space weights, bounds and units", () => {
   it("weigh pieces by distinctness and the others 1, times the family factor", () => {
-    expect(rulesOf(key("sphere/40/12")).weight(key("sphere/40/12"))).toBeCloseTo(0.5 * 1.2, 12);
-    expect(rulesOf(key("sphere/4/12")).weight(key("sphere/4/12"))).toBeCloseTo(1.2, 12);
-    expect(rulesOf(key("curved/-1/40/50/7")).weight(key("curved/-1/40/50/7"))).toBeCloseTo(0.5 * 0.4 * 1.2, 12);
-    expect(rulesOf(key("polyhedra/cubintet/12")).weight(key("polyhedra/cubintet/12"))).toBeCloseTo(1.2, 12);
+    expect(rulesOf(key("sphere/40/12")).weight(key("sphere/40/12"))).toBeCloseTo(0.5 * 1.2 * levelOf("sphere", 12), 12);
+    expect(rulesOf(key("sphere/4/12")).weight(key("sphere/4/12"))).toBeCloseTo(1.2 * levelOf("sphere", 12), 12);
+    expect(rulesOf(key("curved/-1/40/50/7")).weight(key("curved/-1/40/50/7"))).toBeCloseTo(0.5 * 0.4 * 1.2 * levelOf("curved", 7), 12);
+    expect(rulesOf(key("polyhedra/cubintet/12")).weight(key("polyhedra/cubintet/12"))).toBeCloseTo(1.2 * levelOf("polyhedra", 12), 12);
   });
 
   it("take a space problem's bound from the server", () => {
@@ -131,18 +132,26 @@ describe("Tighter space weights, bounds and units", () => {
     expect(rulesOf(k).bound(k)).toBeNull();
   });
 
-  it("pays 1.2 times for every row outside 2D in 2D, and changing a level changes the pay", () => {
+  it("gives each row a level that grows in proportion to P, and weighs a problem by shape x 1.2 x level", () => {
     expect(PREMIUM).toBe(1.2);
-    expect(FAMILY_FACTOR.polygon).toBe(1);
-    expect(Object.keys(LEVEL).sort()).toEqual(Object.keys(KERNEL_MS).sort());
-    for (const row of Object.keys(LEVEL)) expect(FAMILY_FACTOR[row]).toBeCloseTo(1.2, 12);
-    const k = key("sphere/4/12");
-    expect(rulesOf(k).weight(k)).toBeCloseTo(1.2, 12);
-    const was = LEVEL.sphere;
-    LEVEL.sphere = 2;
-    expect(rulesOf(k).weight(k)).toBeCloseTo(2.4, 12);
-    expect(recordPoints({ ...k, bound: 1.7, sPrev: 3, sNew: 2.9, tier: "open" })!.w).toBeCloseTo(2.4, 12);
-    LEVEL.sphere = was;
+    expect(Object.keys(LEVEL_AT_48).sort()).toEqual(Object.keys(KERNEL_MS).sort());
+    expect(levelOf("curved", 48)).toBe(24);
+    expect(levelOf("torus", 48)).toBe(0.44);
+    expect(levelOf("sphere", 96)).toBeCloseTo(3.2, 12);
+    for (const row of Object.keys(LEVEL_AT_48)) expect(levelOf(row, 100) / levelOf(row, 25)).toBeCloseTo(4, 12);
+    const k = key("curved/-1/3/4/100");
+    expect(rulesOf(k).weight(k)).toBeCloseTo(1.2 * 24 * (100 / 48), 12);
+    expect(levelFactor(k)).toBeCloseTo(24 * (100 / 48), 12);
+    expect(levelFactor(poly(24, 30, 60))).toBe(1);
+    // a curved problem at P = 100 pays 50 x 1.2 times the shape-and-cost pay of the same improvement
+    const p = recordPoints({ ...k, bound: 1.7, sPrev: 3, sNew: 2.9, tier: "open" })!;
+    expect(p.improvement).toBeCloseTo(50 * 1.2 * costFactor(k) * (p.nibble + p.size + p.gap), 6);
+  });
+
+  it("leaves the level out of the dealer's prior", () => {
+    const k = key("curved/-1/3/4/100");
+    const prior = priorPerEval({ ...k, tier: "open", weakness: null, bonusSpent: true });
+    expect(prior).toBeCloseTo(1.2 * 1 * costFactor(k) * RP_PER_EVAL, 9);
   });
 
   it("interpolates a kernel evaluation's cost on log-log axes, extrapolating along the end segments", () => {

@@ -121,7 +121,7 @@ const POINTS: How[] = [
       "Your records are sent to PolyPack under your display name, and points are paid from your very first click. You can change the name at any time in Settings.",
       "Each payment is made of a few parts. The two biggest parts reward a smaller side and a side that is closer to the area bound. The area bound is the smallest side that the total area of the pieces allows. Over a whole run they add up to the same total however many clicks it takes, so a run that shrinks the side more pays more.",
       `Every click that improves the board also pays a small step part, which is larger for larger steps.`,
-      "The payment is then multiplied by two weights. The shape weight makes shapes with many sides pay less, because they are close to circles. The cost weight lets slow problems pay about as much per second as fast ones. Problems outside 2D in 2D pay 1.2 times as much. Your points multiplier applies as well.",
+      "The payment is then multiplied by two weights. The shape weight makes shapes with many sides pay less, because they are close to circles. The cost weight lets slow problems pay about as much per second as fast ones. Problems outside 2D in 2D pay 1.2 times as much. Each family outside 2D in 2D also has a level, measured so that a second of solving pays about as much as in 2D in 2D. The level grows with the number of pieces. Your points multiplier applies as well.",
       `Two bonuses come on top. The first record on a problem pays a ${int(FIRST_BONUS)} RP bonus. That payment pays only the bonus, and later payments count from your first record. Taking the lead on a problem that already has a record pays a ${int(LEAD_BONUS)} RP bonus. The record can be another name's, a published value or a research record. The bonus is paid on the payment whose board is better than that record, at 6 decimals and by at least one millionth. That payment also pays the usual parts for how far the board is past the record.`,
       "A bonus is paid at most once for each problem in each cycle. Weights and multipliers do not change it, and it does not count toward rent. If the server does not accept your board as the record, the bonus is taken back with the other points, and it can be paid again later.",
       "The server checks every record you send, and a board is usually sent within a minute. If the server does not accept it as the record, for example because another name got there first, the points paid for that board are taken back. Points you have already spent are not owed, and your balance never goes below 0.",
@@ -133,7 +133,8 @@ const POINTS: How[] = [
       `<var>t</var><sub>size</sub> = ${int(SIZE_WEIGHT)} × ln(<var>s</var><sub>prev</sub> / <var>s</var><sub>new</sub>)`,
       `<var>t</var><sub>gap</sub> = ${int(GAP_WEIGHT)} × ln(<var>g</var><sub>prev</sub> / <var>g</var><sub>new</sub>)`,
       `<var>g</var><sub>prev</sub> = max(<var>s</var><sub>prev</sub> / <var>b</var> − 1, ${G_MIN}), <var>g</var><sub>new</sub> = max(<var>s</var><sub>new</sub> / <var>b</var> − 1, ${G_MIN})`,
-      `<var>w</var> = <var>d</var>(<var>N</var>) × <var>d</var>(<var>M</var>), where <var>d</var>(<var>n</var>) = 1 for <var>n</var> ≤ 20 and 20 / <var>n</var> above`,
+      `<var>w</var> = <var>d</var>(<var>N</var>) × <var>d</var>(<var>M</var>), where <var>d</var>(<var>n</var>) = 1 for <var>n</var> ≤ 20 and 20 / <var>n</var> above. Outside 2D in 2D, <var>w</var> is also multiplied by 1.2 × <var>L</var>`,
+      `<var>L</var> = <var>a</var> × <var>P</var> / 48`,
       `<var>m</var> = 2<sup><var>n</var></sup> × (1 + <var>C</var>) × <var>R</var>`,
     ],
     vars: [
@@ -162,6 +163,12 @@ const POINTS: How[] = [
         "<var>w</var>",
         "the shape weight. Pieces and containers with many sides are close to circles, so they pay less.",
       ],
+      [
+        "<var>L</var>",
+        "the level of a family outside 2D in 2D, which grows with the number of pieces",
+      ],
+      ["<var>a</var>", "the family's level at 48 pieces, from 0.44 for tori to 24 for curved spaces"],
+      ["<var>P</var>", "the number of pieces"],
       ["<var>d</var>(<var>n</var>)", "how distinct a shape with n sides is (n = 0 for a circle)"],
       ["<var>N</var>, <var>M</var>", "the number of sides of a piece and of the container (0 for a circle)"],
       [

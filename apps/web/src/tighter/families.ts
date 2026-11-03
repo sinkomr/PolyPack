@@ -131,33 +131,34 @@ function spaceScoreWord(p: SpaceKey): string {
 export const PREMIUM = 1.2;
 
 /**
- * The level of each row, to be fitted by a measurement of how much solver time each row's problems
- * take to improve. All 1 for now.
+ * The level of each row at P = 48 pieces (levelOf), fitted 2026-11-03 against 2D in 2D's RP per second of
+ * solver time, problems' lifetimes under Auto-advance, 141 runs, residuals within the seed noise (about 3x) [CALC].
+ * surface:nofold was not measured: the same as fold.
  */
-export const LEVEL: Record<string, number> = {
-  sphere: 1,
-  torus: 1,
-  curved: 1,
-  "surface:fold": 1,
-  "surface:nofold": 1,
-  polyhedra: 1,
-  "balls:ball": 1,
-  "balls:solid": 1,
+export const LEVEL_AT_48: Record<string, number> = {
+  sphere: 1.6,
+  torus: 0.44,
+  curved: 24,
+  "surface:fold": 1.1,
+  "surface:nofold": 1.1,
+  polyhedra: 1.2,
+  "balls:ball": 1.7,
+  "balls:solid": 5.9,
 };
 
-/** The family factor D_f of the shape weight [SPEC]: PREMIUM times the row's LEVEL; 1 for polygons. As the table was at load (spaceWeight reads PREMIUM and LEVEL themselves). */
-export const FAMILY_FACTOR: Readonly<Record<string, number>> = {
-  polygon: 1,
-  ...Object.fromEntries(Object.entries(LEVEL).map(([row, level]) => [row, PREMIUM * level])),
-};
+/** The level of a row at P pieces: it grows in proportion to P. */
+export const levelOf = (row: string, P: number): number => (LEVEL_AT_48[row] * P) / 48;
 
-/** The weight of a space problem: d(N) for polygon pieces (and d(M) for a polygon container), 1 for solids and balls, times D_f. */
+/** The level of a problem: 1 for a polygon. */
+export const levelFactor = (p: ProblemKey): number => (isPolygon(p) ? 1 : levelOf(unitsRow(p), p.P));
+
+/** The weight of a space problem: d(N) for polygon pieces (and d(M) for a polygon container), 1 for solids and balls, times PREMIUM and the level. */
 function spaceWeight(p: SpaceKey): number {
   const f = fieldsOf(p);
   let w = 1;
   if (f.family === "surface" || f.family === "sphere" || f.family === "torus") w = distinctness(f.N);
   if (f.family === "curved") w = distinctness(f.N) * distinctness(f.M);
-  return w * PREMIUM * LEVEL[unitsRow(p)];
+  return w * PREMIUM * levelOf(unitsRow(p), p.P);
 }
 
 // ---------- cost of an evaluation ----------
@@ -206,7 +207,7 @@ export const KERNEL_MS: Readonly<Record<string, readonly (readonly [number, numb
   "balls:solid": [[12, 0.0777], [24, 0.25], [48, 0.504], [100, 1.2]],
 };
 
-/** The row of KERNEL_MS, LEVEL and FAMILY_FACTOR a space problem is in. */
+/** The row of KERNEL_MS and LEVEL_AT_48 a space problem is in. */
 export function unitsRow(p: SpaceKey): string {
   const f = fieldsOf(p);
   if (f.family === "surface") return `surface:${f.mode}`;

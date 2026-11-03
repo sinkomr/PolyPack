@@ -1,5 +1,5 @@
 import { Bandit, Prior, observe, sampleArm } from "./bandit";
-import { msPerEval, rulesOf } from "./families";
+import { levelFactor, msPerEval, rulesOf } from "./families";
 import { FRONTIER_P, FRONTIER_SIDES, PolygonKey, ProblemKey, isPolygon, keyOf, parseKey, poly } from "./frontier";
 import { COMBO_RECORDS, FIRST_BONUS, LEAD_BONUS, TIERS, Tier, costFactor } from "./points";
 
@@ -115,7 +115,8 @@ export function expectedBonus(c: { tier: Tier; weakness: number | null; bonusSpe
  * factor) plus the expected flat bonus over BONUS_EVALS evaluations.
  */
 export function priorPerEval(c: ProblemKey & { tier: Tier; weakness: number | null; bonusSpent?: boolean }): number {
-  return rulesOf(c).weight(c) * room(c.tier, c.weakness) * costFactor(c) * RP_PER_EVAL + expectedBonus(c) / BONUS_EVALS;
+  // the level makes up for how rarely those problems improve per evaluation, which room models for a polygon, so the prior leaves it out
+  return (rulesOf(c).weight(c) / levelFactor(c)) * room(c.tier, c.weakness) * costFactor(c) * RP_PER_EVAL + expectedBonus(c) / BONUS_EVALS;
 }
 
 /** The size rings, largest first (plan §3): ring k holds N+M+P ≥ RINGS[k] and below RINGS[k − 1]. */
