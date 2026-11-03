@@ -702,7 +702,7 @@ const RENT_VARS: readonly Var[] = [
   ],
   [sym("a"), "levels of Higher rent"],
   [sym("m"), "your points multiplier now (resets, collections and the rewards of cycle rules)"],
-  [sym("Δ"), "hours since the record's last payday (24 hours a day, 168 hours at most)"],
+  [sym("Δ"), "hours since the last payday, or since you won the record if that was later (168 hours at most)"],
 ];
 
 /** A method whose runs have a warm-up (methods/ warmup), with its evaluations at tuning level 0. */
@@ -1116,11 +1116,11 @@ export const UPGRADES: readonly Upgrade[] = [
     name: "Records pay rent",
     cost: 200_000,
     requires: ["advance"],
-    effect: "Each record you still hold pays a day of rent once a day.",
+    effect: "Each record you still hold pays its rent every day at noon.",
     how: {
       text: [
-        "Each record you hold earns rent every hour, even while this page is closed. It is paid once a day. On payday, the game checks all your records with the server at once. It pays the rent for the days since each record's last payday, up to a week of them.",
-        "If another name has taken a record, the rent since its last payday is not paid.",
+        "Each record you hold earns rent every hour, even while this page is closed. Payday is every day at noon, your local time. If the game is closed then, payday comes when you next open it. On payday, the game checks all your records with the server at once. Each record that is still yours is paid for the time since the last payday, or since you won it if that was later, for at most 7 days.",
+        "If another name has taken a record, it is paid nothing for that time.",
         "A reset takes this upgrade away unless Head start gives it back. No rent builds up while you do not own it. When you own it again, every record you still hold starts earning from that moment, and rent that was not paid before is lost.",
       ],
       math: RENT_MATH,

@@ -15,6 +15,7 @@ import {
   pendingPoints,
   reserveSeed,
 } from "../src/tighter/game";
+import type { PastProblem } from "../src/tighter/game";
 import { recordSend } from "../src/tighter/pacer";
 import {
   SAVE_VERSION,
@@ -41,7 +42,7 @@ import {
   upgrade,
 } from "../src/tighter/upgrades";
 import { readFileSync } from "node:fs";
-import { RENT_PAYDAY_MS, paydayDueAt } from "../src/tighter/economy";
+import { RENT_PAYDAY_MS, nextNoon, paydayDueAt } from "../src/tighter/economy";
 
 const T0 = 1_700_000_000_000;
 
@@ -300,7 +301,92 @@ describe("Tighter saves", () => {
     expect(b.ok && b.state.economy.paydayAt).toBeUndefined();
     raw.economy.paydayAt = T0 + 10 * RENT_PAYDAY_MS;
     const f = readSave(raw, T0);
-    expect(f.ok && paydayDueAt(f.state.economy, T0)).toBe(T0 + RENT_PAYDAY_MS);
+    expect(f.ok && paydayDueAt(f.state.economy, T0)).toBe(nextNoon(T0));
+  });
+
+  it("keeps a record's base and the paid-until time, and leaves both out when missing", () => {
+    const s = played();
+    s.queue[0].base = 123.5;
+    s.past.push({
+      N: 21,
+      M: 21,
+      P: 41,
+      key: "21/21/41",
+      tier: "open",
+      best: 5,
+      verified: 5,
+      ourId: 4,
+      heldSince: T0,
+      base: 77,
+      rp: 90,
+      leftAt: T0,
+    });
+    s.economy.paidUntil = T0 + 3_600_000;
+    const text = toJson(s);
+    expect(JSON.parse(text).economy).not.toHaveProperty("base");
+    expect(JSON.parse(text).economy).not.toHaveProperty("checks");
+    const r = fromJson(text, T0);
+    expect(r.ok && r.state.queue[0].base).toBe(123.5);
+    expect(r.ok && r.state.past.find((q) => q.key === "21/21/41")!.base).toBe(77);
+    expect(r.ok && r.state.economy.paidUntil).toBe(T0 + 3_600_000);
+    // missing or malformed: left out
+    const raw = JSON.parse(text);
+    delete raw.queue[0].base;
+    raw.past[raw.past.length - 1].base = "lots";
+    delete raw.economy.paidUntil;
+    const m = readSave(raw, T0);
+    expect(m.ok && m.state.queue[0]).not.toHaveProperty("base");
+    expect(m.ok && m.state.past.find((q) => q.key === "21/21/41")).not.toHaveProperty("base");
+    expect(m.ok && m.state.economy).not.toHaveProperty("paidUntil");
+  });
+
+  it("moves the old economy.base and economy.checks onto the records and a payday window", () => {
+    const s = played();
+    s.owned.push("rent");
+    const key = s.queue[0].key;
+    const past = (P: number, ourId: number | null): PastProblem => ({
+      N: 21,
+      M: 21,
+      P,
+      key: `21/21/${P}`,
+      tier: "open",
+      best: 5,
+      verified: 5,
+      ourId,
+      rp: 10,
+      leftAt: T0,
+    });
+    s.past.push(past(41, 5), past(42, 6), past(43, 7), past(44, null));
+    s.past.find((q) => q.key === "21/21/41")!.base = 8;
+    const raw = JSON.parse(toJson(s));
+    raw.queue[0].ourId = 3;
+    delete raw.queue[0].heldSince;
+    delete raw.queue[0].base;
+    const D = 24 * 3_600_000;
+    raw.economy.base = { [key]: 40, "21/21/41": 99, "21/21/42": 55, "21/21/44": 5 };
+    // three held records settled at the last payday, one won after it, one lost
+    raw.economy.checks = { [key]: T0 - D, "21/21/41": T0 - D, "21/21/42": T0 - D, "21/21/43": T0 - 6 * 3_600_000 };
+    delete raw.economy.paidUntil;
+    const r = readSave(raw, T0);
+    expect(r.ok).toBe(true);
+    if (!r.ok) return;
+    const st = r.state;
+    expect(st.queue[0].base).toBe(40);
+    // an entry that already has a base keeps it
+    expect(st.past.find((q) => q.key === "21/21/41")!.base).toBe(8);
+    expect(st.past.find((q) => q.key === "21/21/42")!.base).toBe(55);
+    expect(st.past.find((q) => q.key === "21/21/43")!.base).toBeUndefined();
+    expect(st.economy.paidUntil).toBe(T0 - D);
+    expect(st.past.find((q) => q.key === "21/21/43")!.heldSince).toBe(T0 - 6 * 3_600_000);
+    expect(st.past.find((q) => q.key === "21/21/42")!.heldSince).toBeUndefined();
+    const written = JSON.parse(toJson(st));
+    expect(written.economy).not.toHaveProperty("base");
+    expect(written.economy).not.toHaveProperty("checks");
+    // without Rent nothing becomes a window
+    raw.owned = raw.owned.filter((id: string) => id !== "rent");
+    const n = readSave(raw, T0);
+    expect(n.ok && n.state.economy.paidUntil).toBeUndefined();
+    expect(n.ok && n.state.queue[0].base).toBe(40);
   });
 
   it("keep levels only for owned levelled upgrades, within their range", () => {
@@ -313,7 +399,7 @@ describe("Tighter saves", () => {
     raw.economy = { recorded: ["1/2/3", "bad", 4], rentPaid: -1 };
     const t = readSave(raw, T0);
     expect(t.ok && t.state.standing).toMatchObject({ points: 0, total: 0, resets: 0 });
-    expect(t.ok && t.state.economy).toMatchObject({ recorded: ["1/2/3"], rentPaid: 0, checks: {}, lastRent: null });
+    expect(t.ok && t.state.economy).toMatchObject({ recorded: ["1/2/3"], rentPaid: 0, lastRent: null });
   });
 
   const rungs = ["auto1", "auto2", "auto3", "auto4", "auto5", "auto6", "auto7", "auto8", "auto9"];
@@ -929,6 +1015,8 @@ describe("Tighter saves of version 3", () => {
     const raw = JSON.parse(toJson(played()));
     return {
       ...raw,
+      // a save of that time kept no base on the records
+      queue: raw.queue.map(({ base: _base, ...q }: Record<string, unknown>) => q),
       version: 3,
       owned,
       levels: {},
@@ -984,7 +1072,8 @@ describe("Tighter saves of version 3", () => {
     expect(r.state.rpEarned).toBeCloseTo(1000 * f, 9);
     expect(r.state.standing.cycleEarned).toBeCloseTo(800 * f, 9);
     expect(r.state.standing.history[0].earned).toBeCloseTo(5000 * f, 9);
-    expect(r.state.economy.base["24/30/40"]).toBeCloseTo(50 * f, 9);
+    expect(r.state.queue.find((q) => q.key === "24/30/40")!.base).toBeCloseTo(50 * f, 9);
+    expect(r.state.economy).not.toHaveProperty("base");
     expect(r.state.economy.rentPaid).toBeCloseTo(12.5 * f, 9);
     expect(r.state.economy.lastRent!.rp).toBeCloseTo(2 * f, 9);
     const before = played();

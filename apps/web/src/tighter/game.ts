@@ -10,7 +10,7 @@ import { PacerState, newPacer } from "./pacer";
 import { BonusKind, FLOOR, LEAD_MIN, Points, Tier, recordPoints, show6 } from "./points";
 import type { RunRecord, SubmitOutcome } from "./submission";
 import { generatePlayerName, sanitizeName } from "./names";
-import { EconomyState, addBase, forgetHeld, newEconomy, noteRecorded, pointsMultiplier, takeBase } from "./economy";
+import { EconomyState, addBase, newEconomy, noteRecorded, pointsMultiplier, takeBase } from "./economy";
 import { PicksState, learnOnLeave, newPicks } from "./picks";
 import type { LatticeResult } from "./methods/lattice";
 import { RunPlanState, newRunPlan } from "./runplan";
@@ -105,6 +105,8 @@ export interface ProblemFields {
    * the player's own improvements, cleared when it is lost. Missing for a record from before it was kept.
    */
   heldSince?: number;
+  /** Record points this problem earned before multipliers (rent is a share of it). Missing: its `rp`, from before it was kept. */
+  base?: number;
   /** The server took a problem out of play (409), or refused this score (400/422). */
   closed: boolean;
   refused: { score: number; reasons: string[] } | null;
@@ -163,6 +165,8 @@ export interface PastFields {
   ourId: number | null;
   /** See ProblemFields.heldSince. */
   heldSince?: number;
+  /** See ProblemFields.base. */
+  base?: number;
   rp: number;
   leftAt: number;
 }
@@ -732,7 +736,7 @@ export function pay(s: GameState, p: ProblemState): PaidPoints | null {
   income.add(Date.now(), points.total, "record", p.tier);
   pushRpTrace(p);
   p.unconfirmed += points.total;
-  addBase(s.economy, p.key, points.base);
+  addBase(p, points.base);
   if (points.bonus) {
     s.bonusPaid[p.key] = s.standing.resets;
     p.bonusOpen = true;
@@ -751,7 +755,7 @@ export function payAll(s: GameState): number {
 /** Takes back points the server did not confirm. Spent points are not owed: the balance stops at zero. */
 function takeBack(s: GameState, p: ProblemState, rp: number): number {
   if (!(rp > 0)) return 0;
-  takeBase(s.economy, p.key, rp, p.rp);
+  takeBase(p, rp, p.rp);
   s.rp = Math.max(0, s.rp - rp);
   s.rpEarned = Math.max(0, s.rpEarned - rp);
   s.standing.cycleEarned = Math.max(0, s.standing.cycleEarned - rp);
@@ -849,7 +853,7 @@ export function applyAnswer(
     p.leader = { score: outcome.score, name: sanitizeName(s.name), id: outcome.id };
     p.refused = null;
     // it counts for collections, and with Rent its rent runs
-    noteRecorded(s, ownedSet(s), p, now);
+    noteRecorded(s, p);
   } else if (outcome.kind === "behind") {
     // another entry got there first: nothing paid since the last confirmation was a record
     takenBack = takeBack(s, p, carried + p.unconfirmed);
@@ -857,8 +861,7 @@ export function applyAnswer(
     // the flat bonus went with them, and may be paid again
     if (p.sending?.bonus || p.bonusOpen) delete s.bonusPaid[p.key];
     p.bonusOpen = false;
-    // a record of ours it overtook is lost now: no rent for it from its last check on
-    if (p.ourId !== null) forgetHeld(s.economy, p.key);
+    // a record of ours it overtook is lost now: no rent for the time since the last payday
     p.ourId = null;
     delete p.heldSince;
     if (outcome.leaderScore !== null) {
@@ -932,8 +935,6 @@ export function applyLeader(
     p.ourId = null;
     delete p.heldSince;
   }
-  // a record lost pays no rent, not even for the time since its last check
-  if (lost && s) forgetHeld(s.economy, p.key);
   if ("leader" in p) p.leader = leader;
   return { lost, reconciled: false, confirmed: 0 };
 }
@@ -1015,7 +1016,7 @@ export function drop(s: GameState, key: string, now: number): boolean {
 
 /**
  * Past entries beyond PAST_LIMIT leave the save. A record still held goes to the archive with its
- * rent (base and check, taken out of the economy); an entry that is not held is dropped.
+ * base; an entry that is not held is dropped.
  */
 function archiveTrimmed(s: GameState, trimmed: PastProblem[]): void {
   const held = trimmed.filter((p) => p.ourId !== null);
@@ -1023,12 +1024,6 @@ function archiveTrimmed(s: GameState, trimmed: PastProblem[]): void {
   const a = ensureArchive(s);
   for (const p of held) {
     const row: ArchiveRow = { ...p };
-    const base = s.economy.base[p.key];
-    const check = s.economy.checks[p.key];
-    if (base !== undefined) row.base = base;
-    if (check !== undefined) row.check = check;
-    delete s.economy.base[p.key];
-    delete s.economy.checks[p.key];
     a.put(row);
   }
 }
@@ -1039,7 +1034,7 @@ export function leave(s: GameState, key: string, now: number): void {
   if (i < 0) return;
   const [p] = s.queue.splice(i, 1);
   // the learning dealer learns what the problem paid per evaluation, from the points as earned, before standing and collections multiply them
-  learnOnLeave(s.picks, { key: p.key, rp: s.economy.base[p.key] ?? p.rp, evaluations: p.evaluations });
+  learnOnLeave(s.picks, { key: p.key, rp: p.base ?? p.rp, evaluations: p.evaluations });
   s.past.push({
     ...keyPart(p),
     key: p.key,
@@ -1048,6 +1043,7 @@ export function leave(s: GameState, key: string, now: number): void {
     verified: p.verified,
     ourId: p.ourId,
     ...(p.heldSince !== undefined && p.ourId !== null ? { heldSince: p.heldSince } : {}),
+    ...(p.base !== undefined ? { base: p.base } : {}),
     rp: p.rp,
     leftAt: now,
   });

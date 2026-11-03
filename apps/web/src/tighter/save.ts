@@ -26,6 +26,7 @@ import { Tier, isTier } from "./points";
 import type { RunRecord } from "./submission";
 import type { ArchiveRow } from "./archive";
 import { normalizeEconomy } from "./economy";
+import type { EconomyState } from "./economy";
 import { normalizePicks } from "./picks";
 import { normalizeRunPlan } from "./runplan";
 import { plainConfig } from "./space-submission";
@@ -855,6 +856,7 @@ function problemState(v: unknown, now: number): ProblemState | null {
     verified: posOrNull(v.verified),
     ourId: idOrNull(v.ourId),
     ...heldSinceOf(v),
+    ...baseOf(v),
     closed: bool(v.closed, false),
     refused,
     leaving: bool(v.leaving, false),
@@ -889,6 +891,7 @@ function pastProblem(v: unknown, now: number): PastProblem | null {
     verified: posOrNull(v.verified),
     ourId: idOrNull(v.ourId),
     ...heldSinceOf(v),
+    ...baseOf(v),
     rp: num(v.rp, 0, 0),
     leftAt: num(v.leftAt, now),
   };
@@ -901,6 +904,52 @@ function heldSinceOf(v: Record<string, unknown>): { heldSince?: number } {
     : {};
 }
 
+/** The optional `base` of a problem or past entry (record points earned before multipliers): kept when it is a number from 0. */
+function baseOf(v: Record<string, unknown>): { base?: number } {
+  return typeof v.base === "number" && Number.isFinite(v.base) && v.base >= 0 ? { base: v.base } : {};
+}
+
+/**
+ * A save from before the bases and the payday window lived where they do now: economy.base (points
+ * earned per problem) is copied onto the queue and past entries with that key that have none, and with
+ * Rent owned economy.checks (the last settlement of each record held) gives the window start
+ * paidUntil, the median of the held records' checks (nearly all are the last payday). A held record
+ * whose check is later than that and that has no heldSince was won after the payday: its check is
+ * when it became the player's. Both maps are then dropped (normalizeEconomy does not read them).
+ */
+function adoptLegacyRent(
+  old: unknown,
+  economy: EconomyState,
+  entries: (ProblemState | PastProblem)[],
+  rent: boolean,
+): void {
+  if (!isObj(old)) return;
+  const read = (m: unknown): Map<string, number> => {
+    const out = new Map<string, number>();
+    if (isObj(m))
+      for (const [k, x] of Object.entries(m))
+        if (parseDealtKey(k) && typeof x === "number" && Number.isFinite(x) && x >= 0) out.set(k, x);
+    return out;
+  };
+  const bases = read(old.base);
+  for (const p of entries) {
+    const b = bases.get(p.key);
+    if (p.base === undefined && b !== undefined) p.base = b;
+  }
+  if (!rent || economy.paidUntil !== undefined) return;
+  const checks = read(old.checks);
+  const held = entries.filter((p) => p.ourId !== null && checks.has(p.key));
+  if (!held.length) return;
+  const sorted = held.map((p) => checks.get(p.key)!).sort((a, b) => a - b);
+  const m = sorted.length >> 1;
+  const median = sorted.length % 2 ? sorted[m] : (sorted[m - 1] + sorted[m]) / 2;
+  economy.paidUntil = median;
+  for (const p of held) {
+    const c = checks.get(p.key)!;
+    if (c > median && p.heldSince === undefined) p.heldSince = c;
+  }
+}
+
 /** Rows of the record archive in an export: past entries with their rent fields. Rows that are not valid are dropped. */
 export function archiveRows(v: unknown, now: number): ArchiveRow[] {
   const out: ArchiveRow[] = [];
@@ -910,10 +959,7 @@ export function archiveRows(v: unknown, now: number): ArchiveRow[] {
     const p = pastProblem(r, now);
     if (!p || p.ourId === null || seen.has(p.key)) continue;
     seen.add(p.key);
-    const x = r as Record<string, unknown>;
     const row: ArchiveRow = { ...p };
-    if (typeof x.base === "number" && Number.isFinite(x.base) && x.base >= 0) row.base = x.base;
-    if (typeof x.check === "number" && Number.isFinite(x.check) && x.check >= 0) row.check = x.check;
     out.push(row);
   }
   return out;
@@ -996,6 +1042,8 @@ export function normalize(save: Record<string, unknown>, now: number): GameState
           );
     }
   const standing = normalizeStanding(save.standing, now);
+  const economy = normalizeEconomy(save.economy);
+  adoptLegacyRent(save.economy, economy, [...queue, ...past], owned.includes("rent"));
   standing.points += refund.standing;
   const evaluations = int(stats.evaluations, 0);
   const allMethods = methods(owning(owned, levels));
@@ -1064,7 +1112,7 @@ export function normalize(save: Record<string, unknown>, now: number): GameState
           .map((l) => ({ t: l.t, text: l.text.slice(0, 300) }))
       : [],
     standing,
-    economy: normalizeEconomy(save.economy),
+    economy,
     picks: normalizePicks(save.picks),
     runplan: normalizeRunPlan(save.runplan, treeMethods()),
     // optional: a save without it has paid no bonus

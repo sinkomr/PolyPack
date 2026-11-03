@@ -420,7 +420,7 @@ test("long game: records counted, rent paid on a check, a reset under a rule tha
   await expect.poll(async () => (await focused(page)).ourId, { timeout: 20_000 }).not.toBeNull();
   const p = await focused(page);
   // a first record pays only its flat bonus, which rent's base does not count: give the record a base
-  await page.evaluate((k) => ((window as any).tighter.state.economy.base[k] = 5000), p.key);
+  await page.evaluate((k) => ((window as any).tighter.state.queue.find((q: any) => q.key === k).base = 5000), p.key);
   // a confirmed record is remembered for collections, with its tier
   await expect.poll(() => game(page, (s) => s.economy.recorded)).toContain(p.key);
   await give(page, ["rent", "collections"]);
@@ -430,10 +430,10 @@ test("long game: records counted, rent paid on a check, a reset under a rule tha
 
   // rent: the record's rent starts, the first payday (at once, with Rent owned) pays the few seconds
   // since, and a day later the next payday finds the record still ours and pays the day
-  await expect.poll(() => game(page, (s) => s.economy.checks?.[s.focus] !== undefined), { timeout: 15_000 }).toBe(true);
-  const rate = await game(page, (s) => s.economy.base[s.focus]);
+  await expect.poll(() => game(page, (s) => s.economy.paidUntil !== undefined), { timeout: 15_000 }).toBe(true);
+  const rate = await game(page, (s) => s.queue.find((q: any) => q.key === s.focus).base);
   expect(rate).toBeGreaterThan(0);
-  await expect(page.locator("#t-rc-stats")).toContainText(/Next payday\s*in (23 h|1 d 0 h)/, { timeout: 20_000 });
+  await expect(page.locator("#t-rc-stats")).toContainText(/Next payday\s*in /, { timeout: 20_000 });
   const before = await game(page, (s) => s.economy.rentPaid);
   await page.evaluate(() => (window as any).tighter.skipAhead(24 * 3_600_000));
   await expect.poll(() => game(page, (s) => s.economy.rentPaid), { timeout: 20_000 }).toBeGreaterThan(before);
@@ -475,7 +475,7 @@ test("long game: records counted, rent paid on a check, a reset under a rule tha
     owned: s.owned,
     standing: s.standing,
     recorded: s.economy.recorded,
-    checks: s.economy.checks,
+    paidUntil: s.economy.paidUntil,
     ourId: s.queue.find((q: { key: string }) => q.key === s.focus)?.ourId,
   }));
   expect(after.rp).toBe(0);
@@ -490,7 +490,7 @@ test("long game: records counted, rent paid on a check, a reset under a rule tha
   expect(after.owned).not.toContain("rent");
   expect(after.owned).not.toContain("collections");
   // no rent runs without Rent, and the record is still ours and still counted
-  expect(after.checks).toEqual({});
+  expect(after.paidUntil).toBeUndefined();
   expect(after.recorded).toContain(p.key);
   expect(after.ourId).toBe(p.ourId);
   await expect(page.locator("#t-bar-standing")).toHaveText("1 · ×2");

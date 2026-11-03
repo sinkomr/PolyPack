@@ -7,19 +7,15 @@ import { RENT_CLASSES, rentClass } from "./standing";
  * The save keeps the last PAST_LIMIT problems that left the queue. A record the player still holds on
  * an older problem would be forgotten with it, so it moves here instead: one row per problem key,
  * kept in IndexedDB (the save is one string in localStorage, which holds about 5 MB). A row is the
- * past entry plus the rent fields that live in the economy for problems in the save.
+ * past entry, with its base (the record points earned before multipliers) that rent is a share of.
  *
  * The archive is never part of the save string (toJson): a game holds it by reference (attachArchive),
  * and it is saved on its own, incrementally. Without IndexedDB, or when it fails, the rows stay in
  * memory and are lost on a reload, which is how records past the save's limit behaved before.
  */
 
-export type ArchiveRow = PastProblem & {
-  /** Record points earned on the problem before multipliers (economy.base); the entry's `rp` when missing. */
-  base?: number;
-  /** When the rent of this record was last settled (economy.checks); missing: no rent is running. */
-  check?: number;
-};
+/** A row is a past entry; its `base` (record points earned before multipliers) is the rent's basis. */
+export type ArchiveRow = PastProblem;
 
 /** Where the rows are kept. */
 export interface ArchiveStore {
@@ -107,7 +103,6 @@ export class Archive {
   /** Sum of the rows' base by rent class (standing.ts rentClass), kept as rows change. */
   private sums: number[] = new Array(RENT_CLASSES).fill(0);
   private writing: Promise<void> = Promise.resolve();
-  private waitingMemo: { version: number; at: number; sums: number[] } | null = null;
   /** Bumped at every change of a row, for caches. */
   version = 0;
   /** Whether the rows of the store are in (a memory archive starts loaded). */
@@ -170,43 +165,11 @@ export class Archive {
     return true;
   }
 
-  /** A row was changed in place (its check): write it at the next flush. */
-  touch(key: string): void {
-    if (!this.rows.has(key)) return;
-    this.dirty.add(key);
-    this.version++;
-  }
-
-  /** Every row's rent restarts (a reset): checks become `at`, or are cleared when `at` is null. */
-  restartChecks(at: number | null): void {
-    for (const r of this.rows.values()) {
-      if (at === null) delete r.check;
-      else r.check = at;
-      this.dirty.add(r.key);
-    }
-    this.version++;
-  }
-
   /** Replaces every row (an import). */
   replaceAll(rows: ArchiveRow[]): void {
     for (const k of [...this.rows.keys()]) this.remove(k);
     this.sums.fill(0);
     for (const r of rows) this.put(r);
-  }
-
-  /**
-   * Per rent class, the sum over rows with a running check of base × the hours since it (at most
-   * `windowMs`). Kept for a few seconds: it is a pass over every row.
-   */
-  waitingSums(now: number, windowMs: number): number[] {
-    const m = this.waitingMemo;
-    if (m && m.version === this.version && Math.abs(now - m.at) < 5000) return m.sums;
-    const sums: number[] = new Array(RENT_CLASSES).fill(0);
-    for (const r of this.rows.values())
-      if (r.check !== undefined)
-        sums[rentClass(r)] += (effectiveBase(r) * Math.min(windowMs, Math.max(0, now - r.check))) / 3_600_000;
-    this.waitingMemo = { version: this.version, at: now, sums };
-    return sums;
   }
 
   /**

@@ -3,7 +3,6 @@ import { AUTO_CLICK_EVALS, DEAL_CLICKS } from "./dealer";
 import {
   COMBO_BONUS,
   COMBO_RECORDS,
-  RENT_PAYDAY_MS,
   RENT_GROWTH,
   RENT_RETRY_MS,
   RENT_SHARE,
@@ -316,7 +315,7 @@ const RECORDS: How[] = [
   {
     text: [
       `Once you own Records pay rent, every record you still hold earns rent each hour. The rent is ${pct(RENT_SHARE)} of the points its problem paid before multipliers, and each level of Higher rent multiplies it by ${RENT_GROWTH}. Your points multiplier at that moment applies as well.`,
-      `Rent builds up all the time, even while the game is closed. It is payday every ${Math.round(RENT_PAYDAY_MS / 3_600_000)} hours. The time of the next one is saved, so opening the page again does not start one early. The game asks the server about all your records at once, in groups of up to 200. A record that is still yours pays the rent since its last payday, for at most ${Math.round(RENT_WINDOW_MS / 86_400_000)} days. If someone has beaten it, you are paid nothing for that time. A record you won during the day is paid for its part of a day. A record the server could not answer is tried again after ${minutes(RENT_RETRY_MS)}.`,
+      `Rent builds up all the time, even while the game is closed. Payday is every day at noon, your local time. If the game is closed then, payday comes when you next open it. The time of the next one is saved, so opening the page again does not start one early. The game asks the server about all your records at once, in groups of up to 200. When every group has answered, each record that is still yours is paid the rent for the time since the last payday, or since you won it if that was later, for at most ${Math.round(RENT_WINDOW_MS / 86_400_000)} days. If someone has beaten a record, you are paid nothing for it. If a group does not answer, nothing is paid and the game tries again after ${minutes(RENT_RETRY_MS)}. The time that was not paid still counts, up to ${Math.round(RENT_WINDOW_MS / 86_400_000)} days.`,
       "Rent counts as record points earned in this cycle, so it also counts toward a reset. A reset takes Records pay rent away unless Head start gives it back. No rent builds up while you do not own it. Once you own it again, every record you still hold starts earning from that moment, and the rent that was not paid before is lost.",
     ],
     math: [
@@ -328,7 +327,7 @@ const RECORDS: How[] = [
       ["<var>p</var>", "the RP its problem earned before multipliers, less any taken back"],
       ["<var>v</var>", "your level of Higher rent (0 without it)"],
       ["<var>m</var>", "your points multiplier on that problem now (resets, collections and rules)"],
-      ["<var>t</var>", "the time since the record's last payday, in hours"],
+      ["<var>t</var>", "the time since the last payday, or since you won the record if that was later, in hours"],
     ],
   },
   {

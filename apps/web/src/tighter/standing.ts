@@ -12,7 +12,7 @@ import {
 import { RESET_GROWTH, RESET_MIN } from "./points";
 import type { GameState } from "./game";
 import { archiveOf, archivedCount } from "./archive";
-import { tidyRent } from "./economy";
+import { nextNoon, tidyRent } from "./economy";
 import {
   EvolveMethod,
   Funds,
@@ -470,11 +470,13 @@ export function resetCycle(s: GameState, now: number): number {
   s.owned = tree.owned;
   s.levels = tree.levels;
   // rent accrued and not paid is lost; with Rent back (Head start), the records held start earning now
-  s.economy.checks = {};
+  // and the first payday is the next noon
+  delete s.economy.paidUntil;
   delete s.economy.paydayAt;
-  if (s.owned.includes("rent"))
-    for (const p of [...s.queue, ...s.past]) if (p.ourId !== null) s.economy.checks[p.key] = now;
-  archiveOf(s)?.restartChecks(s.owned.includes("rent") ? now : null);
+  if (s.owned.includes("rent")) {
+    s.economy.paidUntil = now;
+    s.economy.paydayAt = nextNoon(now);
+  }
   s.rp = Math.min(s.rp, waiting);
   st.cycleEarned = waiting;
   st.cycleStartedAt = now;

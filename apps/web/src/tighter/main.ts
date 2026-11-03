@@ -503,7 +503,7 @@ document.addEventListener("visibilitychange", () => {
 const owned = () => ownedSet(state);
 const focused = () => problem(state, state.focus);
 /** A problem's points as earned, before standing and collections multiply them: what method match learns from. */
-const basePoints = (p: ProblemState) => state.economy.base[p.key] ?? p.rp;
+const basePoints = (p: ProblemState) => p.base ?? p.rp;
 /** A method the player owns and the cycle's rule allows. */
 const allowedMethod = (o: Owned, m: EvolveMethod): boolean =>
   methods(o).includes(m) && ruleAllowsMethod(state.standing, m);
@@ -2486,6 +2486,13 @@ function plainRanked(c: Candidate): Ranked {
   return rankCandidates([c], null, () => 0.5)[0];
 }
 
+/** A retaken problem comes back from the past, and keeps the base its entry still had. */
+function retakeFromPast(p: ProblemState): void {
+  const old = state.past.find((q) => q.key === p.key);
+  if (old?.base !== undefined) p.base = old.base;
+  state.past = state.past.filter((q) => q.key !== p.key);
+}
+
 /**
  * The problem a candidate becomes: an open problem starts bare; a site record, a retake or a
  * published value starts from a packing the server keeps (the leader's, or the best drawable one
@@ -2526,7 +2533,7 @@ async function materialize(c0: Candidate): Promise<ProblemState | null> {
   p.leader = c.leader ? { ...c.leader } : null;
   p.published = c.target;
   // a retaken problem comes back from the past
-  if (c.retake) state.past = state.past.filter((q) => q.key !== p.key);
+  if (c.retake) retakeFromPast(p);
   return p;
 }
 
@@ -2549,7 +2556,7 @@ async function materializeSpace(c: Candidate & SpaceKey): Promise<ProblemState |
     p.leader = { ...read.leader };
   }
   // a retaken problem comes back from the past
-  if (c.retake) state.past = state.past.filter((q) => q.key !== p.key);
+  if (c.retake) retakeFromPast(p);
   return p;
 }
 
@@ -2968,14 +2975,15 @@ async function findLostRecords(): Promise<void> {
   }
 }
 
-// ---------- rent: a payday once a day ----------
+// ---------- rent: a payday every day at noon ----------
 
 let paydayRunning = false;
 
 /**
  * With Rent: once the saved payday time (economy.paydayAt) has come, all records held are looked up
- * in batches (payday.ts) and the ones still ours pay the rent since their last payday. Records the
- * server did not answer are tried again 10 minutes later. A save without a payday time runs one at
+ * in batches (payday.ts) and, when every batch has answered, the ones still ours pay the rent for
+ * their window. The next payday is the next local noon. A failed request pays nothing and is tried
+ * again 10 minutes later. A save without a payday time runs one at
  * its next load.
  */
 async function paydayTick(): Promise<void> {
@@ -4440,7 +4448,7 @@ function renderRecords(o: Owned): void {
   text(
     "t-rc-note",
     rent
-      ? "Once a day, the game asks the server which of your records you still hold. Each one pays the rent it built up since its last payday." +
+      ? "Every day at noon, the game asks the server which of your records you still hold. Each one pays the rent it built up since the last payday, or since you won it if that was later." +
           (last
             ? ` The last rent paid was +${fmtRP(last.rp)} RP on ${titleOf(last.key)}, ${fmtAgo(now() - last.at)}.`
             : "")

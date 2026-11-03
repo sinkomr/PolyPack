@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { GameState, addToQueue, buy, newGame, newProblem } from "../src/tighter/game";
+import { nextNoon } from "../src/tighter/economy";
 import { RESET_MIN, grantHeadStart, resetCycle } from "../src/tighter/standing";
 import { UpgradeId, autoPerSecond, headStartGives, owning, upgrade } from "../src/tighter/upgrades";
 import { fromJson, readSave, toJson } from "../src/tighter/save";
@@ -52,7 +53,8 @@ describe("Head start now", () => {
     const now = T0 + 5000;
     const given = grantHeadStart(s, now);
     expect(given).toContain("rent");
-    expect(s.economy.checks).toEqual({ [s.queue[0].key]: now });
+    expect(s.economy.paidUntil).toBe(now);
+    expect(s.economy.paydayAt).toBe(nextNoon(now));
     expect(s.rp).toBe(5000);
   });
 

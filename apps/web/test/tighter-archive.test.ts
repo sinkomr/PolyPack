@@ -54,7 +54,10 @@ const rowOf = (P: number, extra: Partial<ArchiveRow> = {}): ArchiveRow => ({ ...
 
 function game(rent = true): GameState {
   const s = newGame(T0, 1);
-  if (rent) s.owned.push("rent");
+  if (rent) {
+    s.owned.push("rent");
+    s.economy.paidUntil = T0;
+  }
   return s;
 }
 
@@ -71,20 +74,19 @@ describe("Archive", () => {
     // nothing changed: no write
     await a.flush();
     expect(store.writes).toHaveLength(1);
-    // one row changed in place, one removed: two rows touched, not all
-    a.get("21/21/40")!.check = T0;
-    a.touch("21/21/40");
+    // one row replaced, one removed: two rows touched, not all
+    a.put(rowOf(40, { base: 8, heldSince: T0 }));
     a.remove("21/21/41");
     await a.flush();
     expect(store.writes[1]).toEqual({ puts: 1, deletes: 1 });
-    expect(store.rows.get("21/21/40")!.check).toBe(T0);
+    expect(store.rows.get("21/21/40")!.base).toBe(8);
     expect(store.rows.has("21/21/41")).toBe(false);
 
     const b = new Archive(store);
     expect(b.loaded).toBe(false);
     expect(await b.load(() => false)).toBe(1);
     expect(b.size).toBe(1);
-    expect(b.get("21/21/40")).toMatchObject({ base: 7, check: T0, ourId: 1040 });
+    expect(b.get("21/21/40")).toMatchObject({ base: 8, heldSince: T0, ourId: 1040 });
   });
 
   it("drops a row whose problem is in the queue or past, from memory and from the store", async () => {
@@ -117,12 +119,10 @@ describe("Archive", () => {
 });
 
 describe("leave past the save's limit", () => {
-  it("moves held entries to the archive with their rent, and drops the others", () => {
+  it("moves held entries to the archive with their base, and drops the others", () => {
     const s = game();
     // the oldest two past entries: one held with rent, one not
-    s.past.push(pastEntry(40, 1), pastEntry(41, null));
-    s.economy.base["21/21/40"] = 55;
-    s.economy.checks["21/21/40"] = T0 + 5;
+    s.past.push({ ...pastEntry(40, 1), base: 55, heldSince: T0 + 5 }, pastEntry(41, null));
     for (let i = 0; i < PAST_LIMIT - 2; i++) s.past.push(pastEntry(1000 + i, null));
     const p = newProblem({ family: "polygon", N: 21, M: 21, P: 300 }, "open", T0);
     addToQueue(s, p);
@@ -131,24 +131,19 @@ describe("leave past the save's limit", () => {
     expect(s.past.some((q) => q.key === "21/21/40")).toBe(false);
     const a = archiveOf(s)!;
     expect(a.size).toBe(1);
-    expect(a.get("21/21/40")).toMatchObject({ ourId: 1, base: 55, check: T0 + 5 });
+    expect(a.get("21/21/40")).toMatchObject({ ourId: 1, base: 55, heldSince: T0 + 5 });
     expect(a.has("21/21/41")).toBe(false);
-    // the economy maps no longer hold it
-    expect(s.economy.base["21/21/40"]).toBeUndefined();
-    expect(s.economy.checks["21/21/40"]).toBeUndefined();
     expect(seenKeys(s).has("21/21/40")).toBe(true);
   });
 
-  it("counts archived rows in the records held and the rent rate, and tidyRent keeps their rent", () => {
+  it("counts archived rows in the records held, the rent rate and the rent waiting, and tidyRent keeps them", () => {
     const s = game();
     const o = ownedSet(s);
-    s.past.push(pastEntry(40, 1));
-    s.economy.base["21/21/40"] = 100;
-    s.economy.checks["21/21/40"] = T0;
+    s.past.push({ ...pastEntry(40, 1), base: 100 });
     const rate1 = rentRate(s, o);
     const a = ensureArchive(s);
-    a.put(rowOf(41, { base: 200, check: T0 }));
-    a.put(rowOf(42, { base: 300, check: T0 }));
+    a.put(rowOf(41, { base: 200 }));
+    a.put(rowOf(42, { base: 300 }));
     expect(recordsHeld(s)).toBe(3);
     expect(heldCount(s)).toBe(3);
     // rent is the same share of the base wherever the record is kept
@@ -157,15 +152,8 @@ describe("leave past the save's limit", () => {
     expect(rentWaiting(s, o, T0 + 2 * H)).toBeCloseTo(rentRate(s, o) * 2, 9);
     expect(rentWaiting(s, o, T0 + 30 * D)).toBeCloseTo((rentRate(s, o) * RENT_WINDOW_MS) / H, 6);
     tidyRent(s, o, T0 + H);
-    expect(a.get("21/21/41")).toMatchObject({ base: 200, check: T0 });
+    expect(a.get("21/21/41")).toMatchObject({ base: 200 });
     expect(a.size).toBe(2);
-  });
-
-  it("starts rent on archived rows that have none when Rent is bought", () => {
-    const s = game();
-    ensureArchive(s).put(rowOf(41, { base: 200 }));
-    tidyRent(s, ownedSet(s), T0 + 5);
-    expect(archiveOf(s)!.get("21/21/41")!.check).toBe(T0 + 5);
   });
 });
 
@@ -196,7 +184,7 @@ describe("payday over archived rows", () => {
   it("pays held rows and keeps them, removes lost rows with one count, leaves unanswered rows", async () => {
     const s = game();
     const a = ensureArchive(s);
-    for (const P of [40, 41, 42, 43]) a.put(rowOf(P, { base: 100, check: T0 }));
+    for (const P of [40, 41, 42, 43]) a.put(rowOf(P, { base: 100 }));
     const mine = (P: number) => ({ score: 5, name: s.name, id: 1000 + P });
     const { d, quiet } = deps(
       s,
@@ -206,16 +194,16 @@ describe("payday over archived rows", () => {
     );
     const rp0 = s.rp;
     const r = await runPayday(d);
-    expect(r.paying).toBe(2);
+    // the row the server left unknown was not found lost: it counts as held and is paid
+    expect(r.paying).toBe(3);
     expect(r.lost).toBe(1);
     expect(r.archivedLost).toBe(1);
-    expect(r.unanswered).toBe(1);
-    expect(r.paid).toBeCloseTo(2 * 24 * 0.01 * 100 * 1, 6);
+    expect(r.unanswered).toBe(0);
+    expect(r.paid).toBeCloseTo(3 * 24 * 0.01 * 100 * 1, 6);
     expect(s.rp).toBeCloseTo(rp0 + r.paid, 9);
     expect(quiet).toEqual([true, true, true]);
     expect(a.has("21/21/41")).toBe(false);
-    expect(a.get("21/21/40")!.check).toBe(T0 + D);
-    expect(a.get("21/21/42")!.check).toBe(T0);
+    expect(s.economy.paidUntil).toBe(T0 + D);
     expect(recordsHeld(s)).toBe(3);
   });
 });
@@ -265,7 +253,7 @@ describe("export and import with archive rows", () => {
     const s = game();
     s.past.push(pastEntry(60, 5));
     const a = ensureArchive(s);
-    a.put(rowOf(40, { base: 12, check: T0, heldSince: T0 - 5 }));
+    a.put(rowOf(40, { base: 12, heldSince: T0 - 5 }));
     a.put(rowOf(41, { base: 13 }));
     const str = await exportString(s, a.values());
     const r = await importString(str, T0);
@@ -274,7 +262,6 @@ describe("export and import with archive rows", () => {
     expect(r.archive).toHaveLength(2);
     expect(r.archive!.find((x) => x.key === "21/21/40")).toMatchObject({
       base: 12,
-      check: T0,
       heldSince: T0 - 5,
       ourId: 1040,
     });
@@ -318,9 +305,7 @@ describe("recovery of records lost from the save", () => {
     const s = game();
     s.name = "Me";
     // two held records in the save (bases 100 and 300), three recorded problems lost from it
-    s.past.push(pastEntry(40, 1), pastEntry(41, 2));
-    s.economy.base["21/21/40"] = 100;
-    s.economy.base["21/21/41"] = 300;
+    s.past.push({ ...pastEntry(40, 1), base: 100 }, { ...pastEntry(41, 2), base: 300 });
     s.economy.recorded = ["21/21/40", "21/21/41", "21/21/50", "21/21/51", "21/21/52"];
     const asked: string[][] = [];
     const deps = {
@@ -346,7 +331,6 @@ describe("recovery of records lost from the save", () => {
       ourId: 77,
       tier: "batch",
       base: 200,
-      check: T0 + 7,
       heldSince: T0 + 7,
       verified: 5,
     });
@@ -359,7 +343,7 @@ describe("recovery of records lost from the save", () => {
     );
   });
 
-  it("tries again later when the server does not answer, and starts no rent without Rent", async () => {
+  it("tries again later when the server does not answer", async () => {
     const s = game(false);
     s.economy.recorded = ["21/21/50"];
     expect(
@@ -376,7 +360,6 @@ describe("recovery of records lost from the save", () => {
       now: () => T0,
     });
     expect(n).toBe(1);
-    expect(archiveOf(s)!.get("21/21/50")!.check).toBeUndefined();
     expect(archiveOf(s)!.get("21/21/50")!.base).toBe(0);
   });
 });
@@ -390,7 +373,7 @@ describe("many archived rows", () => {
     for (let i = 0; i < 50_000; i++) {
       const P = 1 + (i % 500);
       const M = 3 + Math.floor(i / 500);
-      a.put({ ...pastEntry(P, i + 1), M, key: `21/${M}/${P}`, base: 50 + (i % 7), check: T0 });
+      a.put({ ...pastEntry(P, i + 1), M, key: `21/${M}/${P}`, base: 50 + (i % 7) });
     }
     expect(a.size).toBe(50_000);
     rentRate(s, o);
@@ -401,10 +384,9 @@ describe("many archived rows", () => {
       expect(rentRate(s, o)).toBeGreaterThan(0);
     }
     expect((performance.now() - t) / 100).toBeLessThan(5);
-    // waiting rent is kept for a few seconds
-    rentWaiting(s, o, T0 + H);
+    // waiting rent is a pass over five numbers too
     const t2 = performance.now();
-    for (let i = 0; i < 100; i++) rentWaiting(s, o, T0 + H);
+    for (let i = 0; i < 100; i++) expect(rentWaiting(s, o, T0 + H)).toBeGreaterThan(0);
     expect((performance.now() - t2) / 100).toBeLessThan(5);
   });
 });

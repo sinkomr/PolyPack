@@ -479,10 +479,10 @@ describe("Tighter space problems of every slice", () => {
   it("do not count for tier firsts", () => {
     const g = newGame(T0, 1);
     const p = newProblem(key("sphere/4/12"), "published", T0);
-    noteRecorded(g, ownedSet(g), p, T0);
+    noteRecorded(g, p);
     expect(g.economy.recorded).toContain("sphere/4/12");
     expect(g.economy.tiers).toEqual([]);
-    noteRecorded(g, ownedSet(g), newProblem(poly(21, 21, 40), "published", T0), T0);
+    noteRecorded(g, newProblem(poly(21, 21, 40), "published", T0));
     expect(g.economy.tiers).toEqual(["published"]);
   });
 });

@@ -17,6 +17,7 @@ import {
   ruleRewardFactor,
   standingMultiplier,
 } from "../src/tighter/standing";
+import { nextNoon } from "../src/tighter/economy";
 import { openSlices } from "../src/tighter/unlocks";
 import {
   HEAD2_AUTO_LEVELS,
@@ -265,18 +266,21 @@ describe("Tighter standing", () => {
     const s = lateGame(["head"]);
     s.levels.head = 1;
     const p = s.queue[0];
-    s.economy.checks[p.key] = T0 - 3_600_000;
+    s.economy.paidUntil = T0 - 3_600_000;
+    s.economy.paydayAt = T0 + 3_600_000;
     expect(resetCycle(s, T0 + MIN)).toBe(1);
     // level 1 does not bring Rent back: no rent accrues, none was paid
     expect(s.owned).not.toContain("rent");
-    expect(s.economy.checks).toEqual({});
+    expect(s.economy.paidUntil).toBeUndefined();
+    expect(s.economy.paydayAt).toBeUndefined();
     // level 2 does: every record held starts earning from the reset, without back rent
     const t = lateGame(["head"]);
     t.levels.head = 2;
-    t.economy.checks[t.queue[0].key] = T0 - 24 * 3_600_000;
+    t.economy.paidUntil = T0 - 24 * 3_600_000;
     resetCycle(t, T0 + 5 * MIN);
     expect(t.owned).toContain("rent");
-    expect(t.economy.checks).toEqual({ [t.queue[0].key]: T0 + 5 * MIN });
+    expect(t.economy.paidUntil).toBe(T0 + 5 * MIN);
+    expect(t.economy.paydayAt).toBe(nextNoon(T0 + 5 * MIN));
   });
 
   it("spends standing on the Standing row, 1 point an option and a level", () => {

@@ -35,7 +35,7 @@ const median = (xs: number[]): number => {
  * could not finish (no name, the server did not answer): the game tries again at a later load. Done
  * once per save (archiveRecovered).
  */
-export async function recoverRecords(s: GameState, o: Owned, d: RecoveryDeps): Promise<number | null> {
+export async function recoverRecords(s: GameState, _o: Owned, d: RecoveryDeps): Promise<number | null> {
   if (s.archiveRecovered || !s.name) return null;
   const a = ensureArchive(s);
   const inSave = new Set([...s.queue, ...s.past].map((p) => p.key));
@@ -56,7 +56,7 @@ export async function recoverRecords(s: GameState, o: Owned, d: RecoveryDeps): P
 
   // the base of a recovered record is not known: the median of the player's other held records
   const bases: number[] = [];
-  for (const p of [...s.queue, ...s.past]) if (p.ourId !== null) bases.push(s.economy.base[p.key] ?? p.rp);
+  for (const p of [...s.queue, ...s.past]) if (p.ourId !== null) bases.push(p.base ?? p.rp);
   for (const r of a.values()) bases.push(r.base ?? r.rp);
   const base = median(bases);
 
@@ -85,7 +85,6 @@ export async function recoverRecords(s: GameState, o: Owned, d: RecoveryDeps): P
         rp: 0,
         leftAt: now,
         base,
-        ...(o.has("rent") ? { check: now } : {}),
       } as ArchiveRow);
     }
   }
