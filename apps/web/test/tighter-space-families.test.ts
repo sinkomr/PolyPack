@@ -30,8 +30,21 @@ import {
   requiredSlices,
   sliceOfId,
 } from "../src/tighter/catalogue";
+import { costFactor, recordPoints } from "../src/tighter/points";
 import { newDealer } from "../src/tighter/dealer";
-import { FAMILY_FACTOR, SPACE_METHODS, UNITS_AT_20, rulesOf, spaceFields, unitsFor } from "../src/tighter/families";
+import {
+  FAMILY_FACTOR,
+  KERNEL_MS,
+  LEVEL,
+  PREMIUM,
+  SPACE_METHODS,
+  kernelMs,
+  msPerEval,
+  rulesOf,
+  spaceFields,
+  unitsFor,
+  unitsRow,
+} from "../src/tighter/families";
 import { SpaceKey, parseKey, poly } from "../src/tighter/frontier";
 import { newGame, newProblem, ownedSet } from "../src/tighter/game";
 import { noteRecorded, pointsMultiplier } from "../src/tighter/economy";
@@ -105,11 +118,10 @@ describe("Tighter space titles and score words", () => {
 
 describe("Tighter space weights, bounds and units", () => {
   it("weigh pieces by distinctness and the others 1, times the family factor", () => {
-    for (const f of Object.values(FAMILY_FACTOR)) expect(f).toBe(1);
-    expect(rulesOf(key("sphere/40/12")).weight(key("sphere/40/12"))).toBeCloseTo(0.5, 12);
-    expect(rulesOf(key("sphere/4/12")).weight(key("sphere/4/12"))).toBe(1);
-    expect(rulesOf(key("curved/-1/40/50/7")).weight(key("curved/-1/40/50/7"))).toBeCloseTo(0.5 * 0.4, 12);
-    expect(rulesOf(key("polyhedra/cubintet/12")).weight(key("polyhedra/cubintet/12"))).toBe(1);
+    expect(rulesOf(key("sphere/40/12")).weight(key("sphere/40/12"))).toBeCloseTo(0.5 * 1.2, 12);
+    expect(rulesOf(key("sphere/4/12")).weight(key("sphere/4/12"))).toBeCloseTo(1.2, 12);
+    expect(rulesOf(key("curved/-1/40/50/7")).weight(key("curved/-1/40/50/7"))).toBeCloseTo(0.5 * 0.4 * 1.2, 12);
+    expect(rulesOf(key("polyhedra/cubintet/12")).weight(key("polyhedra/cubintet/12"))).toBeCloseTo(1.2, 12);
   });
 
   it("take a space problem's bound from the server", () => {
@@ -119,21 +131,73 @@ describe("Tighter space weights, bounds and units", () => {
     expect(rulesOf(k).bound(k)).toBeNull();
   });
 
-  it("size a game evaluation to about 5 ms: U = max(1, round(base x 20 / P))", () => {
-    expect(unitsFor(400, 20)).toBe(400);
-    expect(unitsFor(400, 40)).toBe(200);
-    expect(unitsFor(6, 100)).toBe(1);
-    expect(unitsFor(8, 400)).toBe(1);
+  it("pays 1.2 times for every row outside 2D in 2D, and changing a level changes the pay", () => {
+    expect(PREMIUM).toBe(1.2);
+    expect(FAMILY_FACTOR.polygon).toBe(1);
+    expect(Object.keys(LEVEL).sort()).toEqual(Object.keys(KERNEL_MS).sort());
+    for (const row of Object.keys(LEVEL)) expect(FAMILY_FACTOR[row]).toBeCloseTo(1.2, 12);
+    const k = key("sphere/4/12");
+    expect(rulesOf(k).weight(k)).toBeCloseTo(1.2, 12);
+    const was = LEVEL.sphere;
+    LEVEL.sphere = 2;
+    expect(rulesOf(k).weight(k)).toBeCloseTo(2.4, 12);
+    expect(recordPoints({ ...k, bound: 1.7, sPrev: 3, sNew: 2.9, tier: "open" })!.w).toBeCloseTo(2.4, 12);
+    LEVEL.sphere = was;
+  });
+
+  it("interpolates a kernel evaluation's cost on log-log axes, extrapolating along the end segments", () => {
+    for (const [row, T] of Object.entries(KERNEL_MS)) {
+      for (const [P, ms] of T) expect(kernelMs(row, P)).toBeCloseTo(ms, 9);
+      const [[p0, m0], [p1, m1]] = [T[0], T[1]];
+      const mid = Math.sqrt(p0 * p1);
+      expect(kernelMs(row, mid)).toBeCloseTo(Math.sqrt(m0 * m1), 9);
+      expect(kernelMs(row, 1.5 * T[T.length - 1][0])).toBeGreaterThan(T[T.length - 1][1]);
+    }
+    expect(KERNEL_MS["surface:nofold"].map(([, m]) => m * 10)).toEqual(KERNEL_MS["surface:fold"].map(([, m]) => m));
+  });
+
+  it("size a game evaluation like a polygon's of N+M+P = P+8: U = max(1, round(msPerEval(P+8) / kernel ms))", () => {
+    for (const row of Object.keys(KERNEL_MS)) {
+      for (const P of [12, 48, 100, 200, 500]) {
+        const U = unitsFor(row, P);
+        const want = msPerEval(P + 8);
+        if (U >= 2) {
+          expect((U * kernelMs(row, P)) / want).toBeGreaterThan(1 / 1.5);
+          expect((U * kernelMs(row, P)) / want).toBeLessThan(1.5);
+        } else expect(kernelMs(row, P)).toBeGreaterThan(want / 1.5);
+      }
+    }
     const u = (id: string) => rulesOf(key(id)).unitsPerEvaluation(key(id));
-    expect(u("sphere/4/20")).toBe(UNITS_AT_20.sphere);
-    expect(u("torus/hex/4/10")).toBe(1200);
-    expect(u("balls/ballinball/50")).toBe(400);
-    expect(u("balls/cubinball/20")).toBe(UNITS_AT_20["balls:solid"]);
-    expect(u("curved/-1/3/4/20")).toBe(40);
-    expect(u("surface/cube/fold/4/20")).toBe(6);
-    expect(u("surface/rhombic_dodecahedron/nofold/4/20")).toBe(60);
-    expect(u("polyhedra/cubintet/60")).toBe(10);
+    const ms = (id: string) => rulesOf(key(id)).evalMs(key(id));
+    expect(u("sphere/4/12")).toBe(unitsFor("sphere", 12));
+    expect(unitsFor("sphere", 12)).toBe(Math.round(msPerEval(20) / 0.0211));
+    // a kernel evaluation that costs more than the polygon's: one of them
+    expect(u("torus/hex/4/500")).toBe(1);
+    expect(ms("torus/hex/4/500")).toBeCloseTo(kernelMs("torus", 500), 12);
+    expect(ms("sphere/4/12")).toBeCloseTo(u("sphere/4/12") * 0.0211, 12);
+    expect(unitsRow(key("surface/rhombic_dodecahedron/nofold/4/20"))).toBe("surface:nofold");
     expect(rulesOf(poly(24, 30, 60)).unitsPerEvaluation(poly(24, 30, 60))).toBe(1);
+  });
+
+  it("raises the cost factor with P in every row, and leaves a polygon's as it was", () => {
+    const sample: Record<string, (P: number) => string> = {
+      sphere: (P) => `sphere/4/${P}`,
+      torus: (P) => `torus/hex/4/${P}`,
+      curved: (P) => `curved/-1/3/4/${P}`,
+      "surface:fold": (P) => `surface/cube/fold/4/${P}`,
+      polyhedra: (P) => `polyhedra/cubintet/${P}`,
+      "balls:ball": (P) => `balls/ballinball/${P}`,
+      "balls:solid": (P) => `balls/cubinball/${P}`,
+    };
+    for (const [row, id] of Object.entries(sample)) {
+      let last = 0;
+      for (const P of [12, 24, 48, 100, 200]) {
+        const k = costFactor(key(id(P)));
+        expect(k, `${row} at ${P}`).toBeGreaterThan(last);
+        last = k;
+      }
+    }
+    expect(costFactor(poly(24, 30, 60))).toBeCloseTo(msPerEval(114) / msPerEval(85), 12);
   });
 
   it("offer the generic methods, mc_compress first and without seed", () => {

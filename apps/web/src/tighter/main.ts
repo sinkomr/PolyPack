@@ -296,12 +296,11 @@ const gapTo = (p: ProblemKey & { bound?: number | null }, s: number): number =>
 const sideWord = (p: ProblemKey) => rulesOf(p).scoreWord(p);
 
 /**
- * The milliseconds of one evaluation that auto-eval's speed terms count from: a polygon problem's by
- * its size (rank.ts), and about 5 ms for a space problem, whose evaluations are sized to that
- * (families.ts unitsPerEvaluation).
+ * The milliseconds of one evaluation that auto-eval's speed terms count from: the problem's family
+ * rules (families.ts evalMs), a polygon problem's by its size and a space problem's from the
+ * measured kernel evaluations its game evaluation is.
  */
-const SPACE_EVAL_MS = 5;
-const tableMsOf = (p: ProblemKey): number => (isPolygon(p) ? msPerEval(p.N + p.M + p.P) : SPACE_EVAL_MS);
+const tableMsOf = (p: ProblemKey): number => rulesOf(p).evalMs(p);
 /** The board's stage for Method match: fresh until a run on it ends by itself or it reaches its patience without progress. */
 const stageOf = (p: ProblemState): BoardStage => boardStage(p.endedRuns, p.sinceGain, stallAfter(state, p));
 /** The kind of problem the bandit learns a problem's methods for: its tier, family (polygons: size and piece shape) and stage. */
@@ -706,6 +705,8 @@ interface OpenRunView {
   /** Finished packings its method has handed back (a space run reports it; a 2D run does not), and the count at the problem's last progress. */
   offers?: number;
   offersAtGain: number;
+  /** The offers already counted into the problem's offersSinceGain. */
+  offersCounted: number;
   stage?: RunStage;
   /** The board it opened from (the method's startFrom), and the problem's best then. */
   origin: PackingConfig | SpaceConfig | null;
@@ -1159,6 +1160,7 @@ async function openRun(lv: LaneView, p: ProblemState, want: WantedRun, job: Job)
     found: a.state.found,
     offers: isSpaceRunState(a.state) ? a.state.offers : undefined,
     offersAtGain: 0,
+    offersCounted: 0,
     stage: a.state.stage,
     origin: setup.start,
     startScore,
@@ -1225,6 +1227,7 @@ async function openSpaceRun(lv: LaneView, p: ProblemState & SpaceKey, want: Want
     found: a.state.found,
     offers: isSpaceRunState(a.state) ? a.state.offers : undefined,
     offersAtGain: 0,
+    offersCounted: 0,
     stage: a.state.stage,
     origin: start,
     startScore,
@@ -1406,6 +1409,11 @@ function settle(
   );
   // the offers the stall rule waits for count from the problem's latest progress
   if (p.sinceGain === 0) run.offersAtGain = run.offers ?? 0;
+  // and the problem's own count, which Auto-advance's leaving waits on (game.ts leaveReason)
+  if (run.offers !== undefined) {
+    p.offersSinceGain = p.sinceGain === 0 ? 0 : (p.offersSinceGain ?? 0) + Math.max(0, run.offers - run.offersCounted);
+    run.offersCounted = run.offers;
+  }
   lastChange.set(p.key, { ...change, evals: counted, seed: run.seed, method: run.method });
   if (change.firstRecord) {
     reveal(state, "log");

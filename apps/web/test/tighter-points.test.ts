@@ -5,6 +5,7 @@ import {
   FIRST_BONUS,
   FLOOR,
   GAP_WEIGHT,
+  G_MIN,
   LEAD_BONUS,
   SIZE_WEIGHT,
   STEP_WEIGHT,
@@ -13,7 +14,7 @@ import {
   recordPoints,
   shapeWeight,
 } from "../src/tighter/points";
-import { msPerEval } from "../src/tighter/families";
+import { msPerEval, rulesOf } from "../src/tighter/families";
 
 // The worked examples of design.md §5 (balance/results/points-examples.txt), at F = 1e-9, with the size
 // and gap weights of 2026-10-22 (10,000 each) and, since 2026-11-01, a step term of a tenth and flat
@@ -90,7 +91,10 @@ describe("Tighter record points", () => {
     expect(costFactor({ family: "polygon", N: 30, M: 36, P: 200 })).toBeCloseTo(msPerEval(266) / 1.77, 12);
     expect(costFactor({ family: "polygon", N: 100, M: 100, P: 300 })).toBeCloseTo(52.3 / 1.77, 12);
     expect(costFactor({ family: "polygon", N: 4, M: 4, P: 10 })).toBeLessThan(0.2);
-    expect(costFactor({ family: "sphere", id: "sphere/0/12", P: 12 })).toBeCloseTo(5 / 1.77, 12);
+    // outside 2D in 2D the factor is worked out the same way, from the cost of the game evaluation
+    const sph = { family: "sphere", id: "sphere/0/12", P: 12 } as const;
+    expect(costFactor(sph)).toBeCloseTo(rulesOf(sph).evalMs(sph) / 1.77, 12);
+    expect(costFactor(sph)).toBeCloseTo(msPerEval(20) / 1.77, 1);
     // the same board and the same step pay in proportion to the factor, nothing else changes
     const a = { family: "polygon", N: 24, M: 30, P: 40, sPrev: 8, sNew: 7.9, tier: "open" } as const;
     const b = { ...a, P: 200 };
@@ -212,5 +216,26 @@ describe("Tighter record points", () => {
     expect(recordPoints({ ...P33, sPrev: 11, sNew: NaN, tier: "open" })).toBeNull();
     expect(recordPoints({ ...P33, sPrev: Infinity, sNew: 11, tier: "open" })).toBeNull();
     expect(recordPoints({ ...P33, sPrev: 11, sNew: -1, tier: "open" })).toBeNull();
+  });
+});
+
+describe("Tighter gap floor", () => {
+  const bound = areaLowerBound(24, 30, 40);
+  const at = (g: number) => bound * (1 + g);
+  const pay = (gPrev: number, gNew: number) =>
+    recordPoints({ family: "polygon", N: 24, M: 30, P: 40, sPrev: at(gPrev), sNew: at(gNew), tier: "open" })!;
+
+  it("counts g as at least G_MIN: a board that reaches its bound pays the floored amount", () => {
+    expect(G_MIN).toBe(0.01);
+    const p = pay(0.2, 1e-9);
+    expect(p.gap).toBeCloseTo(GAP_WEIGHT * Math.log(0.2 / G_MIN), 6);
+  });
+
+  it("pays a gap above the floor as before, and nothing from the floor to the floor", () => {
+    const p = pay(0.2, 0.05);
+    expect(p.gap).toBeCloseTo(GAP_WEIGHT * Math.log(0.2 / 0.05), 6);
+    const q = pay(0.009, 1e-9);
+    expect(q.gap).toBe(0);
+    expect(q.size).toBeGreaterThan(0);
   });
 });

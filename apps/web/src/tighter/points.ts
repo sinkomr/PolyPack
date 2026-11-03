@@ -60,6 +60,8 @@ export const TIER_LABEL: Record<Tier, string> = {
  */
 export const SIZE_WEIGHT = 10_000;
 export const GAP_WEIGHT = 10_000;
+/** The gap g counts as at least this in the gap term, so a board at its bound does not pay without limit. */
+export const G_MIN = 0.01;
 /**
  * Record points the first cycle must earn before it can be reset [SPEC, Michael's ladder of 2026-10-26];
  * each later cycle needs 5 times the one before (standing.ts resetThreshold). Michael raised the first
@@ -84,7 +86,7 @@ export const REFERENCE_SIZE = 85;
 
 /**
  * The cost factor k of a problem: the ms one of its game evaluations takes (a fixed table for
- * polygons, 5 ms for the space problems, whose evaluations are sized to that) over the ms at N+M+P =
+ * polygons, the kernel evaluations a space problem's game evaluation is, measured, for the others) over the ms at N+M+P =
  * 85. Not the player's measured speed, so the pay is the same on every machine. Expected RP per
  * second of solver time then runs about level from N+M+P = 85 up [CALC, scratchpad w6/model.py].
  */
@@ -162,9 +164,9 @@ export function recordPoints(input: PointsInput): Points | null {
   if (bound === null) throw new Error(`no bound for ${input.family}`);
   const gPrev = sPrev / bound - 1;
   const gNew = sNew / bound - 1;
-  // A gap at or below zero cannot occur for the dealt problems (P >= 2 and gap > 0); guard anyway,
-  // since ln(g_prev / g_new) would be undefined or infinite.
-  const gap = gPrev > 0 && gNew > 0 ? GAP_WEIGHT * Math.log(gPrev / gNew) : 0;
+  // g counts as at least G_MIN: a board at its bound (g near 0) would pay without limit, and a gap
+  // at or below zero would make ln(g_prev / g_new) undefined
+  const gap = GAP_WEIGHT * Math.log(Math.max(gPrev, G_MIN) / Math.max(gNew, G_MIN));
   const k = costFactor(input);
   const bonus = input.bonus ?? null;
   const bonusRp = bonus ? BONUS_RP[bonus] : 0;

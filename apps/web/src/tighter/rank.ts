@@ -26,10 +26,11 @@ import { COMBO_RECORDS, FIRST_BONUS, LEAD_BONUS, TIERS, Tier, costFactor } from 
 
 export { COST_TABLE, msPerEval } from "./families";
 
-/** The speed term: √(cost at N+M+P = 85 / cost at this size); 1 for the starter corner's sizes. */
-export function speedFactor(total: number): number {
-  return Math.sqrt(msPerEval(85) / msPerEval(total));
-}
+/** The speed term from the ms of a game evaluation (rulesOf(c).evalMs): √(cost at N+M+P = 85 / evalMs). */
+export const speedFactorMs = (evalMs: number): number => Math.sqrt(msPerEval(85) / evalMs);
+
+/** The speed term of a polygon size: √(cost at N+M+P = 85 / cost at this size); 1 for the starter corner's sizes. */
+export const speedFactor = (total: number): number => speedFactorMs(msPerEval(total));
 
 /** A site record is loose when its gap exceeds the median gap of its neighbours in P by this much. */
 export const LOOSE_WEAKNESS = 0.005;
@@ -188,7 +189,7 @@ export function rankCandidates(cands: readonly Candidate[], bandit: Bandit | nul
     // cost term (speedFactor), so the cost factor is divided out of it; the flat bonus has no cost factor
     // in it, so it is left as it is
     const bonus = expectedBonus(candidate) / BONUS_EVALS;
-    const score = ((prior - bonus) / costFactor(candidate) + bonus) * correction * speedFactor(sizeOf(candidate));
+    const score = ((prior - bonus) / costFactor(candidate) + bonus) * correction * speedFactorMs(rulesOf(candidate).evalMs(candidate));
     return { candidate, score, prior, bucket };
   });
   return out.sort((a, b) => Number(b.candidate.retake) - Number(a.candidate.retake) || b.score - a.score);

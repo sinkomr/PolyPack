@@ -123,6 +123,12 @@ export interface ProblemFields {
    */
   evaluations: number;
   sinceGain: number;
+  /**
+   * For a problem whose runs report offers (outside 2D in 2D): the finished packings its method has
+   * handed back since the last progress. Auto-advance waits for one before it leaves (leaveReason).
+   * Not saved: a problem loaded without it leaves at its patience.
+   */
+  offersSinceGain?: number;
   /** The best at the last progress; null before the first record (a dealt record starts from its own). */
   progressBest: number | null;
   /** Runs opened here. */
@@ -1017,13 +1023,18 @@ export function leave(s: GameState, key: string, now: number): void {
 
 /**
  * Why Auto-advance takes a problem out of the queue, or null while it stays: it ran the player's
- * patience of evaluations without progress (patienceFor). A kept problem, and one whose patience is
+ * patience of evaluations without progress (patienceFor), and, for a problem whose runs report offers,
+ * its method has handed back a finished packing since. A kept problem, and one whose patience is
  * Never, is not dropped this way.
  */
 export function leaveReason(s: GameState, p: ProblemState): "stalled" | null {
   const patience = patienceFor(s, p);
   if (patience === null || p.kept || p.leaving || p.closed) return null;
-  return p.sinceGain >= patience ? "stalled" : null;
+  if (p.sinceGain < patience) return null;
+  // a problem whose runs report offers also waits for its method to hand back a finished packing since its
+  // last progress (as stallEnds does), or leaves after STALL_NO_OFFER_FACTOR times its patience
+  if (p.offersSinceGain !== undefined && p.offersSinceGain < 1 && p.sinceGain < STALL_NO_OFFER_FACTOR * patience) return null;
+  return "stalled";
 }
 
 export interface AdvancePlan {
