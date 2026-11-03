@@ -4,7 +4,7 @@
 
 This is the polygon method `asc` (`docs/methods/asc.md`), after Torquato and Jiao's adaptive
 shrinking cell, written once against the kernel (`packages/methods/src/kernel.ts`), so it runs in
-every space. The code is `packages/methods/src/methods/asc.ts`; what it shares with `mc_compress`
+every family. The code is `packages/methods/src/methods/asc.ts`; what it shares with `mc_compress`
 is in `mc-chain.ts` next to it.
 
 ## How it works
@@ -16,7 +16,7 @@ decide what counts. Starts, offers and costs are those of `mc_compress`
 ([mc_compress.md](mc_compress.md), "Starts and offers" and "Costs").
 
 [CALC] One sweep is P single-piece trials (a `jiggle`, or with probability `jumpRate` a
-`randomPose`), then one trial of each container and collective move. Which size moves a space has
+`randomPose`), then one trial of each container and collective move. Which size moves a family has
 is checked once per run, on a rebased copy of the state and with `toConfig` alone (`sizeMoves` in
 `mc-chain.ts`; see [mc_compress.md](mc_compress.md), "How it works"): the reference disks,
 polyhedra and curved kernels move the centres and the container apart, while in the torus,
@@ -98,8 +98,8 @@ with temperature and cooling, and the return at stagnation.
   in each piece's chart is a coherent collective move, not a rigid motion.
 - The polygon method's radial strain moved the centres in and the walls by a smaller amount, chosen
   from the piece's bounding radius so that pieces at a wall stay inside. A kernel states the piece's
-  inradius, but not the gap a piece of some shape and turn needs at a wall of the space. So, where
-  the space has the moves, there are two: radial (`setSize`, walls with the centres) and centres
+  inradius, but not the gap a piece of some shape and turn needs at a wall of the family. So, where
+  the family has the moves, there are two: radial (`setSize`, walls with the centres) and centres
   (the centres alone), and the scale move brings the walls after them. Elsewhere `setSize` is the
   only size move, and it is the scale.
 - The radial warmup is skipped for random starts (above).
@@ -132,7 +132,7 @@ description and a default.
 | `driftStep` | number, 1e-7–4 | 0.05 | Initial collective translation, in steps. |
 | `strainStep` | number, 1e-7–1 | 0.05 | Initial globals strain, in globalSteps; ignored without globals. |
 | `radialStep` | number, 1e-7–0.3 | 0.03 | Initial fraction of the radial move (`setSize`), where the container also moves alone. |
-| `centresStep` | number, 1e-7–0.3 | 0.03 | Initial fraction of the centre contraction, where the space has it. |
+| `centresStep` | number, 1e-7–0.3 | 0.03 | Initial fraction of the centre contraction, where the family has it. |
 | `scaleStep` | number, 1e-7–0.3 | 0.01 | Initial fraction of the scale: the container alone, else `setSize`. |
 | `targetAcceptance` | number, 0.01–0.99 | 0.3 | Target of every move, each measured apart. |
 | `adaptationGain` | number, 0–10 | 1 | Steps multiply by exp(gain * (rate - target)); 0 keeps them fixed. |
@@ -202,10 +202,10 @@ unless marked.
 - Three and four disks on the free torus jam in looser cells at temperature 0, as with
   `mc_compress`; `squeeze` reaches the optimum there from every random start tried.
 
-### The space kernels
+### The family kernels
 
-[CALC] As for `mc_compress` ([mc_compress.md](mc_compress.md), "The space kernels"): seeds 1–3,
-default parameters, no start, 20000 evaluations, excess against the space's `score_cert`. All 18
+[CALC] As for `mc_compress` ([mc_compress.md](mc_compress.md), "The family kernels"): seeds 1–3,
+default parameters, no start, 20000 evaluations, excess against the family's `score_cert`. All 18
 results are valid by the server's rule.
 
 | Problem | Record | Seed 1 | Seed 2 | Seed 3 | Evaluations | Offer share |

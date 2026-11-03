@@ -1,6 +1,6 @@
 /**
  * The search for unit-edge Platonic solids in the smallest ball (PolyPack's own code, adapted from the polyhedra
- * space's polish, packages/polyhedra/src/polish.ts, to a ball container).
+ * family's polish, packages/polyhedra/src/polish.ts, to a ball container).
  *
  * Polish: the separating-plane penalty method. Every near pair (i, j) gets a plane n . x = t of its own,
  * n = m / |m|, and the variables are the ball's radius s, each piece's centre c and quaternion q (rotation
@@ -13,7 +13,7 @@
  * are chosen again at each stage. The ball is centred at the origin; the pieces move freely, so its centre needs
  * no variable.
  *
- * Legalization: the pieces are moved apart by scaling their centres about the origin (as the polyhedra space
+ * Legalization: the pieces are moved apart by scaling their centres about the origin (as the polyhedra family
  * does: if every pair is separated by at least -d along some axis, scaling the centres by 1 + delta adds at least
  * 2 r delta to that axis' gap, r the inradius, since each piece holds the ball of radius r about its centre), until
  * every pair has the clearance g by the separating-axis test; then s = (largest vertex distance + w)(1 + 4 eps).

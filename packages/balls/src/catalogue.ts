@@ -1,23 +1,23 @@
 /**
- * The problems of the balls space without their geometry: P unit balls in the smallest ball or in the smallest
- * copy of any of the polyhedra space's 186 solids, and P unit-edge solids (any of the 186) in the smallest ball.
- * Names only, so that a page can name problems without loading any coordinates (the polyhedra space's catalogue
+ * The problems of the balls family without their geometry: P unit balls in the smallest ball or in the smallest
+ * copy of any of the polyhedra family's 186 solids, and P unit-edge solids (any of the 186) in the smallest ball.
+ * Names only, so that a page can name problems without loading any coordinates (the polyhedra family's catalogue
  * is as light).
  *
- * A problem is named by a code `<piece>in<container>` in the manner of the polyhedra space ("cubintet"): the
- * piece is `ball` or a solid's code (tet, cub, oct, dod, ico, tte, pr3l15, ... as the polyhedra space names
+ * A problem is named by a code `<piece>in<container>` in the manner of the polyhedra family ("cubintet"): the
+ * piece is `ball` or a solid's code (tet, cub, oct, dod, ico, tte, pr3l15, ... as the polyhedra family names
  * them), the container `ball` or a solid's code. With P pieces its id is `balls/<code>/<P>`, e.g.
  * "balls/ballinball/13", "balls/ballinpkd/20" (balls in a pentakis dodecahedron), "balls/ap5inball/7".
  *
  * Without a piece or container of the other kind there are 1 + 186 + 186 = 373 codes: balls in a ball, balls in
- * each of the 186 solids (the 94 of the first catalogue and the 92 Johnson solids), and each of the 186 solids in a ball. The first 7 (BALLS_ORIGINAL_CODES) are the space's
+ * each of the 186 solids (the 94 of the first catalogue and the 92 Johnson solids), and each of the 186 solids in a ball. The first 7 (BALLS_ORIGINAL_CODES) are the family's
  * first problems, and their ids are unchanged.
  */
 import { SOLID_NAMES_LIST, type SolidName, pluralTitle } from "@polypack/polyhedra/catalogue";
 
 /**
- * The radius of a ball piece, in the units of the space (balls have diameter 1; the polyhedra space's solids have edge 1). Every length
- * of the space that is a ball's size goes through this constant (the validator, the bounds, the search, the
+ * The radius of a ball piece, in the units of the family (balls have diameter 1; the polyhedra family's solids have edge 1). Every length
+ * of the family that is a ball's size goes through this constant (the validator, the bounds, the search, the
  * kernel, the certifier's python/balls/balls_catalogue.py BALL_RADIUS and the board's drawing).
  */
 export const BALL_RADIUS = 0.5;
@@ -39,16 +39,16 @@ export function setBallContainerConversionForTests(k: number | null): void {
 /** The least distance of two ball centres. */
 export const BALL_DIAMETER = 2 * BALL_RADIUS;
 
-/** "ball", or the polyhedra space's name of a solid ("cube", "pentakis_dodecahedron", "prism3_l15"). */
+/** "ball", or the polyhedra family's name of a solid ("cube", "pentakis_dodecahedron", "prism3_l15"). */
 export type BallsPiece = string;
 export type BallsContainer = string;
 
 export interface BallsProblem {
   /** e.g. "ballinball", "ballincub", "tetinball", "ballinpkd". */
   code: string;
-  /** "ball", or the polyhedra space's name of a solid. */
+  /** "ball", or the polyhedra family's name of a solid. */
   piece: BallsPiece;
-  /** "ball", or the polyhedra space's name of a solid ("cube" for the cube). */
+  /** "ball", or the polyhedra family's name of a solid ("cube" for the cube). */
   container: BallsContainer;
   /** "Balls in a ball", "Triakis tetrahedra in a ball", "Balls in a pentakis dodecahedron". */
   title: string;
@@ -124,7 +124,7 @@ function build(): BallsProblem[] {
 export const BALLS_PROBLEMS: readonly BallsProblem[] = build();
 
 /**
- * The codes of the space's first 7 problems, in their first order: balls in a ball and in a cube, and the five
+ * The codes of the family's first 7 problems, in their first order: balls in a ball and in a cube, and the five
  * Platonic solids in a ball. The volunteers' work list sampled these only (problems.ts ballsDomain.sample) until it was
  * removed on 2026-10-29.
  */
@@ -166,7 +166,7 @@ export const BALLS_FAMILY_SAMPLE: readonly string[] = [
 export const BALLS_CODES: readonly string[] = BALLS_PROBLEMS.map((p) => p.code);
 
 /** A few codes for a message ("ballinball, ballincub, ..."), the list being 373 long. */
-export const BALLS_CODES_HINT = `${BALLS_CODES.slice(0, 6).join(", ")}, ... (<piece>in<container>, the piece or the container ball or a solid's code of the polyhedra space; GET /api/spaces lists them)`;
+export const BALLS_CODES_HINT = `${BALLS_CODES.slice(0, 6).join(", ")}, ... (<piece>in<container>, the piece or the container ball or a solid's code of the polyhedra family; GET /api/spaces lists them)`;
 
 /** Smallest and largest P of the catalogue. */
 export const BALLS_MIN_P = 2;

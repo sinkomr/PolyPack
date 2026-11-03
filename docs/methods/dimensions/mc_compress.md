@@ -3,7 +3,7 @@
 **Board:** Monte Carlo compression. *Pieces jiggle at random, never overlapping, while the container keeps shrinking around them.*
 
 This is the polygon method `mc_compress` (`docs/methods/mc_compress.md`), written once against the
-kernel (`packages/methods/src/kernel.ts`), so it runs in every space. The code is
+kernel (`packages/methods/src/kernel.ts`), so it runs in every family. The code is
 `packages/methods/src/methods/mc_compress.ts`; what it shares with `asc` is in `mc-chain.ts` next to it.
 
 ## How it works
@@ -27,7 +27,7 @@ to three trials, each kept when every piece is clear:
 
 [CALC] Trial 1 fails when a piece touches a wall, because the wall gap shrinks too. Trials 2 and 3
 free such a piece; they are the kernel's form of the polygon method's centre contraction and
-enclosure. They exist only in some spaces, so at the start of a run the method checks, on a
+enclosure. They exist only in some families, so at the start of a run the method checks, on a
 rebased copy of its state and with `toConfig` alone (no evaluations), whether trial 2 changes the
 configuration and whether trial 3 differs from trial 1 (`sizeMoves` in `mc-chain.ts`):
 
@@ -54,7 +54,7 @@ alone does not count. Steps reset at each restart.
 
 [CALC] The energy is the size, as in the polygon method. At temperature 0 no kept trial raises the
 size. With `initialTemperature` T > 0, one shrink interval in ten also tries the container one
-fraction larger: alone where the space has that move, else with the arrangement. That trial is kept with probability exp(-increase / T). T is multiplied by
+fraction larger: alone where the family has that move, else with the arrangement. That trial is kept with probability exp(-increase / T). T is multiplied by
 `coolingRate` after every sweep. This is an optimisation heuristic, not a sampler with detailed
 balance.
 
@@ -67,9 +67,9 @@ and temperature again. After `maxRestarts` restarts the method returns.
 ## Starts and offers
 
 [CALC] A start the run was given is used as given when it is hard. It is then contracted as a whole:
-bisection on the factor of `setSize`, then, where the space has them, of the centres alone and of
+bisection on the factor of `setSize`, then, where the family has them, of the centres alone and of
 the container alone, each as far as every piece stays clear. That keeps a loose start's contact
-pattern. The contracted state is offered. Then the container grows by `initialExpansion`, alone where the space has that move
+pattern. The contracted state is offered. Then the container grows by `initialExpansion`, alone where the family has that move
 (room for the pieces at the walls, the contacts kept), else with the arrangement. The
 `warmupSweeps` sweeps that follow do not shrink.
 
@@ -120,7 +120,7 @@ expansion restarts, and the initial contraction of a given start.
 - Random re-placements (`jumpRate`) are new. They can fill a hole that local moves cannot reach
   [SPEC]; on the small test problems their effect stayed within the spread between seeds [CALC].
 - Contraction and enclosure are `setSize`, the centres alone and the container alone, the last two
-  only where the space has them (see above). The kernel has no enclosure, so there is no exact
+  only where the family has them (see above). The kernel has no enclosure, so there is no exact
   re-centring to the tightest container. The adaptive fraction finds the walls instead.
 - Container orientation trials became globals moves. A kernel has no container angle; its globals
   are the variables of the whole packing.
@@ -128,7 +128,7 @@ expansion restarts, and the initial contraction of a given start.
   default (`maxRestarts` 20; the polygon default is 0). Without them the chain ends at its first
   jam; with them it spends the budget on new chains.
 - Offers replace the polygon method's assessments, and there is no appended polish. The kernel's
-  `finish()` is the space's exact finishing.
+  `finish()` is the family's exact finishing.
 
 [CALC] Dropped as 2D-only: the cell grid of piece centres (the kernel's `clear()` does the
 neighbour search), the strict-enclosure margin and the container-angle period, and the seed
@@ -151,7 +151,7 @@ description, a default and an inclusive range.
 | `shrinkEvery` | integer, 1–1000 | 2 | Shrink interval, in sweeps. |
 | `globalEvery` | integer, 1–1000 | 10 | Globals move interval, in sweeps; ignored without globals. |
 | `globalStep` | number, 1e-7–1 | 0.1 | Initial globals move, in the kernel's globalSteps. |
-| `initialExpansion` | number, 0–1 | 0.05 | Room the container gets after a given start's contraction, alone where the space allows. |
+| `initialExpansion` | number, 0–1 | 0.05 | Room the container gets after a given start's contraction, alone where the family allows. |
 | `warmupSweeps` | integer, 0–1000 | 5 | Sweeps without shrinks or globals moves, at the start and after a restart. |
 | `stagnationSweeps` | integer, 0–1000000 | 2000 | Sweeps without progress before a restart or the return; 0 never. |
 | `maxRestarts` | integer, 0–10000 | 20 | Restarts after stagnation. |
@@ -168,7 +168,7 @@ description, a default and an inclusive range.
   against its `DISKS_IN_CIRCLE_BEST`;
 - the free-torus test kernel, P unit disks on a flat torus with a free cell
   (`packages/methods/test/mc-torus-kernel.ts`), against the hexagonal bound, which P copies of the
-  hexagonal lattice attain. It has the torus space's design: offsets from a base packing, a
+  hexagonal lattice attain. It has the torus family's design: offsets from a base packing, a
   `setSize` that changes the size alone, a real `rebase`, finishCost 50 and validateCost 10.
 
 [CALC] Excess is score / best - 1. Node v26.5.0 on arm64, on a shared, loaded machine. Runs took
@@ -201,7 +201,7 @@ nice -n 10 npx tsx packages/methods/scripts/bench-mc_compress.ts --P 2-10 --seed
 
 - Where the chain finds the right arrangement it ends within about 1e-7, the precision its
   adaptive steps reach. The reference kernel's `finish()` only rescales, so nothing polishes it
-  further. A space whose `finish()` polishes closes that gap (curved, below).
+  further. A family whose `finish()` polishes closes that gap (curved, below).
 - Two disks jam off the diameter: both touch the wall and each other, which no shrinking
   single-piece step undoes. Restarts improve the median from 1.9e-5 to 9.1e-7.
 - Five disks can cage one disk in a ring of four (R = 3), and nine disks jam at 3.650115. Restarts
@@ -212,11 +212,11 @@ nice -n 10 npx tsx packages/methods/scripts/bench-mc_compress.ts --P 2-10 --seed
   The test kernel is not at fault: `squeeze` from `local.ts` reached the optimum within 1e-6 from
   20 of 20 random starts for P = 3 and for P = 4. Hard-particle moves cannot leave these jams.
 
-### The space kernels
+### The family kernels
 
 [CALC] The kernels of `sphere`, `torus`, `curved`, `polyhedra` and `boundary`, built by their
 factories (README), seeds 1–3, default parameters, no start, 20000 evaluations. Record is the
-space's `score_cert` in `data/<space>/records.json`; excess is score / record - 1. The offer share
+family's `score_cert` in `data/<space>/records.json`; excess is score / record - 1. The offer share
 counts every finish and validation at the kernel's costs. All 18 results are valid by the server's
 rule.
 
@@ -233,7 +233,7 @@ rule.
 A run ends at the budget or where the framework refuses an offer that no longer fits, so
 evaluations end up to a finish and a validation short of 20000. The offer share is 0.20 on the
 torus and rises with the cost of an offer against the budget, as described under "Starts and
-offers". The space packages depend on the methods package, not the other way round, so this
+offers". The family packages depend on the methods package, not the other way round, so this
 table has no script in `packages/methods`; it is `runMethod` with each factory.
 
 [CALC] No record or benchmark improvement is claimed. The disk and test-torus problems are small
@@ -246,10 +246,10 @@ reference problems with known optima.
 - [CALC] The jiggle has one step for all of a piece's variables. Where positions and turns need
   very different steps, the kernel's `steps` must balance them.
 - [CALC] A jiggle is undone by writing back the piece's variables. That relies on the rule that a
-  `jiggle` changes only piece i's `dim` numbers (kernel.ts), which the space kernels keep. Their
+  `jiggle` changes only piece i's `dim` numbers (kernel.ts), which the family kernels keep. Their
   `randomPose` does not always keep it (polyhedra and boundary set a new anchor), so a random
   re-placement works on a clone.
-- [SPEC] In spaces with very local charts (a polytope's boundary), the chain calls `rebase` every
+- [SPEC] In families with very local charts (a polytope's boundary), the chain calls `rebase` every
   `adaptationSweeps` sweeps. Between those calls a piece's chart offset grows with its moves. How
   far a kernel's charts stay accurate is the kernel's matter.
 

@@ -22,7 +22,7 @@ This page covers the generic port and what differs from it.
 
 [CALC] The kernel's `setShape(s, t)` gives the soft pieces, from the inscribed
 disk or ball at t = 0 to the true shape at t = 1, every one inside the true
-piece. Each space has its own family: the polygon method's inscribed family
+piece. Each family has its own kind of soft shape: the polygon method's inscribed family
 `tP (+) disc((1 - t) r)` on the torus, and on the surface with its round
 corners replaced by chords; rounded solids for polyhedra; caps cut from the
 polygons on the sphere; polygons cut by a disk of growing radius in curved
@@ -39,7 +39,7 @@ One continuation:
    does not finish) up to two random starts relaxed apart at their roomy size
    (`harden-offers.ts`, shared with `harden`). Raw random starts rarely finish
    (none of ten on the boundary's balls or the surface's squares). A run
-   stopped early returns this offer when the space's finishing accepts it;
+   stopped early returns this offer when the family's finishing accepts it;
    curved/-1/3/4/6, which has no seeds, refuses about a quarter of its relaxed
    random starts, and then the run has no result until a continuation ends.
 3. **Jitter.** Every piece is moved by a seeded random amount of up to `jitter`
@@ -60,7 +60,7 @@ One continuation:
    problem's bound, which holds for the true shapes only; the last stage keeps
    the bound.
 6. **Offer** the arrangement at t = 1, repaired by the squeeze's closing
-   relaxation; the framework finishes it with the space's exact finishing.
+   relaxation; the framework finishes it with the family's exact finishing.
 
 With `localMethod` = `relax`, the first and last stages squeeze as above and
 the stages between keep the size and only relax the overlaps that the harder
@@ -77,7 +77,7 @@ runs. A slice holds the stage to it (`withAllowance`: past it the energy
 refuses and L-BFGS stops at its last accepted point). The squeeze gets three
 quarters of the slice; when it runs out, the rest goes to a closing
 relaxation, since a squeeze cut at a low penalty weight leaves deep overlaps
-that the space's finishing refuses. A stage cut by its slice causes no
+that the family's finishing refuses. A stage cut by its slice causes no
 subdivision. A new continuation starts only when its offer and 20 gradients
 per stage fit in what is left. Continuations run until the evaluation or time
 budget ends or the stop is set, or until `restarts` continuations are done
@@ -140,7 +140,7 @@ family only, and hard-particle Monte Carlo is the separate method
    tenfold on a fixed schedule instead of fourfold when the residual stalls,
    and there are no multipliers.
 2. One offer per continuation, at t = 1, instead of one assessment per
-   accepted L-BFGS iteration; no duplicate suppression. A space's finishing
+   accepted L-BFGS iteration; no duplicate suppression. A family's finishing
    can cost thousands of evaluations (2,000 for the boundary's balls).
 3. The start is the supplied arrangement, a kernel seed or a random start,
    instead of a seed sub-run; the first offer is a seed or a relaxed random
@@ -201,9 +201,9 @@ at most 0.17 s per run.
 - The stored best known values for P = 8, 10 and 12 were corrected after the
   checks of the first version (see harden.md).
 
-### Space kernels
+### Family kernels
 
-[CALC] Six problems of the spaces, registered defaults, no start, seeds 1–5,
+[CALC] Six problems of the families, registered defaults, no start, seeds 1–5,
 5,000 and 20,000 evaluations. "Record" is the stored value
 (`data/<space>/records.json`, `score_cert`). "Within" counts runs at most 1e-4
 relative above it.
@@ -226,7 +226,7 @@ relative above it.
 What these runs show, and no more than that:
 
 - Every run returned a valid configuration within its budget except one:
-  curved/-1/3/4/6 at 5,000, seed 4. The space's finishing refused both its
+  curved/-1/3/4/6 at 5,000, seed 4. The family's finishing refused both its
   relaxed random first offers (curved has no seeds) and its continuation's
   end, after the two failed offers had taken 2,000 of the 5,000 evaluations.
 - On the boundary's balls an offer costs 4,000, so 5,000 evaluations pay for
@@ -271,10 +271,10 @@ rearrangement, but it may carry the same poor topology through every stage.
 On the reference kernel the shape does not change, so `morph` there is
 repeated squeezing of a seed and of random starts; the soft disks change only
 their radius, not their form. Where corners appear (polygons, polyhedra) the
-space kernels' rows above and the polygon page's measurements are the better
+family kernels' rows above and the polygon page's measurements are the better
 guide; six problems are too few to rank methods by.
 
-[CALC] A run can end without a result where the space's finishing refuses
+[CALC] A run can end without a result where the family's finishing refuses
 every offer (curved/-1/3/4/6 refuses about a quarter of its relaxed random
 starts, and its random starts are barely roomier than its optimum, since the
 room of a hyperbolic square is bounded).

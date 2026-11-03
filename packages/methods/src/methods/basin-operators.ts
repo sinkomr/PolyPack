@@ -7,7 +7,7 @@
  * positions in a common frame (a centroid, a wall normal, a vertex), which the kernel does not
  * expose (docs/methods/dimensions/basin_hopping.md).
  */
-import type { KernelState, Rng, SpaceKernel } from "../kernel";
+import type { KernelState, Rng, FamilyKernel } from "../kernel";
 import { randomInt, sample } from "../random";
 
 export const OPERATORS = ["kick", "swap", "reinsert", "restart"] as const;
@@ -63,13 +63,13 @@ export function chooseOperator(
 }
 
 /** Jiggles max(1, ceil(fraction P)) distinct pieces by up to `amount` steps in each variable. */
-export function kick(k: SpaceKernel, s: KernelState, rng: Rng, amount: number, fraction: number): void {
+export function kick(k: FamilyKernel, s: KernelState, rng: Rng, amount: number, fraction: number): void {
   const count = Math.min(k.P, Math.max(1, Math.ceil(fraction * k.P)));
   for (const i of sample(rng, k.P, count)) k.jiggle(s, i, amount, rng);
 }
 
 /** Exchanges the orientations of two distinct random pieces (capability "swap"). */
-export function swapPair(k: SpaceKernel, s: KernelState, rng: Rng): void {
+export function swapPair(k: FamilyKernel, s: KernelState, rng: Rng): void {
   if (!k.swap || k.P < 2) return;
   const [i, j] = sample(rng, k.P, 2);
   k.swap(s, i, j);
@@ -82,7 +82,7 @@ export function swapPair(k: SpaceKernel, s: KernelState, rng: Rng): void {
  * the likeliest; drawing rather than taking the largest keeps one stuck piece from being picked
  * every time. Costs one energy sweep.
  */
-export function stressedPiece(k: SpaceKernel, s: KernelState, rng: Rng, squeeze: number): number {
+export function stressedPiece(k: FamilyKernel, s: KernelState, rng: Rng, squeeze: number): number {
   const probe = k.clone(s);
   k.setSize(probe, s.size * (1 - squeeze));
   const e = new Float64Array(k.P);
@@ -102,7 +102,7 @@ export function stressedPiece(k: SpaceKernel, s: KernelState, rng: Rng, squeeze:
  * others at s's size: the deepest hole the samples find. Stops early at a pose with no overlap.
  * This is sampled free-space search, not a proof that no better hole exists.
  */
-export function reinsert(k: SpaceKernel, s: KernelState, i: number, rng: Rng, trials: number): void {
+export function reinsert(k: FamilyKernel, s: KernelState, i: number, rng: Rng, trials: number): void {
   const scratch = k.clone(s);
   let best: KernelState | null = null;
   let bestEnergy = Infinity;
@@ -120,6 +120,6 @@ export function reinsert(k: SpaceKernel, s: KernelState, i: number, rng: Rng, tr
 }
 
 /** True when a and b give the same configuration (an exchange of equal orientations, say). */
-export function samePacking(k: SpaceKernel, a: KernelState, b: KernelState): boolean {
+export function samePacking(k: FamilyKernel, a: KernelState, b: KernelState): boolean {
   return JSON.stringify(k.toConfig(a)) === JSON.stringify(k.toConfig(b));
 }

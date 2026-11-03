@@ -1,5 +1,5 @@
 /**
- * Writes python/balls/fixtures/johnson_packings.json: test packings of the balls space with Johnson solids, for
+ * Writes python/balls/fixtures/johnson_packings.json: test packings of the balls family with Johnson solids, for
  * python/balls/test_johnson_balls.py (which certifies each exactly) and packages/balls/test/johnson.test.ts (which
  * checks that the float validator agrees). No search: balls in J12 (triangular bipyramid), J44 (chiral) and J92 are an fcc or hcp lattice cut legalized with a clearance of 1e-10 (latticeCut, legalizeBalls); J1, J44 and
  * J92 in a ball are solids on a coarse grid in random orientations legalized the same way (legalizeSolids). They are
@@ -161,5 +161,5 @@ for (const [n, P] of [[1, 2], [1, 4], [44, 3], [44, 5], [92, 2], [92, 4]] as con
   const cfg = legalizeSolids(pb, solidsAt(centres, rng), G, G, () => {});
   finish(code, P, cfg.s, cfg.pieces as number[][]);
 }
-writeFileSync(out, JSON.stringify({ generated: "2026-10-30", note: "lattice and grid packings with Johnson solids in the balls space; no search", cases }) + "\n");
+writeFileSync(out, JSON.stringify({ generated: "2026-10-30", note: "lattice and grid packings with Johnson solids in the balls family; no search", cases }) + "\n");
 console.log(`${cases.length} packings written to ${out}`);

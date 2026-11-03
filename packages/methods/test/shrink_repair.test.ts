@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { type SpaceKernel, mulberry32, registerMethod, runMethod } from "../src";
+import { type FamilyKernel, mulberry32, registerMethod, runMethod } from "../src";
 import { type ShrinkRepairEvent, runShrinkRepair, shrinkRepair } from "../src/methods/shrink_repair";
 import { REPAIRED, Repair, type RuinKind, region, ruin } from "../src/methods/shrink-phase";
 import { DISKS_IN_CIRCLE_BEST, disksKernel, validateDisks } from "../src/reference/disks";
@@ -20,14 +20,14 @@ registerMethod({
  * The reference kernel with a dear finishing (`cost` evaluations) that fails on every other call,
  * as a polish that does not converge would.
  */
-function dearDisks(P: number, cost: number): SpaceKernel {
+function dearDisks(P: number, cost: number): FamilyKernel {
   const k = disksKernel(P);
   let calls = 0;
   return { ...k, finishCost: cost, finish: (s, stop) => (calls++ % 2 === 1 ? null : k.finish(s, stop)) };
 }
 
 /** The reference kernel with a finishing that gives up on loose states, as the curved polish does. */
-function tightOnlyDisks(P: number): SpaceKernel {
+function tightOnlyDisks(P: number): FamilyKernel {
   const k = disksKernel(P);
   return {
     ...k,
@@ -47,7 +47,7 @@ function tightOnlyDisks(P: number): SpaceKernel {
  * valid (the circle only grows). A compression by less than 9% then never finishes below the size
  * it shrank from.
  */
-function inflatingDisks(P: number): SpaceKernel {
+function inflatingDisks(P: number): FamilyKernel {
   const k = disksKernel(P);
   return {
     ...k,
@@ -61,7 +61,7 @@ function inflatingDisks(P: number): SpaceKernel {
 }
 
 /** The reference kernel with a swap that exchanges two disks' centres (a disk has no orientation to swap). */
-function swappingDisks(P: number): SpaceKernel {
+function swappingDisks(P: number): FamilyKernel {
   const k = disksKernel(P);
   return {
     ...k,

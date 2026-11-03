@@ -6,7 +6,7 @@
 import { describe, expect, it } from "vitest";
 import {
   type KernelState,
-  type SpaceKernel,
+  type FamilyKernel,
   mulberry32,
   registerMethod,
   runMethod,
@@ -21,7 +21,7 @@ const records: { id: string; N: number; P: number; score_float: number; score_ce
   loadSiteRecords();
 
 /** The largest relative difference between the gradient and central differences, over every entry. */
-function gradientError(k: SpaceKernel, s: KernelState): number {
+function gradientError(k: FamilyKernel, s: KernelState): number {
   const n = s.x.length;
   const g = new Float64Array(n + 1);
   k.energy(s, g);

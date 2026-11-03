@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { type SpaceKernel, mulberry32, registerMethod, runMethod } from "../src";
+import { type FamilyKernel, mulberry32, registerMethod, runMethod } from "../src";
 import { type BasinHop, type BasinTrace, basinHopping, runBasinHopping } from "../src/methods/basin_hopping";
 import { OPERATORS, chooseOperator, metropolis, reinsert, stressedPiece } from "../src/methods/basin-operators";
 import { DISKS_IN_CIRCLE_BEST, disksKernel, validateDisks } from "../src/reference/disks";
@@ -31,14 +31,14 @@ registerMethod({
  * The reference kernel with a dear finishing (`cost` evaluations) that fails on every other call,
  * as a polish that does not converge would.
  */
-function dearDisks(P: number, cost: number): SpaceKernel {
+function dearDisks(P: number, cost: number): FamilyKernel {
   const k = disksKernel(P);
   let calls = 0;
   return { ...k, finishCost: cost, finish: (s, stop) => (calls++ % 2 === 1 ? null : k.finish(s, stop)) };
 }
 
 /** The reference kernel with a finishing that gives up on loose states, as the curved polish does. */
-function tightOnlyDisks(P: number): SpaceKernel {
+function tightOnlyDisks(P: number): FamilyKernel {
   const k = disksKernel(P);
   return {
     ...k,
@@ -57,7 +57,7 @@ function tightOnlyDisks(P: number): SpaceKernel {
  * The reference kernel whose finishing adds 20% to the radius of every configuration with disk 0
  * left of the centre: valid (the circle only grows), and unrelated to the squeezed size.
  */
-function lopsidedDisks(P: number): SpaceKernel {
+function lopsidedDisks(P: number): FamilyKernel {
   const k = disksKernel(P);
   return {
     ...k,
@@ -72,7 +72,7 @@ function lopsidedDisks(P: number): SpaceKernel {
 }
 
 /** The reference kernel with a swap that exchanges two disks' centres (a disk has no orientation to swap). */
-function swappingDisks(P: number): SpaceKernel {
+function swappingDisks(P: number): FamilyKernel {
   const k = disksKernel(P);
   return {
     ...k,

@@ -1,7 +1,7 @@
 /**
- * The surface space's kernel for the generic search methods (packages/methods/src/kernel.ts,
- * docs/methods/dimensions/README.md), on every solid of the space: pieces on the surface of a solid,
- * folding across its edges (mode "fold") or each inside one face (mode "nofold"). The space package
+ * The surface family's kernel for the generic search methods (packages/methods/src/kernel.ts,
+ * docs/methods/dimensions/README.md), on every solid of the family: pieces on the surface of a solid,
+ * folding across its edges (mode "fold") or each inside one face (mode "nofold"). The family package
  * runs the nofold problems of the Platonic solids on the polygon solver instead; the kernel serves
  * them too.
  *
@@ -33,7 +33,7 @@
  */
 import { inradius } from "@polypack/geometry";
 import { SURFACE_DISK_RADIUS, pieceReach, scaleFor } from "./disk";
-import type { Finished, KernelCapability, KernelState, Rng, SpaceKernel, Validation } from "@polypack/methods";
+import type { Finished, KernelCapability, KernelState, Rng, FamilyKernel, Validation } from "@polypack/methods";
 import { PolygonModel, TooLarge, diskClear, diskTerms, jumpAwareDifference } from "./kernel-energy";
 import {
   SERVER_BOUND_SLACK,
@@ -103,7 +103,7 @@ export function surfaceFinishCost(N: number, P: number, mode: Mode = "fold"): nu
 /** Energy evaluations one validate() costs with folding (measured): the fold validator develops every piece once, as an energy sweep does. */
 export const SURFACE_VALIDATE_COST = VALIDATE_COST.fold;
 
-export function surfaceKernel(problem: { solid: SolidName; N: number; P: number; mode?: Mode }): SpaceKernel {
+export function surfaceKernel(problem: { solid: SolidName; N: number; P: number; mode?: Mode }): FamilyKernel {
   const { N, P } = problem;
   const mode: Mode = problem.mode ?? "fold";
   if (!isSolidName(problem.solid)) throw new Error(`unknown solid ${String(problem.solid)}`);
@@ -355,7 +355,7 @@ export function surfaceKernel(problem: { solid: SolidName; N: number; P: number;
 
   const capabilities: KernelCapability[] = N === 0 ? ["shape", "seeds"] : ["shape", "seeds", "swap"];
 
-  const kernel: SpaceKernel = {
+  const kernel: FamilyKernel = {
     space: "surface",
     id: `surface/${solid.name}/${mode}/${N}/${P}`,
     P,

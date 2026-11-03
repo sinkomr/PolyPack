@@ -6,7 +6,7 @@
  * docs/methods/dimensions/basin_hopping.md says what was kept and why.
  */
 import type { ParameterSchema } from "@polypack/solver/schema";
-import type { MethodContext, SpaceMethodDefinition } from "../framework";
+import type { MethodContext, FamilyMethodDefinition } from "../framework";
 import type { KernelState } from "../kernel";
 import type { SqueezeOptions } from "../local";
 import { randomInt } from "../random";
@@ -47,7 +47,7 @@ const number = (
 const WEIGHTS: Record<Operator, number> = { kick: 4, swap: 1, reinsert: 2, restart: 0.3 };
 const WEIGHT_TEXT: Record<Operator, string> = {
   kick: "Jiggle a fraction of the pieces by the adaptive kick size.",
-  swap: "Exchange the orientations of two pieces (only where the space can swap).",
+  swap: "Exchange the orientations of two pieces (only where the family can swap).",
   reinsert: "Move a piece in the way of a smaller size to the best of several random poses.",
   restart: "Start again from a structured start or the supplied one, strongly kicked, or from random poses.",
 };
@@ -290,7 +290,7 @@ export function runBasinHopping(ctx: MethodContext, trace?: BasinTrace, observe?
     const tie = raw !== null && Math.abs(raw - previous) <= TIE * previous;
     const score = tie ? previous : raw;
     const improved = score !== null && score < previous;
-    // the finished score decides, not the squeezed size: the finishing is the space's own
+    // the finished score decides, not the squeezed size: the finishing is the family's own
     const accepted = score !== null && metropolis(previous, score, temperature * previous, rng);
     if (accepted) {
       current = s;
@@ -311,7 +311,7 @@ export function runBasinHopping(ctx: MethodContext, trace?: BasinTrace, observe?
   }
 }
 
-export const basinHopping: SpaceMethodDefinition = {
+export const basinHopping: FamilyMethodDefinition = {
   name: "basin_hopping",
   title: "Basin hopping",
   summary:

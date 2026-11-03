@@ -17,14 +17,14 @@
  * one inradius, and the same mobility in piece units for a turn.
  *
  * The size needs a unit too. The reference moves the radius of a circle (a unit of size moves the
- * wall by a unit of length) or the side of a polygon. In other spaces a unit of size moves the
+ * wall by a unit of length) or the side of a polygon. In other families a unit of size moves the
  * contacts by very different lengths: the side of a hyperbolic square buys ever less room (its
  * inradius stays below asinh 1), and on a closed surface the size spreads the pairs instead of
  * moving walls. So the size moves in units of room: `unit` is how far a unit of size moves the
  * contacts, measured from the gradient (see measureUnit), and the size dynamics is the reference's
  * in the room a = unit * size: v_a <- 0.85 v_a - 0.02 (mu + dE/dsize / unit), size += v_a / unit.
  */
-import type { KernelState, Rng, SpaceKernel } from "../kernel";
+import type { KernelState, Rng, FamilyKernel } from "../kernel";
 import { variableSteps } from "../local";
 
 /** Reference update constants (engine2d.js `step`). */
@@ -48,7 +48,7 @@ export function gaussian(rng: Rng): number {
  * and noise per unit-side square or unit-diameter circle, that is per inscribed diameter, which
  * is twice this.
  */
-export function pieceLength(k: SpaceKernel): number {
+export function pieceLength(k: FamilyKernel): number {
   return k.inradius;
 }
 
@@ -72,7 +72,7 @@ export class HardenDynamics {
   unit = 1;
 
   constructor(
-    private readonly k: SpaceKernel,
+    private readonly k: FamilyKernel,
     readonly s: KernelState,
   ) {
     this.steps = variableSteps(k);

@@ -1,7 +1,7 @@
 /**
  * A kernel with globals, charts and a dear finish, for the tests and benchmarks of mc_compress and
- * asc: P unit disks on a flat torus whose cell is free. It is not a space; it copies the design of
- * the torus space's kernel (packages/torus/src/kernel.ts) in a small exact form.
+ * asc: P unit disks on a flat torus whose cell is free. It is not a family; it copies the design of
+ * the torus family's kernel (packages/torus/src/kernel.ts) in a small exact form.
  *
  * State. aux holds a base packing: a basis B (b1, b2) whose score is sb, and base centres u_i. The
  * plane is reached by M = (size / sb) F, F = [[e^t1, t2], [0, e^-t1]] (determinant 1), with t1 and
@@ -16,12 +16,12 @@
  * against 2 for the square cell; P disks in P copies of it, which is the bound.
  *
  * Configuration: { b1, b2, centres } in the plane. finish() scales centres and cell together until
- * the closest image pair touches; it costs 50 evaluations and a validation 10, as in the torus space.
+ * the closest image pair touches; it costs 50 evaluations and a validation 10, as in the torus family.
  *
  * `instrument` wraps any kernel to record a run of either method: the chain's state, what the
  * offers cost, and collective trials that change nothing.
  */
-import type { Finished, KernelState, SpaceKernel, Validation } from "../src/kernel";
+import type { Finished, KernelState, FamilyKernel, Validation } from "../src/kernel";
 
 type V2 = [number, number];
 
@@ -118,7 +118,7 @@ export function validateTorusDisks(P: number, config: unknown, tol = 1e-9): Vali
   return { valid, score, reasons: valid ? [] : [`two disks are ${d} apart`] };
 }
 
-export function torusDisksKernel(P: number): SpaceKernel {
+export function torusDisksKernel(P: number): FamilyKernel {
   const n = 2 * P;
   const auxOf = (s: KernelState) => s.aux as Aux;
   /** M = k F as m11, m12, m22 (m21 = 0), with k = size / sb and e = e^t1. */
@@ -242,7 +242,7 @@ export function torusDisksKernel(P: number): SpaceKernel {
     rebase(s) {
       const a = auxOf(s);
       const { L, c } = plane(s);
-      // a basis that has become skewed is replaced by a reduced one (the same lattice), as the torus space does
+      // a basis that has become skewed is replaced by a reduced one (the same lattice), as the torus family does
       const red = gaussReduce(L);
       const n2 = (q: Float64Array) => q[0] ** 2 + q[1] ** 2 + q[2] ** 2 + q[3] ** 2;
       a.B.set(n2(L) > 1.5 * n2(red) ? red : L);
@@ -319,10 +319,10 @@ export interface ChainProbe {
 }
 
 /** A kernel that records a run (ChainProbe) and otherwise is `base`. */
-export function instrument(base: SpaceKernel): { kernel: SpaceKernel; probe: ChainProbe } {
+export function instrument(base: FamilyKernel): { kernel: FamilyKernel; probe: ChainProbe } {
   const probe: ChainProbe = { chain: null, offerCost: 0, finishes: 0, empty: 0 };
   let checked: KernelState | null = null;
-  const kernel: SpaceKernel = {
+  const kernel: FamilyKernel = {
     ...base,
     jiggle(s, i, amount, rng) {
       probe.chain = s;

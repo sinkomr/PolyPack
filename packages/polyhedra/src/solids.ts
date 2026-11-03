@@ -1,5 +1,5 @@
 /**
- * The canonical solids of the polyhedra space: the 5 Platonic, 13 Archimedean and 13 Catalan solids,
+ * The canonical solids of the polyhedra family: the 5 Platonic, 13 Archimedean and 13 Catalan solids,
  * 5 prisms, 5 antiprisms and 15 elongated prisms of upstream's catalogue (alejandrozu/platonic-packing,
  * MIT, src/solids_exact.json; see THIRD_PARTY_NOTICES.md), then PolyPack's prisms and antiprisms with 7, 9,
  * 10 and 11 sides and their 12 elongated prisms, in upstream's conventions, and PolyPack's 9 bipyramids and 9

@@ -1,5 +1,5 @@
 /**
- * The search of the polyhedra space: seeded, budgeted, stoppable and synchronous, for a browser worker or Node.
+ * The search of the polyhedra family: seeded, budgeted, stoppable and synchronous, for a browser worker or Node.
  *
  *  1. Start. A given configuration (any scale; an invalid one is first legalized by moving its pieces apart) is
  *     polished; without one, a soft-to-rigid run of the simulator (sim/sim.ts, ported from upstream) packs balls

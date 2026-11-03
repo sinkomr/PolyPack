@@ -9,7 +9,7 @@
 import { performance } from "node:perf_hooks";
 import { runMethod } from "../src";
 import { DISKS_IN_CIRCLE_BEST, disksKernel } from "../src/reference/disks";
-import type { SpaceKernel } from "../src/kernel";
+import type { FamilyKernel } from "../src/kernel";
 import { torusDisksKernel } from "../test/mc-torus-kernel";
 
 const option = (name: string, fallback: string) => {
@@ -26,7 +26,7 @@ const median = (v: number[]) => {
   return s.length % 2 ? s[(s.length - 1) / 2] : (s[s.length / 2 - 1] + s[s.length / 2]) / 2;
 };
 
-function table(method: string, rows: { name: string; make: () => SpaceKernel; best: number }[]) {
+function table(method: string, rows: { name: string; make: () => FamilyKernel; best: number }[]) {
   const seeds = Number(option("seeds", "10"));
   const evals = Number(option("evals", "30000"));
   const params = JSON.parse(option("params", "{}"));

@@ -14,11 +14,11 @@
  * offer.
  */
 import type { MethodContext } from "../framework";
-import type { KernelState, SpaceKernel } from "../kernel";
+import type { KernelState, FamilyKernel } from "../kernel";
 import { type SqueezeOptions, squeeze } from "../local";
 
 /** Evaluations of one offer that improves the best: the finish and the server's check. */
-export function offerCost(k: SpaceKernel): number {
+export function offerCost(k: FamilyKernel): number {
   return k.finishCost + (k.validateCost ?? k.finishCost);
 }
 
@@ -42,7 +42,7 @@ export function squeezeWithin(ctx: MethodContext, s: KernelState, limit: number,
   const guard = () => {
     if (ctx.used() >= limit) throw new Spent();
   };
-  const guarded: SpaceKernel = {
+  const guarded: FamilyKernel = {
     ...k,
     energy: (q, g, w) => (guard(), k.energy(q, g, w)),
     pieceEnergy: (q, i, w) => (guard(), k.pieceEnergy(q, i, w)),

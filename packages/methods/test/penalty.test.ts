@@ -1,12 +1,12 @@
 import { describe, expect, it } from "vitest";
-import { type KernelState, type SpaceKernel, mulberry32, runMethod, squeeze } from "../src";
+import { type KernelState, type FamilyKernel, mulberry32, runMethod, squeeze } from "../src";
 import { descend } from "../src/methods/penalty-schedule";
 import { DISKS_IN_CIRCLE_BEST, disksKernel, validateDisks } from "../src/reference/disks";
 
 const valid = (P: number, config: unknown) => validateDisks(P, config, 0).valid;
 
 /** The reference kernel whose finish fails unless the state has no overlap at all, so starts need restoring. */
-function strictKernel(P: number, failures: { count: number }): SpaceKernel {
+function strictKernel(P: number, failures: { count: number }): FamilyKernel {
   const base = disksKernel(P);
   return {
     ...base,
@@ -129,7 +129,7 @@ describe("penalty", () => {
 
   it("runs a fixed number of starts, and without the seeds capability", () => {
     const k = disksKernel(5);
-    const plain: SpaceKernel = { ...k, capabilities: ["shape"], seeds: undefined };
+    const plain: FamilyKernel = { ...k, capabilities: ["shape"], seeds: undefined };
     const r = runMethod(plain, "penalty", { seed: 1, params: { starts: 3 }, budget: { evals: 1e6 } });
     expect(r.stopped).toBe("done");
     expect(r.evaluations).toBeLessThan(20000);
@@ -140,7 +140,7 @@ describe("penalty", () => {
     const k = disksKernel(7);
     const fixed = k.seeds!(() => 0.25, 3);
     let calls = 0;
-    const repeating: SpaceKernel = {
+    const repeating: FamilyKernel = {
       ...k,
       seeds: (_rng, count) => {
         calls++;
@@ -163,7 +163,7 @@ describe("penalty", () => {
   it("descends from the given start", () => {
     // no random starts and no seeds: a run that ignored its start would have nothing to descend from
     const k = disksKernel(5);
-    const startless: SpaceKernel = {
+    const startless: FamilyKernel = {
       ...k,
       capabilities: [],
       seeds: undefined,
@@ -199,7 +199,7 @@ describe("penalty", () => {
     // a finish that polishes by itself: the first polish gains nothing, and no other is tried
     const base = disksKernel(7);
     let finishes = 0;
-    const polishing: SpaceKernel = {
+    const polishing: FamilyKernel = {
       ...base,
       finish(s) {
         finishes++;
@@ -224,7 +224,7 @@ describe("penalty", () => {
     for (const schedule of ["quadratic", "augmented"] as const) {
       const base = disksKernel(9);
       const seen: (Float64Array | undefined)[] = [];
-      const k: SpaceKernel = {
+      const k: FamilyKernel = {
         ...base,
         energy: (s, g, w) => (seen.push(w && Float64Array.from(w)), base.energy(s, g, w)),
       };

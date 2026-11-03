@@ -1,6 +1,6 @@
 # Shrink and repair (`shrink_repair`)
 
-Board title: **Shrink and repair**. Summary: _Makes the space a little too small so that pieces
+Board title: **Shrink and repair**. Summary: _Makes the family a little too small so that pieces
 overlap, then moves them until nothing overlaps; when that stops working, it scrambles a patch
 of pieces and tries again._
 
@@ -14,7 +14,7 @@ size: it makes the size too small, then removes the overlaps at that fixed size.
 ## The repair phase
 
 [CALC] A repair works on a state at a fixed size, with the kernel's penalty energy weighted by
-one guided-local-search (GLS) weight per piece (`SpaceKernel.energy`'s `weights`: a pair term
+one guided-local-search (GLS) weight per piece (`FamilyKernel.energy`'s `weights`: a pair term
 counts `(w_i + w_j) / 2`, a wall term `w_i`).
 
 1. **Relocate** every piece in conflict (its `pieceEnergy` above 1e-18), in seeded random
@@ -224,9 +224,9 @@ budgets given; the rest are the polygon's values.
 
 ## Measurements
 
-### The space kernels
+### The family kernels
 
-[CALC] The setup and the table of [basin_hopping](basin_hopping.md#the-space-kernels): defaults,
+[CALC] The setup and the table of [basin_hopping](basin_hopping.md#the-family-kernels): defaults,
 no start, seeds 1 to 3, 20,000 evaluations, records from `data/<space>/records.json`. Every
 result is valid, on all five problems. In the first version, shrink_repair returned nothing
 on curved/-1/3/4/6 seed 2 (and on seeds 4 and 6 of 6), and 3.08 (1.285 times the record) on
@@ -243,7 +243,7 @@ every seed of boundary/tesseract/ball/13.
 [CALC] Over seeds 1 to 6 on curved/-1/3/4/6, all 6 runs reach the record with the current
 kernels (squeezed random starts there reach it about one time in eight).
 On curved/1/4/4/5 and curved/-1/4/4/8 neither method finds a valid configuration (see
-[basin_hopping](basin_hopping.md#the-space-kernels)).
+[basin_hopping](basin_hopping.md#the-family-kernels)).
 
 [CALC] A dear finishing that fails on every other call (reference kernel, finishCost 2,000,
 seeds 1 to 5, 40,000 evaluations): P = 10, 11 and 12 all reach the best known in 5 of 5 runs.
@@ -333,7 +333,7 @@ as with basin_hopping.
   (squeezed square grids that need coordinated tilts) is not tested on the reference kernel.
 - [SPEC] Without a rigid block turn, a tilt of a whole group of pieces must come from the
   repair itself, or from swaps where the kernel has them. That may make the square-like
-  sawtooth harder in the spaces than for the polygon method.
+  sawtooth harder in the families than for the polygon method.
 - [CALC] The region probe shrinks the packing by 25%. In a sparse packing (rattlers, loose
   starts) a region may run out of neighbours and is then filled with random pieces.
 - [CALC] A time-only run banks carried progress only through the offer share; a stop can lose

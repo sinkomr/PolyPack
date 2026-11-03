@@ -1,5 +1,5 @@
 /**
- * The polyhedra space's kernel for the generic search methods (packages/methods/src/kernel.ts,
+ * The polyhedra family's kernel for the generic search methods (packages/methods/src/kernel.ts,
  * docs/methods/dimensions/README.md; docs/spaces/POLYHEDRA.md, "Kernel for the generic methods"): P congruent
  * copies of the piece solid in the container solid scaled by s.
  *
@@ -25,7 +25,7 @@
  * centres and in world-frame rotations, which the left Jacobian of exp maps to r (kernel-rotation.ts). The model
  * is exact at t = 1, so a configuration valid at tolerance 0 has zero energy.
  *
- * finish() is the space's own: the legalization and the polish of polish.ts (penalty weights 1e4 to 1e9, the
+ * finish() is the family's own: the legalization and the polish of polish.ts (penalty weights 1e4 to 1e9, the
  * search's polish of a start), each result checked with validatePolyhedra at tolerance 0, the smaller kept. The
  * polish polls the stop it is given and ends early, leaving the legalized result.
  * validate() is the server's rule (packages/spaces/src/validate.ts) for every entry that does not beat the research
@@ -35,7 +35,7 @@
  * That needs the record, which the kernel does not have; finish() gives configurations valid at tolerance 0,
  * which pass it.
  */
-import type { Finished, KernelCapability, KernelState, Rng, SpaceKernel, Validation } from "@polypack/methods";
+import type { Finished, KernelCapability, KernelState, Rng, FamilyKernel, Validation } from "@polypack/methods";
 import type { Pose } from "./geom";
 import { POLYHEDRA_MAX_P } from "./info";
 import { chartGradient, expQuat, logQuat, mulQuat, randomQuat, unitQuat } from "./kernel-rotation";
@@ -66,7 +66,7 @@ const MAX_REASONS = 20;
 /** Volume fraction of a random start: the pieces fill about this much of the container. */
 const START_FILL = 0.15;
 
-export function polyhedraKernel(problem: { code: string; P: number }): SpaceKernel {
+export function polyhedraKernel(problem: { code: string; P: number }): FamilyKernel {
   const pb = getProblem(problem.code);
   if (!pb) throw new Error(`unknown polyhedra problem ${problem.code}`);
   const P = problem.P;

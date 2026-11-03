@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { runMethod } from "../src";
-import type { KernelState, SpaceKernel } from "../src/kernel";
+import type { KernelState, FamilyKernel } from "../src/kernel";
 import { DISKS_IN_CIRCLE_BEST, disksKernel, validateDisks } from "../src/reference/disks";
 import { instrument, torusDisksKernel, validateTorusDisks } from "./mc-torus-kernel";
 
@@ -85,7 +85,7 @@ describe("asc", () => {
   it("offers only hard states: every piece clear at tolerance 0", () => {
     const base = disksKernel(6);
     let offers = 0;
-    const k: SpaceKernel = {
+    const k: FamilyKernel = {
       ...base,
       finish(s: KernelState) {
         offers++;

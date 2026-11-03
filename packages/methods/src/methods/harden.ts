@@ -7,7 +7,7 @@
  *   site        https://yoheinakajima.github.io/soft-to-rigid/
  *   repository  https://github.com/yoheinakajima/soft-to-rigid  (engine/engine2d.js, paper/main.pdf)
  * PolyPack's part is the port to the generic kernel (soft shapes by the kernel's setShape, the
- * energy and finishing of each space), the mapping of the evaluation budget onto the schedule,
+ * energy and finishing of each family), the mapping of the evaluation budget onto the schedule,
  * restarts, and the closing squeeze. See docs/methods/dimensions/harden.md.
  *
  * Each run starts the pieces as their inscribed disks or balls (t = 0) at a roomy size, compresses
@@ -15,7 +15,7 @@
  * the container keeps pushing, and settles at t = 1. Every offered state has the true shape: a
  * soft state is never offered. The framework keeps the best of the runs.
  */
-import type { MethodContext, SpaceMethodDefinition } from "../framework";
+import type { MethodContext, FamilyMethodDefinition } from "../framework";
 import { squeeze } from "../local";
 import { HardenDynamics, pieceLength } from "./harden-dynamics";
 import { energyCost, offerFirst, offerTrueShape, withAllowance } from "./harden-offers";
@@ -52,7 +52,7 @@ const numeric = (
   integer = false,
 ) => ({ type: integer ? "integer" : "number", title, description, default: value, minimum, maximum }) as const;
 
-export const harden: SpaceMethodDefinition = {
+export const harden: FamilyMethodDefinition = {
   name: "harden",
   title: "Soft-to-rigid hardening",
   summary:
@@ -189,7 +189,7 @@ export function runHarden(ctx: MethodContext): void {
     polish: p.polish ? polishEvals + offer : 0,
   };
 
-  // Before any long work, a first result that the space's finishing can take: the supplied
+  // Before any long work, a first result that the family's finishing can take: the supplied
   // start, a structured seed, or a random start relaxed apart (harden-offers.ts).
   offerFirst(ctx, [() => ctx.start ?? undefined, () => (k.seeds ? k.seeds(ctx.rng, 1)[0] : undefined)], () =>
     k.randomStart(ctx.rng),

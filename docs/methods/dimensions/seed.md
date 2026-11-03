@@ -14,7 +14,7 @@ or `basin_hopping`. Code: `packages/methods/src/methods/seed.ts` and `seed-start
 
 1. The given start comes first.
 2. Further starts follow while the budget lasts, or `starts` of them in all. A share `seedShare`
-   comes from the kernel's structured seeds (lattices, rings, symmetric layouts: whatever the space
+   comes from the kernel's structured seeds (lattices, rings, symmetric layouts: whatever the family
    provides); the rest are the kernel's random starts. Seeds are asked for in batches of `batch`,
    each seed costing one evaluation.
 3. A seed met before is skipped: its configuration's hash was seen. A batch with nothing new doubles
@@ -39,7 +39,7 @@ Kept: many cheap structured starts, each scored by the exact finishing, the best
 Dropped:
 
 - **The generators.** Square and hexagonal lattices, the pentagon double lattice, rings and rows
-  are 2D constructions for polygons in a polygon. A space supplies its own structured starts
+  are 2D constructions for polygons in a polygon. A family supplies its own structured starts
   through the kernel's `seeds()`; the reference kernel gives patches of the hexagonal lattice. This
   method knows no lattice.
 - **Trials over lattice angle, offset and piece orientation.** `seeds()` receives the random
@@ -71,9 +71,9 @@ description and its default.
 
 [CALC] Node.js v26.5.0, Apple Silicon. Every result is checked with the kernel's own validator.
 
-### Space kernels
+### Family kernels
 
-[CALC] Defaults, seeds 1–3. Each cell is the median excess over the space's record
+[CALC] Defaults, seeds 1–3. Each cell is the median excess over the family's record
 (`score_cert` in `data/<space>/records.json`), then the runs within 1e-3 of it. Every run has a
 result. A negative excess (1e-13 to 1e-10) is a score just below the record's certified score,
 which carries a safety margin; it is not a new record. The costs of a finish are listed in
@@ -151,8 +151,8 @@ JavaScript runtime; another Node.js version may round differently and give other
 
 ## Limits
 
-- [CALC] Measured on a few problems per space and few seeds. How good a space's seeds are is the
-  space's matter.
+- [CALC] Measured on a few problems per family and few seeds. How good a family's seeds are is the
+  family's matter.
 - A start's squeeze is short, so close local optima (relative gaps near 1e-6) are not told apart
   reliably. Polish the result with `penalty`.
 - The seeds can trap their whole share of the starts in one local optimum.

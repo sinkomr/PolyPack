@@ -1,5 +1,5 @@
 /**
- * The problems of the surface space as a domain of parameter ranges (for packages/spaces' SPACE_DOMAINS):
+ * The problems of the surface family as a domain of parameter ranges (for packages/spaces' SPACE_DOMAINS):
  * surface/<solid>/<mode>/<N>/<P> for the 141 solids, fold and nofold, N = 0 (disks) or 3 to 100, and
  * P = 1 to 100, as in 2D in 2D. Records exist only for the Platonic solids with N in {0, 3, 4, 5, 6, 8}
  * (data/surface/records.json); every other problem starts without one.

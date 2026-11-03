@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { type KernelState, type SpaceKernel, mulberry32, runMethod } from "../src";
+import { type KernelState, type FamilyKernel, mulberry32, runMethod } from "../src";
 import { checkKernel } from "../src/contract";
 import { DISKS_IN_CIRCLE_BEST, disksKernel, validateDisks } from "../src/reference/disks";
 import { HardenDynamics } from "../src/methods/harden-dynamics";
@@ -17,7 +17,7 @@ import { roomDisksKernel, softDisksKernel, softRadius } from "./soft-disks";
 
 const FULL = { compress: 2500, morph: 7500, settle: 1500 };
 const COSTS: RunCosts = { step: 1, measure: 16, offer: 2, full: FULL, interval: 1000, polish: 502 };
-/** An expensive space kernel's costs: a finish of 1,000, a gradient of 4, a finish that fails on overlapping states. */
+/** An expensive family kernel's costs: a finish of 1,000, a gradient of 4, a finish that fails on overlapping states. */
 const COSTLY = { finishCost: 1000, validateCost: 3, gradCost: 4, failAbove: 0.05 };
 
 describe("the hardening schedule", () => {
@@ -66,7 +66,7 @@ describe("the hardening dynamics", () => {
   it("moves the pieces in piece units, whatever the kernel's variables measure", () => {
     // the reference disks with every variable stored at half its length: steps 0.5, inradius 1
     const base = disksKernel(6);
-    const halved: SpaceKernel = {
+    const halved: FamilyKernel = {
       ...base,
       steps: Float64Array.from([0.5, 0.5]),
       energy(s, g, w) {
@@ -104,7 +104,7 @@ describe("the hardening dynamics", () => {
     dc.step(0, 0, mulberry32(1), true);
     expect(dc.unit).toBeCloseTo(1, 6);
     // the same problem sized by a square's side, whose walls move by half of it
-    const side: SpaceKernel = {
+    const side: FamilyKernel = {
       ...circle,
       energy(s, g, w) {
         const e = circle.energy({ ...s, size: s.size / 2 }, g, w);
@@ -120,7 +120,7 @@ describe("the hardening dynamics", () => {
   it("stops the pieces whose chart rebase changes, and only those", () => {
     const base = disksKernel(2);
     // a rebase that moves piece 0 to another chart and leaves piece 1 alone
-    const k: SpaceKernel = {
+    const k: FamilyKernel = {
       ...base,
       rebase(s) {
         s.x[0] += 1;
@@ -283,7 +283,7 @@ describe("harden where the shape really changes", () => {
   });
 });
 
-describe("harden on an expensive space kernel", () => {
+describe("harden on an expensive family kernel", () => {
   it("plans its runs at the kernel's gradient and offer costs, so that they settle and offer", () => {
     // a gradient costs 4 and a finish 1,000: a plan at one evaluation per step and twice the
     // finish per offer was cut in compression or left a third of the budget unspent

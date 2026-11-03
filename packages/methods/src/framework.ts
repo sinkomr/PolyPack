@@ -20,10 +20,10 @@
  * is reproducible from (kernel, method, params, start, seed, evals).
  */
 import { type ParameterSchema, checkSchema, clone, fillDefaults, validate } from "@polypack/solver/schema";
-import type { Finished, KernelCapability, KernelState, Rng, SpaceKernel } from "./kernel";
+import type { Finished, KernelCapability, KernelState, Rng, FamilyKernel } from "./kernel";
 import { mulberry32 } from "./random";
 
-export interface SpaceMethodDefinition {
+export interface FamilyMethodDefinition {
   /** The polygon method it ports ("basin_hopping"); lower case, digits and underscores. */
   name: string;
   /** The board's label ("Basin hopping"). */
@@ -48,7 +48,7 @@ export class Stop extends Error {
 
 export interface MethodContext {
   /** The kernel, counted: every call is charged to the budget, and may throw Stop. */
-  readonly kernel: SpaceKernel;
+  readonly kernel: FamilyKernel;
   /** The method's parameters, defaults filled in and checked against its schema. */
   readonly params: Record<string, unknown>;
   readonly rng: Rng;
@@ -72,7 +72,7 @@ export interface MethodContext {
 export interface MethodRunOptions {
   seed: number;
   params?: Record<string, unknown>;
-  /** A configuration in the space's format to start from (any size, valid or not). */
+  /** A configuration in the family's format to start from (any size, valid or not). */
   start?: unknown;
   budget: { evals?: number; time_s?: number };
   /**
@@ -105,12 +105,12 @@ export interface MethodRunResult {
   reasons: string[];
 }
 
-const registry = new Map<string, SpaceMethodDefinition>();
+const registry = new Map<string, FamilyMethodDefinition>();
 
-export function registerMethod(def: SpaceMethodDefinition): void {
+export function registerMethod(def: FamilyMethodDefinition): void {
   if (!/^[a-z][a-z0-9_]*$/.test(def.name) || registry.has(def.name))
     throw new Error(`invalid or duplicate method ${def.name}`);
-  if (def.name === "auto") throw new Error('"auto" is the space\'s own search, not a generic method');
+  if (def.name === "auto") throw new Error('"auto" is the family\'s own search, not a generic method');
   if (def.doc !== `docs/methods/dimensions/${def.name}.md`) throw new Error("method doc must match name");
   if (def.schema.type !== "object") throw new Error("parameter schema must be an object");
   checkSchema(def.schema);
@@ -119,22 +119,22 @@ export function registerMethod(def: SpaceMethodDefinition): void {
 }
 
 /** Every registered method, in registration order. */
-export function listMethods(): readonly SpaceMethodDefinition[] {
+export function listMethods(): readonly FamilyMethodDefinition[] {
   return [...registry.values()];
 }
 
 /** The methods a kernel can run: those whose required capabilities it has. */
-export function methodsFor(kernel: Pick<SpaceKernel, "capabilities">): readonly SpaceMethodDefinition[] {
+export function methodsFor(kernel: Pick<FamilyKernel, "capabilities">): readonly FamilyMethodDefinition[] {
   return listMethods().filter((m) => m.requires.every((c) => kernel.capabilities.includes(c)));
 }
 
-export function getMethod(name: string): SpaceMethodDefinition | undefined {
+export function getMethod(name: string): FamilyMethodDefinition | undefined {
   return registry.get(name);
 }
 
 /** The method's parameters: its defaults with `params` over them, checked against its schema (throws when they fail). */
 export function methodParams(
-  def: SpaceMethodDefinition,
+  def: FamilyMethodDefinition,
   params: Record<string, unknown> = {},
 ): Record<string, unknown> {
   if (!params || typeof params !== "object" || Array.isArray(params)) throw new Error("params must be an object");
@@ -143,7 +143,7 @@ export function methodParams(
   return filled;
 }
 
-export function runMethod(kernel: SpaceKernel, name: string, o: MethodRunOptions): MethodRunResult {
+export function runMethod(kernel: FamilyKernel, name: string, o: MethodRunOptions): MethodRunResult {
   const def = registry.get(name);
   if (!def) throw new Error(`unknown method: ${name}`);
   const missing = def.requires.filter((c) => !kernel.capabilities.includes(c));
@@ -178,7 +178,7 @@ export function runMethod(kernel: SpaceKernel, name: string, o: MethodRunOptions
     used += cost;
   };
 
-  const counted: SpaceKernel = {
+  const counted: FamilyKernel = {
     space: kernel.space,
     id: kernel.id,
     P: kernel.P,
@@ -288,3 +288,6 @@ export function runMethod(kernel: SpaceKernel, name: string, o: MethodRunOptions
     reasons: final ? reasons : [...reasons, "no valid configuration found"],
   };
 }
+
+/** @deprecated Renamed FamilyMethodDefinition; this alias goes once no caller uses it. */
+export type SpaceMethodDefinition = FamilyMethodDefinition;
