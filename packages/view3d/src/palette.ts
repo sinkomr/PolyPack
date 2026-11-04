@@ -1,5 +1,5 @@
 /**
- * Colours and names. Pieces take the hues the site's other space drawings use (137.5 degrees
+ * Colours and names. Pieces take the hues the site's other family drawings use (137.5 degrees
  * apart, so that neighbours in the list differ). Cells get their own palette, used for the tint of
  * every face glued to them: on a polytope whose cells are the faces of a cube-like frame (normals
  * +-e_i, the tesseract), the two cells of an axis share a hue family, the - cell darker; other

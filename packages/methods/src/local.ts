@@ -1,7 +1,7 @@
 /**
  * Local solves shared by the methods, on any kernel: L-BFGS on the kernel's penalty energy with
  * every variable scaled to piece units (a variable divided by its `steps` entry), so one step
- * length suits every space.
+ * length suits every family.
  *
  *  - relax: the size fixed, minimise the energy (a repair: overlaps pushed apart);
  *  - squeeze: minimise size + mu * energy over the variables and the size together, for each mu of
@@ -12,11 +12,11 @@
  * energy call goes through the kernel given, so with the counted kernel of a method context they
  * are charged to the run and may throw its Stop.
  */
-import type { KernelState, SpaceKernel } from "./kernel";
+import type { KernelState, FamilyKernel } from "./kernel";
 import { lbfgs } from "./lbfgs";
 
 /** The typical step of every variable of x: the pieces' steps, then the globals'. */
-export function variableSteps(k: SpaceKernel): Float64Array {
+export function variableSteps(k: FamilyKernel): Float64Array {
   const n = k.P * k.dim;
   const out = new Float64Array(n + k.globals);
   for (let i = 0; i < n; i++) out[i] = k.steps[i % k.dim];
@@ -31,12 +31,12 @@ export interface RelaxOptions {
   target?: number;
   /** Longest step in piece units (default 0.5). */
   maxStep?: number;
-  /** Per-piece weights of the energy terms (see SpaceKernel.energy). */
+  /** Per-piece weights of the energy terms (see FamilyKernel.energy). */
   weights?: Float64Array;
 }
 
 /** Relaxes s at its size; returns the energy reached. */
-export function relax(k: SpaceKernel, s: KernelState, o: RelaxOptions = {}): number {
+export function relax(k: FamilyKernel, s: KernelState, o: RelaxOptions = {}): number {
   const steps = variableSteps(k);
   const n = steps.length;
   const grad = new Float64Array(n + 1);
@@ -67,7 +67,7 @@ export interface SqueezeOptions {
 }
 
 /** Squeezes s as far as its overlaps allow; returns the energy at the size reached. */
-export function squeeze(k: SpaceKernel, s: KernelState, o: SqueezeOptions = {}): number {
+export function squeeze(k: FamilyKernel, s: KernelState, o: SqueezeOptions = {}): number {
   const steps = variableSteps(k);
   const n = steps.length;
   const minSize = o.minSize ?? k.bound ?? 0;

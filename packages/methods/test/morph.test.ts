@@ -189,7 +189,7 @@ describe("morph where the shape really changes", () => {
   });
 });
 
-describe("morph on an expensive space kernel", () => {
+describe("morph on an expensive family kernel", () => {
   /** A finish of 1,000, a gradient of 4, a finish that fails on overlapping states. */
   const COSTLY = { finishCost: 1000, validateCost: 3, gradCost: 4, failAbove: 0.05 };
 

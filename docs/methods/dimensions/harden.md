@@ -6,7 +6,7 @@ Each run starts every piece as its inscribed disk or ball at a roomy size,
 compresses the pieces under inward pressure, hardens them step by step into
 the true shapes while the container keeps pushing, and settles with the true
 shape. Only true-shape states are offered; a soft state is never offered. The
-framework finishes each offer with the space's exact finishing and keeps the
+framework finishes each offer with the family's exact finishing and keeps the
 best of independent seeded runs.
 
 Board title: "Soft-to-rigid hardening". Summary: "Squeezes the pieces
@@ -42,7 +42,7 @@ What is whose on this page:
 | Default pressure, noise, softness and step counts                                                                                                                                     | Yohei Nakajima                                           | [EST], paper appendix and `methods/*.json`               |
 | Reported results about where hardening helps and where it does not                                                                                                                    | Yohei Nakajima                                           | [EST], repository README and paper, see the polygon page |
 | The polyhedra kernel's rounded solids (a solid scaled and dilated by a ball) and their energy                                                                                         | Yohei Nakajima and Alejandro Zarzuelo (platonic-packing) | [EST], see `docs/spaces/POLYHEDRA.md`                    |
-| The other spaces' soft shapes: caps cut from the polygons on the sphere, polygons cut by a growing disk in curved space, chorded corners on the surface                               | PolyPack (each space's kernel)                           | [CALC]                                                   |
+| The other families' soft shapes: caps cut from the polygons on the sphere, polygons cut by a growing disk in curved space, chorded corners on the surface                               | PolyPack (each family's kernel)                           | [CALC]                                                   |
 | Port to the generic kernel: units of the variables, of pressure and noise, the size in units of room, the size floor, the budget plan, the first offer, restarts, the closing squeeze | PolyPack                                                 | [CALC]                                                   |
 | Every number measured in this repository (tables below)                                                                                                                               | PolyPack                                                 | [CALC]                                                   |
 
@@ -57,7 +57,7 @@ Method section and `engine/engine2d.js`, read on 2026-10-11.
 
 - **Shape family.** The kernel's `setShape(s, t)` gives the soft pieces, from
   the inscribed disk or ball at t = 0 to the true shape at t = 1, every one
-  inside the true piece. Each space has its own family: rounded polygons (the
+  inside the true piece. Each family has its own kind of soft shape: rounded polygons (the
   reference's, softness tau = 1 - t) on the torus, and on the surface with
   their round corners replaced by chords, rounded solids for polyhedra, caps cut from the polygons on the sphere, polygons cut
   by a disk of growing radius in curved space; disks and balls are their own
@@ -94,7 +94,7 @@ diameters; a piece's whole move is capped at 0.03 sqrt(dim) steps.
 
 **The size in units of room.** The reference moves the radius of a circle (a
 unit of size moves the wall by a unit of length) or the side of a polygon (a
-square's side moves its walls by half as much). In other spaces a unit of size
+square's side moves its walls by half as much). In other families a unit of size
 moves the contacts by very different lengths: the side of a hyperbolic square
 buys ever less room (its inradius stays below asinh 1, about 0.88), and on a
 closed surface the size spreads the pairs instead of moving walls. With the
@@ -149,11 +149,11 @@ validation of an improvement): from 1 + 1 for the reference kernel to 2,000 +
 2,000 for the boundary's balls.
 
 - **First offer.** Before any long work, when nothing valid is held, the
-  method offers a state that the space's finishing can take: the supplied
+  method offers a state that the family's finishing can take: the supplied
   start, else one structured seed (`seeds`), else a random start relaxed apart
   at its roomy size (100 L-BFGS iterations). Raw random starts rarely finish:
   none of ten on the boundary's balls or the surface's squares. So a run that
-  is stopped early returns this first offer, when the space's finishing
+  is stopped early returns this first offer, when the family's finishing
   accepts it (in every measured case below and in the tests); a stop before it
   returns nothing.
 - **Offers inside a run** come only while settling, every `offerInterval`
@@ -223,7 +223,7 @@ is the energy evaluation.
    pieces clear of the walls; the first offer is a seed or a relaxed start.
 5. The budget is counted in energy evaluations at the kernel's costs; offers
    only while settling and at the end, instead of an assessment every 32 steps.
-6. The legalisation is the space's `finish`; the closing squeeze is PolyPack's
+6. The legalisation is the family's `finish`; the closing squeeze is PolyPack's
    addition (the polygon framework has its own final polish instead).
 7. Velocities are dropped where a chart changes.
 
@@ -280,9 +280,9 @@ Runs used 2,601 to 3,000 of 3,000 evaluations and 29,594 to 29,756 of 30,000
   at 50 digits had its closest pair 2 - 5.6e-18 apart and every disk inside
   [CALC]. They have been corrected; the table uses the corrected values.
 
-### Space kernels
+### Family kernels
 
-[CALC] Six problems of the spaces, registered defaults, no start, seeds 1–5,
+[CALC] Six problems of the families, registered defaults, no start, seeds 1–5,
 5,000 and 20,000 evaluations. "Record" is the stored value
 (`data/<space>/records.json`, `score_cert`). "Within" counts runs at most 1e-4
 relative above it.
@@ -307,7 +307,7 @@ What these runs show, and no more than that:
 - Every run ended on its own ("done"), within its budget, and returned a
   valid configuration except one: curved/-1/3/4/6 at 20,000, seed 4. Its
   arrangement jammed with overlaps that no size of the hyperbolic square
-  relieves (its room is bounded), and the space's finishing refused all five
+  relieves (its room is bounded), and the family's finishing refused all five
   of its offers, the two relaxed random starts included. The size stayed at
   most at the start's (see Floor and ceiling of the size).
 - On the boundary's balls a finish costs 2,000 and a validation 2,000, so
@@ -366,7 +366,7 @@ nice -n 10 npx tsx packages/methods/scripts/bench-harden.ts 30000 5 13,15,18,20,
 On the reference kernel the three paths are identical, as they must be (its
 soft shape is the disk itself). On these disks pressure 0.08 is better than the
 default at P = 20 and 30 (median 6.1978 against 6.2162 at P = 30),
-as on curved/-1/3/4/6 and unlike polyhedra/cubincub/9 (Space kernels, above).
+as on curved/-1/3/4/6 and unlike polyhedra/cubincub/9 (Family kernels, above).
 Less noise does not help; shorter runs (more of them) are better at P = 30
 and worse at P = 25; the closing squeeze changes the last digits, not the
 packing found. The samples do not separate the harden path

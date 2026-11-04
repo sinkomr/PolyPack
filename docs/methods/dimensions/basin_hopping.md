@@ -42,7 +42,7 @@ server's rule, so a hop never decides validity.
   accepted with probability `exp(-(s' - s) / (T s))`, with `T` the temperature _relative to
   the current score_ `s`. The polygon method's temperature is in score units. Here the score
   is a container side, a sphere's rho or a polytope's edge, so a relative temperature means
-  the same in every space. Scores within a relative 1e-9 are ties, and a tie is accepted at
+  the same in every family. Scores within a relative 1e-9 are ties, and a tie is accepted at
   `T > 0`. The finished score decides, never the squeezed size: a test with a finishing that
   adds 20% to half the packings checks it.
 - **Redraws.** A perturbation that leaves the configuration unchanged is redrawn without a
@@ -126,7 +126,7 @@ best known before, 20 of 20 after (reproduced in a separate check).
 
 [CALC] Everything is charged through the counted kernel: a squeeze is its energy calls
 (about 200 to 600 evaluations per hop on the reference kernel for P = 8 to 12; about 500
-to 3,300 from a random start on the space kernels below). Picking the piece to reinsert costs one sweep (P `pieceEnergy`
+to 3,300 from a random start on the family kernels below). Picking the piece to reinsert costs one sweep (P `pieceEnergy`
 calls). Each reinsertion sample costs 1/P, four structured starts cost 4, and a `randomStart`
 costs 1. Each offer costs the kernel's `finishCost`, plus its validate cost when it improves
 the best: 2 on the reference kernel, 35 to 60 on sphere and torus, 1,003 on curved/-1/3/4/6,
@@ -162,7 +162,7 @@ or 1000; 50 or 200 iterations per weight), at about the lowest cost.
 
 ## Measurements
 
-### The space kernels
+### The family kernels
 
 [CALC] Defaults, no start, seeds 1 to 3, 20,000 evaluations, with the early first offer. The
 record is the problem's `score_cert` in `data/<space>/records.json`; ratios are score over it,
@@ -182,7 +182,7 @@ Pro, load average near 150.
 - polyhedra/tetintet/6: four of the six results (basin_hopping, seeds 1 to 3; shrink_repair,
   seed 1) are 2.290994449 to 2.290994452, accepted by the kernel's finishing at tolerance 0 and
   by the server rule, up to 3.2e-7 below the record's float score 2.2909947650 (1.4e-7 relative).
-  This is not verified or certified, and no record is claimed; it needs the space's
+  This is not verified or certified, and no record is claimed; it needs the family's
   certification first.
 - boundary/tesseract/ball/13: an offer costs 4,000 evaluations, so a run makes about four
   hops, and its result depends on those few hops (seed 3).
@@ -303,7 +303,7 @@ for shrink_repair), 3.304765, the best known, at 20,000 evaluations.
 - [CALC] With a dear finishing every hop pays for an offer: boundary/tesseract/ball/13 makes
   about four hops in 20,000 evaluations.
 - [SPEC] The relative temperature assumes that scores of one problem differ by a few percent
-  at most. A space whose score is far from proportional to the packing's scale may need
+  at most. A family whose score is far from proportional to the packing's scale may need
   another temperature.
 - [CALC] Reinsertion samples uniformly random poses and keeps the least overlap. It cannot find
   an exactly piece-sized hole except by chance (the centre space of such a hole has zero

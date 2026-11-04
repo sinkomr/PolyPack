@@ -1,11 +1,11 @@
 /**
- * The problems of the balls space with their geometry: the piece solid (the polyhedra space's unit-edge solids,
+ * The problems of the balls family with their geometry: the piece solid (the polyhedra family's unit-edge solids,
  * centred at their vertex centroid) and the lower bounds of the score.
  *
- * Units: balls have radius BALL_RADIUS = 1/2, diameter 1 (catalogue.ts); solids have the polyhedra space's canonical size (edge 1 for
+ * Units: balls have radius BALL_RADIUS = 1/2, diameter 1 (catalogue.ts); solids have the polyhedra family's canonical size (edge 1 for
  * the Platonic, Archimedean, prism and antiprism solids). The container is s times the canonical container, centred
  * at the origin: the ball of diameter s (radius s / 2), or the canonical solid scaled by s (the cube [-s/2, s/2]^3 with its faces
- * normal to the axes, the polyhedra space's unit cube scaled by s). The score is s: the container ball's diameter, or
+ * normal to the axes, the polyhedra family's unit cube scaled by s). The score is s: the container ball's diameter, or
  * the scale of the solid (the cube's edge). A ball of radius r lies in s C iff its centre has N_f . c <= s b_f - r
  * for every face f (container.ts).
  */
@@ -149,10 +149,10 @@ export function ballsBound(problem: BallsProblem, P: number): BallsBound {
 }
 
 /**
- * The domain of the space (packages/spaces domain.ts): the 373 codes and P = BALLS_MIN_P to BALLS_MAX_P, each problem
- * with its elementary bound as a listing shows it ("volume bound; [EST] ..."). The space ships no research records,
+ * The domain of the family (packages/spaces domain.ts): the 373 codes and P = BALLS_MIN_P to BALLS_MAX_P, each problem
+ * with its elementary bound as a listing shows it ("volume bound; [EST] ..."). The family ships no research records,
  * so every problem starts without one. The board's menu groups the codes (BallsProblem.group). Its sample takes small
- * P first, the space's first 7 codes (BALLS_ORIGINAL_CODES) in their first order, as the volunteers' work list offered
+ * P first, the family's first 7 codes (BALLS_ORIGINAL_CODES) in their first order, as the volunteers' work list offered
  * them until it was removed on 2026-10-29; the volunteer client now draws from every code and P at random.
  */
 export const ballsDomain = {

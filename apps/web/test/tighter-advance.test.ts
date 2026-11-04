@@ -258,6 +258,33 @@ describe("Tighter Auto-advance", () => {
     expect(stallAfter(s)).toBe(500);
   });
 
+  it("waits for an offer before a problem whose runs report offers leaves, up to 20 times the patience", () => {
+    const { s, q } = full();
+    const patience = patienceFor(s, q[0]) as number;
+    q[0].sinceGain = patience + 1;
+    q[1].sinceGain = patience + 1;
+    // a problem without the field (a polygon, or one loaded from a save) leaves at its patience, as before
+    expect(q[0].offersSinceGain).toBeUndefined();
+    expect(leaveReason(s, q[0])).toBe("stalled");
+    // one whose runs report offers, with none since its last progress, stays
+    q[0].offersSinceGain = 0;
+    expect(leaveReason(s, q[0])).toBeNull();
+    expect(leaveReason(s, q[1])).toBe("stalled");
+    // and below the patience it stays whatever its offers
+    q[0].sinceGain = patience - 1;
+    q[0].offersSinceGain = 3;
+    expect(leaveReason(s, q[0])).toBeNull();
+    // with an offer it leaves at the patience
+    q[0].sinceGain = patience;
+    expect(leaveReason(s, q[0])).toBe("stalled");
+    // a method that never hands one back is let go at 20 times the patience
+    q[0].offersSinceGain = 0;
+    q[0].sinceGain = 20 * patience - 1;
+    expect(leaveReason(s, q[0])).toBeNull();
+    q[0].sinceGain = 20 * patience;
+    expect(leaveReason(s, q[0])).toBe("stalled");
+  });
+
   it("never drops a kept problem by itself, and Drop still works on it", () => {
     const { s, q } = full();
     s.dealer.tokens = 3;

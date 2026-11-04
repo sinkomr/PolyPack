@@ -1,19 +1,19 @@
 /**
  * The reference kernel: P unit disks in a circle of radius R, in the plane. It belongs to no
- * space; it is the test bed of the generic methods, small and exact, with known optima
- * (DISKS_IN_CIRCLE_BEST, from Packomania), and the model a space kernel can be compared with.
+ * family; it is the test bed of the generic methods, small and exact, with known optima
+ * (DISKS_IN_CIRCLE_BEST, from Packomania), and the model a family kernel can be compared with.
  *
  * Configuration: { R, centres: [x, y][] }. State: x = the centres (dim 2), size = R, no charts.
  * Energy: max(0, 2 - |c_i - c_j|)^2 per pair and max(0, |c_i| + 1 - R)^2 per disk, with exact
  * gradients. finish() scales the centres by the factor that makes the closest pair touch and
  * takes the smallest R around them: a closed form, so a finish costs about one energy sweep.
  * Units: this test bed is in working units on purpose (disk radius 1, R the container radius). It is no
- * space of the site and is not served; the site units (disk diameter 1, circle container scored by its
- * diameter) apply at the API edge, where a space kernel converts exactly (see CONVENTIONS in the units plan).
+ * family of the site and is not served; the site units (disk diameter 1, circle container scored by its
+ * diameter) apply at the API edge, where a family kernel converts exactly (see CONVENTIONS in the units plan).
  * Capabilities: "shape" (a disk is its own inscribed disk, so every soft shape is the disk
  * itself) and "seeds" (patches of the hexagonal lattice).
  */
-import type { Finished, KernelState, Rng, SpaceKernel, Validation } from "../kernel";
+import type { Finished, KernelState, Rng, FamilyKernel, Validation } from "../kernel";
 
 /**
  * Best known R for P unit disks in a circle, P = 1 to 12: the values of data/records.json (N = 0,
@@ -55,7 +55,7 @@ export function validateDisks(P: number, config: unknown, tol = 1e-9): Validatio
   return { valid: reasons.length === 0, score: c.R, reasons: reasons.slice(0, 5) };
 }
 
-export function disksKernel(P: number): SpaceKernel {
+export function disksKernel(P: number): FamilyKernel {
   const dim = 2;
   const bound = Math.max(1, Math.sqrt(P));
   const state = (centres: number[], R: number): KernelState => ({ x: Float64Array.from(centres), size: R, aux: null });

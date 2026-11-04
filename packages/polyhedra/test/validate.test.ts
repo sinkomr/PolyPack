@@ -130,8 +130,8 @@ describe.skipIf(!doc)("data/polyhedra/records.json", () => {
   const records = doc?.records ?? [];
 
   it("every record up to P = 30 and every tenth above is valid by the float validator at tolerance 0 at its certified scale", async () => {
-    // the one broad float scan of the stored polyhedra records (the spaces tests check a fixed sample of every
-    // space): all 14,850 take over a minute (scripts/bench-validate.ts), so every one up to P = 30 and every tenth above
+    // the one broad float scan of the stored polyhedra records (the packages/spaces tests check a fixed sample of every
+    // family): all 14,850 take over a minute (scripts/bench-validate.ts), so every one up to P = 30 and every tenth above
     let minGap = Infinity;
     for (const [i, r] of records.entries()) {
       if (r.P > 30 && i % 10 !== 0) continue;

@@ -2,7 +2,7 @@
  * The pieces of a shape continuation (docs/methods/dimensions/morph.md): its schedule of shapes,
  * and the homothety that carries an arrangement to the first contact of a new shape.
  */
-import type { KernelState, SpaceKernel } from "../kernel";
+import type { KernelState, FamilyKernel } from "../kernel";
 
 /** Energy at or below which a state counts as free of overlap (relax's default target). */
 const CLEAR = 1e-20;
@@ -29,7 +29,7 @@ export function morphSchedule(t0: number, stages: number, spacing: number): numb
  * size finds the contact. A state that no factor up to 1.25^24 (about 200) frees, such as one
  * with coincident pieces, is left unchanged for the local solve. About 25 to 45 energy evaluations.
  */
-export function toContact(k: SpaceKernel, s: KernelState): void {
+export function toContact(k: FamilyKernel, s: KernelState): void {
   const size0 = s.size;
   const at = (size: number) => {
     k.setSize(s, size);

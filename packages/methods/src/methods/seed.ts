@@ -5,8 +5,8 @@
  * is offered, so the run keeps the best start found. Its result is a good start for penalty or
  * basin_hopping.
  */
-import type { MethodContext, SpaceMethodDefinition } from "../framework";
-import type { KernelState, SpaceKernel } from "../kernel";
+import type { MethodContext, FamilyMethodDefinition } from "../framework";
+import type { KernelState, FamilyKernel } from "../kernel";
 import { relax, squeeze } from "../local";
 import { StartStream, fitIterations } from "./seed-starts";
 
@@ -20,7 +20,7 @@ interface SeedParams {
 }
 
 /** The short relaxation of a start: a squeeze at weights 10 ... 10^squeeze, or a relaxation at its size. */
-function settle(k: SpaceKernel, s: KernelState, p: SeedParams, maxIter: number): void {
+function settle(k: FamilyKernel, s: KernelState, p: SeedParams, maxIter: number): void {
   if (p.squeeze === 0) relax(k, s, { maxIter });
   else squeeze(k, s, { mus: Array.from({ length: p.squeeze }, (_, i) => 10 ** (i + 1)), maxIter });
 }
@@ -36,7 +36,7 @@ function run(ctx: MethodContext): void {
   }
 }
 
-export const seed: SpaceMethodDefinition = {
+export const seed: FamilyMethodDefinition = {
   name: "seed",
   title: "Seeds",
   summary: "Tries many quick starting layouts, settles each one briefly, and keeps the tightest.",
@@ -54,7 +54,7 @@ export const seed: SpaceMethodDefinition = {
     type: "object",
     title: "Seeds",
     description:
-      "Offer many cheap starts, the space's structured seeds and random layouts, each after a short squeeze; keep the best.",
+      "Offer many cheap starts, the family's structured seeds and random layouts, each after a short squeeze; keep the best.",
     additionalProperties: false,
     properties: {
       seedShare: {
@@ -64,7 +64,7 @@ export const seed: SpaceMethodDefinition = {
         default: 0.5,
         title: "Seed share",
         description:
-          "Fraction of the starts taken from the space's structured seeds, where it has them; the rest are random. Once the seeds give nothing new, every start is random.",
+          "Fraction of the starts taken from the family's structured seeds, where it has them; the rest are random. Once the seeds give nothing new, every start is random.",
       },
       batch: {
         type: "integer",
@@ -72,7 +72,7 @@ export const seed: SpaceMethodDefinition = {
         maximum: 256,
         default: 8,
         title: "Seed batch",
-        description: "Structured seeds asked of the space at once; each costs one evaluation.",
+        description: "Structured seeds asked of the family at once; each costs one evaluation.",
       },
       squeeze: {
         type: "integer",

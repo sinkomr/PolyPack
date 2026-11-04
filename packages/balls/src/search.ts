@@ -1,5 +1,5 @@
 /**
- * The search of the balls space: seeded, budgeted, stoppable and synchronous, for a browser worker or Node.
+ * The search of the balls family: seeded, budgeted, stoppable and synchronous, for a browser worker or Node.
  *
  *  1. Start. A given configuration (any size; an invalid one is first legalized) is polished, unless it is this
  *     search's own polished result (startPolished). Without one, a new start: for balls random centres or a cut of

@@ -1,11 +1,11 @@
 import { describe, expect, it } from "vitest";
-import { type SpaceKernel, runMethod } from "../src";
+import { type FamilyKernel, runMethod } from "../src";
 import { DISKS_IN_CIRCLE_BEST, disksKernel, validateDisks } from "../src/reference/disks";
 
 const valid = (P: number, config: unknown) => validateDisks(P, config, 0).valid;
 
 /** The reference kernel, counting its seeds() calls. */
-function counted(P: number, calls: { seeds: number }): SpaceKernel {
+function counted(P: number, calls: { seeds: number }): FamilyKernel {
   const k = disksKernel(P);
   return { ...k, seeds: (rng, n) => (calls.seeds++, k.seeds!(rng, n)) };
 }
@@ -52,7 +52,7 @@ describe("seed", () => {
 
   it("settles the given start first", () => {
     const k = disksKernel(5);
-    const startless: SpaceKernel = {
+    const startless: FamilyKernel = {
       ...k,
       capabilities: [],
       seeds: undefined,
@@ -107,7 +107,7 @@ describe("seed", () => {
     expect(half).toBeGreaterThanOrEqual(3);
     expect(all).toBeGreaterThanOrEqual(5);
     expect(all).toBeGreaterThan(half);
-    const plain: SpaceKernel = { ...disksKernel(6), capabilities: ["shape"], seeds: undefined };
+    const plain: FamilyKernel = { ...disksKernel(6), capabilities: ["shape"], seeds: undefined };
     const r = runMethod(plain, "seed", { seed: 3, params: { seedShare: 1, starts: 10 }, budget: { evals: 1e6 } });
     expect(valid(6, r.config)).toBe(true);
   });

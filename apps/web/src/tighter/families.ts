@@ -35,7 +35,7 @@ export interface FamilyRules {
   bound(p: ProblemKey & { bound?: number | null }): number | null;
   /**
    * Kernel evaluations of the space's search that one game evaluation is, sized to the CPU time of
-   * a 2D evaluation (about 5 ms); 1 for polygons.
+   * a 2D evaluation with as many pieces (unitsFor); 1 for polygons.
    */
   unitsPerEvaluation(p: ProblemKey): number;
   /** The cost in ms of one game evaluation, from a fixed model and not the player's machine: what pay scales with. */
@@ -127,57 +127,55 @@ function spaceScoreWord(p: SpaceKey): string {
 
 // ---------- weights ----------
 
+/** The premium that problems outside 2D in 2D pay over 2D in 2D for the same solver time [SPEC]. */
+export const PREMIUM = 1.2;
+
 /**
- * The family factor D_f of the shape weight [SPEC]: every family counts as much as a polygon
- * problem of the same distinctness for now.
+ * The level of each row at P = 48 pieces (levelOf), fitted 2026-11-03 against 2D in 2D's RP per second of
+ * solver time, problems' lifetimes under Auto-advance, 141 runs, residuals within the seed noise (about 3x) [CALC].
+ * surface:nofold was not measured: the same as fold.
  */
-export const FAMILY_FACTOR: Readonly<Record<Family, number>> = {
-  polygon: 1,
-  curved: 1,
-  surface: 1,
-  sphere: 1,
-  torus: 1,
-  polyhedra: 1,
-  balls: 1,
+export const LEVEL_AT_48: Record<string, number> = {
+  sphere: 1.6,
+  torus: 0.44,
+  curved: 24,
+  "surface:fold": 1.1,
+  "surface:nofold": 1.1,
+  polyhedra: 1.2,
+  "balls:ball": 1.7,
+  "balls:solid": 5.9,
 };
 
-/** The weight of a space problem: d(N) for polygon pieces (and d(M) for a polygon container), 1 for solids and balls, times D_f. */
+/**
+ * The largest P each row's level was measured at (the problem sets of sphere, surface, curved and balls
+ * stop at 100; torus and polyhedra paid nothing past their first record at 500). The level stops growing
+ * there rather than extrapolating the fit; the cost factor still grows with P.
+ */
+export const LEVEL_TOP_P: Readonly<Record<string, number>> = {
+  sphere: 100,
+  torus: 200,
+  curved: 100,
+  "surface:fold": 100,
+  "surface:nofold": 100,
+  polyhedra: 200,
+  "balls:ball": 100,
+  "balls:solid": 100,
+};
+
+/** The level of a row at P pieces: it grows in proportion to P, up to LEVEL_TOP_P. */
+export const levelOf = (row: string, P: number): number => (LEVEL_AT_48[row] * Math.min(P, LEVEL_TOP_P[row])) / 48;
+
+/** The level of a problem: 1 for a polygon. */
+export const levelFactor = (p: ProblemKey): number => (isPolygon(p) ? 1 : levelOf(unitsRow(p), p.P));
+
+/** The weight of a space problem: d(N) for polygon pieces (and d(M) for a polygon container), 1 for solids and balls, times PREMIUM and the level. */
 function spaceWeight(p: SpaceKey): number {
   const f = fieldsOf(p);
   let w = 1;
   if (f.family === "surface" || f.family === "sphere" || f.family === "torus") w = distinctness(f.N);
   if (f.family === "curved") w = distinctness(f.N) * distinctness(f.M);
-  return w * FAMILY_FACTOR[p.family];
+  return w * PREMIUM * levelOf(unitsRow(p), p.P);
 }
-
-// ---------- units per evaluation ----------
-
-/**
- * Kernel evaluations per game evaluation at P = 20, by family (the bench, scratchpad r3 [CALC]).
- * The kernels' evaluations cost very different times, so a game evaluation is as many of them as
- * come to about the 5 ms a 2D evaluation takes.
- */
-export const UNITS_AT_20: Readonly<Record<string, number>> = {
-  sphere: 400,
-  torus: 600,
-  "balls:ball": 1000,
-  "balls:solid": 8,
-  curved: 40,
-  "surface:fold": 6,
-  "surface:nofold": 60,
-  polyhedra: 30,
-};
-
-/** The row of UNITS_AT_20 a space problem is in. */
-export function unitsRow(p: SpaceKey): string {
-  const f = fieldsOf(p);
-  if (f.family === "surface") return `surface:${f.mode}`;
-  if (f.family === "balls") return f.code.startsWith("ball") ? "balls:ball" : "balls:solid";
-  return f.family;
-}
-
-/** U = max(1, round(base × 20 / P)): fewer pieces make a kernel evaluation cheaper, so more of them make a game evaluation. */
-export const unitsFor = (base: number, P: number): number => Math.max(1, Math.round((base * 20) / Math.max(1, P)));
 
 // ---------- cost of an evaluation ----------
 
@@ -194,20 +192,54 @@ export const COST_TABLE: readonly (readonly [number, number])[] = [
   [500, 52.3],
 ];
 
-/** The cost of one evaluation at size N+M+P, interpolated on log-log axes (extrapolated at the ends). */
-export function msPerEval(total: number): number {
-  const t = Math.max(2, total);
-  const T = COST_TABLE;
+/** A table's value at x, interpolated on log-log axes and extrapolated at the ends along the end segments. */
+function logLog(T: readonly (readonly [number, number])[], x: number): number {
   let i = 0;
-  while (i < T.length - 2 && t > T[i + 1][0]) i++;
+  while (i < T.length - 2 && x > T[i + 1][0]) i++;
   const [x0, y0] = T[i];
   const [x1, y1] = T[i + 1];
   const slope = Math.log(y1 / y0) / Math.log(x1 / x0);
-  return y0 * Math.pow(t / x0, slope);
+  return y0 * Math.pow(x / x0, slope);
 }
 
-/** What a space problem's game evaluation costs: unitsPerEvaluation sizes every family to about this. */
-export const SPACE_EVAL_MS = 5;
+/** The cost of one evaluation at size N+M+P, interpolated on log-log axes (extrapolated at the ends). */
+export function msPerEval(total: number): number {
+  return logLog(COST_TABLE, Math.max(2, total));
+}
+
+/**
+ * Median ms of one kernel evaluation by row and P, measured 2026-11-03 on an M1 Pro [CALC]
+ * (scratchpad dim-pay2/stage1.json). surface:nofold was not measured (the game never offers it): a
+ * tenth of surface:fold, the ratio of their units before.
+ */
+export const KERNEL_MS: Readonly<Record<string, readonly (readonly [number, number])[]>> = {
+  sphere: [[12, 0.0211], [24, 0.0719], [48, 0.266], [100, 1.39]],
+  torus: [[12, 0.0397], [24, 0.118], [48, 0.379], [100, 1.64], [200, 6.54], [500, 45.1]],
+  curved: [[12, 0.218], [24, 0.735], [48, 3.01], [100, 12.7]],
+  "surface:fold": [[12, 0.495], [24, 0.987], [48, 2.15], [100, 6.3]],
+  "surface:nofold": [[12, 0.0495], [24, 0.0987], [48, 0.215], [100, 0.63]],
+  polyhedra: [[12, 0.0754], [24, 0.16], [48, 0.355], [100, 1.11], [200, 2.47], [500, 8.19]],
+  "balls:ball": [[12, 0.00303], [24, 0.00665], [48, 0.0159], [100, 0.0536]],
+  "balls:solid": [[12, 0.0777], [24, 0.25], [48, 0.504], [100, 1.2]],
+};
+
+/** The row of KERNEL_MS and LEVEL_AT_48 a space problem is in. */
+export function unitsRow(p: SpaceKey): string {
+  const f = fieldsOf(p);
+  if (f.family === "surface") return `surface:${f.mode}`;
+  if (f.family === "balls") return f.code.startsWith("ball") ? "balls:ball" : "balls:solid";
+  return f.family;
+}
+
+/** The cost of one kernel evaluation of a space problem's row at P pieces. */
+export const kernelMs = (row: string, P: number): number => logLog(KERNEL_MS[row], Math.max(2, P));
+
+/**
+ * U = max(1, round(msPerEval(P + 8) / kernelMs)): a game evaluation costs about what one costs on a
+ * board of P squares in a square (N + M + P = P + 8), or one kernel evaluation when that costs more.
+ */
+export const unitsFor = (row: string, P: number): number =>
+  Math.max(1, Math.round(msPerEval(P + 8) / kernelMs(row, P)));
 
 // ---------- the rules ----------
 
@@ -264,9 +296,13 @@ function spaceRules(family: SpaceFamily): FamilyRules {
     },
     unitsPerEvaluation: (p) => {
       const q = spaceOnly(p, family);
-      return unitsFor(UNITS_AT_20[unitsRow(q)], q.P);
+      return unitsFor(unitsRow(q), q.P);
     },
-    evalMs: () => SPACE_EVAL_MS,
+    evalMs: (p) => {
+      const q = spaceOnly(p, family);
+      const row = unitsRow(q);
+      return unitsFor(row, q.P) * kernelMs(row, q.P);
+    },
     methods: SPACE_METHODS,
   };
 }

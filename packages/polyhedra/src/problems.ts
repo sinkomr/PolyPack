@@ -1,5 +1,5 @@
 /**
- * The problems of the polyhedra space: P congruent copies of a piece solid in the smallest scaled copy
+ * The problems of the polyhedra family: P congruent copies of a piece solid in the smallest scaled copy
  * s C of a container solid. The 86 problems of polyhedrainpolyhedra.wiki (upstream's scripts/engine.py,
  * PROBLEMS): the 25 Platonic pairs, the 13 Archimedean and 13 Catalan solids in themselves, the 5
  * prisms and 5 antiprisms in themselves and in a cube, and the 15 elongated prisms in a cube. Then

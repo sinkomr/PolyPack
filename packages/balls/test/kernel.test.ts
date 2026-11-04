@@ -8,7 +8,7 @@
  */
 import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
-import { type KernelState, type SpaceKernel, methodsFor, mulberry32, runMethod, squeeze } from "@polypack/methods";
+import { type KernelState, type FamilyKernel, methodsFor, mulberry32, runMethod, squeeze } from "@polypack/methods";
 import { checkKernel } from "@polypack/methods/contract";
 import {
   BALLS_CLEARANCE,
@@ -31,12 +31,12 @@ const packings = JSON.parse(readFileSync(new URL("../../../python/balls/fixtures
   .packings as { id: string; code: string; P: number; config: BallsConfig }[];
 const packing = (code: string, P: number) => packings.find((p) => p.code === code && p.P === P)!.config;
 
-/** Valid at tolerance 0 by the space's validator. */
+/** Valid at tolerance 0 by the family's validator. */
 const strictlyValid = (code: string, config: unknown) =>
   validateBalls(getBallsProblem(code)!, config as BallsConfig, { tol: 0 }).valid;
 
 /** The largest mismatch of the energy's gradient and central differences over every variable and the size. */
-function gradientError(k: SpaceKernel, s: KernelState): number {
+function gradientError(k: FamilyKernel, s: KernelState): number {
   const n = k.P * k.dim;
   const g = new Float64Array(n + 1);
   k.energy(s, g);
@@ -215,7 +215,7 @@ describe("ballsKernel", () => {
     expect(k.validate(two(0.5, 2))).toEqual({ valid: true, score: 2, reasons: [] });
     // within the strict tolerance 1e-11
     expect(k.validate(two(0.5 - 0.125e-11, 2)).valid).toBe(true);
-    // within the touching tolerance, not the strict one: refused, since the space has no records
+    // within the touching tolerance, not the strict one: refused, since the family has no records
     const loose = k.validate(two(0.5 - 0.125e-9, 2));
     expect(loose.valid).toBe(false);
     expect(loose.score).toBe(2);

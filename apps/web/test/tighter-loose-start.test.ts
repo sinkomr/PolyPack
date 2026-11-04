@@ -1,7 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { mulberry32, runMethod } from "@polypack/methods";
 import { checkSpaceConfig, parseSearchProblem, spaceKernel } from "@polypack/spaces/search";
-import { UNITS_AT_20, unitsFor, unitsRow } from "../src/tighter/families";
 import { countedEvals } from "../src/tighter/game";
 import { LOOSE_ROOM, spaceStart } from "../src/tighter/space-run";
 import { COMPACT_EVALS } from "../src/tighter/upgrades";
@@ -58,10 +57,6 @@ describe("Tighter loose starts", () => {
       if (!a.ok) throw new Error(a.message);
       const p = parseSearchProblem(id)!;
       const k = spaceKernel(p)!;
-      const unit = unitsFor(
-        UNITS_AT_20[unitsRow({ family, id, P: (p as { P: number }).P } as never)],
-        (p as { P: number }).P,
-      );
       let offers = 0;
       let stop = false;
       let best = Infinity;
@@ -71,7 +66,8 @@ describe("Tighter loose starts", () => {
         {
           seed: 7,
           start: a.config,
-          budget: { evals: 20_000 * unit, time_s: 60 },
+          // kernel evaluations, whatever a game evaluation is (families.ts unitsFor): the run stops at its first offer
+          budget: { evals: 30_000_000, time_s: 60 },
           onOffer: () => {
             offers++;
             stop = true;

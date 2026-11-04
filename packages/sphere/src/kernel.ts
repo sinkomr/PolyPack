@@ -1,5 +1,5 @@
 /**
- * The sphere space's kernel for the generic search methods (packages/methods/src/kernel.ts,
+ * The sphere family's kernel for the generic search methods (packages/methods/src/kernel.ts,
  * docs/methods/dimensions/README.md, docs/spaces/SPHERE.md "Kernel for the generic methods").
  *
  *  - State: per piece a rotation vector about a world axis, times rho (x_i = rho w_i, so that
@@ -19,7 +19,7 @@
  *    (Platonic and spiral centres, kernel-seeds.ts) and, for polygons, swap (orientations carried
  *    along the geodesic between the two centres).
  */
-import type { Finished, KernelCapability, KernelState, SpaceKernel, Validation } from "@polypack/methods";
+import type { Finished, KernelCapability, KernelState, FamilyKernel, Validation } from "@polypack/methods";
 import {
   type Quat,
   type SphereConfig,
@@ -90,7 +90,7 @@ function transport(u: Vec3, v: Vec3): Quat {
   return [0, n[0] / l, n[1] / l, n[2] / l];
 }
 
-export function sphereKernel(problem: { N: number; P: number }): SpaceKernel {
+export function sphereKernel(problem: { N: number; P: number }): FamilyKernel {
   const { N, P } = problem;
   if (!supportedN(N) || !Number.isInteger(P) || P < 1 || P > 100)
     throw new Error(`bad sphere problem ${JSON.stringify(problem)}`);

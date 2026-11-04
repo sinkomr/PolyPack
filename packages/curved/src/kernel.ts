@@ -1,5 +1,5 @@
 /**
- * The curved space's kernel for the generic search methods (packages/methods/src/kernel.ts,
+ * The curved family's kernel for the generic search methods (packages/methods/src/kernel.ts,
  * docs/methods/dimensions/README.md, docs/spaces/CURVED.md "Kernel for the generic methods").
  *
  *  - State: each piece's chart offsets (u, v, phi) at an anchor pose (kernel-chart.ts; disks have
@@ -17,7 +17,7 @@
  *    malformed (its limits and its far-centre test).
  *  - id: the catalogue's, with K written as the curved records write it (formatCurvature).
  */
-import type { KernelState, Rng, SpaceKernel } from "@polypack/methods";
+import type { KernelState, Rng, FamilyKernel } from "@polypack/methods";
 import { type CurvedPose, makeSpace } from "./problem";
 import { compose, poseMotion } from "./space";
 import { maxContainerSize, sideFromApothem } from "./shapes";
@@ -63,7 +63,7 @@ export function formatCurvature(K: number): string {
   return `${mantissa}e${e < 0 ? "-" : "+"}${digits}`;
 }
 
-export function curvedKernel(problem: { K: number; N: number; M: number; P: number }): SpaceKernel {
+export function curvedKernel(problem: { K: number; N: number; M: number; P: number }): FamilyKernel {
   const { K, N, M, P } = problem;
   if (!Number.isInteger(P) || P < 1 || P > 100) throw new RangeError("P must be an integer in [1, 100]");
   // throws for a non-finite K, a bad N or M, or a unit piece that does not exist at K
@@ -102,7 +102,7 @@ export function curvedKernel(problem: { K: number; N: number; M: number; P: numb
     for (let a = 0; a < dim; a++) s.x[i * dim + a] = 0;
   };
 
-  const kernel: SpaceKernel = {
+  const kernel: FamilyKernel = {
     space: "curved",
     id: `curved/${formatCurvature(K)}/${N}/${M}/${P}`,
     P,

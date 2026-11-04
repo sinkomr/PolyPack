@@ -22,7 +22,7 @@
  */
 import type { ParameterSchema } from "@polypack/solver/schema";
 import type { MethodContext } from "../framework";
-import type { KernelState, Rng, SpaceKernel } from "../kernel";
+import type { KernelState, Rng, FamilyKernel } from "../kernel";
 import { relax } from "../local";
 import { randomInt } from "../random";
 
@@ -60,7 +60,7 @@ export function adaptStep(step: number, rate: number, target: number, gain: numb
 }
 
 /** The first piece of s, from `first` on and cyclically, that is not clear at tolerance 0, or -1 when every piece is. */
-export function blocker(k: SpaceKernel, s: KernelState, first = 0): number {
+export function blocker(k: FamilyKernel, s: KernelState, first = 0): number {
   for (let n = 0; n < k.P; n++) {
     const i = (first + n) % k.P;
     if (!k.clear(s, i, 0)) return i;
@@ -73,13 +73,13 @@ export function blocker(k: SpaceKernel, s: KernelState, first = 0): number {
  * entry. One at a time: at a jammed cell most directions of a joint move are blocked (on a square
  * torus lattice any change of the aspect shortens a lattice vector, while the shear is free).
  */
-export function jiggleGlobals(k: SpaceKernel, s: KernelState, amount: number, rng: Rng): void {
+export function jiggleGlobals(k: FamilyKernel, s: KernelState, amount: number, rng: Rng): void {
   const g = randomInt(rng, k.globals);
   s.x[k.P * k.dim + g] += (2 * rng() - 1) * amount * k.globalSteps[g];
 }
 
 /** Moves every piece of s by the same random offset, of up to `amount` steps in each of a piece's variables. */
-export function drift(k: SpaceKernel, s: KernelState, amount: number, rng: Rng): void {
+export function drift(k: FamilyKernel, s: KernelState, amount: number, rng: Rng): void {
   const offset = Array.from({ length: k.dim }, (_, d) => (2 * rng() - 1) * amount * k.steps[d]);
   for (let i = 0; i < k.P; i++) for (let d = 0; d < k.dim; d++) s.x[i * k.dim + d] += offset[d];
 }
@@ -89,7 +89,7 @@ export function drift(k: SpaceKernel, s: KernelState, amount: number, rng: Rng):
  * fixed variables. It is a move of its own only where the variables (or the anchors setSize moves)
  * are positions in the container's frame; see sizeMoves.
  */
-export function scaleCentres(k: SpaceKernel, s: KernelState, f: number): void {
+export function scaleCentres(k: FamilyKernel, s: KernelState, f: number): void {
   const size = s.size;
   k.setSize(s, size * f);
   s.size = size;
@@ -109,17 +109,17 @@ function sameConfig(a: unknown, b: unknown): boolean {
 }
 
 /**
- * The size moves a space has besides setSize, which moves the arrangement with the container:
+ * The size moves a family has besides setSize, which moves the arrangement with the container:
  *  - centres: the centres alone (scaleCentres);
  *  - walls: the container alone, the size at fixed variables.
- * Tried once on a rebased copy of s, with toConfig only (no evaluations). In a space whose
+ * Tried once on a rebased copy of s, with toConfig only (no evaluations). In a family whose
  * variables are positions about the container's centre (the reference disks, polyhedra, curved)
  * both are moves of their own. Where setSize changes the size alone (torus, surface), or the
  * variables are offsets from anchors that follow the size (sphere, boundary), the centres move
  * changes nothing on a rebased state and the walls move is setSize; between rebases they would
  * only pull pieces towards their anchors, so the methods leave them out there.
  */
-export function sizeMoves(k: SpaceKernel, s: KernelState): { centres: boolean; walls: boolean } {
+export function sizeMoves(k: FamilyKernel, s: KernelState): { centres: boolean; walls: boolean } {
   const base = k.clone(s);
   k.rebase(base);
   const f = 0.9;
@@ -140,7 +140,7 @@ export function sizeMoves(k: SpaceKernel, s: KernelState): { centres: boolean; w
  * every piece is clear; false when that fails. A relaxed state often keeps overlaps of about 1e-10,
  * which the first growths of 1e-9, 1e-8, ... part.
  */
-function separate(k: SpaceKernel, s: KernelState): boolean {
+function separate(k: FamilyKernel, s: KernelState): boolean {
   relax(k, s, { maxIter: 300 });
   let grow = 1e-9;
   for (let t = 0; t < 16; t++) {
@@ -172,7 +172,7 @@ export function hardStart(ctx: MethodContext): { state: KernelState; given: bool
  * stays the same for the whole run; kept trials are written into it.
  */
 export class HardChain {
-  readonly k: SpaceKernel;
+  readonly k: FamilyKernel;
   /** True when a kept trial changed the state since it was last offered. */
   changed: boolean;
   /** The run's best score, as the framework kept it after the last offer (Infinity while there is none). */
@@ -376,7 +376,7 @@ function bisect(chain: HardChain, lo: number, apply: (t: KernelState, f: number)
 /**
  * Shrinks a start as a whole, keeping its contact pattern (the polygon method's initial
  * contraction): by bisection, first the arrangement with the container (setSize), then, where the
- * space has them (sizeMoves), the centres alone and the container alone, each as far as every
+ * family has them (sizeMoves), the centres alone and the container alone, each as far as every
  * piece stays clear. Writes the result into the chain's state; returns whether it changed.
  */
 export function contract(chain: HardChain, moves: { centres: boolean; walls: boolean }, halvings = 30): boolean {

@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   type MethodContext,
-  type SpaceMethodDefinition,
+  type FamilyMethodDefinition,
   Stop,
   getMethod,
   methodsFor,
@@ -15,7 +15,7 @@ import { DISKS_IN_CIRCLE_BEST, disksKernel, validateDisks } from "../src/referen
 import { mulberry32 } from "../src/random";
 
 // A method for these tests only: squeeze random starts, offering each.
-const restarts: SpaceMethodDefinition = {
+const restarts: FamilyMethodDefinition = {
   name: "test_restarts",
   title: "Restarts (test)",
   summary: "Squeezes random starts.",
@@ -186,7 +186,7 @@ describe("running a method", () => {
 
   it("offers a method only to kernels with the capabilities it needs", () => {
     expect(getMethod("test_restarts")).toBeDefined();
-    const needs: SpaceMethodDefinition = {
+    const needs: FamilyMethodDefinition = {
       ...restarts,
       name: "test_needs_swap",
       doc: "docs/methods/dimensions/test_needs_swap.md",

@@ -1,5 +1,5 @@
 /**
- * The torus space's kernel for the generic search methods (packages/methods/src/kernel.ts,
+ * The torus family's kernel for the generic search methods (packages/methods/src/kernel.ts,
  * docs/methods/dimensions/README.md, docs/spaces/TORUS.md "Kernel for the generic methods").
  *
  *  - State: as in the search (search.ts), a base packing in aux (basis, centres, angles) mapped by
@@ -26,7 +26,7 @@
  */
 import { type Pose, inradius, isShapeCode } from "@polypack/geometry";
 import { areaOf, reachOf } from "./disk";
-import type { Finished, KernelCapability, KernelState, SpaceKernel, Validation } from "@polypack/methods";
+import type { Finished, KernelCapability, KernelState, FamilyKernel, Validation } from "@polypack/methods";
 import { TorusEnergy, type TorusKernelAux, type TorusStateView, familyBasis } from "./kernel-energy";
 import { latticeSeed } from "./kernel-seeds";
 import {
@@ -47,7 +47,7 @@ import { areaScoreBound, validateTorusPacking } from "./validate";
 
 export type { TorusKernelAux } from "./kernel-energy";
 
-/** A torus configuration in the space's format (docs/spaces/TORUS.md, the API's torus space). */
+/** A torus configuration in the family's format (docs/spaces/TORUS.md, the API's torus family). */
 export interface TorusConfig {
   lattice: { L: number } | { b1: [number, number]; b2: [number, number] };
   poses: [number, number, number][];
@@ -71,7 +71,7 @@ const isObject = (v: unknown): v is Record<string, unknown> => typeof v === "obj
 const finiteUpTo = (v: unknown, max: number): v is number =>
   typeof v === "number" && Number.isFinite(v) && Math.abs(v) <= max;
 
-export function torusKernel(problem: { family: TorusFamily; N: number; P: number }): SpaceKernel {
+export function torusKernel(problem: { family: TorusFamily; N: number; P: number }): FamilyKernel {
   const { family, N, P } = problem;
   if (!TORUS_FAMILIES.includes(family) || !isShapeCode(N) || !Number.isInteger(P) || P < 1 || P > TORUS_MAX_P)
     throw new Error(`bad torus problem ${JSON.stringify(problem)}`);

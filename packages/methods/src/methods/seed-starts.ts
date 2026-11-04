@@ -10,7 +10,7 @@
  * ends the seeds; random starts take their place.
  */
 import type { MethodContext } from "../framework";
-import type { KernelState, SpaceKernel } from "../kernel";
+import type { KernelState, FamilyKernel } from "../kernel";
 
 /** The largest seed request, so a kernel with a long fixed list is not asked for ever more. */
 const MAX_BATCH = 1024;
@@ -18,7 +18,7 @@ const MAX_BATCH = 1024;
 const NUDGE = 1e-4;
 
 /** A short hash of a state's configuration, to recognise a seed given before. */
-function signature(k: SpaceKernel, s: KernelState): string {
+function signature(k: FamilyKernel, s: KernelState): string {
   const text = JSON.stringify(k.toConfig(s));
   // two 32-bit FNV-1a hashes with different offsets: about 64 bits, enough for thousands of seeds
   let a = 0x811c9dc5;

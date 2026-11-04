@@ -5,7 +5,7 @@
  */
 import { existsSync } from "node:fs";
 import { describe, expect, it } from "vitest";
-import { type KernelState, type SpaceKernel, mulberry32, runMethod, squeeze } from "@polypack/methods";
+import { type KernelState, type FamilyKernel, mulberry32, runMethod, squeeze } from "@polypack/methods";
 import { checkKernel } from "@polypack/methods/contract";
 import { getProblem, getSolid, polyhedraKernel, validatePolyhedra } from "../src";
 import { readProblemConfigs } from "../src/records-file";
@@ -16,7 +16,7 @@ const haveRecords = existsSync(recordsPath);
 const recordConfig = (code: string, P: number) => readProblemConfigs(recordsPath, code).get(P)!;
 
 /** The largest mismatch of the energy's gradient and central differences over every variable and the size. */
-function gradientError(k: SpaceKernel, s: KernelState): number {
+function gradientError(k: FamilyKernel, s: KernelState): number {
   const n = k.P * k.dim;
   const g = new Float64Array(n + 1);
   k.energy(s, g);

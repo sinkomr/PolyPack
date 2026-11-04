@@ -1,9 +1,9 @@
 /**
  * What the balls kernel's two kinds of pieces (kernel-balls.ts, kernel-solids.ts) share: the server's rule for a
- * submission, and the exact finishing of a state, both on configurations in the space's format.
+ * submission, and the exact finishing of a state, both on configurations in the family's format.
  *
  * The rule is the server's (validateSpaceSubmission of packages/spaces/src/validate.ts, as apps/server calls it for
- * this space: the problem's bound, and noRecord, since the space ships without research records). The spaces
+ * this family: the problem's bound, and noRecord, since the family ships without research records). The families
  * package depends on this one, so the rule is built here again from the same parts (ballsConfigErrors and
  * validateBalls) and the server's constants; packages/spaces/test/methods.test.ts checks that both give the same
  * verdict, score and reasons.
@@ -98,7 +98,7 @@ function tightened(problem: BallsProblem, c: BallsConfig): BallsConfig {
 }
 
 /**
- * The space's own finishing of a configuration, as the search treats a start it is given (search.ts), with two
+ * The family's own finishing of a configuration, as the search treats a start it is given (search.ts), with two
  * changes: a configuration valid at tolerance 0 is a result already, so that a finish is never worse than a valid
  * input (the legalization scales centres about the origin, which can take a valid configuration past the server's
  * coordinate limit); and the polish starts at the size the pieces need (tightened), not at the stated one.

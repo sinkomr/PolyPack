@@ -2,9 +2,9 @@
 
 The polygon solver's methods (`docs/methods/*.md`) work on flat polygons in a polygon. The other
 Dimensions each had one built-in search. Now they share a set of generic methods, written once in
-`packages/methods` against a **kernel**: what a method needs to know about a space. Each space
+`packages/methods` against a **kernel**: what a method needs to know about a family. Each family
 implements its kernel once, on top of its own energy and validator. Every method then runs in every
-space whose kernel has the capabilities it needs. The built-in search of each space stays available
+family whose kernel has the capabilities it needs. The built-in search of each family stays available
 as **Auto** and stays the default.
 
 ## The kernel (`packages/methods/src/kernel.ts`)
@@ -18,16 +18,16 @@ as **Auto** and stays the default.
   - a hard clearance test;
   - random poses and local moves;
   - changing the size while keeping the normalized arrangement;
-  - the space's exact finishing (`finish`, which gives a valid configuration);
+  - the family's exact finishing (`finish`, which gives a valid configuration);
   - the server's rule (`validate`).
 - Optional capabilities:
   - `shape`: soft pieces, from the inscribed disk or ball at t = 0 to the true shape at t = 1, for harden and morph;
   - `seeds`: structured starts;
   - `swap`: exchanging two pieces' orientations.
 - `packages/methods/src/contract.ts` checks the rules. Every kernel's test calls `checkKernel` and expects no failures.
-- The reference kernel, unit disks in a circle (`packages/methods/src/reference/disks.ts`), is the methods' test bed. It has known optima. [CALC] It is in working units on purpose (disk radius 1, container radius R; the score is R) and is no space of the site and is not served, so every disk number in these pages about the reference kernel (best known radius, `DISKS_IN_CIRCLE_BEST`, R = 3.9 tanh(L / 3.9)) is in those units. Since 2026-10-27 the site's units are disk diameter 1 and a circle container scored by its diameter; for unit-radius disks in a circle the radius R is the same number as the site's diameter score, and a kernel for a space converts exactly at the API edge.
+- The reference kernel, unit disks in a circle (`packages/methods/src/reference/disks.ts`), is the methods' test bed. It has known optima. [CALC] It is in working units on purpose (disk radius 1, container radius R; the score is R) and is no family of the site and is not served, so every disk number in these pages about the reference kernel (best known radius, `DISKS_IN_CIRCLE_BEST`, R = 3.9 tanh(L / 3.9)) is in those units. Since 2026-10-27 the site's units are disk diameter 1 and a circle container scored by its diameter; for unit-radius disks in a circle the radius R is the same number as the site's diameter score, and a kernel for a family converts exactly at the API edge.
 
-| Space | Factory | Package |
+| Family | Factory | Package |
 |---|---|---|
 | curved (2D in 2D) | `curvedKernel({ K, N, M, P })` | `@polypack/curved` |
 | surface (2D on 3D) | `surfaceKernel({ solid, N, P, mode })` | `@polypack/surface` |
@@ -67,5 +67,5 @@ Each method keeps the name of the polygon method it ports and has its own page h
 | `seed` | — (uses `seeds` when the kernel has it) |
 
 `ls_growth` is not ported. Lubachevsky–Stillinger growth needs exact collision times between
-moving pieces, which none of these spaces' geometries gives in closed form. Its effect, growth
+moving pieces, which none of these families' geometries gives in closed form. Its effect, growth
 under hard-particle moves, is covered by `mc_compress` and `asc`.

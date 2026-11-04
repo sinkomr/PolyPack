@@ -8,9 +8,9 @@
  *  - drift: every piece moved by the same chart offset; in a container this is the container's
  *    translation relative to the pieces (the polygon method's container translation);
  *  - strain: a move of one of the kernel's globals at a fixed size, a change of the cell's shape
- *    where the space has a free cell (the shape part of Torquato and Jiao's cell strain);
+ *    where the family has a free cell (the shape part of Torquato and Jiao's cell strain);
  *  - scale: the container alone shrinks, or with a positive temperature sometimes grows; where the
- *    space has no move of the container alone (sizeMoves in mc-chain.ts: torus, surface, sphere,
+ *    family has no move of the container alone (sizeMoves in mc-chain.ts: torus, surface, sphere,
  *    boundary), setSize, the arrangement with the container (the volume part of the cell strain);
  *  - radial and centres, only where the container moves alone: setSize to a smaller size, and the
  *    centres alone moving in (with the scale after it, the polygon method's radial strain).
@@ -18,7 +18,7 @@
  * compressions shrinks a start used as given without changing its contact pattern. After
  * stagnationSweeps sweeps without progress the method returns.
  */
-import type { MethodContext, SpaceMethodDefinition } from "../framework";
+import type { MethodContext, FamilyMethodDefinition } from "../framework";
 import type { KernelState } from "../kernel";
 import { randomInt } from "../random";
 import {
@@ -61,7 +61,7 @@ const defaults = {
 };
 type Params = typeof defaults;
 
-export const asc: SpaceMethodDefinition = {
+export const asc: FamilyMethodDefinition = {
   name: "asc",
   title: "Adaptive shrinking container",
   summary: "Pieces jiggle without overlapping while the whole container drifts, changes shape and shrinks around them.",
@@ -112,7 +112,7 @@ export const asc: SpaceMethodDefinition = {
       ),
       centresStep: numeric(
         "Centre contraction",
-        "Initial fractional contraction of the centres alone, the container staying, where the space has that move.",
+        "Initial fractional contraction of the centres alone, the container staying, where the family has that move.",
         defaults.centresStep,
         MIN_STEP,
         MAXIMUM.centres,

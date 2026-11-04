@@ -30,14 +30,29 @@ import {
   requiredSlices,
   sliceOfId,
 } from "../src/tighter/catalogue";
+import { costFactor, recordPoints } from "../src/tighter/points";
 import { newDealer } from "../src/tighter/dealer";
-import { FAMILY_FACTOR, SPACE_METHODS, UNITS_AT_20, rulesOf, spaceFields, unitsFor } from "../src/tighter/families";
+import {
+  KERNEL_MS,
+  LEVEL_AT_48,
+  PREMIUM,
+  SPACE_METHODS,
+  kernelMs,
+  levelFactor,
+  levelOf,
+  LEVEL_TOP_P,
+  msPerEval,
+  rulesOf,
+  spaceFields,
+  unitsFor,
+  unitsRow,
+} from "../src/tighter/families";
 import { SpaceKey, parseKey, poly } from "../src/tighter/frontier";
 import { newGame, newProblem, ownedSet } from "../src/tighter/game";
 import { noteRecorded, pointsMultiplier } from "../src/tighter/economy";
 import { ruleAllowsProblem, ruleRewardFactor } from "../src/tighter/standing";
 import { normalizeOffer } from "../src/tighter/picks";
-import { bucketOf, passes, rankCandidates } from "../src/tighter/rank";
+import { RP_PER_EVAL, bucketOf, passes, priorPerEval, rankCandidates } from "../src/tighter/rank";
 import { fromJson, toJson } from "../src/tighter/save";
 import { SLICES, SliceId } from "../src/tighter/slices";
 import {
@@ -105,11 +120,10 @@ describe("Tighter space titles and score words", () => {
 
 describe("Tighter space weights, bounds and units", () => {
   it("weigh pieces by distinctness and the others 1, times the family factor", () => {
-    for (const f of Object.values(FAMILY_FACTOR)) expect(f).toBe(1);
-    expect(rulesOf(key("sphere/40/12")).weight(key("sphere/40/12"))).toBeCloseTo(0.5, 12);
-    expect(rulesOf(key("sphere/4/12")).weight(key("sphere/4/12"))).toBe(1);
-    expect(rulesOf(key("curved/-1/40/50/7")).weight(key("curved/-1/40/50/7"))).toBeCloseTo(0.5 * 0.4, 12);
-    expect(rulesOf(key("polyhedra/cubintet/12")).weight(key("polyhedra/cubintet/12"))).toBe(1);
+    expect(rulesOf(key("sphere/40/12")).weight(key("sphere/40/12"))).toBeCloseTo(0.5 * 1.2 * levelOf("sphere", 12), 12);
+    expect(rulesOf(key("sphere/4/12")).weight(key("sphere/4/12"))).toBeCloseTo(1.2 * levelOf("sphere", 12), 12);
+    expect(rulesOf(key("curved/-1/40/50/7")).weight(key("curved/-1/40/50/7"))).toBeCloseTo(0.5 * 0.4 * 1.2 * levelOf("curved", 7), 12);
+    expect(rulesOf(key("polyhedra/cubintet/12")).weight(key("polyhedra/cubintet/12"))).toBeCloseTo(1.2 * levelOf("polyhedra", 12), 12);
   });
 
   it("take a space problem's bound from the server", () => {
@@ -119,21 +133,86 @@ describe("Tighter space weights, bounds and units", () => {
     expect(rulesOf(k).bound(k)).toBeNull();
   });
 
-  it("size a game evaluation to about 5 ms: U = max(1, round(base x 20 / P))", () => {
-    expect(unitsFor(400, 20)).toBe(400);
-    expect(unitsFor(400, 40)).toBe(200);
-    expect(unitsFor(6, 100)).toBe(1);
-    expect(unitsFor(8, 400)).toBe(1);
+  it("gives each row a level that grows in proportion to P, and weighs a problem by shape x 1.2 x level", () => {
+    expect(PREMIUM).toBe(1.2);
+    expect(Object.keys(LEVEL_AT_48).sort()).toEqual(Object.keys(KERNEL_MS).sort());
+    expect(levelOf("curved", 48)).toBe(24);
+    expect(levelOf("torus", 48)).toBe(0.44);
+    expect(levelOf("sphere", 96)).toBeCloseTo(3.2, 12);
+    for (const row of Object.keys(LEVEL_AT_48)) expect(levelOf(row, 100) / levelOf(row, 25)).toBeCloseTo(4, 12);
+    // the level stops growing at the largest P it was measured at
+    expect(Object.keys(LEVEL_TOP_P).sort()).toEqual(Object.keys(LEVEL_AT_48).sort());
+    expect(levelOf("curved", 500)).toBe(levelOf("curved", 100));
+    expect(levelOf("torus", 500)).toBe(levelOf("torus", 200));
+    expect(levelOf("torus", 150)).toBeCloseTo(0.44 * (150 / 48), 12);
+    const k = key("curved/-1/3/4/100");
+    expect(rulesOf(k).weight(k)).toBeCloseTo(1.2 * 24 * (100 / 48), 12);
+    expect(levelFactor(k)).toBeCloseTo(24 * (100 / 48), 12);
+    expect(levelFactor(poly(24, 30, 60))).toBe(1);
+    // a curved problem at P = 100 pays 50 x 1.2 times the shape-and-cost pay of the same improvement
+    const p = recordPoints({ ...k, bound: 1.7, sPrev: 3, sNew: 2.9, tier: "open" })!;
+    expect(p.improvement).toBeCloseTo(50 * 1.2 * costFactor(k) * (p.nibble + p.size + p.gap), 6);
+  });
+
+  it("leaves the level out of the dealer's prior", () => {
+    const k = key("curved/-1/3/4/100");
+    const prior = priorPerEval({ ...k, tier: "open", weakness: null, bonusSpent: true });
+    expect(prior).toBeCloseTo(1.2 * 1 * costFactor(k) * RP_PER_EVAL, 9);
+  });
+
+  it("interpolates a kernel evaluation's cost on log-log axes, extrapolating along the end segments", () => {
+    for (const [row, T] of Object.entries(KERNEL_MS)) {
+      for (const [P, ms] of T) expect(kernelMs(row, P)).toBeCloseTo(ms, 9);
+      const [[p0, m0], [p1, m1]] = [T[0], T[1]];
+      const mid = Math.sqrt(p0 * p1);
+      expect(kernelMs(row, mid)).toBeCloseTo(Math.sqrt(m0 * m1), 9);
+      expect(kernelMs(row, 1.5 * T[T.length - 1][0])).toBeGreaterThan(T[T.length - 1][1]);
+    }
+    expect(KERNEL_MS["surface:nofold"].map(([, m]) => m * 10)).toEqual(KERNEL_MS["surface:fold"].map(([, m]) => m));
+  });
+
+  it("size a game evaluation like a polygon's of N+M+P = P+8: U = max(1, round(msPerEval(P+8) / kernel ms))", () => {
+    for (const row of Object.keys(KERNEL_MS)) {
+      for (const P of [12, 48, 100, 200, 500]) {
+        const U = unitsFor(row, P);
+        const want = msPerEval(P + 8);
+        if (U >= 2) {
+          expect((U * kernelMs(row, P)) / want).toBeGreaterThan(1 / 1.5);
+          expect((U * kernelMs(row, P)) / want).toBeLessThan(1.5);
+        } else expect(kernelMs(row, P)).toBeGreaterThan(want / 1.5);
+      }
+    }
     const u = (id: string) => rulesOf(key(id)).unitsPerEvaluation(key(id));
-    expect(u("sphere/4/20")).toBe(UNITS_AT_20.sphere);
-    expect(u("torus/hex/4/10")).toBe(1200);
-    expect(u("balls/ballinball/50")).toBe(400);
-    expect(u("balls/cubinball/20")).toBe(UNITS_AT_20["balls:solid"]);
-    expect(u("curved/-1/3/4/20")).toBe(40);
-    expect(u("surface/cube/fold/4/20")).toBe(6);
-    expect(u("surface/rhombic_dodecahedron/nofold/4/20")).toBe(60);
-    expect(u("polyhedra/cubintet/60")).toBe(10);
+    const ms = (id: string) => rulesOf(key(id)).evalMs(key(id));
+    expect(u("sphere/4/12")).toBe(unitsFor("sphere", 12));
+    expect(unitsFor("sphere", 12)).toBe(Math.round(msPerEval(20) / 0.0211));
+    // a kernel evaluation that costs more than the polygon's: one of them
+    expect(u("torus/hex/4/500")).toBe(1);
+    expect(ms("torus/hex/4/500")).toBeCloseTo(kernelMs("torus", 500), 12);
+    expect(ms("sphere/4/12")).toBeCloseTo(u("sphere/4/12") * 0.0211, 12);
+    expect(unitsRow(key("surface/rhombic_dodecahedron/nofold/4/20"))).toBe("surface:nofold");
     expect(rulesOf(poly(24, 30, 60)).unitsPerEvaluation(poly(24, 30, 60))).toBe(1);
+  });
+
+  it("raises the cost factor with P in every row, and leaves a polygon's as it was", () => {
+    const sample: Record<string, (P: number) => string> = {
+      sphere: (P) => `sphere/4/${P}`,
+      torus: (P) => `torus/hex/4/${P}`,
+      curved: (P) => `curved/-1/3/4/${P}`,
+      "surface:fold": (P) => `surface/cube/fold/4/${P}`,
+      polyhedra: (P) => `polyhedra/cubintet/${P}`,
+      "balls:ball": (P) => `balls/ballinball/${P}`,
+      "balls:solid": (P) => `balls/cubinball/${P}`,
+    };
+    for (const [row, id] of Object.entries(sample)) {
+      let last = 0;
+      for (const P of [12, 24, 48, 100, 200]) {
+        const k = costFactor(key(id(P)));
+        expect(k, `${row} at ${P}`).toBeGreaterThan(last);
+        last = k;
+      }
+    }
+    expect(costFactor(poly(24, 30, 60))).toBeCloseTo(msPerEval(114) / msPerEval(85), 12);
   });
 
   it("offer the generic methods, mc_compress first and without seed", () => {

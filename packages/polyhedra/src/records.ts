@@ -101,7 +101,7 @@ export type ParsedConfig =
 /**
  * A configuration of a problem with P pieces from untrusted input: { s, pieces: [[x, y, z, qw, qx, qy, qz], ...] }
  * with only those fields kept. Errors are `malformed` when the input is not such a configuration at all, and not
- * when only the number of pieces is wrong (an invalid packing, as the other spaces have it).
+ * when only the number of pieces is wrong (an invalid packing, as the other families have it).
  */
 export function parsePolyhedraConfig(raw: unknown, P: number, maxErrors = 20): ParsedConfig {
   const errs = configErrors(raw, undefined, maxErrors);

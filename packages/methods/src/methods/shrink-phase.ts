@@ -3,12 +3,12 @@
  * state at its fixed size by relocating conflicting pieces to the best of sampled poses, relaxing
  * the whole state (local.ts relax), and guided-local-search weights that make the pieces of
  * persistent conflicts more expensive. Also the ruins of its exploration: a region of pieces
- * found from the energy alone, shifted, scattered or (where the space can) swapped.
+ * found from the energy alone, shifted, scattered or (where the family can) swapped.
  *
  * Everything goes through kernel calls; nothing here decides validity. A repair succeeds when the
  * kernel's energy model is (about) zero, and the caller then offers the state.
  */
-import type { KernelState, Rng, SpaceKernel } from "../kernel";
+import type { KernelState, Rng, FamilyKernel } from "../kernel";
 import { relax } from "../local";
 import { randomInt, sample } from "../random";
 import { assign } from "./basin-operators";
@@ -47,13 +47,13 @@ function shuffle(values: number[], rng: Rng): void {
 }
 
 export class Repair {
-  /** Guided-local-search weight of each piece (SpaceKernel.energy's weights), at least 1. */
+  /** Guided-local-search weight of each piece (FamilyKernel.energy's weights), at least 1. */
   readonly weights: Float64Array;
   /** Repair iterations of the last run. */
   iterations = 0;
 
   constructor(
-    private readonly k: SpaceKernel,
+    private readonly k: FamilyKernel,
     private readonly settings: RepairSettings,
     private readonly rng: Rng,
   ) {
@@ -184,12 +184,12 @@ export class Repair {
  * shrunk by REGION_SQUEEZE (25%: centre distances scale by 0.75), two pieces overlap when their
  * gap is below about a third of their contact distance (unit disks: centres closer than 2.67); with
  * weights 1 for piece c and 0 elsewhere, pieceEnergy(j) is half the pair term of j and c alone
- * (SpaceKernel.energy: a pair term is weighted by (w_c + w_j) / 2, a wall term by w_j), so it
+ * (FamilyKernel.energy: a pair term is weighted by (w_c + w_j) / 2, a wall term by w_j), so it
  * names c's neighbours, deepest (closest) first. The region grows breadth first from the random
  * piece; when it runs out of neighbours it takes random pieces. About one energy sweep per piece
  * expanded.
  */
-export function region(k: SpaceKernel, s: KernelState, count: number, rng: Rng): number[] {
+export function region(k: FamilyKernel, s: KernelState, count: number, rng: Rng): number[] {
   const P = k.P;
   const n = Math.min(P, Math.max(1, Math.round(count)));
   const probe = k.clone(s);
@@ -227,10 +227,10 @@ export type RuinKind = "shift" | "scatter" | "swap";
 /**
  * Ruins the pieces given, in place: shifts each by up to SHIFT steps in every variable (the
  * region keeps its place but loses its contacts), scatters each to a uniformly random pose, or,
- * where the space can swap, exchanges the orientations of random pairs of them. The kind is drawn
+ * where the family can swap, exchanges the orientations of random pairs of them. The kind is drawn
  * uniformly from those available. The repair that follows re-places them.
  */
-export function ruin(k: SpaceKernel, s: KernelState, pieces: readonly number[], rng: Rng): RuinKind {
+export function ruin(k: FamilyKernel, s: KernelState, pieces: readonly number[], rng: Rng): RuinKind {
   const kinds: RuinKind[] = k.swap && pieces.length >= 2 ? ["shift", "scatter", "swap"] : ["shift", "scatter"];
   const kind = kinds[randomInt(rng, kinds.length)];
   if (kind === "swap") {

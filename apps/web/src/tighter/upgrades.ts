@@ -635,7 +635,7 @@ function dealerRung(id: UpgradeId, cost: number, requires: UpgradeId[]): Upgrade
           "the room left, 1 for an open problem, min(1, 0.3 + 25 × its weakness) for a loose record (see Reach), 0.1 for another site record and 0.004 for a published value",
         ],
         [sym("θ"), "1, or with the Learning dealer its correction for this kind of problem"],
-        [sym("t"), "milliseconds of one mc_compress evaluation at this problem's N + M + P, from a measured table"],
+        [sym("t"), "milliseconds of one evaluation of this problem, from a measured table (mc_compress at its N + M + P in 2D in 2D)"],
         [sym("t", "85"), "the same at N + M + P = 85, 1.77 ms"],
       ],
     },

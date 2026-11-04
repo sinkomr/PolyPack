@@ -1,6 +1,6 @@
 /**
  * The generic methods, registered in the order the board lists them. Each file exports its
- * SpaceMethodDefinition; registration happens here only, once.
+ * FamilyMethodDefinition; registration happens here only, once.
  */
 import { registerMethod } from "../framework";
 import { asc } from "./asc";
