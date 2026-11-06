@@ -4,7 +4,7 @@
  * from the server's ranked work lists, GET /api/targets and /api/spaces/targets, which were removed on 2026-10-29.)
  *
  * The problems are the flat ones, N and M a circle (0) or 3 to 100 sides and P from 1 to 500, narrowed by --N, --M and
- * --max-P; and with --dimensions, those of the kinds named, narrowed by --max-P. Each kind's problems are the product
+ * --P (or --max-P); and with --dimensions, those of the kinds named, narrowed by --P. Each kind's problems are the product
  * of its id's fields (a list of values, or a range of integers): packages/spaces' domains, and boundary's catalogue.
  * A draw takes a kind in proportion to the size of its product, then each field uniformly; a draw outside the kind's
  * domain starts again from the kind. So every problem is as likely as any other.
@@ -86,10 +86,11 @@ export type Drawn = { kind: "polygon"; problem: Problem } | { kind: "space"; spa
 /** The key of a drawn problem in the history, the skips and the problems being searched. */
 export const drawnKey = (d: Drawn) => (d.kind === "polygon" ? problemKey(d.problem) : d.id);
 
-/** One field of a kind's ids: a list of values, or the integers from min to max. */
+/** One field of a kind's ids: a list of values, a list of integers (`ints`, sorted), or the integers from min to max. */
 export interface KindField {
   key: string;
   values?: readonly string[];
+  ints?: readonly number[];
   min?: number;
   max?: number;
 }
@@ -108,28 +109,39 @@ const pick = <T>(list: readonly T[], random: () => number): T =>
   list[Math.min(list.length - 1, Math.floor(random() * list.length))];
 const between = (min: number, max: number, random: () => number) =>
   min + Math.min(max - min, Math.floor(random() * (max - min + 1)));
-const fieldSize = (f: KindField) => (f.values ? f.values.length : Math.max(0, f.max! - f.min! + 1));
+const fieldSize = (f: KindField) =>
+  f.values ? f.values.length : f.ints ? f.ints.length : Math.max(0, f.max! - f.min! + 1);
+/** One value of the field, uniformly. */
+const drawField = (f: KindField, random: () => number): string | number =>
+  f.values ? pick(f.values, random) : f.ints ? pick(f.ints, random) : between(f.min!, f.max!, random);
 
-/** The flat problems that pass --N, --M and --max-P (every shape and P up to MAX_PIECES without them). */
-export function flatKind(f: { N: readonly number[] | null; M: readonly number[] | null; maxP: number | null }): Kind {
+/** All the P of the flat problems: 1 to MAX_PIECES. */
+const ALL_P: readonly number[] = Array.from({ length: MAX_PIECES }, (_, i) => i + 1);
+
+/** The flat problems that pass --N, --M and --P (every shape and P from 1 to MAX_PIECES without them). */
+export function flatKind(f: {
+  N: readonly number[] | null;
+  M: readonly number[] | null;
+  P: readonly number[] | null;
+}): Kind {
   const Ns = f.N ?? SHAPE_CODES;
   const Ms = f.M ?? SHAPE_CODES;
-  const maxP = Math.min(MAX_PIECES, f.maxP ?? MAX_PIECES);
+  const Ps = f.P ?? ALL_P;
   return {
     name: "flat",
-    size: Ns.length * Ms.length * maxP,
+    size: Ns.length * Ms.length * Ps.length,
     draw: (random) => ({
       kind: "polygon",
-      problem: { N: pick(Ns, random), M: pick(Ms, random), P: between(1, maxP, random) },
+      problem: { N: pick(Ns, random), M: pick(Ms, random), P: pick(Ps, random) },
     }),
   };
 }
 
 /**
  * The fields of a space's problems: its domain's, or for boundary (which has none) its catalogue's polytope, piece and
- * P. --max-P cuts the range of P.
+ * P. --P cuts the range of P to the allowed values (a field with `ints` when it is not the whole range).
  */
-export function spaceFields(space: SpaceName, maxP: number | null): KindField[] {
+export function spaceFields(space: SpaceName, P: readonly number[] | null): KindField[] {
   const domain = SPACE_DOMAINS[space];
   const fields: KindField[] = domain
     ? domain.info.fields.map((f) => ({ key: f.key, values: f.values, min: f.min, max: f.max }))
@@ -138,7 +150,11 @@ export function spaceFields(space: SpaceName, maxP: number | null): KindField[] 
         { key: "piece", values: BOUNDARY_PIECES },
         { key: "P", min: 1, max: BOUNDARY_CATALOGUE_MAX_P },
       ];
-  return fields.map((f) => (f.key === "P" && maxP !== null ? { ...f, max: Math.min(f.max!, maxP) } : f));
+  return fields.map((f) =>
+    f.key === "P" && P !== null && f.min !== undefined
+      ? { key: "P", ints: P.filter((p) => p >= f.min! && p <= f.max!) }
+      : f,
+  );
 }
 
 /** True when `id` is a problem of the space's domain (every id of the product, for boundary) that this client searches. */
@@ -172,6 +188,7 @@ function dependentGroups(
         const values = info.dependent?.values?.[value];
         const range = info.dependent?.ranges?.[value];
         if (values) return { key: f.key, values };
+        if (range && f.ints) return { key: f.key, ints: f.ints.filter((p) => p >= range[0] && p <= range[1]) };
         if (range)
           return {
             key: f.key,
@@ -184,10 +201,10 @@ function dependentGroups(
   return { on, groups };
 }
 
-/** The problems of one space, after --max-P. */
-export function spaceKind(space: SpaceName, maxP: number | null): Kind {
+/** The problems of one space, after --P. */
+export function spaceKind(space: SpaceName, P: readonly number[] | null): Kind {
   const domain = SPACE_DOMAINS[space];
-  const fields = spaceFields(space, maxP);
+  const fields = spaceFields(space, P);
   const dependent = dependentGroups(space, fields);
   if (domain && dependent) {
     // every problem as likely as any other: a value of the field the others depend on in proportion to its problems
@@ -208,7 +225,7 @@ export function spaceKind(space: SpaceName, maxP: number | null): Kind {
         }
         const g = dependent.groups[at];
         const chosen: Record<string, string | number> = { [dependent.on]: g.value };
-        for (const f of g.fields) chosen[f.key] = f.values ? pick(f.values, random) : between(f.min!, f.max!, random);
+        for (const f of g.fields) chosen[f.key] = drawField(f, random);
         const id = domainId(domain.info, chosen);
         return inSpace(space, domain, id) ? { kind: "space", space, id } : null;
       },
@@ -220,7 +237,7 @@ export function spaceKind(space: SpaceName, maxP: number | null): Kind {
     size,
     draw: (random) => {
       const chosen: Record<string, string | number> = {};
-      for (const f of fields) chosen[f.key] = f.values ? pick(f.values, random) : between(f.min!, f.max!, random);
+      for (const f of fields) chosen[f.key] = drawField(f, random);
       const id = domain ? domainId(domain.info, chosen) : `boundary/${chosen.polytope}/${chosen.piece}/${chosen.P}`;
       return inSpace(space, domain, id) ? { kind: "space", space, id } : null;
     },
@@ -231,11 +248,11 @@ export function spaceKind(space: SpaceName, maxP: number | null): Kind {
 export function kindsFor(o: {
   N: readonly number[] | null;
   M: readonly number[] | null;
-  maxP: number | null;
+  P: readonly number[] | null;
   spaces: readonly SpaceName[] | null;
   onlySpaces: boolean;
 }): Kind[] {
-  const kinds = [...(o.onlySpaces ? [] : [flatKind(o)]), ...(o.spaces ?? []).map((space) => spaceKind(space, o.maxP))];
+  const kinds = [...(o.onlySpaces ? [] : [flatKind(o)]), ...(o.spaces ?? []).map((space) => spaceKind(space, o.P))];
   return kinds.filter((k) => k.size > 0);
 }
 

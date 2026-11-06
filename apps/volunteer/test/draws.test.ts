@@ -52,7 +52,7 @@ afterEach(async () => {
 describe("the draws", () => {
   it("over every flat problem, by default, are the same from one version to the next", () => {
     const random = mulberry32(42);
-    const kinds = kindsFor({ N: null, M: null, maxP: null, spaces: null, onlySpaces: false });
+    const kinds = kindsFor({ N: null, M: null, P: null, spaces: null, onlySpaces: false });
     const picks = Array.from({ length: 10 }, () =>
       drawnKey(drawProblem(kinds, { recent: new Map(), skip: new Set(), now: 0, random })!),
     );

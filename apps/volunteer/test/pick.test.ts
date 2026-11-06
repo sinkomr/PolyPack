@@ -48,7 +48,9 @@ function line(N: number, M: number, P: number, time: number, stopped = "time"): 
   };
 }
 
-const noFilters = { N: null, M: null, maxP: null };
+const noFilters = { N: null, M: null, P: null };
+/** The allowed numbers of pieces 1..k, as --max-P k gives them. */
+const upTo = (k: number) => Array.from({ length: k }, (_, i) => i + 1);
 const NOW = Date.parse("2026-10-29T12:00:00Z");
 
 /** A seeded random source (mulberry32), so that the counts below are the same on every run. */
@@ -79,7 +81,7 @@ describe("the flat problems", () => {
   });
 
   it("are narrowed by --N, --M and --max-P", () => {
-    const k = flatKind({ N: [0, 3], M: [4], maxP: 10 });
+    const k = flatKind({ N: [0, 3], M: [4], P: upTo(10) });
     expect(k.size).toBe(2 * 1 * 10);
     const random = seeded(1);
     for (let i = 0; i < 500; i++) {
@@ -94,7 +96,7 @@ describe("the flat problems", () => {
   });
 
   it("are each drawn about as often as the others", () => {
-    const k = flatKind({ N: [3, 4], M: [5], maxP: 3 });
+    const k = flatKind({ N: [3, 4], M: [5], P: upTo(3) });
     const counts = new Map<string, number>();
     const random = seeded(7);
     const draws = 60_000;
@@ -105,6 +107,24 @@ describe("the flat problems", () => {
     expect(counts.size).toBe(6);
     // [CALC] each count is binomial(60000, 1/6): mean 10000, standard deviation about 91; 5% is 5.5 of them
     for (const n of counts.values()) expect(Math.abs(n - draws / 6)).toBeLessThan(500);
+  });
+
+  it("are narrowed by a list of P that is not contiguous", () => {
+    const Ps = [1, 2, 3, 10];
+    const k = flatKind({ N: [3, 4], M: [5], P: Ps });
+    expect(k.size).toBe(2 * 1 * 4);
+    const counts = new Map<string, number>();
+    const random = seeded(11);
+    const draws = 80_000;
+    for (let i = 0; i < draws; i++) {
+      const d = k.draw(random)!;
+      if (d.kind !== "polygon") throw new Error("flat");
+      expect(Ps).toContain(d.problem.P);
+      counts.set(drawnKey(d), (counts.get(drawnKey(d)) ?? 0) + 1);
+    }
+    expect(counts.size).toBe(8);
+    // [CALC] each count is binomial(80000, 1/8): mean 10000, standard deviation about 94; 500 is over 5 of them
+    for (const n of counts.values()) expect(Math.abs(n - draws / 8)).toBeLessThan(500);
   });
 
   it("include the extremes of the ranges", () => {
@@ -169,12 +189,68 @@ describe("the problems of the other kinds", () => {
   });
 
   it("are cut by --max-P, and left out when it leaves none", () => {
-    const fields = spaceFields("torus", 20);
-    expect(fields.find((f) => f.key === "P")).toMatchObject({ min: 1, max: 20 });
-    expect(spaceKind("torus", 20).size).toBe(3 * 99 * 20);
+    const fields = spaceFields("torus", upTo(20));
+    expect(fields.find((f) => f.key === "P")).toEqual({ key: "P", ints: upTo(20) });
+    expect(spaceKind("torus", upTo(20)).size).toBe(3 * 99 * 20);
     // balls start at P = 2
-    expect(spaceKind("balls", 1).size).toBe(0);
-    expect(kindsFor({ ...noFilters, maxP: 1, spaces: ["balls"], onlySpaces: true })).toEqual([]);
+    expect(spaceKind("balls", upTo(1)).size).toBe(0);
+    expect(kindsFor({ ...noFilters, P: upTo(1), spaces: ["balls"], onlySpaces: true })).toEqual([]);
+  });
+});
+
+describe("the other kinds with a list of P", () => {
+  it("have the allowed P that lie in their ranges, and every one as likely", () => {
+    // balls start at P = 2, so P = 1 is not there
+    const P = [1, 2, 3, 10];
+    const fields = spaceFields("balls", P);
+    expect(fields.find((f) => f.key === "P")).toEqual({ key: "P", ints: [2, 3, 10] });
+    const full = spaceKind("balls", null);
+    const kind = spaceKind("balls", P);
+    const pCount = spaceFields("balls", null).find((f) => f.key === "P")!;
+    const sizeWithout = full.size / (pCount.max! - pCount.min! + 1);
+    expect(kind.size).toBe(sizeWithout * 3);
+    const counts = new Map<number, number>();
+    const random = seeded(3);
+    const draws = 30_000;
+    for (let i = 0; i < draws; i++) {
+      const d = kind.draw(random);
+      if (d?.kind !== "space") continue;
+      const p = Number(d.id.split("/").at(-1));
+      counts.set(p, (counts.get(p) ?? 0) + 1);
+    }
+    expect([...counts.keys()].sort((a, b) => a - b)).toEqual([2, 3, 10]);
+  });
+
+  it("cut boundary's P, and the dependent ranges of ndim, to the list", () => {
+    const P = spaceFields("boundary", [1, 16, 17, 400]).find((f) => f.key === "P")!;
+    expect(P.ints?.length).toBeGreaterThan(0);
+    for (const p of P.ints!) expect([1, 16, 17, 400]).toContain(p);
+    expect(spaceKind("boundary", [500]).size).toBe(0);
+    const ndim = spaceKind("ndim", [2, 3, 100]);
+    expect(ndim.size).toBeGreaterThan(0);
+    expect(ndim.size).toBeLessThan(spaceKind("ndim", null).size);
+    const random = seeded(9);
+    for (let i = 0; i < 200; i++) {
+      const d = ndim.draw(random);
+      if (d?.kind === "space") expect([2, 3]).toContain(Number(d.id.split("/").at(-1)));
+    }
+  });
+
+  it("are dropped when no P is left", () => {
+    expect(kindsFor({ ...noFilters, P: [1], spaces: ["balls"], onlySpaces: true })).toEqual([]);
+    const kinds = kindsFor({ N: [3], M: [3], P: [1], spaces: ["balls", "torus"], onlySpaces: false });
+    expect(kinds.map((k) => k.name)).toEqual(["flat", "torus"]);
+  });
+
+  it("are weighted in proportion to their sizes next to the flat kind", () => {
+    const kinds = kindsFor({ N: [3], M: [3], P: [2, 3, 50], spaces: ["sphere"], onlySpaces: false });
+    expect(kinds.map((k) => k.size)).toEqual([3, 99 * 3]);
+    const random = seeded(21);
+    let flat = 0;
+    const draws = 30_000;
+    for (let i = 0; i < draws; i++) if (drawOnce(kinds, random)?.kind === "polygon") flat++;
+    // [CALC] expected 30000 · 3 / 300 = 300, standard deviation about 17
+    expect(Math.abs(flat - 300)).toBeLessThan(80);
   });
 });
 
@@ -191,7 +267,7 @@ describe("a draw over several kinds", () => {
 
   it("takes each kind in proportion to its number of problems", () => {
     // 2 flat problems against sphere's 9,900: about 1 draw in 4,951 is flat
-    const kinds = kindsFor({ N: [3], M: [3], maxP: 2, spaces: ["sphere"], onlySpaces: false });
+    const kinds = kindsFor({ N: [3], M: [3], P: upTo(2), spaces: ["sphere"], onlySpaces: false });
     expect(kinds.map((k) => k.size)).toEqual([2, 99 * 2]);
     const random = seeded(5);
     let flat = 0;
@@ -207,7 +283,7 @@ describe("a draw over several kinds", () => {
 });
 
 describe("drawing the next problem", () => {
-  const two = [flatKind({ N: [4], M: [4], maxP: 2 })];
+  const two = [flatKind({ N: [4], M: [4], P: upTo(2) })];
 
   it("never draws a problem to skip", () => {
     const random = seeded(2);
