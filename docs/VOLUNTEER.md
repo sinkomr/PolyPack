@@ -145,21 +145,21 @@ node polypack-volunteer.mjs --name "your name" --dimensions sphere,torus --only-
 node polypack-volunteer.mjs --name "your name" --dimensions boundary --only-dimensions
 ```
 
-- **Off by default.** Without `--dimensions` or `--spaces` the client never draws or reads their problems, and nothing below happens. This holds for `ndim` too: it is opt-in only, either named (`--dimensions ndim`) or as part of `all`. Its share of `all` is small (6,131 of 26,152,698 problems), and its jobs are slow and heavy, so name it alone with `--only-dimensions` to give it the time.
-- **Which problem.** Each draw covers the flat problems (unless `--only-dimensions`) and every problem of the kinds named, with or without a research record, every one as likely as any other. A kind's problems are the product of its id's fields, the domain that `GET /api/spaces` describes (for `boundary`, 5,536 problems: balls, aligned cubes and the four other solids on the tesseract, P = 1 to 16, balls and the five solids on the 5-cell, 16-cell, 24-cell, 120-cell and 600-cell, P = 1 to 24, balls and cubes on the 5-cube to the 10-cube, P up to 160, 384 or 400, and balls on the 5- to 10-simplex, orthoplex and demicube, P = 1 to 24; for `ndim`, 6,131: the pieces and the container each a polytope of the dimension or a ball, any pair, P from 2 to 40 in 4D, 32 in 5D, 24 in 6D and 20 above); the client has them built in. So a kind comes up in proportion to its number of problems. [CALC] Without `--max-P`:
+- **Off by default.** Without `--dimensions` or `--spaces` the client never draws or reads their problems, and nothing below happens. This holds for `ndim` too: it is opt-in only, either named (`--dimensions ndim`) or as part of `all`. Its share of `all` is small (6,131 of 51,992,798 problems), and its jobs are slow and heavy, so name it alone with `--only-dimensions` to give it the time.
+- **Which problem.** Each draw covers the flat problems (unless `--only-dimensions`) and every problem of the kinds named, with or without a research record, every one as likely as any other. A kind's problems are the product of its id's fields, the domain that `GET /api/spaces` describes (for `boundary`, 5,536 problems: balls, aligned cubes and the four other solids on the tesseract, P = 1 to 16, balls and the five solids on the 5-cell, 16-cell, 24-cell, 120-cell and 600-cell, P = 1 to 24, balls and cubes on the 5-cube to the 10-cube, P up to 160, 384 or 400, and balls on the 5- to 10-simplex, orthoplex and demicube, P = 1 to 24; for `ndim`, 6,131: the pieces and the container each a polytope of the dimension or a ball, any pair, P from 2 to 40 in 4D, 32 in 5D, 24 in 6D and 20 above; for `curved`, the 26,830,100 of its product's 83,655,000 ids that can exist, the others drawn again); the client has them built in. So a kind comes up in proportion to its number of problems. [CALC] Without `--max-P`:
 
   | Kind      | Problems   | Share with `all` |
   | --------- | ---------- | ---------------- |
-  | polyhedra | 17,263,404 | 66.0 %           |
-  | Flat      | 4,900,500  | 18.7 %           |
-  | surface   | 2,791,800  | 10.7 %           |
-  | curved    | 990,000    | 3.8 %            |
-  | torus     | 148,500    | 0.57 %           |
-  | balls     | 36,927     | 0.14 %           |
-  | sphere    | 9,900      | 0.04 %           |
-  | ndim      | 6,131      | 0.023 %          |
-  | boundary  | 5,536      | 0.021 %          |
-  | All       | 26,152,698 | 100 %            |
+  | curved    | 26,830,100 | 51.6 %           |
+  | polyhedra | 17,263,404 | 33.2 %           |
+  | Flat      | 4,900,500  | 9.4 %            |
+  | surface   | 2,791,800  | 5.4 %            |
+  | torus     | 148,500    | 0.29 %           |
+  | balls     | 36,927     | 0.071 %          |
+  | sphere    | 9,900      | 0.019 %          |
+  | ndim      | 6,131      | 0.012 %          |
+  | boundary  | 5,536      | 0.011 %          |
+  | All       | 51,992,798 | 100 %            |
 
   A problem searched here in the last 7 days is drawn again as for flat problems. `--max-P` cuts each kind's range of P, and a kind left with no problem is dropped.
 - **The start.** It reads the problem, `GET /api/spaces/<space>/problems/<id>`, and starts from the better of its two configurations: the research record's and the site leader's. Closed problems (a proven value, or no packing at all) are skipped.

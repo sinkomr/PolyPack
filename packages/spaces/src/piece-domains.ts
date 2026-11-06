@@ -90,15 +90,16 @@ const curvedKey = (fields: Readonly<Record<string, string>>) => ({
   N: Number(fields.N),
   M: Number(fields.M),
 });
-let curvedProblems: number | undefined;
-/** The problems that can exist: for every curvature, piece and container, P = 1 up to curvedMaxP (about 0.1 s; computed once). */
-function curvedProblemCount(): number {
-  if (curvedProblems === undefined) {
-    let n = 0;
-    for (const K of CURVED_KS) for (const N of PIECE_NS) for (const M of CURVED_MS) n += curvedMaxP(K, N, M);
-    curvedProblems = n;
-  }
-  return curvedProblems;
+/**
+ * How many curved problems can exist [CALC]: countCurvedProblems() below, which takes about 0.3 s, so the server (which
+ * reads the count as it starts) keeps this value and curved-sizes.test.ts checks that the two agree.
+ */
+const CURVED_PROBLEMS = 26_830_100;
+/** The problems that can exist: for every curvature, piece and container, P = 1 up to curvedMaxP. */
+export function countCurvedProblems(): number {
+  let n = 0;
+  for (const K of CURVED_KS) for (const N of PIECE_NS) for (const M of CURVED_MS) n += curvedMaxP(K, N, M);
+  return n;
 }
 export const curvedDomain: SpaceDomain = {
   info: {
@@ -109,9 +110,7 @@ export const curvedDomain: SpaceDomain = {
       { key: "M", label: "Container", values: CURVED_MS.map(String) },
       curvedCount,
     ],
-    get problems() {
-      return curvedProblemCount();
-    },
+    problems: CURVED_PROBLEMS,
   },
   bound({ fields: { K, N, M }, P }) {
     if (!CURVED_KS.includes(K as number) || !shape(N) || !CURVED_MS.includes(M as number) || !Number.isInteger(P) || P < 1 || P > CURVED_MAX_P)

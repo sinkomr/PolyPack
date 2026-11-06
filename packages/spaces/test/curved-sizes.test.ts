@@ -1,8 +1,13 @@
 /** Curved problems at the largest sizes (P = 500, M = 100): the board's search starts, ends in budget and is valid; the check is bounded. */
 import { curvedBoundOf } from "@polypack/curved/bound";
 import { describe, expect, it } from "vitest";
-import { validateSpaceSubmissionAsync } from "../src";
+import { SPACE_DOMAINS, validateSpaceSubmissionAsync } from "../src";
+import { countCurvedProblems } from "../src/piece-domains";
 import { runSpaceJob } from "../src/search";
+
+it("the curved domain's count is that of the problems that can exist", () => {
+  expect(SPACE_DOMAINS.curved!.info.problems).toBe(countCurvedProblems());
+});
 
 describe("curved at P = 500", () => {
   for (const id of ["curved/-0.0001/4/100/500", "curved/0.0001/0/0/500"])

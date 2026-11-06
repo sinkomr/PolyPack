@@ -7,7 +7,8 @@
  * --max-P; and with --dimensions, those of the kinds named, narrowed by --max-P. Each kind's problems are the product
  * of its id's fields (a list of values, or a range of integers): packages/spaces' domains, and boundary's catalogue.
  * A draw takes a kind in proportion to the size of its product, then each field uniformly; a draw outside the kind's
- * domain starts again from the kind. So every problem is as likely as any other.
+ * domain, or on an id of its ranges that cannot be a problem (curved's, SpaceDomain.impossible), starts again from the
+ * kind. So every problem is as likely as any other.
  *
  * A problem this machine searched in the last week (RECENT_MS) is drawn again, at most RECENT_TRIES - 1 times: among
  * millions of problems that hardly happens, and when the filters leave few the client searches one again rather than
@@ -141,12 +142,15 @@ export function spaceFields(space: SpaceName, maxP: number | null): KindField[] 
   return fields.map((f) => (f.key === "P" && maxP !== null ? { ...f, max: Math.min(f.max!, maxP) } : f));
 }
 
-/** True when `id` is a problem of the space's domain (every id of the product, for boundary) that this client searches. */
+/**
+ * True when `id` is a problem of the space's domain (every id of the product, for boundary) that this client searches:
+ * not one the domain says cannot exist (a unit 8-gon at K = 1).
+ */
 function inSpace(space: SpaceName, domain: SpaceDomain | undefined, id: string): boolean {
   if (!parseSpaceId(id)) return false;
   if (!domain) return true;
   const parsed = parseIdOf(space, id);
-  return typeof parsed !== "string" && domain.bound(parsed) !== undefined;
+  return typeof parsed !== "string" && domain.bound(parsed) !== undefined && !domain.impossible?.(parsed);
 }
 
 /**
