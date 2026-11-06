@@ -10,6 +10,7 @@
   },
   "dependencies": {
     "@polypack/balls": "*",
+    "@polypack/curved": "*",
     "@polypack/geometry": "*",
     "@polypack/methods": "*",
     "@polypack/ndspace": "*",
