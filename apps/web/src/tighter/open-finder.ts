@@ -1,6 +1,6 @@
 import type { LeadersAnswer } from "../api";
 import { drawWide, nextRandom } from "./dealer";
-import type { DealerState } from "./dealer";
+import type { DealerState, RuleWide } from "./dealer";
 import type { Filters } from "./rank";
 import { ProblemKey, keyOf } from "./frontier";
 
@@ -12,7 +12,7 @@ export const TAKEN_TTL_MS = 300_000;
 const ROUNDS_PER_POOL = 2;
 
 /** Where to look for open problems: a list, or the wide set (sides 21-100, 40 pieces up) leaning to small ones. */
-export type Pool = { keys: readonly ProblemKey[] } | { wide: true; skew: number };
+export type Pool = { keys: readonly ProblemKey[] } | { wide: true; skew: number; rule?: RuleWide | null };
 
 export interface FinderDeps {
   getLeaders: (keys: readonly string[]) => Promise<LeadersAnswer | null>;
@@ -25,6 +25,10 @@ export class TakenCache {
   constructor(private now: () => number) {}
   add(key: string): void {
     this.at.set(key, this.now());
+  }
+  /** The keys still remembered as taken. */
+  keys(): string[] {
+    return [...this.at.keys()].filter((k) => this.has(k));
   }
   has(key: string): boolean {
     const t = this.at.get(key);
@@ -66,7 +70,7 @@ function candidatesOf(
   if ("keys" in pool) return sample(d, pool.keys, ok, BATCH);
   const out = new Map<string, ProblemKey>();
   for (let i = 0; i < BATCH * 3 && out.size < BATCH; i++) {
-    const k = drawWide(d, exclude, (p) => ok(p) && !out.has(keyOf(p)), 1, pool.skew, within);
+    const k = drawWide(d, exclude, (p) => ok(p) && !out.has(keyOf(p)), 1, pool.skew, within, pool.rule ?? null);
     if (k) out.set(keyOf(k), k);
   }
   return [...out.values()];

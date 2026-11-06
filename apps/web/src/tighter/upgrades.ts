@@ -1157,7 +1157,7 @@ export const UPGRADES: readonly Upgrade[] = [
         "An open problem is one that has no record on the site yet. Normally the dealer picks open problems from a fixed list of 2,601 problems.",
         "With this upgrade, half of the open problems come from a much wider choice instead, with any sides from 21 to 100 and any piece count from 40 to 500. Transfers then also look at problems with 1 to 3 fewer pieces.",
       ],
-      note: "The fixed list has the sides 21, 24, 27, 30, 33, 36, 40, 44, 47, 50, 55, 60, 66, 72, 80, 90 and 100 for the piece and the container, and the piece counts 40, 60, 80, 100, 120, 150, 200, 250 and 300. The wider choice draws each value uniformly. Under the Circles only and Small problems only rules, the rule's own list of problems is used instead.",
+      note: "The fixed list has the sides 21, 24, 27, 30, 33, 36, 40, 44, 47, 50, 55, 60, 66, 72, 80, 90 and 100 for the piece and the container, and the piece counts 40, 60, 80, 100, 120, 150, 200, 250 and 300. The wider choice draws each value uniformly. Under the Circles only and Small problems only rules this upgrade is ignored: the dealer draws 2D in 2D open problems from the fixed list first, then from the rule's own wide set (sides 21 to 100, 40 to 500 pieces, with circles or of size 120 or less).",
     },
     row: "problems",
   },
@@ -1169,16 +1169,16 @@ export const UPGRADES: readonly Upgrade[] = [
     effect: "Groups of similar records add to all your points.",
     how: {
       text: [
-        "Every record the server confirmed for you counts, even if someone beat it later. Only polygon problems count for now. A reset takes this upgrade away, but your records still count when you buy it again.",
-        "Same pieces and container. When you have 9 records with the same pieces in the same container, such as 21-gons in a 24-gon, you get +2 %. The piece counts can be anything.",
-        "Same pieces. When you have 10 records with the same pieces, in any container, you get +1 %. You get 1 % more at 30 records, and again at 100.",
+        "Every record the server confirmed for you counts, even if someone beat it later, in every Dimension (2D in 2D, 2D on 3D and 3D in 3D). A reset takes this upgrade away, but your records still count when you buy it again.",
+        "Same pieces and container. A pairing is a piece shape in a container shape in one Dimension, such as 21-gons in a 24-gon, squares on a cube or cubes in a tetrahedron. When you have 9 records of one pairing, you get +2 %. The piece counts can be anything. A surface counts by its solid, folded or not, a curved container by its shape, whatever the curvature, and a torus by its lattice.",
+        "Same pieces. When you have 10 records with the same piece shape in one Dimension, in any container, you get +1 %. You get 1 % more at 30 records, and again at 100. Squares in 2D in 2D and squares on a 3D surface count apart.",
         "Tiers. Your first record in each tier adds 5 %. The tiers are open problems, loose records, site records and published values.",
         "Example. You have 9 records of 21-gons in a 24-gon, and 3 more of 21-gons in other containers. The 9 give +2 %. All 12 have 21-gon pieces, so they give +1 % more. With your first open problem and your first loose record (+10 %), every point you earn is multiplied by 1.13.",
       ],
       math: [`${sym("m", "c")} = 1 + 0.02 × ${sym("a")} + 0.01 × ${sym("b")} + 0.05 × ${sym("t")}`],
       vars: [
         [sym("m", "c"), "the multiplier from collections"],
-        [sym("a"), "combinations of pieces and container with 9 records"],
+        [sym("a"), "pairings with 9 records"],
         [sym("b"), "marks reached by piece shapes (10, 30 and 100 records of one shape)"],
         [sym("t"), "tiers with a first record"],
       ],
@@ -1490,8 +1490,8 @@ export const UPGRADES: readonly Upgrade[] = [
     {
       text: [
         "When you buy Standing, you can pick a rule for the next cycle. You then play that cycle under the rule, and when you reset at its end, you get 1 more standing point and the rule's reward for good.",
-        "Circles only deals only problems with circles, and it pays 1.5 times the points on them. Small problems only deals only problems of size 120 or less, and it pays 1.5 times the points on them. Clicks only turns auto-eval off and gives one more evaluation per click. One method allows only mc_compress, and it pays 1.5 times the points on the improvements it finds.",
-        "Circles only and Small problems only apply to the problems of 2D in 2D. Other dimensions are dealt as usual and pay no reward from these rules.",
+        "Circles only deals only problems with circles, and it pays 1.5 times the points on them. Small problems only deals only small problems, and it pays 1.5 times the points on them. Clicks only turns auto-eval off and gives one more evaluation per click. One method allows only mc_compress, and it pays 1.5 times the points on the improvements it finds.",
+        "Both rules apply in every Dimension. Circles means circle pieces or a circle container in 2D in 2D, and disk or ball pieces or a ball container in the other Dimensions. Solids in solids have no circles, so they are not dealt. Small means N + M + P of 120 or less in 2D in 2D, and 30 pieces or fewer in the other Dimensions.",
       ],
       note: "Size is N + M + P. Rewards multiply with each other and with your other multipliers.",
     },

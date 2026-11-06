@@ -25,7 +25,15 @@ import {
 import type { SourceReach } from "./dealer";
 import { FinderDeps, Pool, TakenCache, findOpen, firstDealPools } from "./open-finder";
 import { SpaceBoard, mountSpaceBoard, spaceScoreBox } from "./board-space";
-import { ListedSpace, ListedSpaceProblem, SpaceListings, drawSliceProblem, listingOf } from "./catalogue";
+import {
+  ListedSpace,
+  ListedSpaceProblem,
+  RuleLimits,
+  SpaceListings,
+  drawSliceProblem,
+  listingOf,
+  sliceHasCircles,
+} from "./catalogue";
 import { problemTitle, rulesOf } from "./families";
 import {
   FRONTIER,
@@ -183,6 +191,8 @@ import {
   ruleAllowsProblem,
   ruleById,
   ruleOpenProblems,
+  ruleOpenWide,
+  SMALL_PIECES,
   standingMultiplier,
 } from "./standing";
 import {
@@ -2039,7 +2049,7 @@ function contestedTiers(o: ReadonlySet<UpgradeId>): Set<Tier> {
 /** Set while a deal looks outside the player's filters (an empty queue, nothing that fits): the filters are not applied. */
 let filtersOff = false;
 const dealerFilters = () => (!filtersOff && inUse(owned(), "filters") ? state.picks.filters : null);
-/** The cycle's rule allows a problem: "circles only" and "small problems only" restrict polygon problems only, so space problems are dealt as usual under them. */
+/** The cycle's rule allows a problem ("circles only" and "small problems only" restrict every Dimension: standing.ts hasCircles, isSmall). */
 const ruleOk = (p: ProblemKey): boolean => ruleAllowsProblem(state.standing, p);
 /** The player's filters and the cycle's rule allow a candidate. */
 const allowed = (c: ProblemKey & { tier?: Tier }) => passes(dealerFilters(), c) && ruleOk(c);
@@ -2075,6 +2085,7 @@ async function openCandidate(
   const pass = (p: ProblemKey) => allowed({ ...p, tier: "open" });
   // a cycle rule may need open problems of its own (circles have none in the frontier)
   const ruled = ruleOpenProblems(state.standing);
+  const ruledWide = ruleOpenWide(state.standing);
   const confirm = async (): Promise<Candidate | null> => {
     while (openStock.length && !spentIo(io)) {
       const k = openStock.shift()!;
@@ -2099,7 +2110,7 @@ async function openCandidate(
   const pools: Pool[] =
     firstPools ??
     (ruled
-      ? [{ keys: ruled }]
+      ? [{ keys: ruled }, { wide: true, skew: 2.5, rule: ruledWide }]
       : wideFirst
         ? [{ wide: true, skew: 1 }, { keys: FRONTIER }]
         : [{ keys: FRONTIER }, { wide: true, skew: 2.5 }]);
@@ -2250,6 +2261,20 @@ function dealableSlices(): SliceId[] {
   return spaceBlocked ? [] : openSlices(owned(), state.standing);
 }
 
+/** What the cycle's rule asks of the draws in the other Dimensions: small problems, 30 pieces or fewer; circles, disks or balls. */
+function ruleLimits(): RuleLimits {
+  return {
+    ...(state.standing.rule === "small" ? { maxP: SMALL_PIECES, small: true as const } : {}),
+    ...(state.standing.rule === "circles" ? { circles: true } : {}),
+  };
+}
+
+/** The slices open now that the cycle's rule leaves a problem in (under circles only, not the solids of the polyhedra family). */
+function ruledSlices(): SliceId[] {
+  const open = dealableSlices();
+  return state.standing.rule === "circles" ? open.filter(sliceHasCircles) : open;
+}
+
 /** Problems of a dimension dealt, offered or left so far. */
 const dimensionDealt = (dim: DimensionId): number =>
   [...state.queue, ...state.past, ...state.picks.offers].filter((p) => familyDimension(p.family) === dim).length;
@@ -2292,7 +2317,7 @@ async function spaceCandidate(
   exclude: Set<string>,
   starter?: SliceId,
 ): Promise<Candidate | null> {
-  const slice = starter ?? pickSlice(d, dealableSlices());
+  const slice = starter ?? pickSlice(d, ruledSlices());
   if (!slice) return null;
   const listed = listingOf(slice);
   if (listed && !(await spaceListing(io, listed))) return null;
@@ -2301,6 +2326,7 @@ async function spaceCandidate(
     exclude,
     starter: starter !== undefined,
     open: dealableSlices(),
+    ...ruleLimits(),
   });
   if (!k) return null;
   if (!allowed({ ...k, tier: "open" })) {
@@ -2427,13 +2453,18 @@ async function collectorCandidate(io: DealIo, d: DealerState, exclude: Set<strin
 }
 
 /** What the player has reached, as the sources of a draw go. */
-const sourceReach = (o: ReadonlySet<UpgradeId>): SourceReach => ({
-  contested: contestedTiers(o),
-  ringMin: ringMin(o),
-  wide: o.has("wide"),
-  space: dealableSlices().length > 0,
-  ruled: ruleOpenProblems(state.standing),
-});
+const sourceReach = (o: ReadonlySet<UpgradeId>): SourceReach => {
+  const ruled = ruleOpenProblems(state.standing);
+  return {
+    contested: contestedTiers(o),
+    ringMin: ringMin(o),
+    wide: o.has("wide"),
+    space: ruledSlices().length > 0,
+    ruled,
+    ruledWide: ruleOpenWide(state.standing),
+    used: ruled ? new Set([...seenKeys(state), ...skipped, ...takenCache.keys()]) : undefined,
+  };
+};
 
 /**
  * Up to `want` candidates, each checked with GET just before it counts: a retake first (Retake),
@@ -2708,7 +2739,10 @@ async function deal(d: DealerState): Promise<{ p: ProblemState; ranked: Ranked; 
     const io: DealIo = { gets: 0, offline: false };
     const ruled = ruleOpenProblems(state.standing);
     // the starter corner, then the rest of the frontier, then small problems of the wide set: the smallest open one found
-    const pools = ruled ? [{ keys: ruled }] : firstDealPools(STARTER, FRONTIER);
+    const ruledWide = ruleOpenWide(state.standing);
+    const pools: Pool[] = ruled
+      ? [{ keys: ruled }, { wide: true, skew: 2.5, rule: ruledWide }]
+      : firstDealPools(STARTER, FRONTIER);
     for (let attempt = 0; attempt < 3 && !spentIo(io); attempt++) {
       const c = await openCandidate(io, d, exclude, pools);
       if (c) return { p: newProblem(c, "open", now()), ranked: plainRanked(c) };
@@ -4466,15 +4500,14 @@ function renderRecords(o: Owned): void {
     setLines("t-rc-sets", []);
     return;
   }
-  const comboName = (n: { N: number; M: number }) => problemTitle(poly(n.N, n.M, 0)).replace(/, 0 pieces$/, "");
   const lines = [
-    `${fmtInt(c.combos)} combination${c.combos === 1 ? "" : "s"} of pieces and container with ${COMBO_RECORDS} records (+${fmtPct(COMBO_BONUS, 0)} each).` +
+    `${fmtInt(c.combos)} pairing${c.combos === 1 ? "" : "s"} of pieces and container with ${COMBO_RECORDS} records (+${fmtPct(COMBO_BONUS, 0)} each).` +
       (c.nearest.length
-        ? ` Closest: ${andList(c.nearest.map((n) => `${comboName(n)} (${n.have} of ${COMBO_RECORDS})`))}.`
+        ? ` Closest: ${andList(c.nearest.map((n) => `${n.label} (${n.have} of ${COMBO_RECORDS})`))}.`
         : ""),
     `${fmtInt(c.milestones)} shape milestone${c.milestones === 1 ? "" : "s"} at ${andList(SHAPE_MILESTONES.map(String))} records with one piece shape (+${fmtPct(SHAPE_BONUS, 0)} each).` +
       (c.shapes.length
-        ? ` Your most recorded pieces: ${andList(c.shapes.slice(0, 3).map((x) => `${shapeName(x.N, true)} (${fmtInt(x.count)})`))}.`
+        ? ` Your most recorded pieces: ${andList(c.shapes.slice(0, 3).map((x) => `${x.label} (${fmtInt(x.count)})`))}.`
         : ""),
     `First records in these tiers: ${c.tiers.length ? andList(c.tiers.map((t) => TIER_LABEL[t as Tier] ?? t)) : "none yet"} (+${fmtPct(TIER_BONUS, 0)} each).`,
   ];

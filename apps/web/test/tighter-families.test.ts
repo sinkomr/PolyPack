@@ -102,11 +102,12 @@ describe("Tighter polygon-only paths given a space problem", () => {
     expect(recordPoints({ ...sphere, bound: 1, sPrev: 2, sNew: 1.5, tier: "open" })!.total).toBeGreaterThan(0);
   });
 
-  it("pass under a cycle rule that reads N and M, which covers polygon problems only", () => {
+  it("pass under a cycle rule by disks (circles) and pieces (small)", () => {
     const s = normalizeStanding({}, T0);
     expect(ruleAllowsProblem(s, sphere)).toBe(true);
     expect(ruleAllowsProblem({ ...s, rule: "circles" }, sphere)).toBe(true);
     expect(ruleAllowsProblem({ ...s, rule: "small" }, sphere)).toBe(true);
+    expect(ruleAllowsProblem({ ...s, rule: "small" }, { ...sphere, id: "sphere/0/31", P: 31 })).toBe(false);
   });
 
   it("are skipped by the live feed, which follows polygon problems only", () => {
