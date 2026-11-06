@@ -1170,7 +1170,7 @@ export const UPGRADES: readonly Upgrade[] = [
     how: {
       text: [
         "Every record the server confirmed for you counts, even if someone beat it later, in every Dimension (2D in 2D, 2D on 3D and 3D in 3D). A reset takes this upgrade away, but your records still count when you buy it again.",
-        "Same pieces and container. A pairing is a piece shape in a container shape in one Dimension, such as 21-gons in a 24-gon, squares on a cube or cubes in a tetrahedron. When you have 9 records of one pairing, you get +2 %. The piece counts can be anything. A curved container counts by its shape and a torus by its lattice, whatever the curvature or the folding.",
+        "Same pieces and container. A pairing is a piece shape in a container shape in one Dimension, such as 21-gons in a 24-gon, squares on a cube or cubes in a tetrahedron. When you have 9 records of one pairing, you get +2 %. The piece counts can be anything. A surface counts by its solid, folded or not, a curved container by its shape, whatever the curvature, and a torus by its lattice.",
         "Same pieces. When you have 10 records with the same piece shape in one Dimension, in any container, you get +1 %. You get 1 % more at 30 records, and again at 100. Squares in 2D in 2D and squares on a 3D surface count apart.",
         "Tiers. Your first record in each tier adds 5 %. The tiers are open problems, loose records, site records and published values.",
         "Example. You have 9 records of 21-gons in a 24-gon, and 3 more of 21-gons in other containers. The 9 give +2 %. All 12 have 21-gon pieces, so they give +1 % more. With your first open problem and your first loose record (+10 %), every point you earn is multiplied by 1.13.",

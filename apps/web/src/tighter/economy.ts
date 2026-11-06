@@ -172,6 +172,18 @@ export function pairingOf(p: ProblemKey): Pairing | null {
   }
 }
 
+/** Pairings by record key: a key's pairing never changes, and collections re-read up to RECORDED_LIMIT keys when a record is added. */
+const pairings = new Map<string, Pairing | null>();
+function pairingOfKey(k: string): Pairing | null {
+  let p = pairings.get(k);
+  if (p === undefined) {
+    const parsed = parseKey(k);
+    p = parsed ? pairingOf(parsed) : null;
+    pairings.set(k, p);
+  }
+  return p;
+}
+
 /**
  * The player's collections, from the records confirmed (whether or not Collections is owned). Every
  * Dimension counts. The records are distinct problems, so a pairing's count is its number of distinct
@@ -185,8 +197,7 @@ export function collections(e: EconomyState): Collections {
   const combos = new Map<string, { have: number; p: Pairing }>();
   const shapes = new Map<string, { count: number; p: Pairing }>();
   for (const k of e.recorded) {
-    const parsed = parseKey(k);
-    const p = parsed && pairingOf(parsed);
+    const p = pairingOfKey(k);
     if (!p) continue;
     const shape = shapes.get(`${p.dimension}|${p.piece}`) ?? { count: 0, p };
     shape.count++;
