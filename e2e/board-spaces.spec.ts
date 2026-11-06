@@ -345,6 +345,36 @@ test("a closed problem can be viewed but not submitted, and an impossible one ha
   await expect(page.locator("#space-submit")).toBeDisabled();
 });
 
+test("curved menus offer only problems that can exist; a tiling curvature opens from a link; an impossible id says why", async ({
+  page,
+}) => {
+  await page.goto("/#space=curved/1/3/4/3");
+  await shown(page, "curved/1/3/4/3", { timeout: 60_000 });
+  // 16 curvatures, none of the tiling ones; the pieces that exist at K = 1; no P above the area limit
+  await expect(page.locator("#space-f-K option")).toHaveCount(16);
+  await expect(page.locator("#space-f-N option")).toHaveText(["Disk (N = 0)", "3-gon", "4-gon", "5-gon", "6-gon"]);
+  await page.selectOption("#space-f-K", "-0.0001");
+  await expect(page.locator("#space-f-N option")).toHaveCount(99);
+  await page.selectOption("#space-f-M", "100");
+  await expect(page.locator("#space-f-P option")).toHaveCount(500);
+
+  // a tiling curvature stays on the board from a link
+  await page.goto("about:blank");
+  await page.goto("/#space=curved/-1.1892985685754194/3/7/7");
+  await shown(page, "curved/-1.1892985685754194/3/7/7");
+  await expect(page.locator("#space-f-K")).toHaveValue("-1.1892985685754194");
+
+  // an id that cannot exist: the reason, no search
+  await page.goto("about:blank");
+  await page.goto("/#space=curved/1/8/4/3");
+  await expect(page.locator("#space-status")).toHaveText(
+    "No unit 8-gon exists at K = 1: its perimeter, 8, is longer than a great circle, 2π/√K ≈ 6.283.",
+  );
+  await expect(page.locator("#space-f-N")).toHaveValue("8");
+  await expect(page.locator("#space-solve-run")).toBeDisabled();
+  await expect(page.locator("#space-submit")).toBeDisabled();
+});
+
 test("pause holds a run at once, resume goes on, stop ends it at once", async ({ page }) => {
   await page.goto("/#space=torus/sq/5/7");
   await shown(page, "torus/sq/5/7");

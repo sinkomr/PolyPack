@@ -634,9 +634,11 @@ class SpaceMode {
       else fallback = "The kinds' descriptions could not be read, so the menus offer the problems with records only.";
     }
     // an id inside the domain's ranges that cannot be a problem (a unit 8-gon at K = 1) opens with the reason, without a search
-    const parsed = wanted !== null && this.domains.has(space) ? parseSpaceId(space, wanted) : null;
+    // (a problem with a research record opens as before, its fields kept: an infeasible record carries its own proof)
+    const hasRecord = wanted !== null && problems.some((p) => p.id === wanted);
+    const parsed = wanted !== null && !hasRecord && this.domains.has(space) ? parseSpaceId(space, wanted) : null;
     const why = parsed && typeof parsed !== "string" ? impossibleReason(space, parsed) : null;
-    const pick = this.pick(space, fieldsOfId(space, wanted ?? (this.start || DEFAULT_PROBLEM[space])), !!why);
+    const pick = this.pick(space, fieldsOfId(space, wanted ?? (this.start || DEFAULT_PROBLEM[space])), !!why || hasRecord);
     this.renderPicker(space, pick.fields);
     if (why) {
       this.clearProblem();
