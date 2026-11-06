@@ -1554,6 +1554,8 @@ describe("GET /api/holders", () => {
       beat_published,
       site_bests,
       pending,
+      // counted at the first count, which is the peak of a name so far
+      peak: records,
     });
     // most records first, then most site bests, then by name, capitals first
     expect(await holders()).toEqual([
@@ -1585,14 +1587,29 @@ describe("GET /api/holders", () => {
     // a pending claim (three squares against the made-up 5.00) is a site best, not yet a record
     const claim = await submit(squares(3, { name: "bob" }));
     expect(claim.body.pending_verification).toBe(true);
-    expect((await holders())[1]).toEqual({ name: "bob", records: 1, beat_published: 0, site_bests: 2, pending: 1 });
+    expect((await holders())[1]).toEqual({
+      name: "bob",
+      records: 1,
+      beat_published: 0,
+      site_bests: 2,
+      pending: 1,
+      peak: 1,
+    });
     expect((await admin("/api/admin/review", { id: claim.body.id, decision: "confirmed" })).status).toBe(200);
     // level with ann now, and after her by name
-    expect((await holders())[1]).toEqual({ name: "bob", records: 2, beat_published: 1, site_bests: 2, pending: 0 });
+    expect((await holders())[1]).toEqual({
+      name: "bob",
+      records: 2,
+      beat_published: 1,
+      site_bests: 2,
+      pending: 0,
+      peak: 2,
+    });
     expect((await admin("/api/admin/edit", { id: two.body.id, name: "Ann" })).status).toBe(200);
     expect(await names()).toEqual(["bob:2", "Ann:1", "ann:1"]);
     expect((await admin("/api/admin/remove", { id: two.body.id })).status).toBe(200);
-    expect(await names()).toEqual(["bob:2", "ann:1"]);
+    // Ann leads nothing now and stays listed, below those that lead
+    expect(await names()).toEqual(["bob:2", "ann:1", "Ann:0"]);
   });
 
   it("is documented, as current", async () => {
@@ -1603,6 +1620,258 @@ describe("GET /api/holders", () => {
     const section = html.slice(html.indexOf('id="holders"'), html.indexOf('id="holder"'));
     expect(section).toContain("GET /api/holders");
     expect(section).not.toContain("15 minutes");
+  });
+});
+
+// A name that has held a record stays listed after it loses every lead, with the most it has held (Holder.peak).
+describe("GET /api/holders: peaks", () => {
+  const adminPost = (path: string, body: object) =>
+    app.request(path, {
+      method: "POST",
+      headers: { authorization: "Bearer secret", "content-type": "application/json" },
+      body: JSON.stringify(body),
+    });
+  const open = (store: SqliteStore, o: { log?: (m: string) => void } = {}) => {
+    app = createApp({
+      store,
+      records: [],
+      adminToken: "secret",
+      clientIp: () => ip,
+      log: o.log ?? (() => {}),
+      limits: { perIp: 1_000_000 },
+    });
+  };
+  // [name, records, site_bests, peak] of every row
+  const table = async () =>
+    ((await get("/api/holders")).body.holders as Holder[]).map((h) => [h.name, h.records, h.site_bests, h.peak]);
+  // the entries of one problem, the better the smaller the gap
+  // (P = 1 is one square whatever the gap, so the problems below start at 2)
+  const entry = (P: number, name: string, gap: number) => squares(P, { name, pieces: row(P, gap) });
+  const stored = (P: number, score: number, name: string): NewSubmission => ({
+    N: 4,
+    M: 4,
+    P,
+    score,
+    name,
+    agent_note: "",
+    found_with: "hand",
+    method: null,
+    method_params: null,
+    seed: null,
+    budget: null,
+    software: null,
+    pieces: [],
+    container_phi: 0,
+    created_at: "2026-10-21T00:00:00.000Z",
+    verification: "none",
+    literature_value: null,
+    strict_check: null,
+  });
+
+  it("lists a name whose only lead was taken, at zero with its peak, after those that lead", async () => {
+    open(new SqliteStore(":memory:"));
+    expect((await submit(entry(2, "ann", 1.1))).body.leader).toBe(true);
+    expect(await table()).toEqual([["ann", 1, 1, 1]]);
+    expect((await submit(entry(2, "bob", 1.001))).body.leader).toBe(true);
+    // ann now sorts after bob; a name that never led anything is not listed
+    expect((await submit(entry(2, "cat", 1.2))).body.rank).toBeGreaterThan(1);
+    expect(await table()).toEqual([
+      ["bob", 1, 1, 1],
+      ["ann", 0, 0, 1],
+    ]);
+    expect((await get("/api/holders")).body.holders[1]).toEqual({
+      name: "ann",
+      records: 0,
+      beat_published: 0,
+      site_bests: 0,
+      pending: 0,
+      peak: 1,
+    });
+  });
+
+  it("never lowers a peak when records fall, and raises it when records exceed it", async () => {
+    open(new SqliteStore(":memory:"));
+    for (const P of [2, 3, 5]) await submit(entry(P, "ann", 1.1));
+    expect(await table()).toEqual([["ann", 3, 3, 3]]);
+    // two leads go to bob
+    for (const P of [2, 3]) await submit(entry(P, "bob", 1.001));
+    expect(await table()).toEqual([
+      ["bob", 2, 2, 2],
+      ["ann", 1, 1, 3],
+    ]);
+    // bob loses one, and his peak stays; ann wins it back and is at her peak, not above
+    await submit(entry(2, "ann", 1.0001));
+    expect(await table()).toEqual([
+      ["ann", 2, 2, 3],
+      ["bob", 1, 1, 2],
+    ]);
+    // above it: a fourth and a fifth lead
+    await submit(entry(6, "ann", 1.1));
+    expect(await table()).toEqual([
+      ["ann", 3, 3, 3],
+      ["bob", 1, 1, 2],
+    ]);
+    await submit(entry(7, "ann", 1.1));
+    expect(await table()).toEqual([
+      ["ann", 4, 4, 4],
+      ["bob", 1, 1, 2],
+    ]);
+  });
+
+  it("keeps a name that leads only pending claims as before, and counts its peak when they are confirmed", async () => {
+    app = createApp({
+      store: new SqliteStore(":memory:"),
+      records: [fakeRecord],
+      adminToken: "secret",
+      clientIp: () => ip,
+      log: () => {},
+    });
+    const claim = await submit(squares(3, { name: "eve" }));
+    expect(claim.body.pending_verification).toBe(true);
+    expect(await table()).toEqual([["eve", 0, 1, 0]]);
+    expect((await adminPost("/api/admin/review", { id: claim.body.id, decision: "confirmed" })).status).toBe(200);
+    expect(await table()).toEqual([["eve", 1, 1, 1]]);
+  });
+
+  it("keeps the peaks across a restart, and lists a name at zero after it", async () => {
+    const path = join(mkdtempSync(join(tmpdir(), "polypack-peaks-")), "peaks.sqlite");
+    const first = new SqliteStore(path);
+    open(first);
+    // the counts are built by the first request, and peaks are watched from then on
+    expect(await table()).toEqual([]);
+    for (const P of [2, 3]) await submit(entry(P, "ann", 1.1));
+    for (const P of [2, 3]) await submit(entry(P, "bob", 1.001));
+    expect(await table()).toEqual([
+      ["bob", 2, 2, 2],
+      ["ann", 0, 0, 2],
+    ]);
+    expect(await first.holderPeaks()).toEqual(
+      expect.arrayContaining([
+        { name: "ann", peak: 2 },
+        { name: "bob", peak: 2 },
+      ]),
+    );
+    // a new app on the same file, as after a restart: only the current leaders are read, the peaks come from the table
+    open(new SqliteStore(path));
+    expect(await table()).toEqual([
+      ["bob", 2, 2, 2],
+      ["ann", 0, 0, 2],
+    ]);
+    // and they go on: ann takes one back
+    await submit(entry(2, "ann", 1.0001));
+    expect(await table()).toEqual([
+      ["ann", 1, 1, 2],
+      ["bob", 1, 1, 2],
+    ]);
+    // the stored peak of a name is not lowered by a smaller one
+    const store = new SqliteStore(path);
+    await store.raiseHolderPeaks([{ name: "ann", peak: 1 }]);
+    expect((await store.holderPeaks()).find((r) => r.name === "ann")).toEqual({ name: "ann", peak: 2 });
+    await store.raiseHolderPeaks([{ name: "ann", peak: 5 }]);
+    expect((await store.holderPeaks()).find((r) => r.name === "ann")).toEqual({ name: "ann", peak: 5 });
+  });
+
+  it("starts the peak of a name at the records it has when the peaks begin, and stores it", async () => {
+    // entries as an older server left them: no table of peaks was read from, so each name starts at its count
+    const path = join(mkdtempSync(join(tmpdir(), "polypack-peaks-")), "old.sqlite");
+    const old = new SqliteStore(path);
+    for (const P of [1, 2, 3]) await old.insert(stored(P, 5, "ann"));
+    expect(await old.holderPeaks()).toEqual([]);
+    open(new SqliteStore(path));
+    expect(await table()).toEqual([["ann", 3, 3, 3]]);
+    expect(await old.holderPeaks()).toEqual([{ name: "ann", peak: 3 }]);
+  });
+
+  it("follows an administrator's removal and edit that move leaders", async () => {
+    open(new SqliteStore(":memory:"));
+    const lead = await submit(entry(2, "ann", 1.001));
+    await submit(entry(2, "bob", 1.1));
+    await submit(entry(4, "ann", 1.1));
+    expect(await table()).toEqual([["ann", 2, 2, 2]]);
+    // a rename gives the lead to another name; ann keeps her other lead and her peak
+    expect((await adminPost("/api/admin/edit", { id: lead.body.id, name: "Ann" })).status).toBe(200);
+    expect(await table()).toEqual([
+      ["Ann", 1, 1, 1],
+      ["ann", 1, 1, 2],
+    ]);
+    // and back: ann is at her peak again, Ann stays listed at zero
+    expect((await adminPost("/api/admin/edit", { id: lead.body.id, name: "ann" })).status).toBe(200);
+    expect(await table()).toEqual([
+      ["ann", 2, 2, 2],
+      ["Ann", 0, 0, 1],
+    ]);
+    // the removal of ann's lead leaves the problem without one (a worse entry is pruned)
+    expect((await adminPost("/api/admin/remove", { id: lead.body.id })).status).toBe(200);
+    expect(await table()).toEqual([
+      ["ann", 1, 1, 2],
+      ["Ann", 0, 0, 1],
+    ]);
+  });
+
+  it("goes on when a peak cannot be stored, and stores it with the next one", async () => {
+    const store = new SqliteStore(":memory:");
+    const logs: string[] = [];
+    open(store, { log: (m) => logs.push(m) });
+    await get("/api/holders");
+    const real = store.raiseHolderPeaks.bind(store);
+    let broken = true;
+    vi.spyOn(store, "raiseHolderPeaks").mockImplementation(async (rows) => {
+      if (broken) throw new Error("the disk is full");
+      return real(rows);
+    });
+    const sent = await submit(entry(2, "ann", 1.1));
+    expect(sent.status).toBe(200);
+    expect(sent.body.leader).toBe(true);
+    expect(logs.some((m) => m.includes("could not store") && m.includes("the disk is full"))).toBe(true);
+    expect(await store.holderPeaks()).toEqual([]);
+    // the peak stands in memory
+    await submit(entry(2, "bob", 1.001));
+    expect(await table()).toEqual([
+      ["bob", 1, 1, 1],
+      ["ann", 0, 0, 1],
+    ]);
+    broken = false;
+    // the next raise, by any name, stores the ones left behind as well
+    await submit(entry(4, "cat", 1.1));
+    expect((await store.holderPeaks()).sort((a, b) => (a.name < b.name ? -1 : 1))).toEqual([
+      { name: "ann", peak: 1 },
+      { name: "bob", peak: 1 },
+      { name: "cat", peak: 1 },
+    ]);
+  });
+
+  it("lists the names at zero again after counts that were started over", async () => {
+    const store = new SqliteStore(":memory:");
+    open(store);
+    expect(await table()).toEqual([]);
+    const first = await submit(entry(2, "ann", 1.1));
+    const rival = await submit(entry(2, "bob", 1.001));
+    await submit(entry(4, "cat", 1.1));
+    expect(await table()).toEqual([
+      ["bob", 1, 1, 1],
+      ["cat", 1, 1, 1],
+      ["ann", 0, 0, 1],
+    ]);
+    // a removal whose leader cannot be read afterwards: the counts are dropped, the table stays as it is
+    const real = store.leadersOf.bind(store);
+    let reads = 0;
+    vi.spyOn(store, "leadersOf").mockImplementation(async (problems) => {
+      if (++reads === 2) throw new Error("the disk is gone");
+      return real(problems);
+    });
+    const quiet = vi.spyOn(console, "error").mockImplementation(() => {});
+    try {
+      expect((await adminPost("/api/admin/remove", { id: rival.body.id })).status).toBe(500);
+    } finally {
+      quiet.mockRestore();
+    }
+    // counted again from the table (the problem has no entry left): both names are listed at zero with their peaks
+    expect(first.status).toBe(200);
+    expect(await table()).toEqual([
+      ["cat", 1, 1, 1],
+      ["ann", 0, 0, 1],
+      ["bob", 0, 0, 1],
+    ]);
   });
 });
 
@@ -1663,7 +1932,7 @@ describe("GET /api/holders: the counts kept", () => {
   // the count as it was before the counts were kept: every leader read at once, counted in one pass
   const counted = (all: ProblemLeader[], records: LiteratureRecord[]): string => {
     const literature = new Map(records.map((r) => [`${r.N}/${r.M}/${r.P}`, r]));
-    const byName = new Map<string, Holder>();
+    const byName = new Map<string, Omit<Holder, "peak">>();
     for (const e of all) {
       const lit = literature.get(`${e.N}/${e.M}/${e.P}`);
       if (closedToSubmissions(lit)) continue;
@@ -1680,7 +1949,22 @@ describe("GET /api/holders: the counts kept", () => {
       (a, b) =>
         b.records - a.records || b.site_bests - a.site_bests || (a.name < b.name ? -1 : a.name > b.name ? 1 : 0),
     );
-    return JSON.stringify({ holders: list } satisfies HoldersResponse);
+    return JSON.stringify({ holders: list });
+  };
+  // The answer as `counted` makes it: only the names that lead something, without the peaks, which depend on the
+  // history of the walk and are held to what they must be (peaksHold) instead.
+  const leading = (body: string): string =>
+    JSON.stringify({
+      holders: (JSON.parse(body) as HoldersResponse).holders
+        .filter((h) => h.site_bests > 0)
+        .map(({ peak: _peak, ...h }) => h),
+    });
+  const peaksHold = (body: string) => {
+    for (const h of (JSON.parse(body) as HoldersResponse).holders) {
+      expect(h.peak).toBeGreaterThanOrEqual(h.records);
+      // a name that leads nothing is listed because it has held a record
+      if (h.site_bests === 0) expect(h.peak).toBeGreaterThan(0);
+    }
   };
   const prng = (seed: number) => () => {
     seed = (seed + 0x6d2b79f5) | 0;
@@ -1810,7 +2094,8 @@ describe("GET /api/holders: the counts kept", () => {
         if (i >= begins && i % 3 === 2) {
           const answer = await text();
           const truth = await w.truth();
-          expect(answer).toBe(truth);
+          expect(leading(answer)).toBe(truth);
+          peaksHold(answer);
           const list = (JSON.parse(truth) as HoldersResponse).holders;
           seen.claim ||= list.some((h) => h.pending > 0);
           seen.beat ||= list.some((h) => h.beat_published > 0);
@@ -1829,14 +2114,14 @@ describe("GET /api/holders: the counts kept", () => {
 
   it("reads no table again once the counts are built, however entries keep changing", async () => {
     const w = await world(11, { chunk: 5 });
-    expect(await text()).toBe(await w.truth());
+    expect(leading(await text())).toBe(await w.truth());
     const pages = w.calls.leadersAfter!;
     // 24 entries of the store, in a few problems, five at a page
     expect(pages).toBeGreaterThan(1);
     expect(w.calls.leaders).toBeUndefined();
     for (let i = 0; i < 40; i++) {
       await w.step();
-      if (i % 4 === 0) expect(await text()).toBe(await w.truth());
+      if (i % 4 === 0) expect(leading(await text())).toBe(await w.truth());
     }
     expect(w.calls.leadersAfter).toBe(pages);
     expect(w.calls.leaders).toBeUndefined();
@@ -1871,11 +2156,12 @@ describe("GET /api/holders: the counts kept", () => {
       // the lead taken by another name, and that entry renamed
       const taken = await submit(squares(2, { name: "bob", pieces: row(2, 1.001) }));
       expect(taken.body.leader).toBe(true);
-      expect(await names()).toEqual(["bob:1"]);
-      expect(await names()).toEqual(["bob:1"]);
+      // ann leads nothing now, and stays listed
+      expect(await names()).toEqual(["bob:1", "ann:0"]);
+      expect(await names()).toEqual(["bob:1", "ann:0"]);
       expect(answers()).toBe(3);
       expect((await adminPost("/api/admin/edit", { id: taken.body.id, name: "Bob" })).status).toBe(200);
-      expect(await names()).toEqual(["Bob:1"]);
+      expect(await names()).toEqual(["Bob:1", "ann:0", "bob:0"]);
       expect(answers()).toBe(4);
     } finally {
       stringified.mockRestore();
@@ -1909,7 +2195,7 @@ describe("GET /api/holders: the counts kept", () => {
     ticking = false;
     expect(bodies[1]).toBe(bodies[0]);
     expect(bodies[2]).toBe(bodies[0]);
-    expect(bodies[0]).toBe(counted(await store.leaders(), []));
+    expect(leading(bodies[0]!)).toBe(counted(await store.leaders(), []));
     const steps = events.filter((e) => e === "step").length;
     expect(steps).toBe(Math.floor(problems / HOLDERS_CHUNK) + 1);
     expect(calls.leadersAfter).toBe(steps);
@@ -1985,7 +2271,7 @@ describe("GET /api/holders: the counts kept", () => {
     open();
     for (const answer of await Promise.all(changes)) expect(answer.status).toBe(200);
     const answer = await counting;
-    expect(answer).toBe(counted(await store.leaders(), []));
+    expect(leading(answer)).toBe(counted(await store.leaders(), []));
     expect(steps).toBeGreaterThanOrEqual(6);
     // and the counts stand as the changes left them
     const holders = (JSON.parse(answer) as HoldersResponse).holders;
@@ -1995,6 +2281,7 @@ describe("GET /api/holders: the counts kept", () => {
       beat_published: 0,
       site_bests,
       pending,
+      peak: expect.any(Number),
     });
     expect(holders).toContainEqual(who("ann", 2, 2));
     expect(holders).toContainEqual(who("bob", 4, 4));
@@ -2014,7 +2301,7 @@ describe("GET /api/holders: the counts kept", () => {
         if (!over) during += 4;
       }
       await counting;
-      expect(await text()).toBe(await w.truth());
+      expect(leading(await text())).toBe(await w.truth());
     }
     // some of the changes came while the build was running
     expect(during).toBeGreaterThan(0);
@@ -2022,7 +2309,7 @@ describe("GET /api/holders: the counts kept", () => {
 
   it("counts again from the start after a change it could not follow", async () => {
     const w = await world(31, { chunk: 4 });
-    expect(await text()).toBe(await w.truth());
+    expect(leading(await text())).toBe(await w.truth());
     const pages = w.calls.leadersAfter!;
     // the entry is removed, then the leader of its problem cannot be read
     const store = w.store;
@@ -2041,7 +2328,7 @@ describe("GET /api/holders: the counts kept", () => {
     }
     expect(await store.get(leader.id)).toBeNull();
     // the next request counts the table again, and the answer is right
-    expect(await text()).toBe(await w.truth());
+    expect(leading(await text())).toBe(await w.truth());
     expect(w.calls.leadersAfter).toBeGreaterThan(pages);
   });
 
@@ -2061,6 +2348,7 @@ describe("GET /api/holders: the counts kept", () => {
       beat_published,
       site_bests: 1,
       pending,
+      peak: 0,
     });
     // a published value of 5 to six decimals
     const lit = published(4, 3, 5);
@@ -2182,6 +2470,8 @@ describe("GET /api/holder", () => {
     beat_published: 0,
     site_bests: 0,
     pending: 0,
+    // the peak is the counts' of /api/holders, 0 while they are not built (see the walk below, where they are)
+    peak: 0,
     computed_at,
     pairs: [],
   });
@@ -2233,6 +2523,7 @@ describe("GET /api/holder", () => {
       beat_published: 0,
       site_bests: 8,
       pending: 0,
+      peak: 0,
       computed_at: new Date(T0).toISOString(),
       // most problems first, then by N, then by M
       pairs: [pair(4, 5, [1, 2, 3]), pair(3, 3, [1, 2]), pair(4, 4, [1, 4]), pair(0, 4, [1])],
@@ -2243,6 +2534,7 @@ describe("GET /api/holder", () => {
       beat_published: 1,
       site_bests: 2,
       pending: 0,
+      peak: 0,
       computed_at: new Date(T0).toISOString(),
       pairs: [pair(4, 4, [3, 6], 1, 1)],
     });
@@ -2253,6 +2545,7 @@ describe("GET /api/holder", () => {
       beat_published: 0,
       site_bests: 1,
       pending: 1,
+      peak: 0,
       computed_at: new Date(T0).toISOString(),
       pairs: [pair(4, 4, [7], 0, 0, 1)],
     });
@@ -2738,7 +3031,14 @@ describe("GET /api/holder", () => {
         for (const name of NAMES) {
           const { pairs, computed_at, ...totals } = (await holder(name)).body as HolderResponse;
           expect(totals).toEqual(
-            rows.find((r) => r.name === name) ?? { name, records: 0, beat_published: 0, site_bests: 0, pending: 0 },
+            rows.find((r) => r.name === name) ?? {
+              name,
+              records: 0,
+              beat_published: 0,
+              site_bests: 0,
+              pending: 0,
+              peak: 0,
+            },
           );
           expect(new Date(computed_at).getTime()).toBeLessThanOrEqual(now);
           expect(pairs.reduce((n, p) => n + p.P.length, 0)).toBe(totals.site_bests);

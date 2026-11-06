@@ -136,11 +136,12 @@ test("the record holders page counts the leads of each name", async ({ page, req
     "aria-current",
     "page",
   );
-  // place, name, records, beat published, site bests, awaiting review
+  // place, name, records, most held, beat published, site bests, awaiting review
   await expect(page.locator("#rows tr", { hasText: "Holders test" }).locator("td")).toHaveText([
     /^\d+$/,
     "Holders test",
     "1",
+    /^[1-9]\d*$/,
     "0",
     "1",
     "0",

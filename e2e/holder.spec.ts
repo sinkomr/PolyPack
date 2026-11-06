@@ -109,6 +109,7 @@ test("a name is only ever shown as text", async ({ page }) => {
     beat_published: 0,
     site_bests: 1,
     pending: 0,
+    peak: 1,
     computed_at: "2026-11-01T14:05:00.000Z",
     pairs: [{ N: 4, M: 4, P: [3], records: 1, beat_published: 0, pending: 0 }],
   };

@@ -15,10 +15,12 @@ async function load(): Promise<void> {
     return;
   }
   const { holders } = data;
+  // names at zero stay in the table, at the bottom; the note counts the names that lead something
+  const leading = holders.filter((h) => h.site_bests > 0).length;
   const leads = holders.reduce((n, h) => n + h.site_bests, 0);
   const records = holders.reduce((n, h) => n + h.records, 0);
   $("note").textContent = holders.length
-    ? `${plural(holders.length, "name leads", "names lead")} ${plural(leads, "problem", "problems")}; ${count(records)} of these ${records === 1 ? "is a record" : "are records"}.`
+    ? `${plural(leading, "name leads", "names lead")} ${plural(leads, "problem", "problems")}; ${count(records)} of these ${records === 1 ? "is a record" : "are records"}.`
     : "No entries yet.";
   let place = 0;
   holders.forEach((h, i) => {
@@ -35,6 +37,7 @@ async function load(): Promise<void> {
       el("td", String(place), "num"),
       name,
       el("td", count(h.records), "num"),
+      el("td", count(h.peak), "num"),
       el("td", count(h.beat_published), "num"),
       el("td", count(h.site_bests), "num"),
       el("td", count(h.pending), "num"),
