@@ -484,7 +484,7 @@ describe("Tighter upgrade texts", () => {
   it("call no part of the game the frontier, and never call a set of records a pair", () => {
     for (const u of UPGRADES) expect([u.name, u.effect, ...all(u)].join(" "), u.id).not.toMatch(/frontier/i);
     const text = (id: UpgradeId) => all(UPGRADES.find((u) => u.id === id)!).join(" ");
-    expect(text("collections")).toContain("Same pieces and container. When you have 9 records");
+    expect(text("collections")).toContain("Same pieces and container. A pairing is");
     expect(text("collections")).not.toMatch(/\bpairs?\b/i);
     expect(text("collector")).not.toMatch(/\bpairs?\b/i);
   });

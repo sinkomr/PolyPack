@@ -555,14 +555,14 @@ describe("Tighter space problems of every slice", () => {
     expect(pointsMultiplier(g, ownedSet(g), p, null)).toBe(pointsMultiplier(newGame(T0, 1), ownedSet(g), p, null));
   });
 
-  it("do not count for tier firsts", () => {
+  it("count for tier firsts, as polygon problems do", () => {
     const g = newGame(T0, 1);
-    const p = newProblem(key("sphere/4/12"), "published", T0);
+    const p = newProblem(key("sphere/4/12"), "batch", T0);
     noteRecorded(g, p);
     expect(g.economy.recorded).toContain("sphere/4/12");
-    expect(g.economy.tiers).toEqual([]);
+    expect(g.economy.tiers).toEqual(["batch"]);
     noteRecorded(g, newProblem(poly(21, 21, 40), "published", T0));
-    expect(g.economy.tiers).toEqual(["published"]);
+    expect(g.economy.tiers).toEqual(["batch", "published"]);
   });
 });
 

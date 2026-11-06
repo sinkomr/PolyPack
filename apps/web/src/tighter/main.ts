@@ -4466,15 +4466,14 @@ function renderRecords(o: Owned): void {
     setLines("t-rc-sets", []);
     return;
   }
-  const comboName = (n: { N: number; M: number }) => problemTitle(poly(n.N, n.M, 0)).replace(/, 0 pieces$/, "");
   const lines = [
-    `${fmtInt(c.combos)} combination${c.combos === 1 ? "" : "s"} of pieces and container with ${COMBO_RECORDS} records (+${fmtPct(COMBO_BONUS, 0)} each).` +
+    `${fmtInt(c.combos)} pairing${c.combos === 1 ? "" : "s"} of pieces and container with ${COMBO_RECORDS} records (+${fmtPct(COMBO_BONUS, 0)} each).` +
       (c.nearest.length
-        ? ` Closest: ${andList(c.nearest.map((n) => `${comboName(n)} (${n.have} of ${COMBO_RECORDS})`))}.`
+        ? ` Closest: ${andList(c.nearest.map((n) => `${n.label} (${n.have} of ${COMBO_RECORDS})`))}.`
         : ""),
     `${fmtInt(c.milestones)} shape milestone${c.milestones === 1 ? "" : "s"} at ${andList(SHAPE_MILESTONES.map(String))} records with one piece shape (+${fmtPct(SHAPE_BONUS, 0)} each).` +
       (c.shapes.length
-        ? ` Your most recorded pieces: ${andList(c.shapes.slice(0, 3).map((x) => `${shapeName(x.N, true)} (${fmtInt(x.count)})`))}.`
+        ? ` Your most recorded pieces: ${andList(c.shapes.slice(0, 3).map((x) => `${x.label} (${fmtInt(x.count)})`))}.`
         : ""),
     `First records in these tiers: ${c.tiers.length ? andList(c.tiers.map((t) => TIER_LABEL[t as Tier] ?? t)) : "none yet"} (+${fmtPct(TIER_BONUS, 0)} each).`,
   ];

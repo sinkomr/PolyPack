@@ -1,6 +1,10 @@
 import { archiveOf } from "./archive";
 import { parseDealtKey } from "./catalogue";
-import { ProblemKey, isPolygon, parseKey } from "./frontier";
+import { ballsProblemOf } from "@polypack/balls/catalogue";
+import { SOLID_NAMES_LIST, pluralTitle, problemNameOf } from "@polypack/polyhedra/catalogue";
+import { solidTitle } from "../spaces-model";
+import { spaceFields } from "./families";
+import { DimensionId, ProblemKey, familyDimension, isPolygon, parseKey, shapeName } from "./frontier";
 import type { GameState, PastProblem, ProblemState } from "./game";
 import { income } from "./income";
 import { COMBO_RECORDS } from "./points";
@@ -80,16 +84,16 @@ export function normalizeEconomy(v: unknown): EconomyState {
 // ---------- collections ----------
 
 export interface Collections {
-  /** Combinations of a piece shape and a container shape with at least COMBO_RECORDS records. */
+  /** Pairings (a piece shape in a container shape, in one Dimension) with at least COMBO_RECORDS records. */
   combos: number;
-  /** The combinations closest to COMBO_RECORDS without reaching it, most records first: up to three. */
-  nearest: { N: number; M: number; have: number }[];
-  /** Piece shapes with records, and the milestones (10, 30, 100) each has reached. */
-  shapes: { N: number; count: number; milestones: number }[];
+  /** The pairings closest to COMBO_RECORDS without reaching it, most records first: up to three. `label` is "21-gons in a 24-gon" or "cubes in a tetrahedron". */
+  nearest: { label: string; have: number }[];
+  /** Piece shapes per Dimension with records, and the milestones (10, 30, 100) each has reached. `label` is the plural of the shape, with its Dimension when the records span several. */
+  shapes: { label: string; count: number; milestones: number }[];
   milestones: number;
   /** Tiers with a first record. */
   tiers: string[];
-  /** What it adds to all points (0.02 a combination, 0.01 a milestone, 0.05 a tier first). */
+  /** What it adds to all points (0.02 a pairing, 0.01 a milestone, 0.05 a tier first). */
   bonus: number;
 }
 
@@ -102,34 +106,111 @@ export const SHAPE_MILESTONES = [10, 30, 100] as const;
 /** Collections are counted at every paid click: kept per list of records until it changes. */
 const memo = new WeakMap<string[], { key: string; value: Collections }>();
 
+const DIMENSION_NAME: Record<DimensionId, string> = { "2-in-2": "2D in 2D", "2-on-3": "2D on 3D", "3-in-3": "3D in 3D", "3-on-4": "3D on 4D" };
+const lowerFirst = (t: string) => t.charAt(0).toLowerCase() + t.slice(1);
+const article = (t: string) => (/^[aeiou8]|^1[18]-/.test(t) ? `an ${t}` : `a ${t}`);
+const SOLID_TITLE = new Map(SOLID_NAMES_LIST.map((s) => [s.name, s.title]));
+const TORUS_NAMES = { sq: "square torus", hex: "hexagonal torus", free: "free-lattice torus" } as const;
+/** "cubes", "triangular prisms of height 1.5", "balls". */
+const solidPlural = (name: string) => (name === "ball" ? "balls" : lowerFirst(pluralTitle(SOLID_TITLE.get(name) ?? name)));
+
 /**
- * The player's collections, from the records confirmed (whether or not Collections is owned). The
- * records are distinct problems, so a combination's count is its number of distinct piece counts.
+ * A pairing: the Dimension, the piece shape and the container shape of a problem, whatever its P.
+ * `piece` and `container` are ids that keep the shapes of different families apart; `pieceLabel`
+ * and `label` read them.
+ *
+ * What the container is, per family (the id's other fields, P and the mode, do not count):
+ *  - polygon: the M-gon (or circle); curved: the M-gon or disk of the domain, whatever its curvature K
+ *    (K is a setting of the domain, as the fold mode is of a surface; with K a pairing would split into 10);
+ *  - surface: the solid, folded or not (the game deals no unfolded ones that equal 2D in 2D);
+ *  - sphere: the sphere; torus: the lattice (square, hexagonal, free);
+ *  - polyhedra: the container solid; balls: the container ball or solid.
+ * A piece is an N-gon (N = 0: a disk) in the first four, a solid or a ball in the last two.
+ */
+export interface Pairing {
+  dimension: DimensionId;
+  piece: string;
+  container: string;
+  pieceLabel: string;
+  label: string;
+}
+
+const gons = (N: number) => shapeName(N, true);
+const polygonContainer = (M: number) => article(shapeName(M, false));
+
+/** The pairing of a problem, or null for an id that names none (a solid or a code the catalogues do not know). */
+export function pairingOf(p: ProblemKey): Pairing | null {
+  const dimension = familyDimension(p.family);
+  const make = (piece: string, container: string, pieceLabel: string, label: string): Pairing => ({
+    dimension,
+    piece,
+    container,
+    pieceLabel,
+    label,
+  });
+  if (isPolygon(p))
+    return make(`${p.N}`, `p${p.M}`, gons(p.N), `${gons(p.N)} in ${polygonContainer(p.M)}`);
+  const f = spaceFields(p.id);
+  if (!f || f.family !== p.family) return null;
+  switch (f.family) {
+    case "surface":
+      return make(`${f.N}`, `s${f.solid}`, gons(f.N), `${gons(f.N)} on ${article(solidTitle(f.solid))}`);
+    case "curved":
+      return make(`${f.N}`, `c${f.M}`, gons(f.N), `${gons(f.N)} in ${polygonContainer(f.M)}`);
+    case "sphere":
+      return make(`${f.N}`, "sphere", gons(f.N), `${gons(f.N)} on a sphere`);
+    case "torus":
+      return make(`${f.N}`, `t${f.lattice}`, gons(f.N), `${gons(f.N)} on ${article(TORUS_NAMES[f.lattice])}`);
+    case "polyhedra": {
+      const n = problemNameOf(f.code);
+      return n ? make(`b${n.piece}`, `b${n.container}`, solidPlural(n.piece), lowerFirst(n.title)) : null;
+    }
+    case "balls": {
+      const n = ballsProblemOf(f.code);
+      return n ? make(`b${n.piece}`, `b${n.container}`, solidPlural(n.piece), lowerFirst(n.title)) : null;
+    }
+  }
+}
+
+/**
+ * The player's collections, from the records confirmed (whether or not Collections is owned). Every
+ * Dimension counts. The records are distinct problems, so a pairing's count is its number of distinct
+ * piece counts; the piece milestones are per Dimension and piece shape ("squares in 2D in 2D" and
+ * "squares on a 3D surface" are two).
  */
 export function collections(e: EconomyState): Collections {
   const key = `${e.recorded.length}|${e.recorded.at(-1)}|${e.tiers.join(",")}`;
   const seen = memo.get(e.recorded);
   if (seen?.key === key) return seen.value;
-  const combos = new Map<string, { N: number; M: number; have: number }>();
-  const shapes = new Map<number, number>();
+  const combos = new Map<string, { have: number; p: Pairing }>();
+  const shapes = new Map<string, { count: number; p: Pairing }>();
   for (const k of e.recorded) {
-    const p = parseKey(k);
-    // collections count polygon problems only for now
-    if (!p || !isPolygon(p)) continue;
-    shapes.set(p.N, (shapes.get(p.N) ?? 0) + 1);
-    const id = `${p.N}/${p.M}`;
-    const combo = combos.get(id) ?? { N: p.N, M: p.M, have: 0 };
+    const parsed = parseKey(k);
+    const p = parsed && pairingOf(parsed);
+    if (!p) continue;
+    const shape = shapes.get(`${p.dimension}|${p.piece}`) ?? { count: 0, p };
+    shape.count++;
+    shapes.set(`${p.dimension}|${p.piece}`, shape);
+    const id = `${p.dimension}|${p.piece}|${p.container}`;
+    const combo = combos.get(id) ?? { have: 0, p };
     combo.have++;
     combos.set(id, combo);
   }
   const complete = [...combos.values()].filter((x) => x.have >= COMBO_RECORDS).length;
-  const nearest = [...combos.values()]
-    .filter((x) => x.have < COMBO_RECORDS)
-    .sort((a, b) => b.have - a.have || a.N - b.N || a.M - b.M)
-    .slice(0, 3);
-  const shapeList = [...shapes.entries()]
-    .map(([N, count]) => ({ N, count, milestones: SHAPE_MILESTONES.filter((m) => count >= m).length }))
-    .sort((a, b) => b.count - a.count || a.N - b.N);
+  const nearest = [...combos.entries()]
+    .filter(([, x]) => x.have < COMBO_RECORDS)
+    .sort((a, b) => b[1].have - a[1].have || (a[0] < b[0] ? -1 : 1))
+    .slice(0, 3)
+    .map(([, x]) => ({ label: x.p.label, have: x.have }));
+  const ranked = [...shapes.entries()]
+    .map(([id, x]) => ({ id, ...x, milestones: SHAPE_MILESTONES.filter((m) => x.count >= m).length }))
+    .sort((a, b) => b.count - a.count || (a.id < b.id ? -1 : 1));
+  const dims = new Set(ranked.map((x) => x.p.dimension));
+  const shapeList = ranked.map((x) => ({
+    label: dims.size > 1 || x.p.dimension !== "2-in-2" ? `${x.p.pieceLabel} (${DIMENSION_NAME[x.p.dimension]})` : x.p.pieceLabel,
+    count: x.count,
+    milestones: x.milestones,
+  }));
   const milestones = shapeList.reduce((t, x) => t + x.milestones, 0);
   const tiers = TIERS.filter((t) => e.tiers.includes(t));
   const value: Collections = {
@@ -171,8 +252,8 @@ export function noteRecorded(s: GameState, p: ProblemState): void {
     e.recorded.push(p.key);
     if (e.recorded.length > RECORDED_LIMIT) e.recorded.splice(0, e.recorded.length - RECORDED_LIMIT);
   }
-  // tier firsts count polygon problems only, as the other collections do
-  if (isPolygon(p) && !e.tiers.includes(p.tier)) e.tiers.push(p.tier);
+  // tier firsts count every family: a space problem's tier is "open" or "batch" (a site record), the same tiers
+  if (!e.tiers.includes(p.tier)) e.tiers.push(p.tier);
 }
 
 /** Points earned on a problem before multipliers (paid now), kept on the problem. */
