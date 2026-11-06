@@ -156,7 +156,8 @@ describe("auto-orient", () => {
         const best = autoOrient(N, poses, M, phi0);
         expect(best.size).toBeLessThanOrEqual(enclose(N, poses, M, 0).size);
         expect(best.size).toBeLessThanOrEqual(enclose(N, poses, M, phi0).size + 1e-12);
-        expect(maxViolation(N, poses, best)).toBeLessThan(1e-9);
+        // relative, as for the minimal circle above: the violation is rounding on coordinates of size best.size
+        expect(maxViolation(N, poses, best)).toBeLessThan(1e-9 * Math.max(1, best.size));
       }),
       { numRuns: 100 },
     );
