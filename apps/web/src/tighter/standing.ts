@@ -177,7 +177,7 @@ export const RULES: readonly Rule[] = [
     id: "circles",
     name: "Circles only",
     limit:
-      "Only problems with circles are dealt. In 2D in 2D that means circle pieces or a circle container, in the other Dimensions disk or ball pieces or a disk or ball container.",
+      "Only problems with circles are dealt. In 2D in 2D that means circle pieces or a circle container, in the other Dimensions disk or ball pieces or a ball container.",
     reward: "Every problem the rule would deal pays 1.5 times the points, in every Dimension.",
   },
   {
@@ -226,9 +226,13 @@ export function hasCircles(p: ProblemKey): boolean {
       return false;
   }
 }
-/** Whether a problem is small: 2D in 2D N+M+P at most SMALL_TOTAL, any other family P at most SMALL_PIECES. */
+/** Whether a problem is small: in 2D in 2D (polygons and curved) N+M+P at most SMALL_TOTAL, any other family P at most SMALL_PIECES. */
 export function isSmall(p: ProblemKey): boolean {
-  return isPolygon(p) ? p.N + p.M + p.P <= SMALL_TOTAL : p.P <= SMALL_PIECES;
+  if (isPolygon(p)) return p.N + p.M + p.P <= SMALL_TOTAL;
+  // curved problems are in 2D in 2D: they are measured by N + M + P as polygons are
+  const f = p.family === "curved" ? spaceFields(p.id) : null;
+  if (f && f.family === "curved") return f.N + f.M + f.P <= SMALL_TOTAL;
+  return p.P <= SMALL_PIECES;
 }
 
 /**

@@ -1491,7 +1491,7 @@ export const UPGRADES: readonly Upgrade[] = [
       text: [
         "When you buy Standing, you can pick a rule for the next cycle. You then play that cycle under the rule, and when you reset at its end, you get 1 more standing point and the rule's reward for good.",
         "Circles only deals only problems with circles, and it pays 1.5 times the points on them. Small problems only deals only small problems, and it pays 1.5 times the points on them. Clicks only turns auto-eval off and gives one more evaluation per click. One method allows only mc_compress, and it pays 1.5 times the points on the improvements it finds.",
-        "Both rules apply in every Dimension. Circles means circle pieces or a circle container in 2D in 2D, and disk or ball pieces or a disk or ball container in the other Dimensions (Polyhedra, which has only solids, is not dealt). Small means N + M + P of 120 or less in 2D in 2D, and 30 pieces or fewer in the other Dimensions.",
+        "Both rules apply in every Dimension. Circles means circle pieces or a circle container in 2D in 2D, and disk or ball pieces or a ball container in the other Dimensions. Solids in solids have no circles, so they are not dealt. Small means N + M + P of 120 or less in 2D in 2D, and 30 pieces or fewer in the other Dimensions.",
       ],
       note: "Size is N + M + P. Rewards multiply with each other and with your other multipliers.",
     },

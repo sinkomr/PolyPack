@@ -1,6 +1,15 @@
 import { describe, expect, it } from "vitest";
 import { drawSliceProblem, sliceHasCircles } from "../src/tighter/catalogue";
-import { SourceReach, drawWide, filterSources, newDealer, nextRandom, pickSource, ruleWideLeft, sourceOdds } from "../src/tighter/dealer";
+import {
+  SourceReach,
+  drawWide,
+  filterSources,
+  newDealer,
+  nextRandom,
+  pickSource,
+  ruleWideLeft,
+  sourceOdds,
+} from "../src/tighter/dealer";
 import { SMALL_PIECES, SMALL_TOTAL, keyOf, parseKey, poly } from "../src/tighter/frontier";
 import { Archive } from "../src/tighter/archive";
 import { newGame } from "../src/tighter/game";
@@ -56,6 +65,21 @@ describe("Tighter rules in every Dimension", () => {
     expect(ruleAllowsProblem(small, poly(21, 21, 40))).toBe(true);
   });
 
+  it("measure curved problems by N + M + P, as 2D in 2D, and the other families by P", () => {
+    const small = standingWith("small");
+    const done = standingWith(null, ["small"]);
+    // P > 30 but N + M + P <= 120: small; P <= 30 but N + M + P > 120: not
+    expect(isSmall(fam("curved/-1/50/6/60"))).toBe(true);
+    expect(isSmall(fam("curved/-1/100/12/20"))).toBe(false);
+    expect(ruleAllowsProblem(small, fam("curved/-1/50/6/60"))).toBe(true);
+    expect(ruleAllowsProblem(small, fam("curved/-1/100/12/20"))).toBe(false);
+    expect(rentClass(fam("curved/-1/50/6/60"))).toBe(6);
+    expect(rentClass(fam("curved/-1/100/12/20"))).toBe(4);
+    expect(ruleRewardFactor(done, fam("curved/-1/50/6/60"), null)).toBe(1.5);
+    expect(ruleRewardFactor(done, fam("curved/-1/100/12/20"), null)).toBe(1);
+    expect(isSmall(fam("sphere/90/31"))).toBe(false);
+  });
+
   it("pay each finished rule's 1.5 times on the problems it deals, in every family", () => {
     const done = standingWith(null, ["circles", "small"]);
     expect(ruleRewardFactor(done, fam("sphere/0/12"), null)).toBe(2.25);
@@ -82,7 +106,13 @@ describe("Tighter rules in every Dimension", () => {
     expect([0, 1, 2, 3, 4].map((c) => rentClassFactor(old, c))).toEqual([1, 1.5, 1.5, 2.25, 1]);
     expect([5, 6, 7].map((c) => rentClassFactor(old, c))).toEqual([1.5, 1.5, 2.25]);
     // a class always pays what the problem would
-    for (const p of [poly(0, 4, 5), poly(5, 6, 7), fam("balls/ballinball/9"), fam("torus/sq/5/400"), fam("curved/-1/0/3/50")])
+    for (const p of [
+      poly(0, 4, 5),
+      poly(5, 6, 7),
+      fam("balls/ballinball/9"),
+      fam("torus/sq/5/400"),
+      fam("curved/-1/0/3/50"),
+    ])
       expect(rentClassFactor(old, rentClass(p))).toBe(ruleRewardFactor(old, p, null));
     // the sums are rebuilt from the rows on load, so a save with rules done and old rows loads and sums per class
     const g = newGame(T0, 1);
@@ -104,9 +134,15 @@ describe("Tighter draws under the rules", () => {
     const d = newDealer(11);
     for (const s of SLICES) {
       for (let i = 0; i < 120; i++) {
-        const k = drawSliceProblem(d, s.id, { listings: {}, exclude: new Set(), open, maxP: SMALL_PIECES });
+        const k = drawSliceProblem(d, s.id, {
+          listings: {},
+          exclude: new Set(),
+          open,
+          maxP: SMALL_PIECES,
+          small: true,
+        });
         expect(k, s.id).not.toBeNull();
-        expect(k!.P).toBeLessThanOrEqual(SMALL_PIECES);
+        if (k!.family !== "curved") expect(k!.P).toBeLessThanOrEqual(SMALL_PIECES);
         expect(isSmall(k!)).toBe(true);
         const c = drawSliceProblem(d, s.id, { listings: {}, exclude: new Set(), open, circles: true });
         if (sliceHasCircles(s.id)) {
@@ -119,11 +155,32 @@ describe("Tighter draws under the rules", () => {
     expect(SLICES.filter((s) => !sliceHasCircles(s.id)).every((s) => s.id.startsWith("poly-"))).toBe(true);
   });
 
+  it("draw curved problems small by N + M + P", () => {
+    const d = newDealer(9);
+    for (let i = 0; i < 400; i++) {
+      const k = drawSliceProblem(d, "curved", {
+        listings: {},
+        exclude: new Set(),
+        open,
+        maxP: SMALL_PIECES,
+        small: true,
+      });
+      expect(k).not.toBeNull();
+      expect(isSmall(k!), k!.id).toBe(true);
+    }
+  });
+
   it("draw starters inside the rules too", () => {
     const d = newDealer(5);
     for (const s of SLICES.filter((x) => x.free)) {
       for (let i = 0; i < 20; i++) {
-        const k = drawSliceProblem(d, s.id, { listings: {}, exclude: new Set(), open, starter: true, maxP: SMALL_PIECES });
+        const k = drawSliceProblem(d, s.id, {
+          listings: {},
+          exclude: new Set(),
+          open,
+          starter: true,
+          maxP: SMALL_PIECES,
+        });
         if (k) expect(k.P).toBeLessThanOrEqual(SMALL_PIECES);
         const c = drawSliceProblem(d, s.id, { listings: {}, exclude: new Set(), open, starter: true, circles: true });
         if (c) expect(hasCircles(c)).toBe(true);
@@ -218,7 +275,8 @@ describe("Tighter wide pools under the rules", () => {
         }
         // the frontier first, then the wide set
         const k =
-          list.find((p) => !used.has(keyOf(p))) ?? drawWide(d, used, (p) => !used.has(keyOf(p)), 24, 2.5, null, "small");
+          list.find((p) => !used.has(keyOf(p))) ??
+          drawWide(d, used, (p) => !used.has(keyOf(p)), 24, 2.5, null, "small");
         if (!k) {
           dry++;
           continue;

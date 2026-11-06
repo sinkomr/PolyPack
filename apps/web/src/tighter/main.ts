@@ -2264,7 +2264,7 @@ function dealableSlices(): SliceId[] {
 /** What the cycle's rule asks of the draws in the other Dimensions: small problems, 30 pieces or fewer; circles, disks or balls. */
 function ruleLimits(): RuleLimits {
   return {
-    ...(state.standing.rule === "small" ? { maxP: SMALL_PIECES } : {}),
+    ...(state.standing.rule === "small" ? { maxP: SMALL_PIECES, small: true as const } : {}),
     ...(state.standing.rule === "circles" ? { circles: true } : {}),
   };
 }
@@ -2453,15 +2453,18 @@ async function collectorCandidate(io: DealIo, d: DealerState, exclude: Set<strin
 }
 
 /** What the player has reached, as the sources of a draw go. */
-const sourceReach = (o: ReadonlySet<UpgradeId>): SourceReach => ({
-  contested: contestedTiers(o),
-  ringMin: ringMin(o),
-  wide: o.has("wide"),
-  space: ruledSlices().length > 0,
-  ruled: ruleOpenProblems(state.standing),
-  ruledWide: ruleOpenWide(state.standing),
-  used: new Set([...seenKeys(state), ...skipped, ...takenCache.keys()]),
-});
+const sourceReach = (o: ReadonlySet<UpgradeId>): SourceReach => {
+  const ruled = ruleOpenProblems(state.standing);
+  return {
+    contested: contestedTiers(o),
+    ringMin: ringMin(o),
+    wide: o.has("wide"),
+    space: ruledSlices().length > 0,
+    ruled,
+    ruledWide: ruleOpenWide(state.standing),
+    used: ruled ? new Set([...seenKeys(state), ...skipped, ...takenCache.keys()]) : undefined,
+  };
+};
 
 /**
  * Up to `want` candidates, each checked with GET just before it counts: a retake first (Retake),
@@ -2737,7 +2740,9 @@ async function deal(d: DealerState): Promise<{ p: ProblemState; ranked: Ranked; 
     const ruled = ruleOpenProblems(state.standing);
     // the starter corner, then the rest of the frontier, then small problems of the wide set: the smallest open one found
     const ruledWide = ruleOpenWide(state.standing);
-    const pools: Pool[] = ruled ? [{ keys: ruled }, { wide: true, skew: 2.5, rule: ruledWide }] : firstDealPools(STARTER, FRONTIER);
+    const pools: Pool[] = ruled
+      ? [{ keys: ruled }, { wide: true, skew: 2.5, rule: ruledWide }]
+      : firstDealPools(STARTER, FRONTIER);
     for (let attempt = 0; attempt < 3 && !spentIo(io); attempt++) {
       const c = await openCandidate(io, d, exclude, pools);
       if (c) return { p: newProblem(c, "open", now()), ranked: plainRanked(c) };

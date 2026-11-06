@@ -1,7 +1,7 @@
 import { BALLS_CODES, BALLS_PROBLEMS } from "@polypack/balls/catalogue";
 import { SOLID_NAMES_LIST, problemNameOf } from "@polypack/polyhedra/catalogue";
 import { DealerState, nextRandom } from "./dealer";
-import { ProblemKey, SpaceKey, isPolygon, parseKey } from "./frontier";
+import { SMALL_TOTAL, ProblemKey, SpaceKey, isPolygon, parseKey } from "./frontier";
 import { spaceFields } from "./families";
 import { SLICES, SOLID_FAMILY_SLICE, SliceId, laterSlice } from "./slices";
 
@@ -337,12 +337,21 @@ export const CURVED_KS: readonly string[] = [
 export const CURVED_MS: readonly number[] = [0, 3, 4, 5, 6, 7, 8, 9, 10, 12];
 export const TORUS_LATTICES: readonly string[] = ["sq", "hex", "free"];
 /** P of a drawn problem runs from 2 (P = 1 is trivial) to this: 100, and 500 on a torus. */
-export const DOMAIN_MAX_P: Readonly<Record<ListedSpace, number>> = { curved: 100, sphere: 100, torus: 500, polyhedra: 500 };
+export const DOMAIN_MAX_P: Readonly<Record<ListedSpace, number>> = {
+  curved: 100,
+  sphere: 100,
+  torus: 500,
+  polyhedra: 500,
+};
 
 /** How many problems the game draws from a domain: every piece (99), every container, curvature or lattice, P from 2. */
 export function domainProblems(space: "curved" | "sphere" | "torus"): number {
   const per = 99 * (DOMAIN_MAX_P[space] - 1);
-  return space === "curved" ? CURVED_KS.length * CURVED_MS.length * per : space === "torus" ? TORUS_LATTICES.length * per : per;
+  return space === "curved"
+    ? CURVED_KS.length * CURVED_MS.length * per
+    : space === "torus"
+      ? TORUS_LATTICES.length * per
+      : per;
 }
 
 /**
@@ -354,11 +363,26 @@ export function domainProblems(space: "curved" | "sphere" | "torus"): number {
 function drawDomainId(d: DealerState, space: ListedSpace, starter: boolean, limits: RuleLimits = {}): string {
   // under "circles only" a disk piece (curved: or a disk container); the coin for the container is drawn either way
   const diskContainer = space === "curved" && !!limits.circles && nextRandom(d) < 0.5;
-  const N = limits.circles && !diskContainer ? 0 : starter ? pick(d, STARTER_SIDES) : nextRandom(d) < 1 / 99 ? 0 : span(d, 3, 100);
-  const max = Math.min(DOMAIN_MAX_P[space], limits.maxP ?? Infinity);
+  const N =
+    limits.circles && !diskContainer
+      ? 0
+      : starter
+        ? pick(d, STARTER_SIDES)
+        : nextRandom(d) < 1 / 99
+          ? 0
+          : span(d, 3, 100);
+  const M =
+    space === "curved"
+      ? diskContainer
+        ? 0
+        : pick(d, limits.circles ? CURVED_MS.filter((m) => m !== 0) : CURVED_MS)
+      : 0;
+  // curved is in 2D in 2D: small there means N + M + P at most SMALL_TOTAL (worst case N = 100, M = 12 leaves P = 8)
+  const cap = space === "curved" && limits.small ? SMALL_TOTAL - N - M : (limits.maxP ?? Infinity);
+  const max = Math.min(DOMAIN_MAX_P[space], cap);
   // P is log-uniform in [2, max]; a max of 2 leaves one value
   const P = starter
-    ? span(d, STARTER_P.min, Math.min(STARTER_P.max, limits.maxP ?? Infinity))
+    ? span(d, STARTER_P.min, Math.min(STARTER_P.max, cap))
     : Math.min(max, Math.max(2, Math.round(Math.exp(Math.log(2) + nextRandom(d) * Math.log(max / 2)))));
   switch (space) {
     case "sphere":
@@ -366,7 +390,7 @@ function drawDomainId(d: DealerState, space: ListedSpace, starter: boolean, limi
     case "torus":
       return `torus/${pick(d, TORUS_LATTICES)}/${N}/${P}`;
     default:
-      return `curved/${pick(d, CURVED_KS)}/${N}/${diskContainer ? 0 : pick(d, limits.circles ? CURVED_MS.filter((m) => m !== 0) : CURVED_MS)}/${P}`;
+      return `curved/${pick(d, CURVED_KS)}/${N}/${M}/${P}`;
   }
 }
 
@@ -379,6 +403,8 @@ const span = (d: DealerState, a: number, b: number) => a + Math.floor(nextRandom
 export interface RuleLimits {
   /** Most pieces. */
   maxP?: number;
+  /** Small problems of 2D in 2D's measure: curved problems keep N + M + P at most SMALL_TOTAL, whatever maxP says. */
+  small?: true;
   /** Disks or balls only (see hasCircles). */
   circles?: boolean;
 }
