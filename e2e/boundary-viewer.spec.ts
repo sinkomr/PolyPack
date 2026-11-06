@@ -40,7 +40,7 @@ test("the viewer opens from the dimensions page, draws a problem and links to th
     "Board",
     "Records",
     "Dimensions",
-    "Volunteer",
+    "Pack@Home",
     "API",
     "Tighter",
   ]);

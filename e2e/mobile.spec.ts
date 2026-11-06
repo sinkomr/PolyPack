@@ -104,7 +104,7 @@ test("phone: run an optimizer and accept its preview", async ({ page }) => {
 test("phone: the volunteer page and the records pages fit, with the site menu wrapped", async ({ page }) => {
   for (const path of ["/volunteer.html", "/browse.html", "/holders.html"]) {
     await page.goto(path);
-    await expect(page.getByRole("navigation", { name: "Site" }).getByRole("link", { name: "Volunteer" })).toBeVisible();
+    await expect(page.getByRole("navigation", { name: "Site" }).getByRole("link", { name: "Pack@Home" })).toBeVisible();
     expect(
       await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth),
       path,

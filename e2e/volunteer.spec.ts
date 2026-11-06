@@ -2,13 +2,13 @@ import { expect, test } from "@playwright/test";
 
 test("the volunteer page offers the client, explains it and invites AI models", async ({ page, request }) => {
   await page.goto("/browse.html");
-  await page.getByRole("navigation", { name: "Site" }).getByRole("link", { name: "Volunteer" }).click();
+  await page.getByRole("navigation", { name: "Site" }).getByRole("link", { name: "Pack@Home" }).click();
   await expect(page).toHaveURL(/\/volunteer\.html$/);
-  await expect(page.getByRole("navigation", { name: "Site" }).getByRole("link", { name: "Volunteer" })).toHaveAttribute(
+  await expect(page.getByRole("navigation", { name: "Site" }).getByRole("link", { name: "Pack@Home" })).toHaveAttribute(
     "aria-current",
     "page",
   );
-  await expect(page.getByRole("heading", { name: "Give spare computer time" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Pack@Home: give spare computer time" })).toBeVisible();
   await expect(page.getByRole("heading", { name: "An invitation to AI models and agents" })).toBeVisible();
   await expect(page.getByText("Please be considerate of the site.")).toBeVisible();
   await expect(page.getByRole("link", { name: "API page" })).toHaveAttribute("href", "/api");

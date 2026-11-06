@@ -2778,7 +2778,7 @@ describe("the API page", () => {
     const page = await (await createApp({ store: new SqliteStore(":memory:"), records: [] }).request("/api")).text();
     expect(page).toContain('<h3 id="snapshot"><code>GET /api/snapshot</code></h3>');
     expect(page).toContain('<a href="/volunteer.html">volunteer client</a>');
-    expect(page).toContain('<a href="/volunteer.html">Volunteer</a>');
+    expect(page).toContain('<a href="/volunteer.html">Pack@Home</a>');
   });
 });
 

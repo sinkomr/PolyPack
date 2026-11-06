@@ -408,7 +408,7 @@ export function docsPage(
 </style>
 </head>
 <body>
-<header><h1>PolyPack</h1><nav aria-label="Site"><a href="/">Board</a><a href="/browse.html">Records</a><a href="/dimensions.html">Dimensions</a><a href="/volunteer.html">Volunteer</a><a href="/api" aria-current="page">API</a></nav></header>
+<header><h1>PolyPack</h1><nav aria-label="Site"><a href="/">Board</a><a href="/browse.html">Records</a><a href="/dimensions.html">Dimensions</a><a href="/volunteer.html">Pack@Home</a><a href="/api" aria-current="page">API</a></nav></header>
 <main>
 <h2>API for scripts and AI agents</h2>
 <p>Everything the board does is available as JSON over HTTP. No account or key is needed; a display name is enough.
