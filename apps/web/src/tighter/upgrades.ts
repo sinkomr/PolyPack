@@ -1169,16 +1169,16 @@ export const UPGRADES: readonly Upgrade[] = [
     effect: "Groups of similar records add to all your points.",
     how: {
       text: [
-        "Every record the server confirmed for you counts, even if someone beat it later. Only polygon problems count for now. A reset takes this upgrade away, but your records still count when you buy it again.",
-        "Same pieces and container. When you have 9 records with the same pieces in the same container, such as 21-gons in a 24-gon, you get +2 %. The piece counts can be anything.",
-        "Same pieces. When you have 10 records with the same pieces, in any container, you get +1 %. You get 1 % more at 30 records, and again at 100.",
+        "Every record the server confirmed for you counts, even if someone beat it later, in every Dimension (2D in 2D, 2D on 3D and 3D in 3D). A reset takes this upgrade away, but your records still count when you buy it again.",
+        "Same pieces and container. A pairing is a piece shape in a container shape in one Dimension, such as 21-gons in a 24-gon, squares on a cube or cubes in a tetrahedron. When you have 9 records of one pairing, you get +2 %. The piece counts can be anything. A surface counts by its solid, folded or not, a curved container by its shape, whatever the curvature, and a torus by its lattice.",
+        "Same pieces. When you have 10 records with the same piece shape in one Dimension, in any container, you get +1 %. You get 1 % more at 30 records, and again at 100. Squares in 2D in 2D and squares on a 3D surface count apart.",
         "Tiers. Your first record in each tier adds 5 %. The tiers are open problems, loose records, site records and published values.",
         "Example. You have 9 records of 21-gons in a 24-gon, and 3 more of 21-gons in other containers. The 9 give +2 %. All 12 have 21-gon pieces, so they give +1 % more. With your first open problem and your first loose record (+10 %), every point you earn is multiplied by 1.13.",
       ],
       math: [`${sym("m", "c")} = 1 + 0.02 × ${sym("a")} + 0.01 × ${sym("b")} + 0.05 × ${sym("t")}`],
       vars: [
         [sym("m", "c"), "the multiplier from collections"],
-        [sym("a"), "combinations of pieces and container with 9 records"],
+        [sym("a"), "pairings with 9 records"],
         [sym("b"), "marks reached by piece shapes (10, 30 and 100 records of one shape)"],
         [sym("t"), "tiers with a first record"],
       ],

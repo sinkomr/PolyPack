@@ -344,9 +344,9 @@ const RECORDS: How[] = [
   },
   {
     text: [
-      "Collections count every problem where the server confirmed a record of yours, even one that was beaten later. Once you own Collections, they add to all your points. A reset takes the card away, but your records still count when you buy it again. Only polygon problems count for now.",
-      `Same pieces and container. When you have ${COMBO_RECORDS} confirmed records with the same pieces in the same container, such as 21-gons in a 24-gon, you get +${COMBO_BONUS * 100} %. The piece counts can be anything.`,
-      `Same pieces. A piece shape reaches a milestone at ${andList(SHAPE_MILESTONES.map(String))} confirmed records with that piece, in any container. Each milestone gives +${SHAPE_BONUS * 100} %.`,
+      "Collections count every problem where the server confirmed a record of yours, even one that was beaten later. Once you own Collections, they add to all your points. A reset takes the card away, but your records still count when you buy it again. Every Dimension counts.",
+      `Same pieces and container. A pairing is a piece shape in a container shape in one Dimension, such as 21-gons in a 24-gon, squares on a cube or cubes in a tetrahedron. When you have ${COMBO_RECORDS} confirmed records of one pairing, you get +${COMBO_BONUS * 100} %. The piece counts can be anything.`,
+      `Same pieces. A piece shape in one Dimension reaches a milestone at ${andList(SHAPE_MILESTONES.map(String))} confirmed records with that piece, in any container. Squares in 2D in 2D and squares on a 3D surface count apart. Each milestone gives +${SHAPE_BONUS * 100} %.`,
       `Tiers. A tier first is your first confirmed record in each tier, which are ${andList(Object.values(TIER_LABEL).map((t) => `${t}s`))}. Each gives +${TIER_BONUS * 100} %.`,
       "Example. You have 9 records of 21-gons in a 24-gon, and 3 more of 21-gons in other containers. The 9 give +2 %. All 12 have 21-gon pieces, so they give +1 % more. With your first open problem and your first loose record (+10 %), every point you earn is multiplied by 1.13.",
     ],
@@ -356,7 +356,7 @@ const RECORDS: How[] = [
     ],
     vars: [
       ["<var>C</var>", "the collections bonus (0.05 means +5 %)"],
-      ["<var>A</var>", `your combinations of pieces and container with ${COMBO_RECORDS} records`],
+      ["<var>A</var>", `your pairings with ${COMBO_RECORDS} records`],
       ["<var>K</var>", "the milestones your piece shapes have reached, added over every shape"],
       ["<var>Q</var>", "the tiers with a first record (0 to 4)"],
     ],
