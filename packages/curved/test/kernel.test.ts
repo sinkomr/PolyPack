@@ -235,13 +235,13 @@ describe("the curved kernel", () => {
     }
   });
 
-  it("names problems as the catalogue does, and accepts P through 100 as the server does", () => {
+  it("names problems as the catalogue does, and accepts P through 500 as the server does", () => {
     expect(curvedKernel({ K: 1e-6, N: 4, M: 4, P: 5 }).id).toBe("curved/1e-06/4/4/5");
     expect(curvedKernel({ K: -1e-6, N: 0, M: 0, P: 7 }).id).toBe("curved/-1e-06/0/0/7");
     expect(curvedKernel({ K: -1, N: 3, M: 8, P: 29 }).id).toBe("curved/-1/3/8/29");
     for (const r of RECORDS.slice(0, 40)) expect(curvedKernel({ K: r.K, N: r.N, M: r.M, P: r.P }).id).toBe(r.id);
-    expect(curvedKernel({ K: -1, N: 0, M: 0, P: 100 }).P).toBe(100);
-    expect(() => curvedKernel({ K: -1, N: 0, M: 0, P: 101 })).toThrow(/100/);
+    expect(curvedKernel({ K: -1, N: 0, M: 0, P: 500 }).P).toBe(500);
+    expect(() => curvedKernel({ K: -1, N: 0, M: 0, P: 501 })).toThrow(/500/);
   });
 
   it("caps a finish's work, and polls the stop inside the polish's linear programs", () => {

@@ -17,6 +17,7 @@
  *    malformed (its limits and its far-centre test).
  *  - id: the catalogue's, with K written as the curved records write it (formatCurvature).
  */
+import { CURVED_MAX_P } from "./bound";
 import type { KernelState, Rng, FamilyKernel } from "@polypack/methods";
 import { type CurvedPose, makeSpace } from "./problem";
 import { compose, poseMotion } from "./space";
@@ -65,7 +66,8 @@ export function formatCurvature(K: number): string {
 
 export function curvedKernel(problem: { K: number; N: number; M: number; P: number }): FamilyKernel {
   const { K, N, M, P } = problem;
-  if (!Number.isInteger(P) || P < 1 || P > 100) throw new RangeError("P must be an integer in [1, 100]");
+  if (!Number.isInteger(P) || P < 1 || P > CURVED_MAX_P)
+    throw new RangeError(`P must be an integer in [1, ${CURVED_MAX_P}]`);
   // throws for a non-finite K, a bad N or M, or a unit piece that does not exist at K
   const space = makeSpace(K, N, M);
   const dim = N === 0 ? 2 : 3;
