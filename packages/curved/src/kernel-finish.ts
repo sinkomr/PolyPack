@@ -13,7 +13,7 @@
  * finishCost, or when the caller's stop says so (polled before every simplex pivot).
  *
  * curvedServerRule: what packages/spaces/src/validate.ts does for curved, without importing it:
- * P at most 100, the configuration's form and limits (size at most 1e6, coordinates at most 1e4),
+ * P at most 500, the configuration's form and limits (size at most 1e6, coordinates at most 1e4),
  * the problem's lower bound (minus 1e-9 relative), the cheap far-centre test, then validate() of
  * validate.ts at the touching tolerance TOL = 1e-9 (the server's SPACE_TOL).
  */
@@ -25,9 +25,10 @@ import { energy as modelEnergy, posesFromVector, vectorFromPoses } from "./model
 import { lbfgs } from "./optim";
 import { polish } from "./polish";
 import { TOL, validate } from "./validate";
-import { containerCircumradius, maxApothem, maxContainerSize, pieceExists, pieceGeometry, sideFromApothem } from "./shapes";
-import { CURVED_MAX_P, curvedFits } from "./existence";
-import { tForArea } from "./search";
+import { containerCircumradius, maxContainerSize } from "./shapes";
+import { CURVED_MAX_P, curvedBound } from "./bound";
+
+export { curvedBound, curvedBoundOf } from "./bound";
 
 /** The server's limits for curved problems and configurations (SPACE_MAX_P, SPACE_MAX_SIZE, SPACE_MAX_COORD, SPACE_BOUND_SLACK). */
 export const MAX_P = CURVED_MAX_P;
@@ -278,30 +279,4 @@ function legalise(g: KernelGeometry, problem: CurvedProblem, c: CurvedConfig, co
     else lo = mid;
   }
   return grown(hi);
-}
-
-/**
- * A lower bound on the score [CALC], deflated by 1e-12 relative against rounding, or null when
- * none is finite inside the admissible range (an infeasible problem):
- *  - area: P disjoint pieces of area A lie in the container, so its area is at least P A;
- *  - one piece: a polygon container contains the piece's inscribed disk, so its inradius is at
- *    least rho; a disk container contains the piece's vertices, so r >= R;
- *  - two pieces in a disk: two disjoint inscribed disks have centres within r - rho of O and at
- *    least 2 rho apart, so r >= 2 rho.
- * These are the bounds of the research records (data/curved/records.json, `bound.kind`).
- */
-export function curvedBound(space: Pick<Space, "K" | "M" | "piece" | "tMax">, P: number): number | null {
-  const { K, M, piece, tMax } = space;
-  if (!curvedFits(K, M, tMax, piece, P)) return null;
-  const sizeOfT = (t: number) => sideFromApothem(M, K, t); // (a disk container's size is its diameter 2 t)
-  let b = sizeOfT(tForArea(space, P * piece.area));
-  b = Math.max(b, sizeOfT(M === 0 ? piece.R : piece.rho));
-  if (M === 0 && P >= 2) b = Math.max(b, sizeOfT(2 * piece.rho));
-  return Number.isFinite(b) ? b * (1 - 1e-12) : null;
-}
-
-/** curvedBound of the problem (K, N, M, P) without a Space: null when the piece does not exist either. */
-export function curvedBoundOf(K: number, N: number, M: number, P: number): number | null {
-  if (!pieceExists(N, K)) return null;
-  return curvedBound({ K, M, piece: pieceGeometry(N, K), tMax: maxApothem(M, K) }, P);
 }

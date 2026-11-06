@@ -12,5 +12,5 @@ export * from "./engine";
 export * from "./sensitivity";
 export * from "./ideal";
 export * from "./kernel";
-export { curvedBound, curvedBoundOf } from "./kernel-finish";
-export * from "./existence";
+
+export * from "./bound";

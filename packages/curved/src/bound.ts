@@ -1,7 +1,9 @@
 /**
- * Which curved problems can exist, as scalars: no Space (makeSpace caches vertex arrays per key, and the
- * catalogue has about 218,000 keys), so that the site can count problems and size the board's menus.
- * `curvedFits` is the one test of curvedBound (kernel-finish.ts): a bound is null exactly when it fails.
+ * The light part of the package (subpath @polypack/curved/bound; reaches only shapes.ts and kfun.ts): the lower bound of
+ * a curved problem and which problems can exist, as scalars. No Space is made (makeSpace caches vertex arrays per key, and
+ * the catalogue has about 218,000 keys), and none of the search, engine or kernels is loaded, so that the site's pages
+ * can count problems and size the board's menus. `curvedFits` is the one test of curvedBound: a bound is null exactly
+ * when it fails.
  */
 import {
   containerArea,
@@ -12,6 +14,9 @@ import {
   sideFromApothem,
   type PieceGeometry,
 } from "./shapes";
+import type { Space } from "./problem";
+
+export { pieceExists };
 
 /** The largest P of the site's curved catalogue (MAX_PIECES of packages/geometry). */
 export const CURVED_MAX_P = 500;
@@ -91,4 +96,47 @@ export function curvedWhyNot(K: number, N: number, M: number, P: number): string
   if (max === 0) return `A ${box} ${at} cannot hold even one unit ${piece}: ${limit}.`;
   if (M === 0 && max === 1) return `A ${box} ${at} cannot hold two unit ${piece}s: ${limit}.`;
   return `A ${box} ${at} holds at most ${max} unit ${piece}${max === 1 ? "" : "s"}: ${limit}, and ${P} pieces need more area than it has.`;
+}
+
+/** Container variable whose container has area A (bisection), capped below tMax. */
+export function tForArea(space: Pick<Space, "K" | "M" | "tMax">, A: number): number {
+  const { M, K } = space;
+  let lo = 0;
+  let hi = Number.isFinite(space.tMax) ? space.tMax : 1;
+  const areaOfT = (t: number) => containerArea(M, K, sideFromApothem(M, K, t));
+  if (!Number.isFinite(space.tMax)) {
+    while (areaOfT(hi) < A && hi < 1e6) hi *= 2;
+  } else if (areaOfT(hi * (1 - 1e-12)) < A) return Infinity;
+  for (let i = 0; i < 200; i++) {
+    const mid = (lo + hi) / 2;
+    if (areaOfT(mid) < A) lo = mid;
+    else hi = mid;
+  }
+  return hi;
+}
+
+/**
+ * A lower bound on the score [CALC], deflated by 1e-12 relative against rounding, or null when
+ * none is finite inside the admissible range (an infeasible problem):
+ *  - area: P disjoint pieces of area A lie in the container, so its area is at least P A;
+ *  - one piece: a polygon container contains the piece's inscribed disk, so its inradius is at
+ *    least rho; a disk container contains the piece's vertices, so r >= R;
+ *  - two pieces in a disk: two disjoint inscribed disks have centres within r - rho of O and at
+ *    least 2 rho apart, so r >= 2 rho.
+ * These are the bounds of the research records (data/curved/records.json, `bound.kind`).
+ */
+export function curvedBound(space: Pick<Space, "K" | "M" | "piece" | "tMax">, P: number): number | null {
+  const { K, M, piece, tMax } = space;
+  if (!curvedFits(K, M, tMax, piece, P)) return null;
+  const sizeOfT = (t: number) => sideFromApothem(M, K, t); // (a disk container's size is its diameter 2 t)
+  let b = sizeOfT(tForArea(space, P * piece.area));
+  b = Math.max(b, sizeOfT(M === 0 ? piece.R : piece.rho));
+  if (M === 0 && P >= 2) b = Math.max(b, sizeOfT(2 * piece.rho));
+  return Number.isFinite(b) ? b * (1 - 1e-12) : null;
+}
+
+/** curvedBound of the problem (K, N, M, P) without a Space: null when the piece does not exist either. */
+export function curvedBoundOf(K: number, N: number, M: number, P: number): number | null {
+  if (!pieceExists(N, K)) return null;
+  return curvedBound({ K, M, piece: pieceGeometry(N, K), tMax: maxApothem(M, K) }, P);
 }

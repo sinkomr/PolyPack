@@ -1,5 +1,5 @@
 /** Range domains for curved, whole-sphere and flat-torus pieces. Research records are independent. */
-import { CURVED_MAX_P, curvedBoundOf, curvedMaxP, curvedWhyNot, pieceExists } from "@polypack/curved";
+import { CURVED_MAX_P, curvedBoundOf, curvedMaxP, curvedWhyNot, pieceExists } from "@polypack/curved/bound";
 import { MAX_SIDES } from "@polypack/geometry";
 import { areaBound } from "@polypack/sphere";
 import { areaScoreBound, TORUS_MAX_P, type TorusFamily } from "@polypack/torus";

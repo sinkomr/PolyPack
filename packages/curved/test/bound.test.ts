@@ -1,3 +1,5 @@
+import { readFileSync } from "node:fs";
+import { dirname, resolve } from "node:path";
 import { describe, expect, it } from "vitest";
 import {
   curvedBound,
@@ -83,5 +85,21 @@ describe("curvedWhyNot", () => {
     expect(curvedWhyNot(1, 3, 4, max)).toBeNull();
     expect(curvedWhyNot(1, 3, 4, max + 1)).toMatch(/holds at most \d+ unit 3-gons?.*area/);
     expect(curvedWhyNot(-1, 100, 3, 1)).toMatch(/cannot hold even one unit 100-gon/);
+  });
+});
+
+describe("@polypack/curved/bound", () => {
+  it("reaches only the light modules: no search, engine, kernel, polish or validator", () => {
+    const seen = new Set<string>();
+    const walk = (file: string) => {
+      if (seen.has(file)) return;
+      seen.add(file);
+      const text = readFileSync(file, "utf8");
+      // value imports and re-exports of relative modules (type-only ones are erased)
+      for (const m of text.matchAll(/^(?:import|export)\s(?!type\s)[^;]*?from\s+"(\.[^"]+)"/gms))
+        walk(resolve(dirname(file), `${m[1]}.ts`));
+    };
+    walk(resolve(__dirname, "../src/bound.ts"));
+    expect([...seen].map((f) => f.slice(f.lastIndexOf("/") + 1)).sort()).toEqual(["bound.ts", "kfun.ts", "shapes.ts"]);
   });
 });
