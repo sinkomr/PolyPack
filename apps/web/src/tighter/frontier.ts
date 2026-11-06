@@ -109,3 +109,8 @@ export function problemTitle(p: ProblemKey): string {
   const article = /^[aeiou8]|^1[18]-/.test(container) ? "an" : "a";
   return `${shapeName(q.N, true)} in ${article} ${container}, ${q.P} pieces`;
 }
+
+/** Problems small enough for the "small problems" rule and its reward in 2D in 2D: N+M+P at most this. */
+export const SMALL_TOTAL = 120;
+/** The same rule in every other Dimension (a problem of another family): at most this many pieces. */
+export const SMALL_PIECES = 30;

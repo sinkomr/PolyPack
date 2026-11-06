@@ -1,7 +1,7 @@
 import { MAX_PIECES, areaLowerBound, closedToSubmissions } from "@polypack/geometry";
 import type { ProblemInfo } from "@polypack/geometry";
 import type { RecordsResponse } from "../api";
-import { FRONTIER_P, FRONTIER_SIDES, ProblemKey, keyOf, poly } from "./frontier";
+import { FRONTIER_P, FRONTIER_SIDES, ProblemKey, SMALL_TOTAL, keyOf, parseKey, poly } from "./frontier";
 import type { Tier } from "./points";
 import { Candidate, Filters, LOOSE_WEAKNESS, NEIGHBOURS, passes } from "./rank";
 
@@ -142,11 +142,54 @@ function wideValues(min: number, max: number, only: readonly number[] | null): n
   return out;
 }
 
+/** The wide set under a cycle rule (whatever More open problems says): small problems (N+M+P at most SMALL_TOTAL), or circles. */
+export type RuleWide = "small" | "circles";
+
+/** The allowed values of the wide set's three axes under the player's filters. */
+function wideAxes(within: Filters | null) {
+  return {
+    ns: wideValues(WIDE.minSide, WIDE.maxSide, within?.pieces ?? null),
+    ms: wideValues(WIDE.minSide, WIDE.maxSide, within?.containers ?? null),
+    pLo: Math.max(WIDE.minP, within?.minP ?? 0),
+    pHi: Math.min(WIDE.maxP, within?.maxP ?? WIDE.maxP),
+  };
+}
+
+/** Whether a polygon problem is in the wide set of a rule and the filters allow it (counting and tests). */
+function inRuleWide(rule: RuleWide, k: ProblemKey, within: Filters | null): boolean {
+  if (k.family !== "polygon") return false;
+  const { ns, ms, pLo, pHi } = wideAxes(within);
+  if (k.P < pLo || k.P > pHi) return false;
+  if (rule === "small") return ns.includes(k.N) && ms.includes(k.M) && k.N + k.M + k.P <= SMALL_TOTAL;
+  return (k.N === 0 && (within?.pieces?.includes(0) ?? true) && ms.includes(k.M)) ||
+    (k.M === 0 && (within?.containers?.includes(0) ?? true) && ns.includes(k.N));
+}
+
+/** How many problems the wide set of a rule holds under the filters, less those in `exclude` (used, seen, taken). */
+export function ruleWideLeft(rule: RuleWide, within: Filters | null = null, exclude: ReadonlySet<string> = new Set()): number {
+  const { ns, ms, pLo, pHi } = wideAxes(within);
+  let total = 0;
+  if (rule === "small") {
+    for (const n of ns) for (const m of ms) total += Math.max(0, Math.min(pHi, SMALL_TOTAL - n - m) - pLo + 1);
+  } else {
+    const ps = Math.max(0, pHi - pLo + 1);
+    if (within?.pieces?.includes(0) ?? true) total += ms.length * ps;
+    if (within?.containers?.includes(0) ?? true) total += ns.length * ps;
+  }
+  for (const key of exclude) {
+    const k = parseKey(key);
+    if (k && inRuleWide(rule, k, within)) total--;
+  }
+  return Math.max(0, total);
+}
+
 /**
  * A random problem of the wider frontier, the player's filters and `allow` permitting, not in `exclude`.
  * The filters are applied before drawing: each side comes from the allowed shapes within 21 to 100 and
  * the piece count from the allowed range within 40 to 500, so every allowed problem can be drawn. Null at
- * once when an axis has no allowed value.
+ * once when an axis has no allowed value. Under a cycle rule (`rule`) the draw stays inside the rule: a
+ * small problem draws its second side and then P from what is left of SMALL_TOTAL, a circle problem sets
+ * one side to 0, so no draw is spent on a problem the rule refuses.
  */
 export function drawWide(
   d: DealerState,
@@ -155,15 +198,29 @@ export function drawWide(
   attempts = 24,
   skew = 1,
   within: Filters | null = null,
+  rule: RuleWide | null = null,
 ): ProblemKey | null {
-  const ns = wideValues(WIDE.minSide, WIDE.maxSide, within?.pieces ?? null);
-  const ms = wideValues(WIDE.minSide, WIDE.maxSide, within?.containers ?? null);
-  const ps = wideValues(Math.max(WIDE.minP, within?.minP ?? 0), Math.min(WIDE.maxP, within?.maxP ?? WIDE.maxP), null);
+  const { ns, ms, pLo, pHi } = wideAxes(within);
+  const ps = wideValues(pLo, pHi, null);
   if (!ns.length || !ms.length || !ps.length) return null;
   // skew > 1 leans each draw toward the smallest allowed value (smaller problems open quicker)
   const pick = (values: readonly number[]) => values[Math.floor(Math.pow(nextRandom(d), skew) * values.length)];
   for (let i = 0; i < attempts; i++) {
-    const p = poly(pick(ns), pick(ms), pick(ps));
+    let p: ProblemKey | null = null;
+    if (rule === "small") {
+      // the smallest N + M + P a later draw can still use leaves room for the rest
+      const n = pick(ns.filter((v) => v + ms[0] + pLo <= SMALL_TOTAL));
+      if (n === undefined) return null;
+      const m = pick(ms.filter((v) => n + v + pLo <= SMALL_TOTAL));
+      p = poly(n, m, pick(ps.filter((v) => n + m + v <= SMALL_TOTAL)));
+    } else if (rule === "circles") {
+      const roles: boolean[] = [];
+      if (within?.pieces?.includes(0) ?? true) roles.push(true);
+      if (within?.containers?.includes(0) ?? true) roles.push(false);
+      if (!roles.length) return null;
+      const circlePiece = roles[Math.floor(nextRandom(d) * roles.length)];
+      p = circlePiece ? poly(0, pick(ms), pick(ps)) : poly(pick(ns), 0, pick(ps));
+    } else p = poly(pick(ns), pick(ms), pick(ps));
     if (!exclude.has(keyOf(p)) && allow(p)) return p;
   }
   return null;
@@ -208,6 +265,10 @@ export interface SourceReach {
   space: boolean;
   /** The cycle's rule's own open problems, which replace the dealer's lists (standing.ts ruleOpenProblems); null without one. */
   ruled?: readonly ProblemKey[] | null;
+  /** The rule's wide set (standing.ts ruleOpenWide), drawn from after its own list whatever More open problems says; null without one. */
+  ruledWide?: RuleWide | null;
+  /** Problems never to deal again (dealt, in the queue, seen or found taken): a ruled pool they use up cannot give a problem. */
+  used?: ReadonlySet<string>;
 }
 
 /** Whether any of `values` (a shape list, null for all) lies among `shapes`. */
@@ -216,7 +277,7 @@ const anyShape = (only: readonly number[] | null, shapes: readonly number[]) =>
 
 /**
  * Which sources can give a problem that passes the filters, so that a draw is not spent on one that
- * cannot. Open problems: the cycle's rule's own list when it has one, else the frontier's list, or with
+ * cannot. Open problems: the cycle's rule's own list and wide set when it has one (less those used up), else the frontier's list, or with
  * More open problems sides 21 to 100 and 40 to 500 pieces. Contested: an owned tier the filter allows, shapes of 0 or 3 to 20 sides, and a size the ring
  * allows. Space problems ignore the shape filters, so they stay possible whenever a slice is open.
  */
@@ -230,7 +291,8 @@ export function filterSources(f: Filters | null, reach: SourceReach): Record<Sou
   const open =
     tierOk("open") &&
     (reach.ruled
-      ? reach.ruled.some((k) => passes(f, { ...k, tier: "open" }))
+      ? reach.ruled.some((k) => !reach.used?.has(keyOf(k)) && passes(f, { ...k, tier: "open" })) ||
+        (!!reach.ruledWide && ruleWideLeft(reach.ruledWide, f, reach.used) > 0)
       : reach.wide
         ? shapesOk(wideSides) && Math.max(minP, WIDE.minP) <= Math.min(maxP, WIDE.maxP)
         : shapesOk(FRONTIER_SIDES) && FRONTIER_P.some((P) => P >= minP && P <= maxP));

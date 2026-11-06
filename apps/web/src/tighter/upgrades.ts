@@ -1157,7 +1157,7 @@ export const UPGRADES: readonly Upgrade[] = [
         "An open problem is one that has no record on the site yet. Normally the dealer picks open problems from a fixed list of 2,601 problems.",
         "With this upgrade, half of the open problems come from a much wider choice instead, with any sides from 21 to 100 and any piece count from 40 to 500. Transfers then also look at problems with 1 to 3 fewer pieces.",
       ],
-      note: "The fixed list has the sides 21, 24, 27, 30, 33, 36, 40, 44, 47, 50, 55, 60, 66, 72, 80, 90 and 100 for the piece and the container, and the piece counts 40, 60, 80, 100, 120, 150, 200, 250 and 300. The wider choice draws each value uniformly. Under the Circles only and Small problems only rules, the rule's own list of problems is used instead.",
+      note: "The fixed list has the sides 21, 24, 27, 30, 33, 36, 40, 44, 47, 50, 55, 60, 66, 72, 80, 90 and 100 for the piece and the container, and the piece counts 40, 60, 80, 100, 120, 150, 200, 250 and 300. The wider choice draws each value uniformly. Under the Circles only and Small problems only rules this upgrade is ignored: the dealer draws 2D in 2D open problems from the fixed list first, then from the rule's own wide set (sides 21 to 100, 40 to 500 pieces, with circles or of size 120 or less).",
     },
     row: "problems",
   },
@@ -1490,8 +1490,8 @@ export const UPGRADES: readonly Upgrade[] = [
     {
       text: [
         "When you buy Standing, you can pick a rule for the next cycle. You then play that cycle under the rule, and when you reset at its end, you get 1 more standing point and the rule's reward for good.",
-        "Circles only deals only problems with circles, and it pays 1.5 times the points on them. Small problems only deals only problems of size 120 or less, and it pays 1.5 times the points on them. Clicks only turns auto-eval off and gives one more evaluation per click. One method allows only mc_compress, and it pays 1.5 times the points on the improvements it finds.",
-        "Circles only and Small problems only apply to the problems of 2D in 2D. Other dimensions are dealt as usual and pay no reward from these rules.",
+        "Circles only deals only problems with circles, and it pays 1.5 times the points on them. Small problems only deals only small problems, and it pays 1.5 times the points on them. Clicks only turns auto-eval off and gives one more evaluation per click. One method allows only mc_compress, and it pays 1.5 times the points on the improvements it finds.",
+        "Both rules apply in every Dimension. Circles means circle pieces or a circle container in 2D in 2D, and disk or ball pieces or a disk or ball container in the other Dimensions (Polyhedra, which has only solids, is not dealt). Small means N + M + P of 120 or less in 2D in 2D, and 30 pieces or fewer in the other Dimensions.",
       ],
       note: "Size is N + M + P. Rewards multiply with each other and with your other multipliers.",
     },

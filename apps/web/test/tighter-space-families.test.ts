@@ -543,16 +543,23 @@ describe("Tighter space problems of every slice", () => {
       expect(normalizeOffer({ family, id, P, tier: "open", leader: null })).toBeNull();
   });
 
-  it("are dealt under the polygon rules, whose rewards do not apply to them", () => {
+  it("are dealt under the circles and small rules by their own definition, and the rewards follow", () => {
     const st = { ...newGame(T0, 1).standing, rulesDone: ["circles", "small", "method"] };
     const p = key("sphere/4/12");
-    for (const rule of ["circles", "small", "method", null]) expect(ruleAllowsProblem({ ...st, rule }, p)).toBe(true);
+    const disk = key("sphere/0/50");
+    for (const rule of ["method", null]) expect(ruleAllowsProblem({ ...st, rule }, p)).toBe(true);
+    expect(ruleAllowsProblem({ ...st, rule: "small" }, p)).toBe(true);
+    expect(ruleAllowsProblem({ ...st, rule: "circles" }, p)).toBe(false);
+    expect(ruleAllowsProblem({ ...st, rule: "circles" }, disk)).toBe(true);
+    expect(ruleAllowsProblem({ ...st, rule: "small" }, disk)).toBe(false);
     expect(ruleAllowsProblem({ ...st, rule: "circles" }, poly(5, 6, 30))).toBe(false);
-    expect(ruleRewardFactor(st, p, null)).toBe(1);
+    expect(ruleRewardFactor(st, p, null)).toBe(1.5);
+    expect(ruleRewardFactor(st, disk, null)).toBe(1.5);
+    expect(ruleRewardFactor(st, key("sphere/0/12"), null)).toBe(1.5 * 1.5);
     expect(ruleRewardFactor(st, poly(0, 3, 4), null)).toBe(1.5 * 1.5);
     const g = newGame(T0, 1);
     g.standing.rulesDone = ["circles", "small"];
-    expect(pointsMultiplier(g, ownedSet(g), p, null)).toBe(pointsMultiplier(newGame(T0, 1), ownedSet(g), p, null));
+    expect(pointsMultiplier(g, ownedSet(g), p, null)).toBe(1.5 * pointsMultiplier(newGame(T0, 1), ownedSet(g), p, null));
   });
 
   it("do not count for tier firsts", () => {

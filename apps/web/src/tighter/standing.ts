@@ -8,11 +8,16 @@ import {
   keyOf,
   needPolygon,
   poly,
+  SMALL_PIECES,
+  SMALL_TOTAL,
 } from "./frontier";
 import { RESET_GROWTH, RESET_MIN } from "./points";
 import type { GameState } from "./game";
 import { archiveOf, archivedCount } from "./archive";
+import { spaceFields } from "./families";
+import { ballsProblemOf } from "@polypack/balls/catalogue";
 import { nextNoon, tidyRent } from "./economy";
+import type { RuleWide } from "./dealer";
 import {
   EvolveMethod,
   Funds,
@@ -165,22 +170,21 @@ export interface Rule {
   reward: string;
 }
 
-/** Problems small enough for the "small problems" rule and its reward: N+M+P at most this. */
-export const SMALL_TOTAL = 120;
+export { SMALL_PIECES, SMALL_TOTAL };
 
 export const RULES: readonly Rule[] = [
   {
     id: "circles",
     name: "Circles only",
     limit:
-      "Only problems with circle pieces or a circle container are dealt. This covers 2D in 2D only, and other dimensions are dealt as usual.",
-    reward: "Every 2D in 2D problem with circle pieces or a circle container pays 1.5 times the points.",
+      "Only problems with circles are dealt. In 2D in 2D that means circle pieces or a circle container, in the other Dimensions disk or ball pieces or a disk or ball container.",
+    reward: "Every problem the rule would deal pays 1.5 times the points, in every Dimension.",
   },
   {
     id: "small",
     name: "Small problems only",
-    limit: `Only problems of size ${SMALL_TOTAL} or less are dealt. Size means N + M + P, the sides of the piece and of the container plus the number of pieces, with 0 sides for a circle. This covers 2D in 2D only, and other dimensions are dealt as usual.`,
-    reward: `Every 2D in 2D problem of size ${SMALL_TOTAL} or less pays 1.5 times the points.`,
+    limit: `Only small problems are dealt. In 2D in 2D that means size ${SMALL_TOTAL} or less, in the other Dimensions ${SMALL_PIECES} pieces or fewer. Size is N + M + P, the sides of the piece and of the container plus the number of pieces, with 0 sides for a circle.`,
+    reward: `Every problem the rule would deal pays 1.5 times the points, in every Dimension.`,
   },
   {
     id: "clicks",
@@ -197,24 +201,50 @@ export const RULES: readonly Rule[] = [
 ];
 export const ruleById = (id: string | null) => RULES.find((r) => r.id === id) ?? null;
 
-const hasCircles = (p: ProblemKey) => {
-  const q = needPolygon(p, "cycle rule circles");
-  return q.N === 0 || q.M === 0;
-};
-const isSmall = (p: ProblemKey) => {
-  const q = needPolygon(p, "cycle rule small");
-  return q.N + q.M + q.P <= SMALL_TOTAL;
-};
+/**
+ * Whether a problem has circles. 2D in 2D: circle pieces or a circle container (N or M = 0). Other
+ * families: disk pieces (surfaces, sphere, torus: N = 0), a disk piece or a disk container (curved:
+ * N or M = 0), a ball piece or a ball container (every balls problem is one or the other); a
+ * polyhedra problem is solids only, so never.
+ */
+export function hasCircles(p: ProblemKey): boolean {
+  if (isPolygon(p)) return p.N === 0 || p.M === 0;
+  const f = spaceFields(p.id);
+  if (!f) return false;
+  switch (f.family) {
+    case "surface":
+    case "sphere":
+    case "torus":
+      return f.N === 0;
+    case "curved":
+      return f.N === 0 || f.M === 0;
+    case "balls": {
+      const b = ballsProblemOf(f.code);
+      return !!b && (b.piece === "ball" || b.container === "ball");
+    }
+    default:
+      return false;
+  }
+}
+/** Whether a problem is small: 2D in 2D N+M+P at most SMALL_TOTAL, any other family P at most SMALL_PIECES. */
+export function isSmall(p: ProblemKey): boolean {
+  return isPolygon(p) ? p.N + p.M + p.P <= SMALL_TOTAL : p.P <= SMALL_PIECES;
+}
 
-/** Classes of problems that the rules' rewards tell apart on rent (ruleRewardFactor with no method). */
-export const RENT_CLASSES = 5;
-/** A problem's class: for a polygon one bit for circles and one for small, 4 for any other family. */
+/**
+ * Classes of problems that the rules' rewards tell apart on rent (ruleRewardFactor with no method).
+ * Classes 0 to 3 are polygon problems (bit 1 circles, bit 2 small); 4 to 7 are other families, 4 plus
+ * the same bits. Class 4, any other family without either, is what the single family class was, so
+ * the numbering of earlier classes holds.
+ */
+export const RENT_CLASSES = 8;
+/** A problem's class. */
 export function rentClass(p: ProblemKey): number {
-  return isPolygon(p) ? (hasCircles(p) ? 1 : 0) | (isSmall(p) ? 2 : 0) : 4;
+  return (isPolygon(p) ? 0 : 4) | (hasCircles(p) ? 1 : 0) | (isSmall(p) ? 2 : 0);
 }
 /** The rules' reward factor shared by every problem of a class (the method rule needs a run, which a past entry has not). */
 export function rentClassFactor(s: StandingState, c: number): number {
-  return c < 4 ? shapeRuleFactor(s, (c & 1) !== 0, (c & 2) !== 0) : 1;
+  return shapeRuleFactor(s, (c & 1) !== 0, (c & 2) !== 0);
 }
 
 /**
@@ -222,8 +252,6 @@ export function rentClassFactor(s: StandingState, c: number): number {
  * only, ...). The dealer calls it on every candidate.
  */
 export function ruleAllowsProblem(s: StandingState, p: ProblemKey): boolean {
-  // circles only and small problems only are rules of 2D in 2D's polygon problems
-  if (!isPolygon(p)) return true;
   if (s.rule === "circles") return hasCircles(p);
   if (s.rule === "small") return isSmall(p);
   return true;
@@ -234,8 +262,13 @@ export function ruleAllowsMethod(s: StandingState, method: EvolveMethod): boolea
   return s.rule !== "method" || method === "mc_compress";
 }
 
+/** The wide set a rule also draws open problems from (2D in 2D, sides 21 to 100, whatever More open problems says), or null. */
+export function ruleOpenWide(s: StandingState): RuleWide | null {
+  return s.rule === "circles" || s.rule === "small" ? s.rule : null;
+}
+
 /**
- * Open problems the dealer draws from under a rule that the frontier cannot serve: under "circles
+ * Open problems the dealer draws first under a rule that the frontier cannot serve: under "circles
  * only", circles in each frontier polygon and each frontier polygon in a circle (N or M = 0, the
  * other a frontier side, P a frontier count: 306 problems); under "small problems only", the
  * frontier problems with N+M+P at most 120. Null: the dealer's own lists.
@@ -252,7 +285,7 @@ const SMALL_FRONTIER: readonly ProblemKey[] = FRONTIER.filter(isSmall);
 
 /** The rules' rewards on one improvement's points: the product of those finished that apply. */
 export function ruleRewardFactor(s: StandingState, p: ProblemKey, method: string | null): number {
-  let f = isPolygon(p) ? shapeRuleFactor(s, hasCircles(p), isSmall(p)) : 1;
+  let f = shapeRuleFactor(s, hasCircles(p), isSmall(p));
   if (s.rulesDone.includes("method") && method === "mc_compress") f *= RULE_REWARD;
   return f;
 }
