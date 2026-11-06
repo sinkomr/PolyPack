@@ -444,13 +444,22 @@ describe("Tighter catalogue", () => {
 });
 
 describe("Tighter domain draws of curved, sphere and torus", () => {
-  it("write the domains as the spaces package does", () => {
-    const f = (sp: "curved" | "torus", key: string) => SPACE_DOMAINS[sp]!.info.fields.find((x) => x.key === key)!;
-    expect([...CURVED_KS]).toEqual(f("curved", "K").values);
-    expect(CURVED_MS.map(String)).toEqual(f("curved", "M").values);
-    expect([...TORUS_LATTICES]).toEqual(f("torus", "family").values);
+  it("draw only problems of the spaces package's domains", () => {
+    // Tighter keeps its own lists and may deal fewer than a domain offers, but each value must be one of the domain's
+    const inDomain = (sp: "curved" | "sphere" | "torus", id: string) => {
+      const parsed = parseSpaceId(sp, id);
+      return typeof parsed === "object" && SPACE_DOMAINS[sp]!.bound(parsed) !== undefined;
+    };
+    for (const K of CURVED_KS)
+      for (const M of CURVED_MS) {
+        expect(inDomain("curved", `curved/${K}/3/${M}/2`), `K ${K}, M ${M}`).toBe(true);
+        expect(inDomain("curved", `curved/${K}/100/${M}/${DOMAIN_MAX_P.curved}`), `K ${K}, M ${M}`).toBe(true);
+      }
+    for (const lattice of TORUS_LATTICES)
+      expect(inDomain("torus", `torus/${lattice}/100/${DOMAIN_MAX_P.torus}`), lattice).toBe(true);
+    expect(inDomain("sphere", `sphere/100/${DOMAIN_MAX_P.sphere}`)).toBe(true);
     for (const sp of ["curved", "sphere", "torus"] as const)
-      expect(DOMAIN_MAX_P[sp]).toBe(SPACE_DOMAINS[sp]!.info.fields.find((x) => x.key === "P")!.max);
+      expect(DOMAIN_MAX_P[sp]).toBeLessThanOrEqual(SPACE_DOMAINS[sp]!.info.fields.find((x) => x.key === "P")!.max!);
   });
 
   it("parse in the package, are in their slice, and have at least 2 pieces, below the domain's P", () => {
