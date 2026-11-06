@@ -283,7 +283,7 @@ export function syncEconomy(s: GameState): void {
   for (const p of [...s.past, ...s.queue]) {
     if (p.verified === null) continue;
     if (!s.economy.recorded.includes(p.key)) s.economy.recorded.push(p.key);
-    if (isPolygon(p) && !s.economy.tiers.includes(p.tier)) s.economy.tiers.push(p.tier);
+    if (!s.economy.tiers.includes(p.tier)) s.economy.tiers.push(p.tier);
   }
   if (s.standing.resets === 0 && s.standing.cycleEarned < s.rpEarned) s.standing.cycleEarned = s.rpEarned;
 }
