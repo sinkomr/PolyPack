@@ -5,6 +5,7 @@ import {
   areaLowerBound,
   autoOrient,
   containerArea,
+  convexHull,
   enclose,
   evaluate,
   pieceArea,
@@ -146,6 +147,21 @@ describe("enclosing circle", () => {
       }),
       { numRuns: 500 },
     );
+  });
+});
+
+describe("convex hull", () => {
+  it("keeps a point whose cross product underflows (a counterexample of the enclosing polygon property)", () => {
+    // three centres: x differs by the smallest double, and the first is 1.7e-9 lower
+    const poses = [
+      { x: 0, y: -1.732050780578476e-9, theta: 0 },
+      { x: 0, y: 0, theta: 0 },
+      { x: -5e-324, y: 0, theta: 0 },
+    ];
+    const hull = convexHull(new Float64Array(poses.flatMap((p) => [p.x, p.y])));
+    expect([...hull]).toContain(-1.732050780578476e-9);
+    const c = enclose(0, poses, 3, 0);
+    expect(maxViolation(0, poses, c)).toBeLessThanOrEqual(0);
   });
 });
 

@@ -19,9 +19,23 @@ export function convexHull(pts: Float64Array): Float64Array {
   idx.sort((a, b) => pts[2 * a] - pts[2 * b] || pts[2 * a + 1] - pts[2 * b + 1]);
   const hull = new Uint32Array(2 * n);
   let k = 0;
-  const cross = (o: number, a: number, b: number) =>
-    (pts[2 * a] - pts[2 * o]) * (pts[2 * b + 1] - pts[2 * o + 1]) -
-    (pts[2 * a + 1] - pts[2 * o + 1]) * (pts[2 * b] - pts[2 * o]);
+  const cross = (o: number, a: number, b: number) => {
+    const ax = pts[2 * a] - pts[2 * o];
+    const ay = pts[2 * a + 1] - pts[2 * o + 1];
+    const bx = pts[2 * b] - pts[2 * o];
+    const by = pts[2 * b + 1] - pts[2 * o + 1];
+    const p = ax * by;
+    const q = ay * bx;
+    if (p !== 0 || q !== 0) return p - q;
+    // Both products are zero, which they can be by underflow (a difference of 5e-324 times one of 0.4)
+    // as well as exactly; underflow would drop a point that is not on the segment. A product of two
+    // non-zero factors that underflowed is below 2^-1074, so both factors are below 1; scaled by 2^600
+    // each is exact and the product lies between 2^-948 and 2^126, so the sign is that of the exact cross
+    // product, up to the usual rounding. A zero factor stays zero (never Infinity times 0).
+    const s = 2 ** 600;
+    const scaled = (u: number, v: number) => (u === 0 || v === 0 ? 0 : u * s * (v * s));
+    return scaled(ax, by) - scaled(ay, bx);
+  };
   for (let i = 0; i < n; i++) {
     while (k >= 2 && cross(hull[k - 2], hull[k - 1], idx[i]) <= 0) k--;
     hull[k++] = idx[i];
