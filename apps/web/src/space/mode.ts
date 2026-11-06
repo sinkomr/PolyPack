@@ -18,7 +18,7 @@
 import { addOptions } from "../option-groups";
 import { SCORE_TIE } from "@polypack/geometry";
 import type { SpaceConfig, SpaceDomainInfo, SpaceName, SpaceProblemSummary } from "@polypack/spaces";
-import { SPACE_INFO } from "@polypack/spaces";
+import { SPACE_DOMAINS, SPACE_INFO, impossibleReason, parseSpaceId } from "@polypack/spaces";
 import { AUTO, type SpaceCheck, type SpaceMethodInfo, checkSpaceMethod, hasLatticeStart, spaceLatticeStart } from "@polypack/spaces/search";
 import { ParameterError, parameterForm, validityText } from "../solve-params";
 import { certifiedBy, downloadName } from "../spaces-model";
@@ -633,8 +633,19 @@ class SpaceMode {
       if (domain !== "error") this.domains.set(space, domain);
       else fallback = "The kinds' descriptions could not be read, so the menus offer the problems with records only.";
     }
-    const pick = this.pick(space, fieldsOfId(space, wanted ?? (this.start || DEFAULT_PROBLEM[space])));
+    // an id inside the domain's ranges that cannot be a problem (a unit 8-gon at K = 1) opens with the reason, without a search
+    const parsed = wanted !== null && this.domains.has(space) ? parseSpaceId(space, wanted) : null;
+    const why = parsed && typeof parsed !== "string" ? impossibleReason(space, parsed) : null;
+    const pick = this.pick(space, fieldsOfId(space, wanted ?? (this.start || DEFAULT_PROBLEM[space])), !!why);
     this.renderPicker(space, pick.fields);
+    if (why) {
+      this.clearProblem();
+      this.busy(null);
+      this.say(why);
+      this.solveStatus("There is no problem to search.");
+      this.updateButtons();
+      return;
+    }
     if (!pick.id) {
       this.clearProblem();
       this.busy("This kind lists no problems.", () => void this.open(space, wanted));
@@ -650,11 +661,11 @@ class SpaceMode {
   }
 
   /** The picker for a wish: from the space's domain when it has one, else from its listed problems. */
-  private pick(space: SpaceName, wish: Record<string, string>): { fields: PickField[]; id: string | null } {
+  private pick(space: SpaceName, wish: Record<string, string>, keep = false): { fields: PickField[]; id: string | null } {
     const domain = this.domains.get(space);
     const scope = this.scope;
     return domain
-      ? pickFromDomain(space, domain, wish, scope)
+      ? pickFromDomain(space, domain, wish, scope, SPACE_DOMAINS[space]?.menu, keep)
       : pickProblem(space, (this.records.get(space) ?? []).filter((p) => !scope || scopeHasId(scope, p.id)), wish);
   }
 

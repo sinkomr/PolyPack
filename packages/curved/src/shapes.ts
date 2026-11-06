@@ -101,6 +101,13 @@ export function idealApothem(M: number, K: number): number {
   return asnK(K, 1 / (Math.sqrt(-K) * Math.tan(Math.PI / M)));
 }
 
+/** Upper limit of the container variable t (apothem, or radius for a disk): the hemisphere at K > 0, the ideal M-gon at K < 0. */
+export function maxApothem(M: number, K: number): number {
+  if (K > 0) return Math.PI / (2 * Math.sqrt(K));
+  if (K < 0 && M > 0) return idealApothem(M, K);
+  return Infinity;
+}
+
 /**
  * Container "radius variable" t used internally: the apothem h for polygon containers, the radius r = s / 2
  * for disk containers (a disk container's size s is its diameter). Walls of a polygon container are the lines at distance h from O.

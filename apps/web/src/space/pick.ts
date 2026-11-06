@@ -3,7 +3,7 @@
  * values the catalogue has with the fields before it. Pure and light (no geometry), so that the
  * board's space mode and the 3D on 4D viewer (src/boundary-viewer.ts) pick problems the same way.
  */
-import type { SpaceDomainInfo, SpaceName } from "@polypack/spaces";
+import type { SpaceDomain, SpaceDomainInfo, SpaceName } from "@polypack/spaces";
 import type { FamilyScope } from "../dimension-table";
 import { type FieldSpec, SPACE_FIELDS, fieldValues } from "../spaces-model";
 
@@ -149,12 +149,19 @@ function withParts(domain: SpaceDomainInfo, wish: Record<string, string>): Recor
  *
  * A `scope` (dimension-table.ts) limits one field to the values of a family: the dimension of an nD problem, or the
  * polytopes of 3D on 4D. A field left with one value is marked hidden: the Problem set menu already says it.
+ *
+ * `menu` is the domain's hook for menus that depend on several earlier fields (SpaceDomain.menu: curved's containers and
+ * P); it is passed in, so that this file keeps no geometry. A field's `unlisted` values are left out of its menu, but a
+ * wished one is kept and offered while chosen. With `keep`, a wished value of the domain that the menus do not offer
+ * (an id that cannot be a problem, shown with the reason) is kept too, and offered while chosen.
  */
 export function pickFromDomain(
   space: SpaceName,
   domain: SpaceDomainInfo,
   wished: Record<string, string>,
   scope?: FamilyScope | null,
+  menu?: SpaceDomain["menu"],
+  keep = false,
 ): { fields: PickField[]; id: string } {
   const wish = withParts(domain, wished);
   const start = withParts(domain, fieldsOfId(space, DEFAULT_PROBLEM[space]));
@@ -163,19 +170,19 @@ export function pickFromDomain(
   const picked: Record<string, string> = {};
   const fields: PickField[] = domain.fields.map((f) => {
     const dep = f.dependent && picked[f.dependent.on] !== undefined ? f.dependent : undefined;
-    const listed = dep?.values?.[picked[dep.on]];
-    const range = dep?.ranges?.[picked[dep.on]];
-    let values =
-      listed ??
-      f.values ??
-      (range
-        ? Array.from({ length: range[1] - range[0] + 1 }, (_, i) => String(range[0] + i))
-        : f.min !== undefined && f.max !== undefined
-          ? Array.from({ length: f.max - f.min + 1 }, (_, i) => String(f.min! + i))
-          : []);
+    const hook = menu?.(f.key, picked);
+    const listed = hook?.values ?? dep?.values?.[picked[dep.on]];
+    const range = hook?.range ?? dep?.ranges?.[picked[dep.on]];
+    const integers = (lo: number, hi: number) => Array.from({ length: Math.max(hi - lo + 1, 0) }, (_, i) => String(lo + i));
+    // every value the field's ids take, whatever the earlier fields
+    const whole = f.values ?? (f.min !== undefined && f.max !== undefined ? integers(f.min, f.max) : []);
+    let values = listed ? [...listed] : range ? integers(range[0], range[1]) : whole;
     const scoped = !!scope && f.key === scope.field;
     if (scope && scoped) values = values.filter((v) => scope.values.includes(v));
     let value = wish[f.key];
+    // an unlisted value, or with `keep` any value of the domain, stays the chosen one while the menu would not offer it
+    const kept = value !== undefined && !scoped && (f.unlisted?.includes(value) || (keep && whole.includes(value)));
+    if (kept && !values.includes(value!)) values = whole.filter((v) => v === value || values.includes(v));
     if (value === undefined || !values.includes(value)) {
       if (f.values === undefined && value !== undefined && Number.isFinite(Number(value)) && values.length) {
         const want = Number(value);
@@ -186,7 +193,7 @@ export function pickFromDomain(
     return {
       key: f.key,
       label: PICK_LABELS[f.key] ?? f.label,
-      options: values.map((v) => ({ value: v, text: f.titles?.[v] ?? v, ...(f.groups?.[v] ? { group: f.groups[v] } : {}) })),
+      options: values.filter((v) => v === value || !f.unlisted?.includes(v)).map((v) => ({ value: v, text: f.titles?.[v] ?? v, ...(f.groups?.[v] ? { group: f.groups[v] } : {}) })),
       value,
       ...(scoped && values.length === 1 ? { hidden: true } : {}),
     };

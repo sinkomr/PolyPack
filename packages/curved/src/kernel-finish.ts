@@ -25,11 +25,12 @@ import { energy as modelEnergy, posesFromVector, vectorFromPoses } from "./model
 import { lbfgs } from "./optim";
 import { polish } from "./polish";
 import { TOL, validate } from "./validate";
-import { containerCircumradius, maxContainerSize, sideFromApothem } from "./shapes";
+import { containerCircumradius, maxApothem, maxContainerSize, pieceExists, pieceGeometry, sideFromApothem } from "./shapes";
+import { CURVED_MAX_P, curvedFits } from "./existence";
 import { tForArea } from "./search";
 
 /** The server's limits for curved problems and configurations (SPACE_MAX_P, SPACE_MAX_SIZE, SPACE_MAX_COORD, SPACE_BOUND_SLACK). */
-export const MAX_P = 100;
+export const MAX_P = CURVED_MAX_P;
 const MAX_SIZE = 1e6;
 const MAX_COORD = 1e4;
 const BOUND_SLACK = 1e-9;
@@ -289,12 +290,18 @@ function legalise(g: KernelGeometry, problem: CurvedProblem, c: CurvedConfig, co
  *    least 2 rho apart, so r >= 2 rho.
  * These are the bounds of the research records (data/curved/records.json, `bound.kind`).
  */
-export function curvedBound(space: Space, P: number): number | null {
-  const { K, M, piece } = space;
+export function curvedBound(space: Pick<Space, "K" | "M" | "piece" | "tMax">, P: number): number | null {
+  const { K, M, piece, tMax } = space;
+  if (!curvedFits(K, M, tMax, piece, P)) return null;
   const sizeOfT = (t: number) => sideFromApothem(M, K, t); // (a disk container's size is its diameter 2 t)
   let b = sizeOfT(tForArea(space, P * piece.area));
   b = Math.max(b, sizeOfT(M === 0 ? piece.R : piece.rho));
   if (M === 0 && P >= 2) b = Math.max(b, sizeOfT(2 * piece.rho));
-  if (!Number.isFinite(b) || !(b < maxContainerSize(M, K))) return null;
-  return b * (1 - 1e-12);
+  return Number.isFinite(b) ? b * (1 - 1e-12) : null;
+}
+
+/** curvedBound of the problem (K, N, M, P) without a Space: null when the piece does not exist either. */
+export function curvedBoundOf(K: number, N: number, M: number, P: number): number | null {
+  if (!pieceExists(N, K)) return null;
+  return curvedBound({ K, M, piece: pieceGeometry(N, K), tMax: maxApothem(M, K) }, P);
 }

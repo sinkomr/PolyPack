@@ -47,7 +47,7 @@ export interface SearchResult {
 const FEAS = 1e-22;
 
 /** Container variable whose container has area A (bisection), capped below tMax. */
-export function tForArea(space: Space, A: number): number {
+export function tForArea(space: Pick<Space, "K" | "M" | "tMax">, A: number): number {
   const { M, K } = space;
   let lo = 0;
   let hi = Number.isFinite(space.tMax) ? space.tMax : 1;

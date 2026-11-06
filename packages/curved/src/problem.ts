@@ -14,7 +14,7 @@
 import {
   pieceGeometry,
   apothemFromSide,
-  idealApothem,
+  maxApothem,
   maxContainerSize,
   pieceExists,
   type PieceGeometry,
@@ -63,6 +63,8 @@ export interface Space {
 }
 
 const spaceCache = new Map<string, Space>();
+/** Spaces kept: the catalogue has about 218,000 (K, N, M), so the oldest are dropped (callers keep the ones they use). */
+const SPACE_CACHE_MAX = 512;
 
 export function makeSpace(K: number, N: number, M: number): Space {
   const key = `${K}|${N}|${M}`;
@@ -80,10 +82,8 @@ export function makeSpace(K: number, N: number, M: number): Space {
     edges.push(lineCovector(K, piece.rho, pieceEdgeAngle(N, k)));
   }
   const wallAngles = M === 0 ? [] : Array.from({ length: M }, (_, k) => wallAngle(M, k));
-  let tMax = Infinity;
-  if (K > 0) tMax = Math.PI / (2 * Math.sqrt(K));
-  if (K < 0 && M > 0) tMax = idealApothem(M, K);
-  const space: Space = { K, N, M, piece, vertices, edges, wallAngles, tMax };
+  const space: Space = { K, N, M, piece, vertices, edges, wallAngles, tMax: maxApothem(M, K) };
+  if (spaceCache.size >= SPACE_CACHE_MAX) spaceCache.delete(spaceCache.keys().next().value!);
   spaceCache.set(key, space);
   return space;
 }
