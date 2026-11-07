@@ -180,24 +180,164 @@ fn solve_dual(h: &[f64], m: usize, s: &[f64]) -> DualOptimum {
     best
 }
 
+/// The dual value of the triple i < j < k, when its normals positively span the plane.
+#[inline]
+fn triple_value(h: &[f64], m: usize, s: &[f64], i: usize, j: usize, k: usize) -> Option<f64> {
+    let (d1, d2) = (j - i, k - j);
+    let d3 = m - k + i;
+    if 2 * d1 >= m || 2 * d2 >= m || 2 * d3 >= m {
+        return None;
+    }
+    Some((s[d2] * h[i] + s[d3] * h[j] + s[d1] * h[k]) / (s[d1] + s[d2] + s[d3]))
+}
+
+/// The best dual basis among the walls of `set` (at most five): antipodal pairs and positively
+/// spanning triples, the pair preferred on a tie as in `solve_dual`.
+fn best_basis(h: &[f64], m: usize, s: &[f64], set: &[usize]) -> DualOptimum {
+    let mut idx: Vec<usize> = set.to_vec();
+    idx.sort_unstable();
+    idx.dedup();
+    let mut best = DualOptimum { a: f64::NEG_INFINITY, i: 0, j: 0, k: None };
+    if m % 2 == 0 {
+        for &i in &idx {
+            if i < m / 2 && idx.contains(&(i + m / 2)) {
+                let a = (h[i] + h[i + m / 2]) / 2.0;
+                if a > best.a {
+                    best = DualOptimum { a, i, j: i + m / 2, k: None };
+                }
+            }
+        }
+    }
+    let mut triple = DualOptimum { a: f64::NEG_INFINITY, i: 0, j: 0, k: None };
+    for x in 0..idx.len() {
+        for y in x + 1..idx.len() {
+            for z in y + 1..idx.len() {
+                if let Some(a) = triple_value(h, m, s, idx[x], idx[y], idx[z]) {
+                    if a > triple.a {
+                        triple = DualOptimum { a, i: idx[x], j: idx[y], k: Some(idx[z]) };
+                    }
+                }
+            }
+        }
+    }
+    if triple.a > best.a {
+        triple
+    } else {
+        best
+    }
+}
+
+/// The same optimum as `solve_dual` by a dual active-set ascent: from a spanning triple, the wall
+/// most violated at the basis's centre (or, for an antipodal pair, the two walls that empty the
+/// segment of its centres) joins the basis, and the best basis of those few walls replaces it.
+/// The value of the small LP rises strictly at every step, so no basis returns; it ends when no
+/// wall is violated beyond rounding (1e-14 of the apothem), where the value is a* to that
+/// precision. O(M) per step and a handful of steps, instead of the enumeration's M^3 / 24 triples;
+/// any step that fails to rise hands over to the enumeration.
+fn solve_dual_fast(h: &[f64], m: usize, s: &[f64], cu: &[f64], su: &[f64]) -> DualOptimum {
+    if m <= 12 {
+        return solve_dual(h, m, s);
+    }
+    let top = (0..m).fold(0, |b, j| if h[j] > h[b] { j } else { b });
+    let mut start = [top, (top + m / 3) % m, (top + 2 * m / 3) % m];
+    start.sort_unstable();
+    let mut basis = best_basis(h, m, s, &start);
+    for _ in 0..4 * m {
+        let a = basis.a;
+        if !a.is_finite() {
+            break;
+        }
+        let tol = 1e-14 * (a.abs() + 1.0);
+        let next_set: Vec<usize>;
+        match basis.k {
+            Some(_) => {
+                // the centre of the triple: c . u = h - a on two of its walls
+                let (i, j) = (basis.i, basis.j);
+                let (bi, bj) = (h[i] - a, h[j] - a);
+                let det = cu[i] * su[j] - su[i] * cu[j];
+                let cx = (bi * su[j] - bj * su[i]) / det;
+                let cy = (cu[i] * bj - cu[j] * bi) / det;
+                let mut worst = 0usize;
+                let mut violation = f64::NEG_INFINITY;
+                for n in 0..m {
+                    let v = h[n] - cx * cu[n] - cy * su[n] - a;
+                    if v > violation {
+                        violation = v;
+                        worst = n;
+                    }
+                }
+                if violation <= tol {
+                    return basis;
+                }
+                next_set = vec![basis.i, basis.j, basis.k.unwrap(), worst];
+            }
+            None => {
+                // the centres of an antipodal pair form a line c = b_i u_i + t w; the other walls
+                // bound t to an interval, empty unless the pair is optimal
+                let i = basis.i;
+                let bi = h[i] - a;
+                let (wx, wy) = (-su[i], cu[i]);
+                let (mut lo, mut hi) = (f64::NEG_INFINITY, f64::INFINITY);
+                let (mut lo_at, mut hi_at) = (i, i);
+                for n in 0..m {
+                    if n == i || n == basis.j {
+                        continue;
+                    }
+                    let g = wx * cu[n] + wy * su[n];
+                    let rhs = h[n] - a - bi * (cu[i] * cu[n] + su[i] * su[n]);
+                    if g > 1e-12 {
+                        if rhs / g > lo {
+                            lo = rhs / g;
+                            lo_at = n;
+                        }
+                    } else if g < -1e-12 && rhs / g < hi {
+                        hi = rhs / g;
+                        hi_at = n;
+                    }
+                }
+                if lo <= hi + tol {
+                    return basis;
+                }
+                next_set = vec![basis.i, basis.j, lo_at, hi_at];
+            }
+        }
+        let next = best_basis(h, m, s, &next_set);
+        if !(next.a > a) {
+            break;
+        }
+        basis = next;
+    }
+    solve_dual(h, m, s)
+}
+
 /// Reusable work space for the enclosing polygon of one container shape M.
 #[derive(Clone, Debug)]
 pub struct PolygonEncloser {
     pub m: u32,
     sines: Vec<f64>,
     h: Vec<f64>,
+    /// Wall normals at phi = 0 (the LP is the same in the container's own frame).
+    cu: Vec<f64>,
+    su: Vec<f64>,
 }
 
 impl PolygonEncloser {
     pub fn new(m: u32) -> Self {
-        PolygonEncloser { m, sines: sine_table(m), h: vec![0.0; m as usize] }
+        let angles: Vec<f64> = (0..m).map(|j| -PI / 2.0 + j as f64 * 2.0 * PI / m as f64).collect();
+        PolygonEncloser {
+            m,
+            sines: sine_table(m),
+            h: vec![0.0; m as usize],
+            cu: angles.iter().map(|a| a.cos()).collect(),
+            su: angles.iter().map(|a| a.sin()).collect(),
+        }
     }
 
     /// Apothem of the smallest enclosing regular M-gon at orientation phi.
     pub fn min_apothem(&mut self, set: &PointSet, phi: f64) -> f64 {
         let m = self.m;
         supports(set, m, phi, &mut self.h);
-        solve_dual(&self.h, m as usize, &self.sines).a
+        solve_dual_fast(&self.h, m as usize, &self.sines, &self.cu, &self.su).a
     }
 
     /// Smallest enclosing regular M-gon (M >= 3) at orientation phi.
@@ -215,7 +355,7 @@ impl PolygonEncloser {
     /// The smallest regular M-gon at orientation phi from the supports h along its edge normals.
     pub fn from_supports(&self, h: &[f64], phi: f64) -> Container {
         let m = self.m as usize;
-        let DualOptimum { a, i, j, k } = solve_dual(h, m, &self.sines);
+        let DualOptimum { a, i, j, k } = solve_dual_fast(h, m, &self.sines, &self.cu, &self.su);
         let step = 2.0 * PI / m as f64;
         let ang = |n: usize| phi - PI / 2.0 + n as f64 * step;
         let uix = ang(i).cos();
@@ -537,4 +677,48 @@ pub fn auto_orient_set(set: &PointSet, m: u32, phi0: f64) -> Container {
 /// Auto-orientation for pieces given as poses.
 pub fn auto_orient(n: u32, poses: &[Pose], m: u32, phi0: f64) -> Container {
     auto_orient_set(&extreme_points(n, poses, 1.0), m, phi0)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::rng::Rng;
+
+    /// The active-set dual agrees with the enumeration, on supports of random point clouds
+    /// (whose optimum is usually a triple) and of lattice-like ones (ties, antipodal pairs).
+    #[test]
+    fn active_set_dual_matches_the_enumeration() {
+        let mut rng = Rng::new(9);
+        let mut exact = 0;
+        let mut total = 0;
+        for m in 13..=100u32 {
+            let enc = PolygonEncloser::new(m);
+            for case in 0..40 {
+                let count = 3 + rng.below(60);
+                let mut pts = Vec::new();
+                for _ in 0..count {
+                    let (x, y) = if case % 4 == 0 {
+                        ((rng.below(5) as f64) - 2.0, (rng.below(5) as f64) - 2.0)
+                    } else {
+                        (rng.signed() * 10.0, rng.signed() * (1.0 + 9.0 * rng.next()))
+                    };
+                    pts.push(x + 1000.0 * (case % 3) as f64);
+                    pts.push(y);
+                }
+                let set = PointSet { pts: convex_hull(&pts), pad: 0.25 };
+                let mut h = vec![0.0; m as usize];
+                let phi = rng.next();
+                supports(&set, m, phi, &mut h);
+                let slow = solve_dual(&h, m as usize, &enc.sines);
+                let fast = solve_dual_fast(&h, m as usize, &enc.sines, &enc.cu, &enc.su);
+                assert!((slow.a - fast.a).abs() <= 1e-13 * (1.0 + slow.a.abs()), "m={m} {} {}", slow.a, fast.a);
+                total += 1;
+                if slow.a == fast.a {
+                    exact += 1;
+                }
+            }
+        }
+        // ties apart, the same basis gives the same double
+        assert!(exact * 10 >= total * 9, "{exact} of {total}");
+    }
 }

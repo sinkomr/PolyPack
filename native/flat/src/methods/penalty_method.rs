@@ -294,7 +294,6 @@ impl Geometry {
         }
         let radius = if n == 0 { scale * DISK_RADIUS } else { 0.0 } + padding;
         let step = if n == 0 { 0.0 } else { 2.0 * PI / n as f64 };
-        let nf = n as f64;
         let unit_apothem = self.unit_apothem;
         for i in 0..p {
             let pose = &self.poses[i];
@@ -307,7 +306,8 @@ impl Geometry {
                     (0.0, 0.0)
                 } else {
                     let nearest = ((self.wall_angle[edge] - a0) / step).round();
-                    let k = (nearest % nf + nf) as usize % n as usize;
+                    // integer remainder (the float one is a slow library call)
+                    let k = (nearest as i64).rem_euclid(n as i64) as usize;
                     let (rc, rs) = (self.vertex_c[k], self.vertex_s[k]);
                     (ca * rc - sa * rs, sa * rc + ca * rs)
                 };

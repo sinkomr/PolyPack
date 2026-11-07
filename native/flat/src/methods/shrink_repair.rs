@@ -445,10 +445,12 @@ impl RepairState {
         self.rebuild_grid();
     }
 
+    /// The angle reduced to [0, period): by the floor of the quotient (the exact remainder is a
+    /// slow library call; this differs from it in the last bits only).
     fn wrap(&self, theta: f64) -> f64 {
-        let t = theta % self.period;
-        if t < 0.0 {
-            t + self.period
+        let t = theta - self.period * (theta / self.period).floor();
+        if t >= self.period || t < 0.0 {
+            0.0
         } else {
             t
         }
