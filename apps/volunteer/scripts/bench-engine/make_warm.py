@@ -8,7 +8,7 @@ import urllib.request
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 panel = json.load(open(os.path.join(HERE, "panel.json")))
-recs = {(r["N"], r["M"], r["P"]): r for r in json.load(open(os.path.join(HERE, "../../data/records.json")))["records"]}
+recs = {(r["N"], r["M"], r["P"]): r for r in json.load(open(os.path.join(HERE, "../../../../data/records.json")))["records"]}
 out = []
 for p in panel:
     k = (p["N"], p["M"], p["P"])

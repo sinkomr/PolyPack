@@ -1,7 +1,7 @@
 /**
  * Fragmentation: shrink_repair for `total` CPU seconds as one run, against a chain of runs of
  * `piece` seconds, each from the previous best (what the engine's iterate arm does).
- *   npx tsx scratch/methods-flat/chain.ts total piece seed id1,id2,...
+ *   npx tsx apps/volunteer/scripts/bench-engine/chain.ts total piece seed id1,id2,...
  */
 import fs from "node:fs";
 import path from "node:path";
@@ -28,7 +28,13 @@ for (const p of panel) {
   let best: Awaited<ReturnType<typeof run>> | null = null;
   const t = cpuMs();
   for (let k = 0; k < Math.round(total / piece); k++) {
-    const r = await run(problem, { method: "shrink_repair", params: k > 0 ? params : undefined, seed: seed * 1000 + k, start: best?.best, budget: { time_s: piece } });
+    const r = await run(problem, {
+      method: "shrink_repair",
+      params: k > 0 ? params : undefined,
+      seed: seed * 1000 + k,
+      start: best?.best,
+      budget: { time_s: piece },
+    });
     if (r.strict && r.score !== null && (!best || r.score < best.score!)) best = r;
   }
   const gap = best ? (100 * (best.score! - ref)) / ref : NaN;

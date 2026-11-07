@@ -1,7 +1,7 @@
 /**
  * Start quality: the `seed` method (kind auto) at 24 evaluations (shrink_repair's slice) and at
  * 400, with and without the final polish, against the reference, for every panel problem.
- *   npx tsx scratch/methods-flat/seeds.ts
+ *   npx tsx apps/volunteer/scripts/bench-engine/seeds.ts
  */
 import fs from "node:fs";
 import path from "node:path";
@@ -19,9 +19,14 @@ for (const p of panel) {
     [400, true],
   ] as const) {
     const t = performance.now();
-    const r = await run({ N: p.N, M: p.M, P: p.P }, { method: "seed", params: { kind: "auto" }, seed: 1, budget: { evals, time_s: 30 }, finalPolish });
+    const r = await run(
+      { N: p.N, M: p.M, P: p.P },
+      { method: "seed", params: { kind: "auto" }, seed: 1, budget: { evals, time_s: 30 }, finalPolish },
+    );
     const gap = r.score === null ? NaN : (100 * (r.score - ref)) / ref;
-    out.push(`${evals}${finalPolish ? "+pol" : ""}: ${gap.toFixed(3)}% (${((performance.now() - t) / 1000).toFixed(1)}s)`);
+    out.push(
+      `${evals}${finalPolish ? "+pol" : ""}: ${gap.toFixed(3)}% (${((performance.now() - t) / 1000).toFixed(1)}s)`,
+    );
   }
   console.log(out.join("  "));
 }

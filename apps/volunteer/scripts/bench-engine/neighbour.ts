@@ -3,7 +3,7 @@
  * the P-1 packing plus one piece (record_plus_one), each then shrink_repair for `budget` CPU
  * seconds, against shrink_repair from scratch. Panel problems whose neighbours have coordinates
  * in data/records.json.
- *   npx tsx scratch/methods-flat/neighbour.ts [budget] [only]
+ *   npx tsx apps/volunteer/scripts/bench-engine/neighbour.ts [budget] [only]
  */
 import fs from "node:fs";
 import path from "node:path";
@@ -19,7 +19,7 @@ const { run } = await import("@polypack/solver");
 const here = path.dirname(fileURLToPath(import.meta.url));
 const panel = JSON.parse(fs.readFileSync(path.join(here, "panel.json"), "utf8"));
 const recs = new Map<string, { pieces?: unknown[]; container_phi?: number; value: number }>();
-for (const r of JSON.parse(fs.readFileSync(path.join(here, "../../data/records.json"), "utf8")).records)
+for (const r of JSON.parse(fs.readFileSync(path.join(here, "../../../../data/records.json"), "utf8")).records)
   recs.set(`${r.N}/${r.M}/${r.P}`, r);
 const budget = Number(process.argv[2] ?? 10);
 const only = process.argv[3]?.split(",");
@@ -40,7 +40,12 @@ for (const p of panel) {
     }
     const record = { N: p.N, M: p.M, P: p.P + dP, pieces: r.pieces, container_phi: r.container_phi ?? 0 };
     const t = cpuMs();
-    const s = await run(problem, { method: "seed", params: { kind, record }, seed: 1, budget: { evals: 400, time_s: 20 } });
+    const s = await run(problem, {
+      method: "seed",
+      params: { kind, record },
+      seed: 1,
+      budget: { evals: 400, time_s: 20 },
+    });
     const seedGap = s.score === null ? NaN : (100 * (s.score - ref)) / ref;
     const sr = s.best
       ? await run(problem, { method: "shrink_repair", seed: 1, start: s.best, budget: { time_s: budget } })

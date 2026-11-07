@@ -62,7 +62,7 @@ interface Recipe {
 }
 
 /**
- * Catalogue credits and the arms left out. [CALC] scratch/methods-flat (2026-11-06, Apple M1 Pro,
+ * Catalogue credits and the arms left out. [CALC] apps/volunteer/scripts/bench-engine (2026-11-06, Apple M1 Pro,
  * Node v26.5.0, CPU seconds, one lane, no memory, seeds 1 to 3, 24 flat problems from 10 disks in
  * a circle to 150 squares, and 9 polygon problems started from the site's leader):
  *  - `shrink_repair` made the first good packing nearly everywhere and its iterations most later
@@ -177,7 +177,7 @@ export const POLICY = {
   catalogueWeight: 4,
   /**
    * Largest job: half of maxSeconds, and at most 15 minutes, beyond the 30,000-evaluation runs of
-   * the method pages for P <= 100. [CALC] scratch/methods-flat: `shrink_repair` keeps improving in
+   * the method pages for P <= 100. [CALC] apps/volunteer/scripts/bench-engine: `shrink_repair` keeps improving in
    * one long run (its own ruins and restarts) where a chain of short runs from the best stays in
    * one basin; with jobs of at most a sixth of 60 s, one lane reached a median gap of 0.033% on
    * the 24 problems, with at most half 0.017%.

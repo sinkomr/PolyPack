@@ -5,10 +5,10 @@
  * CPU seconds, not wall seconds: results hold on a loaded machine. One process runs one cell at a
  * time; run several shards in parallel.
  *
- *   npx tsx scratch/methods-flat/bench.ts --budget 10 --seeds 1,2,3 --tag base [--shard 0/7]
+ *   npx tsx apps/volunteer/scripts/bench-engine/bench.ts --budget 10 --seeds 1,2,3 --tag base [--shard 0/7]
  *     [--mode engine | method:<name>] [--only 0,3,5] [--known site|lit]
  *
- * Writes one JSON line per (problem, seed) to scratch/methods-flat/results/<tag>-<budget>.jsonl:
+ * Writes one JSON line per (problem, seed) to apps/volunteer/scripts/bench-engine/results/<tag>-<budget>.jsonl:
  * final score, gap to the reference (min of literature and site best), the anytime trace
  * (cpu seconds, best) and the job log.
  */
@@ -35,13 +35,13 @@ Object.defineProperty(globalThis, "performance", {
 
 const { areaLowerBound } = await import("@polypack/geometry");
 const { run } = await import("@polypack/solver");
-// --engine base: the engine as committed before this study (base-engine/, from git show HEAD)
+// --engine base: the engine before this study, in base-engine/ (see README.md)
 const engineArg = process.argv.indexOf("--engine");
 const { searchProblem } =
   engineArg > 0 && process.argv[engineArg + 1] === "base"
     ? await import("./base-engine/engine/search")
-    : await import("../../apps/volunteer/src/engine/index");
-const { inlineRunJob } = await import("../../apps/volunteer/src/engine/inline");
+    : await import("../../src/engine/index");
+const { inlineRunJob } = await import("../../src/engine/inline");
 
 const here = path.dirname(fileURLToPath(import.meta.url));
 const args = new Map<string, string>();
@@ -102,10 +102,16 @@ const out = path.join(here, "results", `${tag}-${budget}${lanes > 1 ? `x${lanes}
 for (let k = shard; k < cells.length; k += shards) {
   const { p, i, seed } = cells[k];
   const problem = { N: p.N, M: p.M, P: p.P };
-  const warm = (p as { known?: { pieces: { x: number; y: number; theta: number }[]; container_phi: number; score: number } }).known;
+  const warm = (
+    p as { known?: { pieces: { x: number; y: number; theta: number }[]; container_phi: number; score: number } }
+  ).known;
   const ref = warm ? p.literature : Math.min(p.literature, p.site_best ?? Infinity);
   const known = warm
-    ? { config: { ...problem, pieces: warm.pieces, container_phi: warm.container_phi }, score: warm.score, source: "site" as const }
+    ? {
+        config: { ...problem, pieces: warm.pieces, container_phi: warm.container_phi },
+        score: warm.score,
+        source: "site" as const,
+      }
     : undefined;
   const t0 = clock();
   const trace: [number, number][] = [];
@@ -156,8 +162,25 @@ for (let k = shard; k < cells.length; k += shards) {
   // A warm search's result is the better of its own best and the start it was given
   if (known) best = Math.min(best, known.score);
   const cpu = clock() - t0;
-  const row = { i, N: p.N, M: p.M, P: p.P, seed, budget, stopped, start: known?.score, cpu: +cpu.toFixed(2), best, ref, gap: (best - ref) / ref, trace, jobs };
+  const row = {
+    i,
+    N: p.N,
+    M: p.M,
+    P: p.P,
+    seed,
+    budget,
+    stopped,
+    start: known?.score,
+    cpu: +cpu.toFixed(2),
+    best,
+    ref,
+    gap: (best - ref) / ref,
+    trace,
+    jobs,
+  };
   fs.appendFileSync(out, JSON.stringify(row) + "\n");
-  console.log(`${p.N}/${p.M}/${p.P} s${seed} best ${best} gap ${((best - ref) / ref * 100).toFixed(4)}% cpu ${cpu.toFixed(1)}`);
+  console.log(
+    `${p.N}/${p.M}/${p.P} s${seed} best ${best} gap ${(((best - ref) / ref) * 100).toFixed(4)}% cpu ${cpu.toFixed(1)}`,
+  );
 }
 for (const w of workers) await w.terminate();

@@ -6,7 +6,7 @@ import time
 import urllib.request
 
 HERE = os.path.dirname(os.path.abspath(__file__))
-recs = json.load(open(os.path.join(HERE, "../../data/records.json")))["records"]
+recs = json.load(open(os.path.join(HERE, "../../../../data/records.json")))["records"]
 lit = {(r["N"], r["M"], r["P"]): r for r in recs}
 panel = [
     (0, 0, 10), (0, 0, 30), (0, 0, 60), (0, 0, 120), (0, 4, 20), (0, 4, 50), (0, 4, 100), (0, 6, 20),

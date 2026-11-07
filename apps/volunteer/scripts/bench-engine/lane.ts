@@ -10,7 +10,7 @@ const cpuMs = () => {
   return (u.user + u.system) / 1000;
 };
 Object.defineProperty(globalThis, "performance", { configurable: true, value: { now: cpuMs } });
-const { inlineRunJob } = await import("../../apps/volunteer/src/engine/inline");
+const { inlineRunJob } = await import("../../src/engine/inline");
 
 parentPort!.on("message", async (m: { id: number; job: Parameters<typeof inlineRunJob>[0] }) => {
   const result = await inlineRunJob(m.job, { aborted: false, paused: false });
