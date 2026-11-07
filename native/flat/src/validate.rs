@@ -200,15 +200,39 @@ pub struct ServerCheck {
     pub reasons: Vec<String>,
 }
 
-/// Rounding margin by which the client's verdict is stricter than the server's: the client
-/// computes separations with its platform's sin and cos, which may differ from the server's in
-/// the last bits. A pair is accepted only when it clears -TOL by this much more.
-pub fn rounding_margin(pieces: &[Pose]) -> f64 {
-    let mut reach = 1.0f64;
+/// Rounding margin by which the client's verdict is stricter than the server's. Both evaluate the
+/// same expressions in the same order, and IEEE additions, subtractions and products round alike
+/// everywhere (the centre differences of near pairs are even exact), so they can differ only
+/// through sin, cos, atan2 and hypot, which libraries may round differently in the last place.
+/// A separation is a sum of terms of size up to 2R (R the bounding radius); an angle error of a
+/// few units in the last place of |theta| moves a vertex by about R ulp(theta). A pair is accepted
+/// only when it clears -TOL by this much more.
+pub fn rounding_margin(n: u32, pieces: &[Pose]) -> f64 {
+    let mut turn = 0.0f64;
     for p in pieces {
-        reach = reach.max(p.x.abs()).max(p.y.abs());
+        turn = turn.max(p.theta.abs());
     }
-    64.0 * f64::EPSILON * reach
+    32.0 * f64::EPSILON * (1.0 + 2.0 * bounding_radius(n)) * (4.0 + turn)
+}
+
+/// The same packing with every angle reduced to one symmetry period of its shape (theta modulo
+/// 2 pi / N, phi modulo 2 pi / M; disks and circles 0). A regular N-gon is invariant under a turn
+/// by 2 pi / N, so only rounding changes; small angles keep the rounding margin small.
+pub fn canonical(config: &Config) -> Config {
+    let reduce = |x: f64, period: f64| {
+        let t = x % period;
+        if t < 0.0 {
+            t + period
+        } else {
+            t
+        }
+    };
+    let mut out = config.clone();
+    for p in &mut out.pieces {
+        p.theta = if config.n == 0 { 0.0 } else { reduce(p.theta, 2.0 * std::f64::consts::PI / config.n as f64) };
+    }
+    out.phi = if config.m == 0 { 0.0 } else { reduce(config.phi, 2.0 * std::f64::consts::PI / config.m as f64) };
+    out
 }
 
 /// The server's rule as the client applies it to its own candidates: the parse checks, the piece
@@ -221,7 +245,7 @@ pub fn server_check(config: &Config, p: usize) -> ServerCheck {
     if !reasons.is_empty() {
         return ServerCheck { valid: false, strict: false, score: None, container: None, reasons };
     }
-    let margin = rounding_margin(&config.pieces);
+    let margin = rounding_margin(config.n, &config.pieces);
     let strict_tol = strict_tolerance(&config.pieces);
     let reach = 2.0 * bounding_radius(config.n);
     let mut grid = NeighborGrid::new();

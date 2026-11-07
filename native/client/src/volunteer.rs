@@ -14,7 +14,7 @@ use crate::state::{random_u32, StateDir};
 use polypack_flat::clock::ClockKind;
 use polypack_flat::rng::Rng;
 use polypack_flat::shapes::{area_lower_bound, Config, Pose, Problem};
-use polypack_flat::validate::{improves_on, server_check, SCORE_TIE};
+use polypack_flat::validate::{canonical, improves_on, server_check, SCORE_TIE};
 use polypack_flat::{Control, Method};
 use serde_json::{json, Value};
 use std::collections::{HashMap, HashSet};
@@ -758,13 +758,15 @@ fn search_one(s: &Arc<Shared>, problem: Problem, lanes: usize) -> Searched {
     // the client's own check of the server's rule, stricter than the server: never offer a
     // packing it would refuse, nor a score it would compute differently
     let offer = offer.and_then(|(c, from)| {
-        let check = server_check(&c.config, problem.p);
+        // angles in one symmetry period keep the rounding margin of the check small
+        let config = canonical(&c.config);
+        let check = server_check(&config, problem.p);
         if !(check.valid && check.strict) {
             log(&format!("{sub}the best packing does not pass the server's rule here ({}); it is not offered", check.reasons.join("; ")));
             return None;
         }
         let score = check.score.unwrap();
-        Some((Candidate { score, ..c }, from))
+        Some((Candidate { score, config, ..c }, from))
     });
 
     let mut decision = "no strict packing".to_string();
