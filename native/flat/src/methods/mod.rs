@@ -1,7 +1,18 @@
 //! The search methods. Their names are the server's registered method names, which a submission's
 //! `method` must be.
+//!
+//! Each method module has `resolve(given) -> Result<Value, String>` (the parameters with their
+//! defaults filled in and checked, as JSON) and `execute(ctx)`. A method a build does not
+//! implement answers `resolve` with an error and is never chosen.
 
+pub mod asc;
+pub mod basin_hopping;
 pub mod common;
+pub mod harden;
+pub mod lbfgs;
+pub mod ls_growth;
+pub mod morph;
+pub mod penalty_method;
 pub mod polish;
 pub mod seed;
 pub mod shrink_repair;
@@ -63,12 +74,13 @@ impl Method {
 
     /// Whether this build implements the method.
     pub fn available(&self) -> bool {
-        matches!(self, Method::Identity | Method::Polish | Method::Seed | Method::ShrinkRepair)
+        resolve_params(*self, &Value::Null).is_ok()
     }
 }
 
-/// Parameters with the defaults filled in, checked; `given` is null or an object.
-fn fill<P: Serialize + DeserializeOwned + Default>(given: &Value) -> Result<(Value, P), String> {
+/// Parameters with the defaults filled in; `given` is null or an object. Unknown keys are an
+/// error when the parameter struct denies them.
+pub fn fill<P: Serialize + DeserializeOwned + Default>(given: &Value) -> Result<(Value, P), String> {
     let p: P = match given {
         Value::Null => P::default(),
         Value::Object(_) => serde_json::from_value(given.clone()).map_err(|e| e.to_string())?,
@@ -76,6 +88,17 @@ fn fill<P: Serialize + DeserializeOwned + Default>(given: &Value) -> Result<(Val
     };
     let v = serde_json::to_value(&p).map_err(|e| e.to_string())?;
     Ok((v, p))
+}
+
+/// The parameters of a running method, read back from the resolved JSON.
+pub fn params_of<P: DeserializeOwned>(ctx: &mut Ctx) -> Option<P> {
+    match serde_json::from_value(ctx.params().clone()) {
+        Ok(p) => Some(p),
+        Err(e) => {
+            ctx.fail(e.to_string());
+            None
+        }
+    }
 }
 
 pub fn resolve_params(method: Method, given: &Value) -> Result<Value, String> {
@@ -96,7 +119,13 @@ pub fn resolve_params(method: Method, given: &Value) -> Result<Value, String> {
             p.check()?;
             Ok(v)
         }
-        other => Err(format!("method {} is not available in this build", other.name())),
+        Method::Asc => asc::resolve(given),
+        Method::Harden => harden::resolve(given),
+        Method::LsGrowth => ls_growth::resolve(given),
+        Method::Penalty => penalty_method::resolve(given),
+        Method::BasinHopping => basin_hopping::resolve(given),
+        Method::Morph => morph::resolve(given),
+        Method::McCompress => Err("method mc_compress is not available in this build".into()),
     }
 }
 
@@ -110,6 +139,12 @@ pub fn execute(method: Method, ctx: &mut Ctx) {
         Method::Polish => polish::execute(ctx),
         Method::Seed => seed::execute(ctx),
         Method::ShrinkRepair => shrink_repair::execute(ctx),
-        other => ctx.fail(format!("method {} is not available in this build", other.name())),
+        Method::Asc => asc::execute(ctx),
+        Method::Harden => harden::execute(ctx),
+        Method::LsGrowth => ls_growth::execute(ctx),
+        Method::Penalty => penalty_method::execute(ctx),
+        Method::BasinHopping => basin_hopping::execute(ctx),
+        Method::Morph => morph::execute(ctx),
+        Method::McCompress => ctx.fail("method mc_compress is not available in this build"),
     }
 }
