@@ -642,7 +642,7 @@ describe("Tighter points per click", () => {
     expect(c.points!.bonus).toBe("lead");
     expect(c.points!.total).toBeCloseTo(c.points!.improvement * c.points!.multiplier + 10_000, 6);
     // rent's base counts the improvement only
-    expect(s.economy.base[p.key]).toBeCloseTo(c.points!.improvement, 6);
+    expect(p.base).toBeCloseTo(c.points!.improvement, 6);
   });
 
   it("pays each flat bonus once per problem per cycle, keyed by the reset count", () => {

@@ -1,6 +1,8 @@
 import { containerArea, improvesOn, pieceArea } from "@polypack/geometry";
 import type { PackingConfig } from "@polypack/geometry";
 import type { SpaceConfig } from "@polypack/spaces";
+import { archivedCount, archiveOf, ensureArchive } from "./archive";
+import type { ArchiveRow } from "./archive";
 import { DealerState, canDeal, creditOf, earn, newDealer } from "./dealer";
 import { income } from "./income";
 import { PolygonKey, ProblemKey, isPolygon, keyOf, keyPart, poly } from "./frontier";
@@ -8,7 +10,7 @@ import { PacerState, newPacer } from "./pacer";
 import { BonusKind, FLOOR, LEAD_MIN, Points, Tier, recordPoints, show6 } from "./points";
 import type { RunRecord, SubmitOutcome } from "./submission";
 import { generatePlayerName, sanitizeName } from "./names";
-import { EconomyState, addBase, forgetHeld, newEconomy, noteRecorded, pointsMultiplier, takeBase } from "./economy";
+import { EconomyState, addBase, newEconomy, noteRecorded, pointsMultiplier, takeBase } from "./economy";
 import { PicksState, learnOnLeave, newPicks } from "./picks";
 import type { LatticeResult } from "./methods/lattice";
 import { RunPlanState, newRunPlan } from "./runplan";
@@ -98,6 +100,13 @@ export interface ProblemFields {
   /** Our score that the server last made leader, and its entry id while it is kept. */
   verified: number | null;
   ourId: number | null;
+  /**
+   * When the record became the player's (first record, taking the lead, regaining it); kept through
+   * the player's own improvements, cleared when it is lost. Missing for a record from before it was kept.
+   */
+  heldSince?: number;
+  /** Record points this problem earned before multipliers (rent is a share of it). Missing: its `rp`, from before it was kept. */
+  base?: number;
   /** The server took a problem out of play (409), or refused this score (400/422). */
   closed: boolean;
   refused: { score: number; reasons: string[] } | null;
@@ -123,6 +132,12 @@ export interface ProblemFields {
    */
   evaluations: number;
   sinceGain: number;
+  /**
+   * For a problem whose runs report offers (outside 2D in 2D): the finished packings its method has
+   * handed back since the last progress. Auto-advance waits for one before it leaves (leaveReason).
+   * Not saved: a problem loaded without it leaves at its patience.
+   */
+  offersSinceGain?: number;
   /** The best at the last progress; null before the first record (a dealt record starts from its own). */
   progressBest: number | null;
   /** Runs opened here. */
@@ -154,6 +169,10 @@ export interface PastFields {
   best: number | null;
   verified: number | null;
   ourId: number | null;
+  /** See ProblemFields.heldSince. */
+  heldSince?: number;
+  /** See ProblemFields.base. */
+  base?: number;
   rp: number;
   leftAt: number;
 }
@@ -237,6 +256,10 @@ export interface GameState {
    * and nothing needs clearing at a reset.
    */
   bonusPaid: Record<string, number>;
+  /** Set once the records lost from the save were looked for on the server (recovery.ts). */
+  archiveRecovered?: boolean;
+  /** Names this save's record archive in IndexedDB (archive.ts): another save, or a new game, has its own. */
+  archiveId?: string;
 }
 
 export const TRACE_LIMIT = 400;
@@ -392,7 +415,7 @@ export function problem(s: GameState, key: string | null): ProblemState | undefi
 
 /** Keys of every problem dealt so far: never dealt again. */
 export function seenKeys(s: GameState): Set<string> {
-  return new Set([...s.queue.map((p) => p.key), ...s.past.map((p) => p.key)]);
+  return new Set([...s.queue.map((p) => p.key), ...s.past.map((p) => p.key), ...(archiveOf(s)?.keys() ?? [])]);
 }
 
 /** Problems in the queue that hold a slot (those leaving do not). */
@@ -427,6 +450,15 @@ export function applyLoadAll(
   p.run = null;
   p.floor = trimFloor !== null && trimFloor < score ? trimFloor : score;
   p.phase = "loaded";
+}
+
+/**
+ * The evaluations a job counts for: a Compact outside 2D in 2D runs until mc_compress hands back its
+ * first finished packing, however long that takes, and counts as `compactEvals` (the Compact's price).
+ * Every other job counts what it ran.
+ */
+export function countedEvals(done: number, compactOnSpace: boolean, compactEvals: number): number {
+  return compactOnSpace ? Math.min(done, compactEvals) : done;
 }
 
 /**
@@ -710,7 +742,7 @@ export function pay(s: GameState, p: ProblemState): PaidPoints | null {
   income.add(Date.now(), points.total, "record", p.tier);
   pushRpTrace(p);
   p.unconfirmed += points.total;
-  addBase(s.economy, p.key, points.base);
+  addBase(p, points.base);
   if (points.bonus) {
     s.bonusPaid[p.key] = s.standing.resets;
     p.bonusOpen = true;
@@ -729,7 +761,7 @@ export function payAll(s: GameState): number {
 /** Takes back points the server did not confirm. Spent points are not owed: the balance stops at zero. */
 function takeBack(s: GameState, p: ProblemState, rp: number): number {
   if (!(rp > 0)) return 0;
-  takeBase(s.economy, p.key, rp, p.rp);
+  takeBase(p, rp, p.rp);
   s.rp = Math.max(0, s.rp - rp);
   s.rpEarned = Math.max(0, s.rpEarned - rp);
   s.standing.cycleEarned = Math.max(0, s.standing.cycleEarned - rp);
@@ -821,11 +853,13 @@ export function applyAnswer(
     if (leaderBefore === null && p.verified === null) s.stats.firstRecords++;
     s.stats.verifiedImprovements++;
     p.verified = outcome.score;
+    // the record became ours now, unless it already was (an improvement of our own keeps its date)
+    if (p.ourId === null || p.heldSince === undefined) p.heldSince = now;
     p.ourId = outcome.id;
     p.leader = { score: outcome.score, name: sanitizeName(s.name), id: outcome.id };
     p.refused = null;
     // it counts for collections, and with Rent its rent runs
-    noteRecorded(s, ownedSet(s), p, now);
+    noteRecorded(s, p);
   } else if (outcome.kind === "behind") {
     // another entry got there first: nothing paid since the last confirmation was a record
     takenBack = takeBack(s, p, carried + p.unconfirmed);
@@ -833,9 +867,9 @@ export function applyAnswer(
     // the flat bonus went with them, and may be paid again
     if (p.sending?.bonus || p.bonusOpen) delete s.bonusPaid[p.key];
     p.bonusOpen = false;
-    // a record of ours it overtook is lost now: no rent for it from its last check on
-    if (p.ourId !== null) forgetHeld(s.economy, p.key);
+    // a record of ours it overtook is lost now: no rent for the time since the last payday
     p.ourId = null;
+    delete p.heldSince;
     if (outcome.leaderScore !== null) {
       // it is now the one to beat (whose it is, the next read says); what the board still beats it by pays
       p.leader = { score: outcome.leaderScore, name: isPolygon(p) ? "another name" : "the research record", id: null };
@@ -903,16 +937,19 @@ export function applyLeader(
   const held = p.ourId !== null;
   const ours = leader !== null && leader.id !== null && leader.id === p.ourId;
   const lost = held && !ours;
-  if (!ours) p.ourId = null;
-  // a record lost pays no rent, not even for the time since its last check
-  if (lost && s) forgetHeld(s.economy, p.key);
+  if (!ours) {
+    p.ourId = null;
+    delete p.heldSince;
+  }
   if ("leader" in p) p.leader = leader;
   return { lost, reconciled: false, confirmed: 0 };
 }
 
 /** Problems where the player is the current leader, as far as the game has seen. */
 export function recordsHeld(s: GameState): number {
-  return s.queue.filter((p) => p.ourId !== null).length + s.past.filter((p) => p.ourId !== null).length;
+  return (
+    s.queue.filter((p) => p.ourId !== null).length + s.past.filter((p) => p.ourId !== null).length + archivedCount(s)
+  );
 }
 
 /**
@@ -983,13 +1020,27 @@ export function drop(s: GameState, key: string, now: number): boolean {
   return true;
 }
 
+/**
+ * Past entries beyond PAST_LIMIT leave the save. A record still held goes to the archive with its
+ * base; an entry that is not held is dropped.
+ */
+function archiveTrimmed(s: GameState, trimmed: PastProblem[]): void {
+  const held = trimmed.filter((p) => p.ourId !== null);
+  if (!held.length) return;
+  const a = ensureArchive(s);
+  for (const p of held) {
+    const row: ArchiveRow = { ...p };
+    a.put(row);
+  }
+}
+
 /** Moves a problem from the queue to the past. */
 export function leave(s: GameState, key: string, now: number): void {
   const i = s.queue.findIndex((q) => q.key === key);
   if (i < 0) return;
   const [p] = s.queue.splice(i, 1);
   // the learning dealer learns what the problem paid per evaluation, from the points as earned, before standing and collections multiply them
-  learnOnLeave(s.picks, { key: p.key, rp: s.economy.base[p.key] ?? p.rp, evaluations: p.evaluations });
+  learnOnLeave(s.picks, { key: p.key, rp: p.base ?? p.rp, evaluations: p.evaluations });
   s.past.push({
     ...keyPart(p),
     key: p.key,
@@ -997,10 +1048,12 @@ export function leave(s: GameState, key: string, now: number): void {
     best: p.phase === "ready" ? p.best : null,
     verified: p.verified,
     ourId: p.ourId,
+    ...(p.heldSince !== undefined && p.ourId !== null ? { heldSince: p.heldSince } : {}),
+    ...(p.base !== undefined ? { base: p.base } : {}),
     rp: p.rp,
     leftAt: now,
   });
-  if (s.past.length > PAST_LIMIT) s.past.splice(0, s.past.length - PAST_LIMIT);
+  if (s.past.length > PAST_LIMIT) archiveTrimmed(s, s.past.splice(0, s.past.length - PAST_LIMIT));
   if (s.focus === key) s.focus = slotted(s)[0]?.key ?? null;
 }
 
@@ -1008,13 +1061,18 @@ export function leave(s: GameState, key: string, now: number): void {
 
 /**
  * Why Auto-advance takes a problem out of the queue, or null while it stays: it ran the player's
- * patience of evaluations without progress (patienceFor). A kept problem, and one whose patience is
+ * patience of evaluations without progress (patienceFor), and, for a problem whose runs report offers,
+ * its method has handed back a finished packing since. A kept problem, and one whose patience is
  * Never, is not dropped this way.
  */
 export function leaveReason(s: GameState, p: ProblemState): "stalled" | null {
   const patience = patienceFor(s, p);
   if (patience === null || p.kept || p.leaving || p.closed) return null;
-  return p.sinceGain >= patience ? "stalled" : null;
+  if (p.sinceGain < patience) return null;
+  // a problem whose runs report offers also waits for its method to hand back a finished packing since its
+  // last progress (as stallEnds does), or leaves after STALL_NO_OFFER_FACTOR times its patience
+  if (p.offersSinceGain !== undefined && p.offersSinceGain < 1 && p.sinceGain < STALL_NO_OFFER_FACTOR * patience) return null;
+  return "stalled";
 }
 
 export interface AdvancePlan {

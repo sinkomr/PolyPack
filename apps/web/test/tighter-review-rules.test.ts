@@ -18,7 +18,7 @@ import { MAX_NAME_LENGTH as SERVER_MAX_NAME_LENGTH, sanitizeText } from "../../s
 import { MAX_NAME_LENGTH, sanitizeName } from "../src/tighter/names";
 import { fromJson, toJson } from "../src/tighter/save";
 import { canSend, newPacer, recordSend } from "../src/tighter/pacer";
-import { recordPoints, shapeWeight } from "../src/tighter/points";
+import { G_MIN, recordPoints, shapeWeight } from "../src/tighter/points";
 import { msPerEval } from "../src/tighter/families";
 import type { SubmitOutcome } from "../src/tighter/submission";
 
@@ -95,7 +95,7 @@ describe("tighter review: points", () => {
       const want =
         shapeWeight(N, M) *
         (msPerEval(N + M + P) / msPerEval(85)) *
-        (0.1 * (1 + Math.log10(d / 1e-9)) + 10_000 * Math.log(sPrev / sNew) + 10_000 * Math.log(gp / gn));
+        (0.1 * (1 + Math.log10(d / 1e-9)) + 10_000 * Math.log(sPrev / sNew) + 10_000 * Math.log(Math.max(gp, G_MIN) / Math.max(gn, G_MIN)));
       expect(pts).not.toBeNull();
       // a first record pays only its flat bonus; any other payment its improvement
       const total = first ? 1000 : want;

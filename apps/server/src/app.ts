@@ -127,6 +127,8 @@ export const ATLAS_MAX_PIECES = 6000;
  * work, and some tens on the throttled CPU of the live server. The event loop is let in between steps.
  */
 export const HOLDERS_CHUNK = 250;
+/** Rows one POST /api/admin/holder-peaks takes at most. */
+export const MAX_PEAK_ROWS = 10_000;
 /**
  * Problems one step of GET /api/holder reads: a page of the problems that have an entry of the name and the
  * leaders of those problems, a few milliseconds of work, with the event loop let in between steps.
@@ -146,7 +148,8 @@ export const HOLDER_MAX_AGE_MS = 15 * 60_000;
  */
 export function holderShare(e: ProblemLeader, lit: LiteratureRecord | undefined): Holder | null {
   if (closedToSubmissions(lit)) return null;
-  const share: Holder = { name: e.name, records: 0, beat_published: 0, site_bests: 1, pending: 0 };
+  // a share carries no peak (0): peaks belong to the names, not to one lead
+  const share: Holder = { name: e.name, records: 0, beat_published: 0, site_bests: 1, pending: 0, peak: 0 };
   // until a claim is reviewed, the published value it claims to beat is still the record
   if (e.verification === "pending") share.pending = 1;
   else if (!lit || reachesLiterature(e.score, lit)) {
@@ -220,7 +223,10 @@ export function createApp(opts: AppOptions): Hono {
   // poor. The API page, the health check and the snapshot stay open.
   app.use("/api/*", async (c, next) => {
     if (isOldVolunteer(c.req.header("user-agent")) && !oldClientMayRead(c.req.method, c.req.path))
-      return c.json({ error: UPGRADE_MESSAGE, reasons: [UPGRADE_MESSAGE], conventions_version: CONVENTIONS_VERSION }, 426);
+      return c.json(
+        { error: UPGRADE_MESSAGE, reasons: [UPGRADE_MESSAGE], conventions_version: CONVENTIONS_VERSION },
+        426,
+      );
     await next();
   });
   const windowMs = opts.limits?.windowMs ?? 60_000;
@@ -448,6 +454,13 @@ export function createApp(opts: AppOptions): Hono {
   // to a problem beyond it does nothing: the page that gets there reads the problem as it is then.
   // That is why a change during the build is neither lost in the part counted nor counted twice in the
   // part to come.
+  //
+  // Peaks (Holder.peak) come on top of that. A name that has held a record is never dropped: its row stays at
+  // zero when it leads nothing. `peaks` holds the highest `records` known for each name and is never lowered,
+  // not even by the reset of an error (noCounts). They are raised only once the counts are done, in the same
+  // turn as the change of the leader that raised them, and stored one upsert per raised name
+  // (Store.raiseHolderPeaks). The turn that finishes the build loads the stored peaks, lists every name in them,
+  // and writes the peaks the counts have raised, so a restart or a rebuild loses no row and no peak.
   interface Problem {
     N: number;
     M: number;
@@ -462,6 +475,8 @@ export function createApp(opts: AppOptions): Hono {
   }
   const noCounts = (): HolderCounts => ({ byName: new Map(), upTo: null, done: false });
   let counts = noCounts();
+  /** The most records known for each name that has held one; only ever raised. Valid for the answer once `counts.done`. */
+  const peaks = new Map<string, number>();
   /** The answer for `counts` once they are done; null after any change of them. */
   let holdersBody: string | null = null;
   /** The build in progress; requests that arrive during it share it. */
@@ -483,14 +498,71 @@ export function createApp(opts: AppOptions): Hono {
     if (!h)
       counts.byName.set(
         share.name,
-        (h = { name: share.name, records: 0, beat_published: 0, site_bests: 0, pending: 0 }),
+        (h = {
+          name: share.name,
+          records: 0,
+          beat_published: 0,
+          site_bests: 0,
+          pending: 0,
+          peak: peaks.get(share.name) ?? 0,
+        }),
       );
     h.records += sign * share.records;
     h.beat_published += sign * share.beat_published;
     h.site_bests += sign * share.site_bests;
     h.pending += sign * share.pending;
-    // a name that leads no open problem is not listed
-    if (h.site_bests === 0) counts.byName.delete(share.name);
+    // a name that leads no open problem is listed only if it has held a record
+    if (h.site_bests === 0 && h.peak === 0) counts.byName.delete(share.name);
+  };
+
+  /** Peaks raised in memory that the store has not taken yet, by name. */
+  const unsaved = new Map<string, number>();
+  /**
+   * Persists raised peaks, with any that an earlier failure left unsaved. A failure is logged and does not fail
+   * the change that raised them: the peaks stand in memory, and the next raise writes them again.
+   */
+  const savePeaks = async (rows: { name: string; peak: number }[]): Promise<void> => {
+    for (const r of rows) unsaved.set(r.name, Math.max(r.peak, unsaved.get(r.name) ?? 0));
+    if (unsaved.size === 0) return;
+    const batch = [...unsaved].map(([name, peak]) => ({ name, peak }));
+    try {
+      await store.raiseHolderPeaks(batch);
+      for (const r of batch) if (unsaved.get(r.name) === r.peak) unsaved.delete(r.name);
+    } catch (e) {
+      log(`[holders] could not store ${batch.length} peak(s): ${e instanceof Error ? e.message : String(e)}`);
+    }
+  };
+  /** Raises the peak of `name` to its records, if they are more; returns the row to store, or null. */
+  const raisePeak = (name: string): { name: string; peak: number } | null => {
+    const h = counts.byName.get(name);
+    if (!h || h.records <= h.peak) return null;
+    h.peak = h.records;
+    peaks.set(name, h.records);
+    return { name, peak: h.records };
+  };
+  /**
+   * Called in the turn that counts the last page: lists every name with a stored (or remembered) peak, at zero
+   * if it leads nothing, and sets each peak to the most of the stored one and the records. Raised ones are stored.
+   */
+  const finishPeaks = async (): Promise<void> => {
+    const stored = new Map<string, number>();
+    try {
+      for (const r of await store.holderPeaks()) stored.set(r.name, r.peak);
+    } catch (e) {
+      log(`[holders] could not read the stored peaks: ${e instanceof Error ? e.message : String(e)}`);
+    }
+    for (const [name, peak] of stored) if (peak > (peaks.get(name) ?? 0)) peaks.set(name, peak);
+    for (const [name, peak] of peaks)
+      if (!counts.byName.has(name))
+        counts.byName.set(name, { name, records: 0, beat_published: 0, site_bests: 0, pending: 0, peak });
+    const raised: { name: string; peak: number }[] = [];
+    for (const h of counts.byName.values()) {
+      h.peak = Math.max(h.peak, peaks.get(h.name) ?? 0, h.records);
+      if (h.peak > 0) peaks.set(h.name, h.peak);
+      if (h.peak > (stored.get(h.name) ?? 0)) raised.push({ name: h.name, peak: h.peak });
+    }
+    holdersBody = null;
+    await savePeaks(raised);
   };
   const shareOf = (e: ProblemLeader) => holderShare(e, literature.get(`${e.N}/${e.M}/${e.P}`));
 
@@ -500,9 +572,10 @@ export function createApp(opts: AppOptions): Hono {
 
   /**
    * The leader of problem `p` was `old` and is `now` (either may be none): moves its share, if the
-   * counts include the problem. Only in a turn.
+   * counts include the problem, and raises the peak of the name that gained, stored before it returns. Only in
+   * a turn.
    */
-  const leaderMoved = (p: Problem, old: ProblemLeader | null, now: ProblemLeader | null) => {
+  const leaderMoved = async (p: Problem, old: ProblemLeader | null, now: ProblemLeader | null): Promise<void> => {
     if (!counted(p)) return;
     const out = old && shareOf(old);
     const into = now && shareOf(now);
@@ -520,6 +593,9 @@ export function createApp(opts: AppOptions): Hono {
     if (out) countShare(out, -1);
     if (into) countShare(into, 1);
     holdersBody = null;
+    // before the build is done the stored peaks are not yet merged in: finishPeaks sees the records then
+    const raised = into && counts.done ? raisePeak(into.name) : null;
+    if (raised) await savePeaks([raised]);
   };
 
   /**
@@ -538,7 +614,7 @@ export function createApp(opts: AppOptions): Hono {
         if (!p || !counted(p)) return await change();
         const [old] = await store.leadersOf([p]);
         const ok = await change();
-        if (ok) leaderMoved(p, old ?? null, (await store.leadersOf([p]))[0] ?? null);
+        if (ok) await leaderMoved(p, old ?? null, (await store.leadersOf([p]))[0] ?? null);
         return ok;
       } catch (e) {
         // the change may be half done, or a leader unread: count again from the start
@@ -562,8 +638,10 @@ export function createApp(opts: AppOptions): Hono {
             if (share) countShare(share, 1);
           }
           const last = page[page.length - 1];
-          if (page.length < holdersChunk || !last) counts.done = true;
-          else counts.upTo = { N: last.N, M: last.M, P: last.P };
+          if (page.length < holdersChunk || !last) {
+            counts.done = true;
+            await finishPeaks();
+          } else counts.upTo = { N: last.N, M: last.M, P: last.P };
         });
         if (!counts.done) await new Promise<void>((resolve) => setImmediate(resolve));
       }
@@ -632,7 +710,7 @@ export function createApp(opts: AppOptions): Hono {
   };
 
   const holderAnswer = async (name: string, run: HolderRun, began: number): Promise<string> => {
-    const total: Holder = { name, records: 0, beat_published: 0, site_bests: 0, pending: 0 };
+    const total: Holder = { name, records: 0, beat_published: 0, site_bests: 0, pending: 0, peak: 0 };
     const byPair = new Map<string, HolderPair>();
     let after: Problem | null = null;
     let done = false;
@@ -661,6 +739,8 @@ export function createApp(opts: AppOptions): Hono {
       });
       if (!done) await new Promise<void>((resolve) => setImmediate(resolve));
     }
+    // the peak is the name's in the counts, once they are done (0 while unknown)
+    if (counts.done) total.peak = Math.max(counts.byName.get(name)?.peak ?? 0, peaks.get(name) ?? 0);
     const pairs = [...byPair.values()].sort((a, b) => b.P.length - a.P.length || a.N - b.N || a.M - b.M);
     const body = JSON.stringify({
       ...total,
@@ -810,7 +890,11 @@ export function createApp(opts: AppOptions): Hono {
     // what the log line says about this submission, filled in as the body is read
     let problem: string | null = null;
     let verifyMs: number | null = null;
-    const answer = (body: SubmitResponse, status: 200 | 400 | 409 | 413 | 422 | 426 | 429 | 503, retryAfter?: number) => {
+    const answer = (
+      body: SubmitResponse,
+      status: 200 | 400 | 409 | 413 | 422 | 426 | 429 | 503,
+      retryAfter?: number,
+    ) => {
       opts.stats?.submission({ status, ms: performance.now() - started, verifyMs, problem });
       return c.json(body, status, retryAfter === undefined ? {} : { "retry-after": String(retryAfter) });
     };
@@ -910,7 +994,7 @@ export function createApp(opts: AppOptions): Hono {
       // them (a prune does not change the leader). That leader is the entry's, or an earlier one.
       const asLeader = (e: LeaderboardEntry | null): ProblemLeader | null =>
         e && { ...problemKey, id: e.id, name: e.name, score: e.score, verification: e.verification };
-      leaderMoved(problemKey, asLeader(stored.before), asLeader(stored.leader));
+      await leaderMoved(problemKey, asLeader(stored.before), asLeader(stored.leader));
       return stored;
     });
     // The leader is the earliest entry among the equally good ones, so an entry that only ties the
@@ -1093,6 +1177,45 @@ export function createApp(opts: AppOptions): Hono {
     if (ok) entriesChanged();
     if (ok) log(`[review] submission ${body.id} edited: ${Object.keys(changes).join(", ") || "nothing"}`);
     return ok ? c.json({ ok: true }) : c.json({ error: "no such listed submission" }, 404);
+  });
+
+  // Peaks known from before they were counted (lists of holders saved earlier): raises each name's peak, never
+  // lowers one, and lists a name that leads nothing at zero. Names are taken as given, so they must already be
+  // in the form a submission stores.
+  app.post("/api/admin/holder-peaks", async (c) => {
+    const denied = admin(c);
+    if (denied) return denied;
+    const body = (await c.req.json().catch(() => null)) as { peaks?: unknown } | null;
+    const rows = body && Array.isArray(body.peaks) ? (body.peaks as { name?: unknown; peak?: unknown }[]) : null;
+    if (!rows || rows.length === 0 || rows.length > MAX_PEAK_ROWS)
+      return c.json(
+        { error: `body must be {"peaks": [{"name": string, "peak": number}, ...]} with 1 to ${MAX_PEAK_ROWS} rows` },
+        400,
+      );
+    const given = new Map<string, number>();
+    for (const r of rows) {
+      const name = typeof r?.name === "string" ? r.name : "";
+      if (!name || sanitizeText(name, MAX_NAME_LENGTH) !== name || !Number.isInteger(r.peak) || (r.peak as number) < 1)
+        return c.json({ error: `bad row ${JSON.stringify(r)}: a name as stored and a positive integer peak` }, 400);
+      given.set(name, Math.max(r.peak as number, given.get(name) ?? 0));
+    }
+    const raised = await inTurn(async () => {
+      const up = [...given].filter(([name, peak]) => peak > (peaks.get(name) ?? 0));
+      // stored first: a failure leaves memory as it was, and the request fails
+      await store.raiseHolderPeaks(up.map(([name, peak]) => ({ name, peak })));
+      for (const [name, peak] of up) {
+        peaks.set(name, peak);
+        // before the counts are done, finishPeaks lists the name from `peaks`
+        if (!counts.done) continue;
+        const h = counts.byName.get(name);
+        if (h) h.peak = Math.max(h.peak, peak);
+        else counts.byName.set(name, { name, records: 0, beat_published: 0, site_bests: 0, pending: 0, peak });
+      }
+      if (up.length) holdersBody = null;
+      return up.length;
+    });
+    log(`[holders] ${raised} of ${given.size} peak(s) raised by an administrator`);
+    return c.json({ ok: true, raised });
   });
 
   // The nightly records snapshot (snapshot.ts): the manifest, then one gzipped file per shape pair or space.

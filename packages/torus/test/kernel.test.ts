@@ -5,7 +5,7 @@
  * swap, rebase, and the server's rule.
  */
 import { describe, expect, it } from "vitest";
-import { type KernelState, type SpaceKernel, mulberry32, registerMethod, runMethod, squeeze } from "@polypack/methods";
+import { type KernelState, type FamilyKernel, mulberry32, registerMethod, runMethod, squeeze } from "@polypack/methods";
 import { checkKernel } from "@polypack/methods/contract";
 import {
   type TorusConfig,
@@ -24,7 +24,7 @@ const file = loadSiteRecords();
 const records = file?.records ?? [];
 
 /** The largest relative difference between the gradient and central differences, over every entry. */
-function gradientError(k: SpaceKernel, s: KernelState): number {
+function gradientError(k: FamilyKernel, s: KernelState): number {
   const n = s.x.length;
   const g = new Float64Array(n + 1);
   k.energy(s, g);

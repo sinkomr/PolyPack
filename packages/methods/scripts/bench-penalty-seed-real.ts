@@ -1,6 +1,6 @@
 /**
- * penalty and seed on the space kernels: for each case, budget and variant, runs seeds 1..S and
- * prints the scores relative to the space's record (data/<space>/records.json, score_cert), the
+ * penalty and seed on the family kernels: for each case, budget and variant, runs seeds 1..S and
+ * prints the scores relative to the family's record (data/<space>/records.json, score_cert), the
  * runs within 1e-3 of it, the runs with no result, and the evaluations used. Every result is checked with the kernel's own
  * validator.
  *
@@ -14,7 +14,7 @@ import { polyhedraKernel } from "@polypack/polyhedra";
 import { sphereKernel } from "@polypack/sphere";
 import { surfaceKernel } from "@polypack/surface";
 import { torusKernel } from "@polypack/torus";
-import { type SpaceKernel, runMethod } from "../src";
+import { type FamilyKernel, runMethod } from "../src";
 
 const VARIANTS: Record<string, Record<string, unknown>> = {
   default: {},
@@ -35,7 +35,7 @@ const record = (space: string, id: string): number | undefined => {
   return file.records.find((r) => (r.id ?? r.problem) === id)?.score_cert;
 };
 
-const CASES: [string, () => SpaceKernel][] = [
+const CASES: [string, () => FamilyKernel][] = [
   ["surface/cube/fold/4/7", () => surfaceKernel({ solid: "cube", N: 4, P: 7 })],
   ["sphere/4/12", () => sphereKernel({ N: 4, P: 12 })],
   ["sphere/0/13", () => sphereKernel({ N: 0, P: 13 })],

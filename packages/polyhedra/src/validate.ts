@@ -1,5 +1,5 @@
 /**
- * The floating-point validator of the polyhedra space, as a server runs it on untrusted input.
+ * The floating-point validator of the polyhedra family, as a server runs it on untrusted input.
  *
  * A configuration { s, pieces } of a problem (piece solid P, container solid C) is valid at tolerance
  * tol when

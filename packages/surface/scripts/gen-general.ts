@@ -1,7 +1,7 @@
 /**
  * Writes packages/surface/src/general.data.ts: the vertices and faces of the solids beyond the five
  * Platonic ones (the 13 Archimedean and 13 Catalan solids, the prisms with 3 and 5 to 12 sides, the antiprisms with 4
- * to 12 sides and the 92 Johnson solids), copied from the polyhedra space's solids (packages/polyhedra/src/solids.data.ts,
+ * to 12 sides and the 92 Johnson solids), copied from the polyhedra family's solids (packages/polyhedra/src/solids.data.ts,
  * generated from python/polyhedra/solids_exact.json: each coordinate is the nearest binary64 of its
  * exact value). Only the coordinates, faces, family and title are kept; packages/surface derives
  * everything else. The certifier reads solids_exact.json itself.

@@ -7,15 +7,15 @@
  * It records every shape set and the shape of every state handed to finish, so a test can check
  * that a method's schedule really changes t and that it offers true shapes only.
  *
- * Options make it behave like an expensive space kernel, to test what the reference kernel cannot
+ * Options make it behave like an expensive family kernel, to test what the reference kernel cannot
  * show: finish and validate costs, a gradient that costs several evaluations, a finish that fails
- * on deeply overlapping states (as a real space's finishing does on raw random starts, whose
+ * on deeply overlapping states (as a real family's finishing does on raw random starts, whose
  * pieces are piled up here near the centre), no seeds, and a bound at the optimum.
  */
-import type { KernelState, Rng, SpaceKernel } from "../src/kernel";
+import type { KernelState, Rng, FamilyKernel } from "../src/kernel";
 import { disksKernel } from "../src/reference/disks";
 
-export interface SoftDisksKernel extends SpaceKernel {
+export interface SoftDisksKernel extends FamilyKernel {
   /** Every t passed to setShape, in order. */
   readonly shapes: number[];
   /** The states passed to setShape, in the same order (to tell a method's own state from its copies). */
@@ -157,7 +157,7 @@ export function softDisksKernel(P: number, o: SoftDisksOptions = {}): SoftDisksK
  * inradius of a hyperbolic polygon saturates with its side: near Rmax a unit of size buys very
  * little room. The size L is the score; the configuration keeps the circle's radius R.
  */
-export function roomDisksKernel(P: number, Rmax: number): SpaceKernel {
+export function roomDisksKernel(P: number, Rmax: number): FamilyKernel {
   const base = softDisksKernel(P);
   const room = (L: number) => Rmax * Math.tanh(L / Rmax);
   const dRoom = (L: number) => 1 / Math.cosh(L / Rmax) ** 2;

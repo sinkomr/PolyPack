@@ -1,14 +1,17 @@
 import {
   boundingRadius,
+  circumradius,
   containerInradius,
+  DISK_RADIUS,
+  inradius,
   enclose,
   findOverlaps,
   MAX_COORD,
-  pieceSeparation,
   visitContainerProtrusions,
   type Container,
   type PackingConfig,
   type Pose,
+  pieceSeparationBelow,
 } from "@polypack/geometry";
 
 export const MIN_STEP = 1e-7;
@@ -61,7 +64,7 @@ export class CellGrid {
           const other = this.pieces[j];
           // Bounding disks rigorously exclude contacts outside the 3x3 block.
           if ((trial.x - other.x) ** 2 + (trial.y - other.y) ** 2 > this.reach ** 2) continue;
-          if (pieceSeparation(this.N, trial, other).sep < 0) return false;
+          if (pieceSeparationBelow(this.N, trial, other, 0)) return false;
         }
       }
     }
@@ -78,7 +81,49 @@ export class CellGrid {
   }
 }
 
+/** Wall normals of the last container orientation clearlyInside saw, by (M, phi). */
+let wallM = -1;
+let wallPhi = NaN;
+let wallNormals = new Float64Array(0);
+
+/**
+ * True only when the piece lies inside the container by a clear margin: its bounding circle
+ * (radius R, or the disk itself) is inside every wall, or inside the circle, by more than 1e-9
+ * of the coordinates involved. Every constraint depth that visitContainerProtrusions reports, in
+ * either mode, is a vertex's (or the disk's) and at most the bounding circle's, so all of them are
+ * then negative and finite; false means only that the exact test must decide.
+ */
+export function clearlyInside(N: number, pose: Pose, container: Container): boolean {
+  const { M, cx, cy, size } = container;
+  const dx = pose.x - cx;
+  const dy = pose.y - cy;
+  if (!(Number.isFinite(dx) && Number.isFinite(dy) && Number.isFinite(pose.theta) && size > 0 && size < Infinity))
+    return false;
+  const R = N === 0 ? DISK_RADIUS : circumradius(N);
+  if (M === 0) {
+    const reach = Math.hypot(dx, dy) + R;
+    return reach - size / 2 < -1e-9 * (reach + size);
+  }
+  if (!Number.isFinite(container.phi)) return false;
+  if (M !== wallM || !Object.is(container.phi, wallPhi)) {
+    if (wallNormals.length < 2 * M) wallNormals = new Float64Array(2 * M);
+    for (let edge = 0; edge < M; edge++) {
+      const angle = container.phi - Math.PI / 2 + (2 * Math.PI * edge) / M;
+      wallNormals[2 * edge] = Math.cos(angle);
+      wallNormals[2 * edge + 1] = Math.sin(angle);
+    }
+    wallM = M;
+    wallPhi = container.phi;
+  }
+  const apothem = size * inradius(M);
+  const margin = 1e-9 * (Math.abs(dx) + Math.abs(dy) + R + apothem);
+  for (let edge = 0; edge < M; edge++)
+    if (!(dx * wallNormals[2 * edge] + dy * wallNormals[2 * edge + 1] + R - apothem < -margin)) return false;
+  return true;
+}
+
 export function contained(N: number, pose: Pose, container: Container): boolean {
+  if (clearlyInside(N, pose, container)) return true;
   let valid = Number.isFinite(container.size) && container.size > 0;
   visitContainerProtrusions(
     N,

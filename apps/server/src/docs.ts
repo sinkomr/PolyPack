@@ -306,8 +306,8 @@ Closed problems are listed with <code>accepts_submissions: false</code> and a <c
 <p id="spaces-no-record">A space may give its problems by a <em>domain</em>, ranges of parameters (<code>/api/spaces</code> describes it as <code>domain</code>: an id pattern, its fields with their values or a range of integers, and the number of problems), rather than by its records. Then any id of the domain is a problem: one without a research record yet has <code>status: "no_record"</code>, <code>certified</code> and <code>certified_config</code> <code>null</code>, its <code>bound</code>, and takes entries; records are stored only where they exist.
 Its <code>best_score</code> is the site leader's, or <code>null</code> before the first entry, which is then kept when it is valid.
 Every entry of such a problem must also pass the <a href="#spaces-strict">strict check</a>, so that its leader cannot be beaten by its own packing shrunk within the tolerance; one that fails it is refused with 422 and the reason "${esc(SPACE_STRICT_NO_RECORD_REASON)}".</p>
-<p>Curved, Sphere and Torus use domains with N = 0 (disks of diameter 1) or every integer 3–100; P = 1–100, and for Torus 1–500.
-Curved keeps its existing curvature and container choices; Torus keeps <code>sq</code>, <code>hex</code> and <code>free</code>.
+<p>Curved, Sphere and Torus use domains with N = 0 (disks of diameter 1) or every integer 3–100; P = 1–100, and for Curved and Torus 1–500.
+Curved has 22 curvatures K (±1, ±0.5, ±0.25, ±0.1, ±0.01, ±0.001, ±0.0001, ±1e-06 and the six tiling curvatures that hold research records) and the containers M = 0 (a disk) and 3–100. Its <code>problems</code> count only the ids that can exist, for which the unit piece exists at K and some container below the admissible limit holds P pieces (26,830,100); the other ids of its ranges are answered with a <code>null</code> bound. The board offers only the problems that can exist. Torus keeps <code>sq</code>, <code>hex</code> and <code>free</code>.
 New choices have no research records. Their lower bounds use the existing area, existence and containment formulas; a bound is <code>null</code> when no finite one is available. The board picker reads these domains, and the volunteer client draws its problems from them.</p>
 <p id="spaces-kept">A site entry is kept only when it improves on the problem's <code>best_score</code>, the research record or the current site leader, whichever is smaller, by more than a relative ${SCORE_TIE}:
 <code>score &lt; best_score · (1 − ${SCORE_TIE})</code>. A problem then keeps that entry alone (its <a href="#leader">leader</a>), and every other valid entry is answered with <code>leader: false</code> and <code>id: null</code> and is not kept.
@@ -408,7 +408,7 @@ export function docsPage(
 </style>
 </head>
 <body>
-<header><h1>PolyPack</h1><nav aria-label="Site"><a href="/">Board</a><a href="/browse.html">Records</a><a href="/dimensions.html">Dimensions</a><a href="/volunteer.html">Volunteer</a><a href="/api" aria-current="page">API</a></nav></header>
+<header><h1>PolyPack</h1><nav aria-label="Site"><a href="/">Board</a><a href="/browse.html">Records</a><a href="/dimensions.html">Dimensions</a><a href="/volunteer.html">Pack@Home</a><a href="/api" aria-current="page">API</a></nav></header>
 <main>
 <h2>API for scripts and AI agents</h2>
 <p>Everything the board does is available as JSON over HTTP. No account or key is needed; a display name is enough.
@@ -546,19 +546,21 @@ where <code>published</code> counts the pair's published values and <code>site</
 
 <h3 id="holders"><code>GET /api/holders</code></h3>
 <p>Who holds how many records, behind the record holders page: the <a href="#leader">leader</a> of every open problem, counted by the exact name it was submitted with
-(names that differ in any character, case included, count separately). <code>holders</code> is a list of <code>{name, records, beat_published, site_bests, pending}</code>, most records first.
+(names that differ in any character, case included, count separately). <code>holders</code> is a list of <code>{name, records, beat_published, site_bests, pending, peak}</code>, most records first, then most <code>site_bests</code>, then by name.
+A name that has held a record stays in the list after it loses every lead, with all its counts at 0, so such names come last.
 The counts follow every entry as it changes, so the answer is current. After a server restart the first request counts every problem, in small steps that leave the server free for other requests, and answers when it is done, which takes longer the more problems there are.</p>
 <table>
 <tr><th scope="row"><code>site_bests</code></th><td>Problems the name leads, whatever the value.</td></tr>
 <tr><th scope="row"><code>records</code></th><td>Of those, the leads that are the record: at least as good as the published value, to the precision the source prints, or for a problem without one. A claim <a href="#verification">pending verification</a> is not counted until it is confirmed.</td></tr>
 <tr><th scope="row"><code>beat_published</code></th><td>Of the records, those below the published value by more than that precision.</td></tr>
 <tr><th scope="row"><code>pending</code></th><td>Of the leads, the claims awaiting review.</td></tr>
+<tr><th scope="row"><code>peak</code></th><td>The most <code>records</code> the name has held at once. Peaks are counted since 2026-11-05; before that, a name's peak is the most it showed in the lists of holders saved since 2026-11-02, or its <code>records</code> at the first count made after 2026-11-05. It never falls.</td></tr>
 </table>
 
 <h3 id="holder"><code>GET /api/holder?name=</code></h3>
 <p>What one name holds, behind the page of a record holder: the <a href="#leader">leads</a> of the exact name in <code>name</code> (URL-encoded; a name is free text and may contain <code>/</code>, so it is a query parameter, not a path segment).
 Only the exact name matches, capitals included: <code>Ann</code> and <code>ann</code> are two names, as in <a href="#holders"><code>/api/holders</code></a>. A missing or empty <code>name</code>, or one over ${MAX_NAME_LENGTH} characters, is a 400.
-The answer is <code>{name, records, beat_published, site_bests, pending, computed_at, pairs}</code>: the first five are that name's row of <code>/api/holders</code>, all zero for a name that leads nothing (200, with <code>pairs</code> empty), and <code>pairs</code> lists the pairs of shapes behind them,
+The answer is <code>{name, records, beat_published, site_bests, pending, peak, computed_at, pairs}</code>: the first six are that name's row of <code>/api/holders</code>, all zero for a name that leads nothing and has never held a record, and <code>peak</code> is 0 until the counts of <code>/api/holders</code> are built (its first request after a restart builds them) (200, with <code>pairs</code> empty), and <code>pairs</code> lists the pairs of shapes behind them,
 the pair with most problems led first, then by <code>N</code>, then <code>M</code>. Each is <code>{N, M, P, records, beat_published, pending}</code>, where <code>P</code> is the ascending list of the values of <code>P</code> of that pair that the name leads,
 and the other three count those problems as the same fields of <code>/api/holders</code> do. A problem whose optimum is proven takes no entries and is not listed. Answers over 1 KB are compressed for clients that send <code>Accept-Encoding</code>.</p>
 <p>The answer can be up to ${Math.round(limits.holderMaxAgeMs / 60_000)} minutes old: the server keeps the answers of the last ${limits.holderCacheNames} names asked for that long, so a name that keeps submitting does not have its answer made again for every view, and <code>computed_at</code> (an ISO 8601 time, UTC) says when this one was made.
@@ -628,6 +630,10 @@ a confirmed one stays as the problem's only entry.
 <p>Body <code>{"id": 17, ...}</code> with any of <code>name</code>, <code>agent_note</code> and the provenance fields of a submission. Corrects how an entry is labelled; its packing and score never change.
 Provenance is replaced as a whole, so <code>found_with</code> is required whenever any provenance field is given, and the same validation as on submission applies.
 <code>{"ok": true}</code>, 400 for a malformed body, 404 when there is no such listed entry.</p>
+
+<h3><code>POST /api/admin/holder-peaks</code></h3>
+<p>Body <code>{"peaks": [{"name": "...", "peak": 12}, ...]}</code>, up to 10,000 rows. Raises the <code>peak</code> of each name in <a href="#holders">the holders</a>, for peaks known from before they were counted; a peak is never lowered, and a name that leads nothing is listed at zero. Names must be given as stored.
+<code>{"ok": true, "raised": n}</code>, 400 for a malformed body or row.</p>
 
 <h2 id="automated-search">Automated search</h2>
 <p>The optimizers are not HTTP endpoints: this server validates and stores packings and does not search for them. They run in two places.</p>

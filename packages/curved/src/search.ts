@@ -10,6 +10,9 @@ import { gaussian, lbfgs, rng } from "./optim";
 import { PolishResult, polish } from "./polish";
 import { containerArea, sideFromApothem, containerCircumradius, apothemFromSide } from "./shapes";
 import { snK } from "./kfun";
+import { tForArea } from "./bound";
+
+export { tForArea };
 
 export interface SearchOptions {
   seed?: number;
@@ -45,23 +48,6 @@ export interface SearchResult {
 }
 
 const FEAS = 1e-22;
-
-/** Container variable whose container has area A (bisection), capped below tMax. */
-export function tForArea(space: Space, A: number): number {
-  const { M, K } = space;
-  let lo = 0;
-  let hi = Number.isFinite(space.tMax) ? space.tMax : 1;
-  const areaOfT = (t: number) => containerArea(M, K, sideFromApothem(M, K, t));
-  if (!Number.isFinite(space.tMax)) {
-    while (areaOfT(hi) < A && hi < 1e6) hi *= 2;
-  } else if (areaOfT(hi * (1 - 1e-12)) < A) return Infinity;
-  for (let i = 0; i < 200; i++) {
-    const mid = (lo + hi) / 2;
-    if (areaOfT(mid) < A) lo = mid;
-    else hi = mid;
-  }
-  return hi;
-}
 
 function minimizeEnergy(
   space: Space,

@@ -13,7 +13,7 @@
  * energy is zero exactly when the configuration is valid at tolerance 0, and clear() agrees with the validator at
  * any tolerance. A ball is its own inscribed ball: setShape changes nothing.
  */
-import type { KernelCapability, KernelState, Rng, SpaceKernel } from "@polypack/methods";
+import type { KernelCapability, KernelState, Rng, FamilyKernel } from "@polypack/methods";
 import { centreIn, latticeCut, legalizeBalls } from "./ball-pieces";
 import { BALL_DIAMETER, BALL_RADIUS, type BallsProblem, ballContainerRadius, ballContainerRadiusSlope, ballContainerScore } from "./catalogue";
 import { containerKind, containerOfProblem, wallGap } from "./container";
@@ -44,7 +44,7 @@ const SOLID_SEEDS: readonly ["fcc" | "hcp" | "sc", boolean][] = [
   ["hcp", true],
 ];
 
-export function ballPiecesKernel(pb: BallsProblem, P: number, common: { id: string; bound: number }): SpaceKernel {
+export function ballPiecesKernel(pb: BallsProblem, P: number, common: { id: string; bound: number }): FamilyKernel {
   const dim = 3;
   const kind = containerKind(pb);
   const cube = kind === "cube";

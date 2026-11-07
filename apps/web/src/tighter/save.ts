@@ -24,7 +24,9 @@ import { generatePlayerName, sanitizeName } from "./names";
 import { PacerState, newPacer } from "./pacer";
 import { Tier, isTier } from "./points";
 import type { RunRecord } from "./submission";
+import type { ArchiveRow } from "./archive";
 import { normalizeEconomy } from "./economy";
+import type { EconomyState } from "./economy";
 import { normalizePicks } from "./picks";
 import { normalizeRunPlan } from "./runplan";
 import { plainConfig } from "./space-submission";
@@ -708,6 +710,8 @@ export type LoadResult =
       standing?: { standing: number; rp: number; resets: number };
       /** The cards a save owning Head start was missing, given at load: how many. */
       headStart?: number;
+      /** The archive rows of an export (only exports carry them, see toExportJson), without those whose problem is in the save. */
+      archive?: ArchiveRow[];
     }
   | { ok: false; error: string };
 
@@ -851,6 +855,8 @@ function problemState(v: unknown, now: number): ProblemState | null {
     leader: leader(v.leader),
     verified: posOrNull(v.verified),
     ourId: idOrNull(v.ourId),
+    ...heldSinceOf(v),
+    ...baseOf(v),
     closed: bool(v.closed, false),
     refused,
     leaving: bool(v.leaving, false),
@@ -884,9 +890,79 @@ function pastProblem(v: unknown, now: number): PastProblem | null {
     best: posOrNull(v.best),
     verified: posOrNull(v.verified),
     ourId: idOrNull(v.ourId),
+    ...heldSinceOf(v),
+    ...baseOf(v),
     rp: num(v.rp, 0, 0),
     leftAt: num(v.leftAt, now),
   };
+}
+
+/** The optional `heldSince` of a problem or past entry: kept when it is a time, left out otherwise. */
+function heldSinceOf(v: Record<string, unknown>): { heldSince?: number } {
+  return typeof v.heldSince === "number" && Number.isFinite(v.heldSince) && v.heldSince >= 0
+    ? { heldSince: v.heldSince }
+    : {};
+}
+
+/** The optional `base` of a problem or past entry (record points earned before multipliers): kept when it is a number from 0. */
+function baseOf(v: Record<string, unknown>): { base?: number } {
+  return typeof v.base === "number" && Number.isFinite(v.base) && v.base >= 0 ? { base: v.base } : {};
+}
+
+/**
+ * A save from before the bases and the payday window lived where they do now: economy.base (points
+ * earned per problem) is copied onto the queue and past entries with that key that have none, and with
+ * Rent owned economy.checks (the last settlement of each record held) gives the window start
+ * paidUntil, the median of the held records' checks (nearly all are the last payday). A held record
+ * whose check is later than that and that has no heldSince was won after the payday: its check is
+ * when it became the player's. Both maps are then dropped (normalizeEconomy does not read them).
+ */
+function adoptLegacyRent(
+  old: unknown,
+  economy: EconomyState,
+  entries: (ProblemState | PastProblem)[],
+  rent: boolean,
+): void {
+  if (!isObj(old)) return;
+  const read = (m: unknown): Map<string, number> => {
+    const out = new Map<string, number>();
+    if (isObj(m))
+      for (const [k, x] of Object.entries(m))
+        if (parseDealtKey(k) && typeof x === "number" && Number.isFinite(x) && x >= 0) out.set(k, x);
+    return out;
+  };
+  const bases = read(old.base);
+  for (const p of entries) {
+    const b = bases.get(p.key);
+    if (p.base === undefined && b !== undefined) p.base = b;
+  }
+  if (!rent || economy.paidUntil !== undefined) return;
+  const checks = read(old.checks);
+  const held = entries.filter((p) => p.ourId !== null && checks.has(p.key));
+  if (!held.length) return;
+  const sorted = held.map((p) => checks.get(p.key)!).sort((a, b) => a - b);
+  const m = sorted.length >> 1;
+  const median = sorted.length % 2 ? sorted[m] : (sorted[m - 1] + sorted[m]) / 2;
+  economy.paidUntil = median;
+  for (const p of held) {
+    const c = checks.get(p.key)!;
+    if (c > median && p.heldSince === undefined) p.heldSince = c;
+  }
+}
+
+/** Rows of the record archive in an export: past entries with their rent fields. Rows that are not valid are dropped. */
+export function archiveRows(v: unknown, now: number): ArchiveRow[] {
+  const out: ArchiveRow[] = [];
+  const seen = new Set<string>();
+  if (!Array.isArray(v)) return out;
+  for (const r of v.slice(0, 1_000_000)) {
+    const p = pastProblem(r, now);
+    if (!p || p.ourId === null || seen.has(p.key)) continue;
+    seen.add(p.key);
+    const row: ArchiveRow = { ...p };
+    out.push(row);
+  }
+  return out;
 }
 
 /**
@@ -966,6 +1042,8 @@ export function normalize(save: Record<string, unknown>, now: number): GameState
           );
     }
   const standing = normalizeStanding(save.standing, now);
+  const economy = normalizeEconomy(save.economy);
+  adoptLegacyRent(save.economy, economy, [...queue, ...past], owned.includes("rent"));
   standing.points += refund.standing;
   const evaluations = int(stats.evaluations, 0);
   const allMethods = methods(owning(owned, levels));
@@ -1034,11 +1112,17 @@ export function normalize(save: Record<string, unknown>, now: number): GameState
           .map((l) => ({ t: l.t, text: l.text.slice(0, 300) }))
       : [],
     standing,
-    economy: normalizeEconomy(save.economy),
+    economy,
     picks: normalizePicks(save.picks),
     runplan: normalizeRunPlan(save.runplan, treeMethods()),
     // optional: a save without it has paid no bonus
     bonusPaid: readBonusPaid(save.bonusPaid),
+    // optional: set once the records lost from the save were looked for on the server
+    ...(save.archiveRecovered === true ? { archiveRecovered: true } : {}),
+    // optional: the name of this save's record archive (a save without one gets a new one at load)
+    ...(typeof save.archiveId === "string" && /^[A-Za-z0-9_-]{8,64}$/.test(save.archiveId)
+      ? { archiveId: save.archiveId }
+      : {}),
   };
 }
 
@@ -1071,9 +1155,12 @@ export function readSave(raw: unknown, now: number, migrations: Record<number, M
   if ((raw.version as number) < 7 && m.save.payWaiting === true) payAll(state);
   // Head start works in the cycle it is bought in: a save that owns it without its cards gets them now
   const headGiven = grantHeadStart(state, now).length;
+  const inSave = new Set([...state.queue, ...state.past].map((p) => p.key));
+  const archive = archiveRows(raw.archive, now).filter((r) => !inSave.has(r.key));
   return {
     ok: true,
     state,
+    ...(archive.length ? { archive } : {}),
     ...(rescaled > 0 ? { rescaled } : {}),
     ...(refunded > 0 ? { refunded } : {}),
     ...(retired.groups.length ? { retired } : {}),
@@ -1112,6 +1199,12 @@ export function toJson(state: GameState): string {
   return JSON.stringify({ ...state, version: SAVE_VERSION });
 }
 
+/** The save with the archive's rows, for an export: the archive is not part of the save itself (toJson). */
+export function toExportJson(state: GameState, archive: Iterable<ArchiveRow>): string {
+  const rows = [...archive];
+  return JSON.stringify({ ...state, version: SAVE_VERSION, ...(rows.length ? { archive: rows } : {}) });
+}
+
 export function fromJson(text: string, now: number): LoadResult {
   let raw: unknown;
   try {
@@ -1148,14 +1241,16 @@ async function pipe(bytes: Uint8Array, stream: CompressionStream | Decompression
 const canCompress = () => typeof CompressionStream === "function" && typeof DecompressionStream === "function";
 
 /** The save as one line of text: deflated where the browser can, plain JSON otherwise. */
-export async function exportString(state: GameState): Promise<string> {
-  const bytes = new TextEncoder().encode(toJson(state));
+export async function exportString(state: GameState, archive: Iterable<ArchiveRow> = []): Promise<string> {
+  const bytes = new TextEncoder().encode(toExportJson(state, archive));
   if (canCompress())
     return `${PREFIX}:${SAVE_VERSION}:z:${toBase64Url(await pipe(bytes, new CompressionStream("deflate-raw")))}`;
   return `${PREFIX}:${SAVE_VERSION}:j:${toBase64Url(bytes)}`;
 }
 
 export async function importString(text: string, now: number): Promise<LoadResult> {
+  // an export too big for the clipboard is a .json file holding the save document itself
+  if (text.trimStart().startsWith("{")) return fromJson(text, now);
   const m = /^tighter:(\d+):([zj]):([A-Za-z0-9_-]+)$/.exec(text.trim().replace(/\s+/g, ""));
   if (!m) return { ok: false, error: "that is not a Tighter save string" };
   try {

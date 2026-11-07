@@ -1,5 +1,5 @@
 /**
- * The two radii that a solid's lower bounds in the balls space rest on, about the best centre and not about the
+ * The two radii that a solid's lower bounds in the balls family rest on, about the best centre and not about the
  * vertex centroid:
  *
  *  - chebyshevRadius: the radius of the largest ball inside the solid (the Chebyshev radius), max over x of

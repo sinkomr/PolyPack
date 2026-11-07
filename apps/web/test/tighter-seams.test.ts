@@ -87,18 +87,19 @@ describe("Tighter seams", () => {
     const { s, p } = withRecord();
     owning(s, ["rent"]);
     // the first record paid only its bonus, which rent does not count: the record has earned 100 from improvements
-    s.economy.base[p.key] = 100;
+    p.base = 100;
+    s.economy.paidUntil = T0;
     applyAnswer(s, p, null, 6.5, { kind: "leader", score: 6.5, id: 3, pending: false }, T0);
-    expect(s.economy.checks[p.key]).toBe(T0);
+    expect(p.heldSince).toBe(T0);
     // another entry got there first: the record is lost at once
     applyAnswer(s, p, p.leader, 6.4, { kind: "behind", leaderScore: 6.45 }, T0 + HOUR);
-    expect(s.economy.checks[p.key]).toBeUndefined();
+    expect(p.heldSince).toBeUndefined();
     // won back two days later: its rent runs from then, not from before it was lost
     p.best = 6.4;
     applyAnswer(s, p, p.leader, 6.4, { kind: "leader", score: 6.4, id: 9, pending: false }, T0 + 49 * HOUR);
-    expect(s.economy.checks[p.key]).toBe(T0 + 49 * HOUR);
+    expect(p.heldSince).toBe(T0 + 49 * HOUR);
     const paid = settleRent(s, ownedSet(s), p, T0 + 50 * HOUR);
-    const perHour = 0.01 * s.economy.base[p.key];
+    const perHour = 0.01 * p.base!;
     expect(paid).toBeCloseTo(perHour, 9);
   });
 
@@ -186,7 +187,7 @@ describe("Tighter seams", () => {
     const g = r.state;
     expect(g).toMatchObject({ levels: {}, standing: { points: 0, total: 0, resets: 0, rule: null } });
     expect(g.queue[0].published).toBeNull();
-    expect(g.economy).toMatchObject({ recorded: [], base: {}, checks: {} });
+    expect(g.economy).toMatchObject({ recorded: [] });
     expect(g.picks).toMatchObject({ offers: [], retake: [], dealt: {} });
     // plays on: the next improvement pays, with no multiplier
     const p = g.queue[0];
@@ -226,7 +227,7 @@ describe("Tighter seams", () => {
     expect(r.ok).toBe(true);
     if (!r.ok) return;
     expect(r.state.standing).toMatchObject({ points: 0, total: 0, rule: null, rulesDone: ["circles"] });
-    expect(r.state.economy).toMatchObject({ recorded: [], base: { "4/5/6": 2 }, checks: {}, lastRent: null });
+    expect(r.state.economy).toMatchObject({ recorded: [], lastRent: null });
     expect(r.state.picks).toMatchObject({ offers: [], filters: null, dealt: {}, bandit: {}, retake: [] });
     expect(r.state.runplan).toEqual({ auto: false, pipeline: [], bandit: {}, draws: 0 });
     expect(r.state.levels).toEqual({});

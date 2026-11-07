@@ -5,6 +5,7 @@ import {
   areaLowerBound,
   autoOrient,
   containerArea,
+  convexHull,
   enclose,
   evaluate,
   pieceArea,
@@ -149,6 +150,21 @@ describe("enclosing circle", () => {
   });
 });
 
+describe("convex hull", () => {
+  it("keeps a point whose cross product underflows (a counterexample of the enclosing polygon property)", () => {
+    // three centres: x differs by the smallest double, and the first is 1.7e-9 lower
+    const poses = [
+      { x: 0, y: -1.732050780578476e-9, theta: 0 },
+      { x: 0, y: 0, theta: 0 },
+      { x: -5e-324, y: 0, theta: 0 },
+    ];
+    const hull = convexHull(new Float64Array(poses.flatMap((p) => [p.x, p.y])));
+    expect([...hull]).toContain(-1.732050780578476e-9);
+    const c = enclose(0, poses, 3, 0);
+    expect(maxViolation(0, poses, c)).toBeLessThanOrEqual(0);
+  });
+});
+
 describe("auto-orient", () => {
   it("is never worse than phi = 0 or the starting phi", () => {
     fc.assert(
@@ -156,7 +172,8 @@ describe("auto-orient", () => {
         const best = autoOrient(N, poses, M, phi0);
         expect(best.size).toBeLessThanOrEqual(enclose(N, poses, M, 0).size);
         expect(best.size).toBeLessThanOrEqual(enclose(N, poses, M, phi0).size + 1e-12);
-        expect(maxViolation(N, poses, best)).toBeLessThan(1e-9);
+        // relative, as for the minimal circle above: the violation is rounding on coordinates of size best.size
+        expect(maxViolation(N, poses, best)).toBeLessThan(1e-9 * Math.max(1, best.size));
       }),
       { numRuns: 100 },
     );

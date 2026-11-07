@@ -1,6 +1,6 @@
 /**
  * The balls of any solid and the solids in a ball: the catalogue of 373 problems (balls in a ball and in each of the
- * polyhedra space's 186 solids, each of the 186 solids in a ball), the container's geometry (a ball of radius r lies in
+ * polyhedra family's 186 solids, each of the 186 solids in a ball), the container's geometry (a ball of radius r lies in
  * s C iff N_f . c <= s b_f - r for every face), the bounds, the validator, the search and the kernel on these
  * problems. The search tests assert properties (validity, the bound, determinism), not seeded outcomes, which may
  * differ between Node versions and platforms.

@@ -3,7 +3,6 @@ import { AUTO_CLICK_EVALS, DEAL_CLICKS } from "./dealer";
 import {
   COMBO_BONUS,
   COMBO_RECORDS,
-  RENT_PAYDAY_MS,
   RENT_GROWTH,
   RENT_RETRY_MS,
   RENT_SHARE,
@@ -29,6 +28,7 @@ import {
   FIRST_BONUS,
   FLOOR,
   GAP_WEIGHT,
+  G_MIN,
   LEAD_BONUS,
   SIZE_WEIGHT,
   STEP_WEIGHT,
@@ -120,7 +120,7 @@ const POINTS: How[] = [
       "Your records are sent to PolyPack under your display name, and points are paid from your very first click. You can change the name at any time in Settings.",
       "Each payment is made of a few parts. The two biggest parts reward a smaller side and a side that is closer to the area bound. The area bound is the smallest side that the total area of the pieces allows. Over a whole run they add up to the same total however many clicks it takes, so a run that shrinks the side more pays more.",
       `Every click that improves the board also pays a small step part, which is larger for larger steps.`,
-      "The payment is then multiplied by two weights. The shape weight makes shapes with many sides pay less, because they are close to circles. The cost weight lets slow problems pay about as much per second as fast ones. Your points multiplier applies as well.",
+      "The payment is then multiplied by two weights. The shape weight makes shapes with many sides pay less, because they are close to circles. The cost weight lets slow problems pay about as much per second as fast ones. Problems outside 2D in 2D pay 1.2 times as much. Each family outside 2D in 2D also has a level, measured so that a second of solving pays about as much as in 2D in 2D. The level grows with the number of pieces. Your points multiplier applies as well.",
       `Two bonuses come on top. The first record on a problem pays a ${int(FIRST_BONUS)} RP bonus. That payment pays only the bonus, and later payments count from your first record. Taking the lead on a problem that already has a record pays a ${int(LEAD_BONUS)} RP bonus. The record can be another name's, a published value or a research record. The bonus is paid on the payment whose board is better than that record, at 6 decimals and by at least one millionth. That payment also pays the usual parts for how far the board is past the record.`,
       "A bonus is paid at most once for each problem in each cycle. Weights and multipliers do not change it, and it does not count toward rent. If the server does not accept your board as the record, the bonus is taken back with the other points, and it can be paid again later.",
       "The server checks every record you send, and a board is usually sent within a minute. If the server does not accept it as the record, for example because another name got there first, the points paid for that board are taken back. Points you have already spent are not owed, and your balance never goes below 0.",
@@ -131,8 +131,9 @@ const POINTS: How[] = [
       `<var>t</var><sub>step</sub> = ${STEP_WEIGHT} × (1 + log<sub>10</sub>(<var>Δ</var> / <var>F</var>))`,
       `<var>t</var><sub>size</sub> = ${int(SIZE_WEIGHT)} × ln(<var>s</var><sub>prev</sub> / <var>s</var><sub>new</sub>)`,
       `<var>t</var><sub>gap</sub> = ${int(GAP_WEIGHT)} × ln(<var>g</var><sub>prev</sub> / <var>g</var><sub>new</sub>)`,
-      `<var>g</var><sub>prev</sub> = <var>s</var><sub>prev</sub> / <var>b</var> − 1, <var>g</var><sub>new</sub> = <var>s</var><sub>new</sub> / <var>b</var> − 1`,
-      `<var>w</var> = <var>d</var>(<var>N</var>) × <var>d</var>(<var>M</var>), where <var>d</var>(<var>n</var>) = 1 for <var>n</var> ≤ 20 and 20 / <var>n</var> above`,
+      `<var>g</var><sub>prev</sub> = max(<var>s</var><sub>prev</sub> / <var>b</var> − 1, ${G_MIN}), <var>g</var><sub>new</sub> = max(<var>s</var><sub>new</sub> / <var>b</var> − 1, ${G_MIN})`,
+      `<var>w</var> = <var>d</var>(<var>N</var>) × <var>d</var>(<var>M</var>), where <var>d</var>(<var>n</var>) = 1 for <var>n</var> ≤ 20 and 20 / <var>n</var> above. Outside 2D in 2D, <var>w</var> is also multiplied by 1.2 × <var>L</var>`,
+      `<var>L</var> = <var>a</var> × min(<var>P</var>, <var>P</var><sub>top</sub>) / 48`,
       `<var>m</var> = 2<sup><var>n</var></sup> × (1 + <var>C</var>) × <var>R</var>`,
     ],
     vars: [
@@ -151,7 +152,7 @@ const POINTS: How[] = [
       ["<var>t</var><sub>gap</sub>", "the gap term, in points"],
       [
         "<var>g</var><sub>prev</sub>, <var>g</var><sub>new</sub>",
-        "how far the side is above the area bound, before and after the step (0.2 means 20 % above)",
+        "how far the side is above the area bound, before and after the step (0.2 means 20 % above). A gap below 0.01 counts as 0.01, so a board at its bound does not pay without limit",
       ],
       [
         "<var>b</var>",
@@ -161,6 +162,16 @@ const POINTS: How[] = [
         "<var>w</var>",
         "the shape weight. Pieces and containers with many sides are close to circles, so they pay less.",
       ],
+      [
+        "<var>L</var>",
+        "the level of a family outside 2D in 2D, which grows with the number of pieces",
+      ],
+      ["<var>a</var>", "the family's level at 48 pieces, from 0.44 for tori to 24 for curved geometries"],
+      [
+        "<var>P</var><sub>top</sub>",
+        "the largest number of pieces the level was measured at, 200 for tori and polyhedra and 100 for the others. Above it the level stays the same.",
+      ],
+      ["<var>P</var>", "the number of pieces"],
       ["<var>d</var>(<var>n</var>)", "how distinct a shape with n sides is (n = 0 for a circle)"],
       ["<var>N</var>, <var>M</var>", "the number of sides of a piece and of the container (0 for a circle)"],
       [
@@ -169,7 +180,7 @@ const POINTS: How[] = [
       ],
       [
         "<var>κ</var>",
-        "the cost factor, the time one evaluation of the problem takes over the time one takes at N + M + P = 85, from a fixed table, so that a slow problem pays about as much for a second of work as a fast one",
+        "the cost factor, the time one evaluation of the problem takes over the time one takes at N + M + P = 85, from a fixed table, so that a slow problem pays about as much for a second of work as a fast one. An evaluation outside 2D in 2D is sized to take about as long as one on a 2D in 2D board with as many pieces, and its cost factor is worked out the same way",
       ],
       ["<var>m</var>", "your points multiplier"],
       ["<var>n</var>", "the resets you have made, each of which doubles your points"],
@@ -245,7 +256,7 @@ const COUNTS: How = {
   text: [
     "An evaluation is one scoring of your packing by the solver, which checks every overlap and how tightly the container fits. Between two evaluations the solver moves the pieces a little.",
     "A click is one press of Evolve, and it runs as many evaluations as you have per click.",
-    `A new open problem starts with every piece on rings around the centre. Its side, or the side of a smaller known packing, is the starting score. Your first record must beat it. The starting board is never sent. Your first click on a problem is Compact, ${int(COMPACT_EVALS)} evaluations of mc_compress at once.`,
+    `A new open problem starts with every piece on rings around the centre. Its side, or the side of a smaller known packing, is the starting score. Your first record must beat it. The starting board is never sent. Your first click on a problem is Compact, ${int(COMPACT_EVALS)} evaluations of mc_compress at once. In the other dimensions the pieces also start loose, and Compact runs until mc_compress hands back its first finished packing, however long that takes, and counts as ${int(COMPACT_EVALS)} evaluations.`,
     `A run is one session of a solver method on one problem, starting from the problem's best board. Each run uses a new random seed, so it searches in a different way. A run stays open between clicks, and it ends when its method stops improving or after ${int(RUN_BUDGET)} evaluations. The next click after that starts a new run. ${runRules()}${runRules() ? " " : ""}Changing the method or its settings also starts a new run.`,
     "Evaluations run counts every evaluation, yours and auto-eval's, while Clicks counts only your own presses of Evolve. Compute is the time the solver has spent, added up over all lanes, so with two busy lanes it grows twice as fast as the clock.",
     "Records held counts the problems where your entry is the current record on PolyPack, as far as the game knows. Earned counts all the record points you have earned, minus any that were taken back, and spending points does not lower it.",
@@ -316,7 +327,7 @@ const RECORDS: How[] = [
   {
     text: [
       `Once you own Records pay rent, every record you still hold earns rent each hour. The rent is ${pct(RENT_SHARE)} of the points its problem paid before multipliers, and each level of Higher rent multiplies it by ${RENT_GROWTH}. Your points multiplier at that moment applies as well.`,
-      `Rent builds up all the time, even while the game is closed. When the page opens, and every ${Math.round(RENT_PAYDAY_MS / 3_600_000)} hours after that, it is payday. The game asks the server about all your records at once, in groups of up to 200. A record that is still yours pays the rent since its last payday, for at most ${Math.round(RENT_WINDOW_MS / 86_400_000)} days. If someone has beaten it, you are paid nothing for that time. A record you won during the day is paid for its part of a day. A record the server could not answer is tried again after ${minutes(RENT_RETRY_MS)}.`,
+      `Rent builds up all the time, even while the game is closed. Payday is every day at noon, your local time. If the game is closed then, payday comes when you next open it. The time of the next one is saved, so opening the page again does not start one early. The game asks the server about all your records at once, in groups of up to 200. When every group has answered, each record that is still yours is paid the rent for the time since the last payday, or since you won it if that was later, for at most ${Math.round(RENT_WINDOW_MS / 86_400_000)} days. If someone has beaten a record, you are paid nothing for it. If a group does not answer, nothing is paid and the game tries again after ${minutes(RENT_RETRY_MS)}. The time that was not paid still counts, up to ${Math.round(RENT_WINDOW_MS / 86_400_000)} days.`,
       "Rent counts as record points earned in this cycle, so it also counts toward a reset. A reset takes Records pay rent away unless Head start gives it back. No rent builds up while you do not own it. Once you own it again, every record you still hold starts earning from that moment, and the rent that was not paid before is lost.",
     ],
     math: [
@@ -328,14 +339,14 @@ const RECORDS: How[] = [
       ["<var>p</var>", "the RP its problem earned before multipliers, less any taken back"],
       ["<var>v</var>", "your level of Higher rent (0 without it)"],
       ["<var>m</var>", "your points multiplier on that problem now (resets, collections and rules)"],
-      ["<var>t</var>", "the time since the record's last payday, in hours"],
+      ["<var>t</var>", "the time since the last payday, or since you won the record if that was later, in hours"],
     ],
   },
   {
     text: [
-      "Collections count every problem where the server confirmed a record of yours, even one that was beaten later. Once you own Collections, they add to all your points. A reset takes the card away, but your records still count when you buy it again. Only polygon problems count for now.",
-      `Same pieces and container. When you have ${COMBO_RECORDS} confirmed records with the same pieces in the same container, such as 21-gons in a 24-gon, you get +${COMBO_BONUS * 100} %. The piece counts can be anything.`,
-      `Same pieces. A piece shape reaches a milestone at ${andList(SHAPE_MILESTONES.map(String))} confirmed records with that piece, in any container. Each milestone gives +${SHAPE_BONUS * 100} %.`,
+      "Collections count every problem where the server confirmed a record of yours, even one that was beaten later. Once you own Collections, they add to all your points. A reset takes the card away, but your records still count when you buy it again. Every Dimension counts.",
+      `Same pieces and container. A pairing is a piece shape in a container shape in one Dimension, such as 21-gons in a 24-gon, squares on a cube or cubes in a tetrahedron. When you have ${COMBO_RECORDS} confirmed records of one pairing, you get +${COMBO_BONUS * 100} %. The piece counts can be anything.`,
+      `Same pieces. A piece shape in one Dimension reaches a milestone at ${andList(SHAPE_MILESTONES.map(String))} confirmed records with that piece, in any container. Squares in 2D in 2D and squares on a 3D surface count apart. Each milestone gives +${SHAPE_BONUS * 100} %.`,
       `Tiers. A tier first is your first confirmed record in each tier, which are ${andList(Object.values(TIER_LABEL).map((t) => `${t}s`))}. Each gives +${TIER_BONUS * 100} %.`,
       "Example. You have 9 records of 21-gons in a 24-gon, and 3 more of 21-gons in other containers. The 9 give +2 %. All 12 have 21-gon pieces, so they give +1 % more. With your first open problem and your first loose record (+10 %), every point you earn is multiplied by 1.13.",
     ],
@@ -345,7 +356,7 @@ const RECORDS: How[] = [
     ],
     vars: [
       ["<var>C</var>", "the collections bonus (0.05 means +5 %)"],
-      ["<var>A</var>", `your combinations of pieces and container with ${COMBO_RECORDS} records`],
+      ["<var>A</var>", `your pairings with ${COMBO_RECORDS} records`],
       ["<var>K</var>", "the milestones your piece shapes have reached, added over every shape"],
       ["<var>Q</var>", "the tiers with a first record (0 to 4)"],
     ],

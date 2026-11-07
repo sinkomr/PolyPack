@@ -1,5 +1,5 @@
 import { MAX_PIECES } from "@polypack/geometry";
-import { SPACE_DOMAINS, SPACE_NAMES } from "@polypack/spaces";
+import { SPACE_DOMAINS, SPACE_NAMES, parseSpaceId as parseIdOf } from "@polypack/spaces";
 import { loadSpacesIndex } from "@polypack/spaces/load";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
@@ -138,11 +138,30 @@ describe("the flat problems", () => {
 });
 
 describe("the problems of the other kinds", () => {
-  it("are the product of each domain's fields, as many as the domain says it holds", () => {
+  it("are the product of each domain's fields, as many as the domain says it holds (more for curved, whose draws skip the ids that cannot exist)", () => {
     for (const space of SPACE_NAMES) {
       const domain = SPACE_DOMAINS[space];
-      if (domain) expect(spaceKind(space, null).size, space).toBe(domain.info.problems);
+      if (!domain) continue;
+      if (domain.impossible) expect(spaceKind(space, null).size, space).toBeGreaterThan(domain.info.problems);
+      else expect(spaceKind(space, null).size, space).toBe(domain.info.problems);
     }
+  });
+
+  it("are, for curved, only problems that can exist", () => {
+    const k = spaceKind("curved", null);
+    const random = seeded(5);
+    let drawn = 0;
+    for (let i = 0; i < 3000; i++) {
+      const d = k.draw(random);
+      if (!d || d.kind !== "space") continue;
+      drawn++;
+      const parsed = parseIdOf("curved", d.id);
+      if (typeof parsed === "string") throw new Error(parsed);
+      expect(SPACE_DOMAINS.curved!.impossible!(parsed), d.id).toBeNull();
+      expect(SPACE_DOMAINS.curved!.bound(parsed), d.id).not.toBeNull();
+    }
+    // about a third of the product can exist
+    expect(drawn).toBeGreaterThan(600);
   });
 
   it("are, for boundary, its domain's 5,536 problems: the tesseract's 32 with records, 784 more on the 4-polytopes (balls and the Platonic solids), 4,288 on the d-cubes and 432 on the d-simplexes, d-orthoplexes and d-demicubes", () => {
@@ -183,8 +202,10 @@ describe("the problems of the other kinds", () => {
         expect(d.space).toBe(space);
         expect(parseSpaceId(d.id)?.space, d.id).toBe(space);
       }
-      // the domains are products of their fields, so no draw falls outside them
-      expect(inside, space).toBe(300);
+      // the domains are products of their fields, so no draw falls outside them; curved's draws on ids that cannot exist
+      // (about two in three) are null
+      if (SPACE_DOMAINS[space]?.impossible) expect(inside, space).toBeGreaterThan(50);
+      else expect(inside, space).toBe(300);
     }
   });
 

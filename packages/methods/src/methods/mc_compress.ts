@@ -7,14 +7,14 @@
  * piece or, now and then, a random re-placement, each kept when the piece is clear. Every
  * shrinkEvery sweeps the chain tries to shrink by one fraction: the arrangement with the container
  * (setSize, which moves the pieces with it), else the centres alone, and then the container alone,
- * the last two where the space has them (sizeMoves in mc-chain.ts). Every globalEvery sweeps it
- * tries a move of the kernel's globals, the cell's shape where the space has one. The jiggle,
+ * the last two where the family has them (sizeMoves in mc-chain.ts). Every globalEvery sweeps it
+ * tries a move of the kernel's globals, the cell's shape where the family has one. The jiggle,
  * shrink and globals steps adapt separately to a target acceptance. With a positive temperature
  * a container expansion is sometimes tried and kept by the Metropolis rule on the size. After
  * stagnationSweeps sweeps without progress the chain is grown and started again (maxRestarts
  * times), else the method returns.
  */
-import type { MethodContext, SpaceMethodDefinition } from "../framework";
+import type { MethodContext, FamilyMethodDefinition } from "../framework";
 import type { KernelState } from "../kernel";
 import { randomInt } from "../random";
 import {
@@ -58,7 +58,7 @@ const defaults = {
 };
 type Params = typeof defaults;
 
-export const mcCompress: SpaceMethodDefinition = {
+export const mcCompress: FamilyMethodDefinition = {
   name: "mc_compress",
   title: "Monte Carlo compression",
   summary: "Pieces jiggle at random, never overlapping, while the container keeps shrinking around them.",
@@ -140,7 +140,7 @@ export const mcCompress: SpaceMethodDefinition = {
       ),
       initialExpansion: numeric(
         "Initial room",
-        "A start used as given is contracted, then the container grows by this fraction (alone where the space allows) for the free-room sweeps.",
+        "A start used as given is contracted, then the container grows by this fraction (alone where the family allows) for the free-room sweeps.",
         defaults.initialExpansion,
         0,
         1,
@@ -202,7 +202,7 @@ function runCompression(ctx: MethodContext): void {
   const { state, given } = hardStart(ctx);
   // a start used as given is already the run's best; a generated one is offered at once
   const chain = new HardChain(ctx, state, p.offerShare, !given);
-  // whether this space moves the centres and the container apart (reference disks, polyhedra,
+  // whether this family moves the centres and the container apart (reference disks, polyhedra,
   // curved) or only together (torus, surface, sphere, boundary)
   const moves = sizeMoves(k, state);
   if (given) {
@@ -215,7 +215,7 @@ function runCompression(ctx: MethodContext): void {
     if (p.initialExpansion > 0) chain.collective((t) => resize(t, 1 + p.initialExpansion), Infinity);
   } else chain.offer();
 
-  /** The container alone where the space has that move, else the arrangement with it. */
+  /** The container alone where the family has that move, else the arrangement with it. */
   function resize(t: KernelState, f: number) {
     if (moves.walls) t.size *= f;
     else k.setSize(t, t.size * f);
@@ -244,7 +244,7 @@ function runCompression(ctx: MethodContext): void {
       const f = 1 - shrinkFraction;
       const before = state.size;
       // the arrangement with the container (centres move in, pieces keep their size); where the
-      // space has the moves, else the centres alone, which frees pieces at the walls (the polygon
+      // family has the moves, else the centres alone, which frees pieces at the walls (the polygon
       // method's contraction), and then the container alone (its enclosure)
       if (!chain.collective((t) => k.setSize(t, t.size * f), temperature) && moves.centres)
         chain.collective((t) => scaleCentres(k, t, f), temperature);

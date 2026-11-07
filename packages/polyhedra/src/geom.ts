@@ -1,5 +1,5 @@
 /**
- * Rigid geometry of the polyhedra space: placed pieces, the separating-axis test between two placed
+ * Rigid geometry of the polyhedra family: placed pieces, the separating-axis test between two placed
  * convex polyhedra and containment in the scaled container.
  *
  * A pose is [x, y, z, qw, qx, qy, qz]: the canonical piece turned by the rotation of the quaternion

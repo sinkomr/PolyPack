@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { runMethod } from "../src";
-import type { KernelState, SpaceKernel } from "../src/kernel";
+import type { KernelState, FamilyKernel } from "../src/kernel";
 import { sizeMoves } from "../src/methods/mc-chain";
 import { mulberry32 } from "../src/random";
 import { DISKS_IN_CIRCLE_BEST, disksKernel, validateDisks } from "../src/reference/disks";
@@ -86,7 +86,7 @@ describe("mc_compress", () => {
   it("offers only hard states: every piece clear at tolerance 0", () => {
     const base = disksKernel(6);
     let offers = 0;
-    const k: SpaceKernel = {
+    const k: FamilyKernel = {
       ...base,
       finish(s: KernelState) {
         offers++;
@@ -102,11 +102,11 @@ describe("mc_compress", () => {
     expect(offers).toBeGreaterThan(100);
   });
 
-  it("knows which size moves a space has besides setSize", () => {
+  it("knows which size moves a family has besides setSize", () => {
     const rng = mulberry32(1);
     const disks = disksKernel(4);
     expect(sizeMoves(disks, disks.randomStart(rng))).toEqual({ centres: true, walls: true });
-    // setSize changes the size alone, as in the torus and surface spaces: neither is a move
+    // setSize changes the size alone, as in the torus and surface families: neither is a move
     const torus = torusDisksKernel(3);
     expect(sizeMoves(torus, torus.randomStart(rng))).toEqual({ centres: false, walls: false });
   });

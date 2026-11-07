@@ -94,7 +94,7 @@ import { SpaceConfig, SpaceName } from "./types";
  * Largest P each space accepts: its catalogue or domain cap (polyhedra P <= 500, 2026-10-26),
  * and for boundary (catalogue P <= 16) room for a larger catalogue: [CALC] checks of 64 pieces took
  * at most about 20 ms (docs/ARCHITECTURE.md). The server also caps P at its loaded catalogue's.
- * Surface, curved and sphere have domains with P <= 100; torus P <= 500 (2026-10-27).
+ * Surface and sphere have domains with P <= 100; torus P <= 500 (2026-10-27); curved P <= 500 (2026-11-05).
  * Their server checks yield in slices, including torus storage rechecks; many-piece checks share
  * the heavy queue (also many-sided sphere pairs at small P).
  * Surface: [CALC] A check of 100 pieces stops at the first MAX_REASONS overlaps and
@@ -104,7 +104,7 @@ import { SpaceConfig, SpaceName } from "./types";
  */
 export const SPACE_MAX_P: Record<SpaceName, number> = {
   surface: 100,
-  curved: 100,
+  curved: 500,
   sphere: 100,
   torus: TORUS_MAX_P,
   // 400 for the d-cubes (d = 5..10; the 4-polytopes' catalogue stops at 24, which their domain enforces)

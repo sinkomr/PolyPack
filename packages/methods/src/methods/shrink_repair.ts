@@ -12,7 +12,7 @@
  * place of polygon geometry; docs/methods/dimensions/shrink_repair.md says what changed.
  */
 import type { ParameterSchema } from "@polypack/solver/schema";
-import type { MethodContext, SpaceMethodDefinition } from "../framework";
+import type { MethodContext, FamilyMethodDefinition } from "../framework";
 import type { KernelState } from "../kernel";
 import { relax } from "../local";
 import { FinalRefinement, offerCost } from "./basin-final";
@@ -43,7 +43,7 @@ const schema: ParameterSchema = {
       type: "string",
       title: "Start",
       description:
-        "auto: a valid supplied start as it is; else the supplied start, the space's structured starts or random poses, each squeezed and offered until one finishes. random: random poses (a valid supplied start is still kept by the framework).",
+        "auto: a valid supplied start as it is; else the supplied start, the family's structured starts or random poses, each squeezed and offered until one finishes. random: random poses (a valid supplied start is still kept by the framework).",
       enum: ["auto", "random"],
       default: "auto",
     },
@@ -281,7 +281,7 @@ export function runShrinkRepair(ctx: MethodContext, observe?: (e: ShrinkRepairEv
   const toBank = () => (unbanked && unbanked.size < bestScore() ? unbanked : null);
 
   // --- The start ---------------------------------------------------------------------------------
-  // A valid supplied start, as it is. Otherwise the supplied start or the space's structured starts,
+  // A valid supplied start, as it is. Otherwise the supplied start or the family's structured starts,
   // relaxed at their own sizes, smallest first, then random poses, relaxed: as the polygon method,
   // which starts from the seeds' layouts and lets compression do the work (squeezed starts sit at
   // the floor of their basin, which on torus/hex/5/8 and boundary/tesseract/ball/13 did worse).
@@ -445,7 +445,7 @@ export function runShrinkRepair(ctx: MethodContext, observe?: (e: ShrinkRepairEv
   }
 }
 
-export const shrinkRepair: SpaceMethodDefinition = {
+export const shrinkRepair: FamilyMethodDefinition = {
   name: "shrink_repair",
   title: "Shrink and repair",
   summary:

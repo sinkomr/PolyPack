@@ -1,5 +1,5 @@
 import { Bandit, Prior, observe, sampleArm } from "./bandit";
-import { msPerEval, rulesOf } from "./families";
+import { levelFactor, msPerEval, rulesOf } from "./families";
 import { FRONTIER_P, FRONTIER_SIDES, PolygonKey, ProblemKey, isPolygon, keyOf, parseKey, poly } from "./frontier";
 import { COMBO_RECORDS, FIRST_BONUS, LEAD_BONUS, TIERS, Tier, costFactor } from "./points";
 
@@ -26,10 +26,11 @@ import { COMBO_RECORDS, FIRST_BONUS, LEAD_BONUS, TIERS, Tier, costFactor } from 
 
 export { COST_TABLE, msPerEval } from "./families";
 
-/** The speed term: √(cost at N+M+P = 85 / cost at this size); 1 for the starter corner's sizes. */
-export function speedFactor(total: number): number {
-  return Math.sqrt(msPerEval(85) / msPerEval(total));
-}
+/** The speed term from the ms of a game evaluation (rulesOf(c).evalMs): √(cost at N+M+P = 85 / evalMs). */
+export const speedFactorMs = (evalMs: number): number => Math.sqrt(msPerEval(85) / evalMs);
+
+/** The speed term of a polygon size: √(cost at N+M+P = 85 / cost at this size); 1 for the starter corner's sizes. */
+export const speedFactor = (total: number): number => speedFactorMs(msPerEval(total));
 
 /** A site record is loose when its gap exceeds the median gap of its neighbours in P by this much. */
 export const LOOSE_WEAKNESS = 0.005;
@@ -114,7 +115,8 @@ export function expectedBonus(c: { tier: Tier; weakness: number | null; bonusSpe
  * factor) plus the expected flat bonus over BONUS_EVALS evaluations.
  */
 export function priorPerEval(c: ProblemKey & { tier: Tier; weakness: number | null; bonusSpent?: boolean }): number {
-  return rulesOf(c).weight(c) * room(c.tier, c.weakness) * costFactor(c) * RP_PER_EVAL + expectedBonus(c) / BONUS_EVALS;
+  // the level makes up for how rarely those problems improve per evaluation, which room models for a polygon, so the prior leaves it out
+  return (rulesOf(c).weight(c) / levelFactor(c)) * room(c.tier, c.weakness) * costFactor(c) * RP_PER_EVAL + expectedBonus(c) / BONUS_EVALS;
 }
 
 /** The size rings, largest first (plan §3): ring k holds N+M+P ≥ RINGS[k] and below RINGS[k − 1]. */
@@ -188,7 +190,7 @@ export function rankCandidates(cands: readonly Candidate[], bandit: Bandit | nul
     // cost term (speedFactor), so the cost factor is divided out of it; the flat bonus has no cost factor
     // in it, so it is left as it is
     const bonus = expectedBonus(candidate) / BONUS_EVALS;
-    const score = ((prior - bonus) / costFactor(candidate) + bonus) * correction * speedFactor(sizeOf(candidate));
+    const score = ((prior - bonus) / costFactor(candidate) + bonus) * correction * speedFactorMs(rulesOf(candidate).evalMs(candidate));
     return { candidate, score, prior, bucket };
   });
   return out.sort((a, b) => Number(b.candidate.retake) - Number(a.candidate.retake) || b.score - a.score);

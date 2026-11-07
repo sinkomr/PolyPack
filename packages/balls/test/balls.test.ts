@@ -1,5 +1,5 @@
 /**
- * The balls space's package: ids, bounds, the validator (contacts, overlaps and protrusions at the tolerance,
+ * The balls family's package: ids, bounds, the validator (contacts, overlaps and protrusions at the tolerance,
  * malformed input) and the search (valid results at any budget, reproducible by seed, stops, warm starts).
  * The search tests assert properties, not seeded outcomes, which may differ between Node versions.
  */

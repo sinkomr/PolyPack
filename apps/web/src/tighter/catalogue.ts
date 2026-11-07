@@ -1,7 +1,8 @@
+import { curvedMaxP } from "@polypack/curved/bound";
 import { BALLS_CODES, BALLS_PROBLEMS } from "@polypack/balls/catalogue";
 import { SOLID_NAMES_LIST, problemNameOf } from "@polypack/polyhedra/catalogue";
 import { DealerState, nextRandom } from "./dealer";
-import { ProblemKey, SpaceKey, isPolygon, parseKey } from "./frontier";
+import { SMALL_TOTAL, ProblemKey, SpaceKey, isPolygon, parseKey } from "./frontier";
 import { spaceFields } from "./families";
 import { SLICES, SOLID_FAMILY_SLICE, SliceId, laterSlice } from "./slices";
 
@@ -320,51 +321,108 @@ export const POLY_P = { min: 2, max: 500 } as const;
 
 // ---------- the domains of curved, sphere and torus ----------
 
-/** The curvatures of the curved domain, written as its ids write them (spaces package piece-domains.ts CURVED_KS). */
+/**
+ * The curvatures Tighter deals on curved surfaces: the board's menu (spaces package piece-domains.ts CURVED_MENU_K_IDS,
+ * written as its ids write them, in numeric order). The six curvatures of the {3,q} tilings stay in the domain but are not dealt.
+ */
 export const CURVED_KS: readonly string[] = [
-  "-6.519717439579256",
-  "-4.50521902808615",
-  "-3.4413111779836725",
-  "-2.3365290558829845",
-  "-1.1892985685754194",
   "-1",
+  "-0.5",
+  "-0.25",
+  "-0.1",
+  "-0.01",
+  "-0.001",
+  "-0.0001",
   "-1e-06",
   "1e-06",
+  "0.0001",
+  "0.001",
+  "0.01",
+  "0.1",
+  "0.25",
+  "0.5",
   "1",
-  "1.225778283313099",
 ];
-/** The containers of the curved domain: a disk (0) or a polygon. */
-export const CURVED_MS: readonly number[] = [0, 3, 4, 5, 6, 7, 8, 9, 10, 12];
+/** The containers of the curved domain: a disk (0) or a polygon of 3 to 100 sides. */
+export const CURVED_MS: readonly number[] = [0, ...Array.from({ length: 98 }, (_, i) => i + 3)];
 export const TORUS_LATTICES: readonly string[] = ["sq", "hex", "free"];
 /** P of a drawn problem runs from 2 (P = 1 is trivial) to this: 100, and 500 on a torus. */
-export const DOMAIN_MAX_P: Readonly<Record<ListedSpace, number>> = { curved: 100, sphere: 100, torus: 500, polyhedra: 500 };
+export const DOMAIN_MAX_P: Readonly<Record<ListedSpace, number>> = {
+  curved: 100,
+  sphere: 100,
+  torus: 500,
+  polyhedra: 500,
+};
+
+/**
+ * Most draws of K, N and M for one curved id. Many triples have no problem with 2 pieces or more (the unit piece does not
+ * exist at K, or does not fit the container), and under "small problems only" N + M can leave no room: a draw is rejected
+ * with chance 0.30 with no rule, 0.54 under "small" and 0.13 under "circles" [CALC], so 40 redraws fail with a chance
+ * below 1e-10 in the worst case, and a failed deal costs only 40 cheap bound evaluations.
+ */
+const CURVED_REDRAWS = 40;
+
+/**
+ * How many curved problems the game can deal: for each of the 16 curvatures, 99 pieces and 99 containers, P from 2 to
+ * the largest that can exist, at most DOMAIN_MAX_P.curved (curvedMaxP). Computing it takes 0.2 s, so it is kept
+ * here and tighter-curved-board.test.ts recomputes it.
+ */
+export const CURVED_PROBLEMS = 6797466;
 
 /** How many problems the game draws from a domain: every piece (99), every container, curvature or lattice, P from 2. */
 export function domainProblems(space: "curved" | "sphere" | "torus"): number {
+  if (space === "curved") return CURVED_PROBLEMS;
   const per = 99 * (DOMAIN_MAX_P[space] - 1);
-  return space === "curved" ? CURVED_KS.length * CURVED_MS.length * per : space === "torus" ? TORUS_LATTICES.length * per : per;
+  return space === "torus" ? TORUS_LATTICES.length * per : per;
 }
 
 /**
  * The id of a problem drawn from a space's domain. N is a disk (0) with the chance of one value in
  * the list of 99 and else 3 to 100; P is log-uniform in [2, the space's largest], since the cost of an
  * evaluation grows with P, so the many small problems that can be improved quickly are dealt as often
- * as the few large ones that take long. A starter has few sides and 8 to 20 pieces.
+ * as the few large ones that take long. A starter has few sides and 8 to 20 pieces. Curved ids follow the
+ * board: only problems that can exist (curvedMaxP), so K, N and M are drawn again while no P of at least 2
+ * (a starter: its minimum) fits; null when CURVED_REDRAWS draws all fail.
  */
-function drawDomainId(d: DealerState, space: ListedSpace, starter: boolean): string {
-  const N = starter ? pick(d, STARTER_SIDES) : nextRandom(d) < 1 / 99 ? 0 : span(d, 3, 100);
-  const max = DOMAIN_MAX_P[space];
+function drawDomainId(d: DealerState, space: ListedSpace, starter: boolean, limits: RuleLimits = {}): string | null {
+  if (space === "curved") return drawCurvedId(d, starter, limits);
+  // under "circles only" a disk piece (curved: or a disk container); the coin for the container is drawn either way
+  const N = limits.circles ? 0 : starter ? pick(d, STARTER_SIDES) : nextRandom(d) < 1 / 99 ? 0 : span(d, 3, 100);
+  const cap = limits.maxP ?? Infinity;
+  const max = Math.min(DOMAIN_MAX_P[space], cap);
+  // P is log-uniform in [2, max]; a max of 2 leaves one value
   const P = starter
-    ? span(d, STARTER_P.min, STARTER_P.max)
+    ? span(d, STARTER_P.min, Math.min(STARTER_P.max, cap))
     : Math.min(max, Math.max(2, Math.round(Math.exp(Math.log(2) + nextRandom(d) * Math.log(max / 2)))));
-  switch (space) {
-    case "sphere":
-      return `sphere/${N}/${P}`;
-    case "torus":
-      return `torus/${pick(d, TORUS_LATTICES)}/${N}/${P}`;
-    default:
-      return `curved/${pick(d, CURVED_KS)}/${N}/${pick(d, CURVED_MS)}/${P}`;
+  return space === "sphere" ? `sphere/${N}/${P}` : `torus/${pick(d, TORUS_LATTICES)}/${N}/${P}`;
+}
+
+/** A curved id of a problem that can exist (see drawDomainId), or null. */
+function drawCurvedId(d: DealerState, starter: boolean, limits: RuleLimits): string | null {
+  for (let i = 0; i < CURVED_REDRAWS; i++) {
+    // under "circles only" a disk piece or a disk container, by a coin
+    const diskContainer = !!limits.circles && nextRandom(d) < 0.5;
+    const N =
+      limits.circles && !diskContainer
+        ? 0
+        : starter
+          ? pick(d, STARTER_SIDES)
+          : nextRandom(d) < 1 / 99
+            ? 0
+            : span(d, 3, 100);
+    const M = diskContainer ? 0 : pick(d, limits.circles ? CURVED_MS.filter((m) => m !== 0) : CURVED_MS);
+    const K = pick(d, CURVED_KS);
+    // curved is in 2D in 2D: small there means N + M + P at most SMALL_TOTAL
+    const cap = limits.small ? SMALL_TOTAL - N - M : (limits.maxP ?? Infinity);
+    const max = Math.min(DOMAIN_MAX_P.curved, cap, curvedMaxP(Number(K), N, M, DOMAIN_MAX_P.curved));
+    if (max < (starter ? STARTER_P.min : 2)) continue;
+    // P is log-uniform in [2, max]; a max of 2 leaves one value
+    const P = starter
+      ? span(d, STARTER_P.min, Math.min(STARTER_P.max, max))
+      : Math.min(max, Math.max(2, Math.round(Math.exp(Math.log(2) + nextRandom(d) * Math.log(max / 2)))));
+    return `curved/${K}/${N}/${M}/${P}`;
   }
+  return null;
 }
 
 // ---------- drawing ----------
@@ -372,7 +430,20 @@ function drawDomainId(d: DealerState, space: ListedSpace, starter: boolean): str
 const pick = <T>(d: DealerState, list: readonly T[]): T => list[Math.floor(nextRandom(d) * list.length)];
 const span = (d: DealerState, a: number, b: number) => a + Math.floor(nextRandom(d) * (b - a + 1));
 
-export interface DrawOptions {
+/** What a cycle rule asks of a draw in the other Dimensions (standing.ts SMALL_PIECES, hasCircles). */
+export interface RuleLimits {
+  /** Most pieces. */
+  maxP?: number;
+  /** Small problems of 2D in 2D's measure: curved problems keep N + M + P at most SMALL_TOTAL, whatever maxP says. */
+  small?: true;
+  /** Disks or balls only (see hasCircles). */
+  circles?: boolean;
+}
+
+/** Whether a slice has any problem with disks or balls (hasCircles): all but the solids of the polyhedra family. */
+export const sliceHasCircles = (slice: SliceId): boolean => !slice.startsWith("poly-");
+
+export interface DrawOptions extends RuleLimits {
   /** The records listings read so far. */
   listings: SpaceListings;
   /** Keys never to deal. */
@@ -399,13 +470,15 @@ export function drawSliceProblem(d: DealerState, slice: SliceId, o: DrawOptions)
     // removes the ids that are proven, closed, infeasible or settled at their bound.
     const shut = new Set((o.listings[listed] ?? []).filter((p) => !dealtFromListing(p)).map((p) => p.id));
     for (let i = 0; i < attempts; i++) {
-      const id = drawDomainId(d, listed, !!o.starter);
-      if (!o.exclude.has(id) && !shut.has(id)) return keyFor(id, spaceFields(id)!.P, listed);
+      const id = drawDomainId(d, listed, !!o.starter, o);
+      if (id !== null && !o.exclude.has(id) && !shut.has(id)) return keyFor(id, spaceFields(id)!.P, listed);
     }
     return null;
   }
   const open = o.open ?? SLICES.map((s) => s.id);
+  const maxP = o.maxP ?? Infinity;
   if (slice.startsWith("poly-")) {
+    if (o.circles) return null;
     // The slice's own family supplies the piece or the container (a coin says which), the other comes
     // from any open family, so each card's solids are dealt as soon as it is bought. A starter is
     // Archimedean in Archimedean.
@@ -421,12 +494,15 @@ export function drawSliceProblem(d: DealerState, slice: SliceId, o: DrawOptions)
       // P is log-uniform in [2, 500]: the cost of an evaluation grows with P, so the many small problems
       // that can be improved quickly are dealt as often as the few large ones that take long
       const P = o.starter
-        ? span(d, STARTER_P.min, STARTER_P.max)
+        ? span(d, STARTER_P.min, Math.min(STARTER_P.max, maxP))
         : Math.min(
             POLY_P.max,
+            maxP,
             Math.max(
               POLY_P.min,
-              Math.round(Math.exp(Math.log(POLY_P.min) + nextRandom(d) * Math.log(POLY_P.max / POLY_P.min))),
+              Math.round(
+                Math.exp(Math.log(POLY_P.min) + nextRandom(d) * Math.log(Math.min(POLY_P.max, maxP) / POLY_P.min)),
+              ),
             ),
           );
       const id = `polyhedra/${piece.code}in${container.code}/${P}`;
@@ -439,7 +515,7 @@ export function drawSliceProblem(d: DealerState, slice: SliceId, o: DrawOptions)
     if (!codes.length) return null;
     for (let i = 0; i < attempts; i++) {
       const code = pick(d, codes);
-      const P = o.starter ? span(d, STARTER_P.min, STARTER_P.max) : span(d, 2, 100);
+      const P = o.starter ? span(d, STARTER_P.min, Math.min(STARTER_P.max, maxP)) : span(d, 2, Math.min(100, maxP));
       const id = `balls/${code}/${P}`;
       if (!o.exclude.has(id)) return keyFor(id, P, "balls");
     }
@@ -451,8 +527,8 @@ export function drawSliceProblem(d: DealerState, slice: SliceId, o: DrawOptions)
   for (let i = 0; i < attempts; i++) {
     const solid = pick(d, o.starter && slice === "surf-platonic" ? STARTER_SOLIDS : solids);
     // pieces: a disk (0), or a polygon of 3 to 100 sides; a starter has few sides
-    const N = o.starter ? pick(d, STARTER_SIDES) : nextRandom(d) < 1 / 98 ? 0 : span(d, 3, 100);
-    const P = o.starter ? span(d, STARTER_P.min, STARTER_P.max) : span(d, 2, 100);
+    const N = o.circles ? 0 : o.starter ? pick(d, STARTER_SIDES) : nextRandom(d) < 1 / 98 ? 0 : span(d, 3, 100);
+    const P = o.starter ? span(d, STARTER_P.min, Math.min(STARTER_P.max, maxP)) : span(d, 2, Math.min(100, maxP));
     const id = `surface/${solid}/${mode}/${N}/${P}`;
     if (!o.exclude.has(id)) return keyFor(id, P, "surface");
   }

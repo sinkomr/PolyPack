@@ -1,4 +1,5 @@
 import type { LeaderValue, LeadersAnswer } from "../api";
+import { archiveOf } from "./archive";
 import { RENT_BATCH, heldRecords, settleRent, tidyRent } from "./economy";
 import type { GameState, Leader, PastProblem, ProblemState } from "./game";
 import type { Owned } from "./upgrades";
@@ -13,7 +14,9 @@ export interface PaydayResult {
   paying: number;
   /** Records the server said somebody else leads. */
   lost: number;
-  /** Records the batch could not answer, or that were busy: they stay unsettled for a retry. */
+  /** Of `lost`, the archived records: the caller tells the player of them in one line. */
+  archivedLost: number;
+  /** Records in requests that failed or were not asked: when not 0, nothing was paid and the payday is tried again soon. */
   unanswered: number;
 }
 
@@ -24,8 +27,8 @@ export interface PaydayDeps {
   /** GET /api/leaders for these keys; null when the request failed. */
   getLeaders: (keys: string[]) => Promise<LeadersAnswer | null>;
   /** Feeds a leader into the game's usual handling (held, lost, Retake, a send whose answer was lost). */
-  noteLeader: (p: Held, leader: Leader | null) => void;
-  /** The record has a send under way, so its state is not settled: it waits for the next payday. */
+  noteLeader: (p: Held, leader: Leader | null, quiet?: boolean) => void;
+  /** The record has a send under way, so its state is not settled: it is not looked up, and counts as held if it still is. */
   busy: (p: Held) => boolean;
   /** This tab still runs the game. */
   active: () => boolean;
@@ -33,23 +36,28 @@ export interface PaydayDeps {
   batchDone?: () => void;
 }
 
-/** Records held with rent running: every one is settled at each payday, for the time since its own last settlement. */
+/** Every record held that a payday asks about: the queue's, the past's and the archive's. */
 export function paydayDue(s: GameState): Held[] {
-  return heldRecords(s).filter((p) => s.economy.checks[p.key] !== undefined);
+  const due: Held[] = heldRecords(s);
+  const a = archiveOf(s);
+  if (a) for (const r of a.values()) if (r.ourId !== null) due.push(r);
+  return due;
 }
 
 const asLeader = (v: LeaderValue | null): Leader | null => (v ? { score: v.score, name: v.name, id: v.id } : null);
 
 /**
- * The daily payday: every held record is looked up in
- * batches of at most RENT_BATCH keys, one request after another. A record still ours pays its rent
- * (at most a week, settleRent); one found lost pays nothing and goes the usual way (noteLeader). A
- * record the server did not answer stays as it was, to be tried at the next payday. A failed request
- * leaves the rest of the batches unasked.
+ * The payday, every day at noon. Every record held is looked up in batches of at most RENT_BATCH
+ * keys, one request after another. A record found lost goes the usual way (noteLeader) as its answer
+ * comes. The payment is all or nothing: only when every batch has answered, every record still held
+ * pays its window (settleRent: since the last payday or since it was won, at most a week) and
+ * paidUntil moves to now. A failed request stops the payday with nothing paid, to be tried again
+ * soon (the result's `unanswered` is not 0). A record that is busy, or that the server left unknown,
+ * was not found lost: it counts as held.
  */
 export async function runPayday(d: PaydayDeps): Promise<PaydayResult> {
   const { state: s, owned: o } = d;
-  const result: PaydayResult = { paid: 0, paying: 0, lost: 0, unanswered: 0 };
+  const result: PaydayResult = { paid: 0, paying: 0, lost: 0, archivedLost: 0, unanswered: 0 };
   tidyRent(s, o, d.now());
   const due = paydayDue(s);
   const keys = [...new Set(due.map((p) => p.key))];
@@ -65,24 +73,33 @@ export async function runPayday(d: PaydayDeps): Promise<PaydayResult> {
     const unknown = new Set(answer.unknown);
     for (const k of batch) {
       for (const p of byKey.get(k)!) {
-        // a record unanswered or busy since the request left is left as it was
-        if (unknown.has(k) || !(k in answer.leaders) || d.busy(p)) {
-          result.unanswered++;
-          continue;
-        }
-        d.noteLeader(p, asLeader(answer.leaders[k]));
+        // a record unanswered or busy since the request left was not found lost: it counts as held
+        if (unknown.has(k) || !(k in answer.leaders) || d.busy(p)) continue;
+        // an archived record found lost is told in one line for all of them, not one each
+        const archived = archiveOf(s)?.get(k) === p;
+        d.noteLeader(p, asLeader(answer.leaders[k]), archived);
         if (p.ourId === null) {
           result.lost++;
-          continue;
-        }
-        const rp = settleRent(s, o, p, d.now());
-        if (rp > 0) {
-          result.paid += rp;
-          result.paying++;
+          if (archived) {
+            result.archivedLost++;
+            archiveOf(s)!.remove(k);
+          }
         }
       }
     }
     d.batchDone?.();
   }
+  if (result.unanswered > 0) return result;
+  // every batch answered: the records still held are paid for their window, and the next window starts
+  const at = d.now();
+  for (const p of paydayDue(s)) {
+    const rp = settleRent(s, o, p, at);
+    if (rp > 0) {
+      result.paid += rp;
+      result.paying++;
+    }
+  }
+  if (o.has("rent")) s.economy.paidUntil = at;
+  d.batchDone?.();
   return result;
 }

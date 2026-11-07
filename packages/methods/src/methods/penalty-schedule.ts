@@ -14,7 +14,7 @@
  *    held and only the lagging pieces' weights rise; otherwise mu grows by growthFactor. The first
  *    solve holds mu, setting the baseline, as in the polygon method.
  */
-import type { KernelState, SpaceKernel } from "../kernel";
+import type { KernelState, FamilyKernel } from "../kernel";
 import { lbfgs } from "../lbfgs";
 import { relax, squeeze, variableSteps } from "../local";
 
@@ -36,7 +36,7 @@ export function quadraticWeights(o: Pick<ScheduleOptions, "initialWeight" | "gro
  * One solve of size + mu * energy(weights), like one weight of local.ts squeeze, without its closing
  * relaxation (the augmented schedule measures the residuals the solve leaves).
  */
-function solve(k: SpaceKernel, s: KernelState, mu: number, weights: Float64Array, maxIter: number): void {
+function solve(k: FamilyKernel, s: KernelState, mu: number, weights: Float64Array, maxIter: number): void {
   const steps = variableSteps(k);
   const n = steps.length;
   const minSize = k.bound ?? 0;
@@ -60,7 +60,7 @@ function solve(k: SpaceKernel, s: KernelState, mu: number, weights: Float64Array
 }
 
 /** Runs the schedule on s; leaves s at its result and returns the energy left there. */
-export function descend(k: SpaceKernel, s: KernelState, o: ScheduleOptions): number {
+export function descend(k: FamilyKernel, s: KernelState, o: ScheduleOptions): number {
   if (o.schedule === "quadratic") return squeeze(k, s, { mus: quadraticWeights(o), maxIter: o.innerIterations });
   const P = k.P;
   const weights = new Float64Array(P).fill(1);

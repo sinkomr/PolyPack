@@ -3,10 +3,14 @@ import {
   areaLowerBound,
   DISK_RADIUS,
   parseConfig,
+  circumradius,
+  inradius,
   pieceSeparation,
   pieceVertices,
+  pieceSeparationBelow,
   type PackingConfig,
   type Evaluation,
+  type Pose,
   type Container,
 } from "@polypack/geometry";
 
@@ -38,77 +42,125 @@ export function contactResiduals(
   container: Container,
   contacts: readonly ContactConstraint[],
 ): number[] {
-  const vertices = new Map<number, Float64Array>();
-  return contacts.map((contact) => {
-    if (contact.kind === "pair") {
-      return pieceSeparation(config.N, config.pieces[contact.i], config.pieces[contact.j]).sep;
-    }
-    const pose = config.pieces[contact.i];
-    let x = pose.x,
-      y = pose.y;
-    const pad = config.N === 0 ? DISK_RADIUS : 0;
-    if (contact.vertex !== undefined) {
-      let v = vertices.get(contact.i);
-      if (!v) {
-        v = pieceVertices(config.N, pose);
-        vertices.set(contact.i, v);
-      }
-      x = v[2 * contact.vertex];
-      y = v[2 * contact.vertex + 1];
-    }
-    if (contact.kind === "radial") return container.size / 2 - Math.hypot(x - container.cx, y - container.cy) - pad;
-    const angle = container.phi - Math.PI / 2 + (2 * Math.PI * contact.edge) / container.M;
-    return (
-      container.size / (2 * Math.tan(Math.PI / container.M)) -
-      (x - container.cx) * Math.cos(angle) -
-      (y - container.cy) * Math.sin(angle) -
-      pad
-    );
-  });
+  return contacts.map((contact) =>
+    contactResidual(
+      config.N,
+      config.pieces[contact.i],
+      contact.kind === "pair" ? config.pieces[contact.j] : undefined,
+      container,
+      contact,
+    ),
+  );
 }
 
-/** Yield even inactive candidates, allowing callers to checkpoint during sparse scans. */
-function* contactCandidates(
+/** One contact's residual from the poses it involves (b only for a pair). */
+function contactResidual(
+  N: number,
+  pose: Pose,
+  b: Pose | undefined,
+  container: Container,
+  contact: ContactConstraint,
+): number {
+  if (contact.kind === "pair") return pieceSeparation(N, pose, b!).sep;
+  let x = pose.x,
+    y = pose.y;
+  const pad = N === 0 ? DISK_RADIUS : 0;
+  if (contact.vertex !== undefined) {
+    const v = pieceVertices(N, pose);
+    x = v[2 * contact.vertex];
+    y = v[2 * contact.vertex + 1];
+  }
+  if (contact.kind === "radial") return container.size / 2 - Math.hypot(x - container.cx, y - container.cy) - pad;
+  const angle = container.phi - Math.PI / 2 + (2 * Math.PI * contact.edge) / container.M;
+  return (
+    container.size / (2 * Math.tan(Math.PI / container.M)) -
+    (x - container.cx) * Math.cos(angle) -
+    (y - container.cy) * Math.sin(angle) -
+    pad
+  );
+}
+
+/**
+ * Lower bound on the separation of two congruent pieces whose centres are `distance` apart:
+ * along the edge normal of A nearest the line of centres (within pi/N of it) A reaches its
+ * inradius r and B at most its circumradius R, so the SAT gap is at least distance cos(pi/N) - r - R.
+ * For disks the separation is exactly distance - 1.
+ */
+function separationFloor(N: number, distance: number): number {
+  return N === 0 ? distance - 2 * DISK_RADIUS : distance * Math.cos(Math.PI / N) - inradius(N) - circumradius(N);
+}
+
+/**
+ * The pair and wall constraints whose residual is within `tolerance`, piece by piece (pairs
+ * (i, j > i), then i's vertices against each wall), or undefined once
+ * `stopped` says so (tested once per piece). With `first`, stops at the first contact found.
+ * A pair is skipped without the SAT kernel when separationFloor proves its separation above the
+ * tolerance (with a margin far beyond the rounding of either), which changes no answer.
+ */
+function collectContacts(
   config: PackingConfig,
   c: Container,
   tolerance: number,
-): Generator<ContactConstraint | undefined> {
-  const normals = Array.from({ length: c.M }, (_, edge) => {
+  stopped: () => boolean,
+  first = false,
+): ContactConstraint[] | undefined {
+  const out: ContactConstraint[] = [];
+  const N = config.N;
+  const pieces = config.pieces;
+  const normals = new Float64Array(2 * Math.max(c.M, 1));
+  for (let edge = 0; edge < c.M; edge++) {
     const angle = c.phi - Math.PI / 2 + (2 * Math.PI * edge) / c.M;
-    return [Math.cos(angle), Math.sin(angle)];
-  });
+    normals[2 * edge] = Math.cos(angle);
+    normals[2 * edge + 1] = Math.sin(angle);
+  }
   const apothem = c.M === 0 ? c.size / 2 : c.size / (2 * Math.tan(Math.PI / c.M));
-  for (let i = 0; i < config.pieces.length; i++) {
-    for (let j = i + 1; j < config.pieces.length; j++) {
-      yield pieceSeparation(config.N, config.pieces[i], config.pieces[j]).sep <= tolerance
-        ? { kind: "pair", i, j }
-        : undefined;
+  const R = N === 0 ? DISK_RADIUS : circumradius(N);
+  const vertices = new Float64Array(2 * Math.max(N, 1));
+  const pad = N === 0 ? DISK_RADIUS : 0;
+  for (let i = 0; i < pieces.length; i++) {
+    if (stopped()) return undefined;
+    const pose = pieces[i];
+    for (let j = i + 1; j < pieces.length; j++) {
+      const q = pieces[j];
+      const distance = Math.hypot(q.x - pose.x, q.y - pose.y);
+      if (
+        separationFloor(N, distance) > tolerance + 1e-9 * (distance + R) &&
+        clearlyApart(pose, q, distance * distance, 0)
+      )
+        continue;
+      if (pieceSeparation(N, pose, q).sep <= tolerance) {
+        out.push({ kind: "pair", i, j });
+        if (first) return out;
+      }
     }
-    const pose = config.pieces[i];
-    const vertices = config.N === 0 ? new Float64Array([pose.x, pose.y]) : pieceVertices(config.N, pose);
-    const pad = config.N === 0 ? DISK_RADIUS : 0;
-    for (let vertex = 0; vertex < (config.N || 1); vertex++) {
-      const point = config.N === 0 ? {} : { vertex };
+    if (N === 0) {
+      vertices[0] = pose.x;
+      vertices[1] = pose.y;
+    } else pieceVertices(N, pose, 1, vertices);
+    for (let vertex = 0; vertex < (N || 1); vertex++) {
       const dx = vertices[2 * vertex] - c.cx,
         dy = vertices[2 * vertex + 1] - c.cy;
       for (let edge = 0; edge < (c.M || 1); edge++) {
-        const contact: ContactConstraint =
-          c.M === 0 ? { kind: "radial", i, ...point } : { kind: "wall", i, edge, ...point };
         const gap =
-          c.M === 0 ? c.size / 2 - Math.hypot(dx, dy) - pad : apothem - dx * normals[edge][0] - dy * normals[edge][1] - pad;
-        yield gap <= tolerance ? contact : undefined;
+          c.M === 0
+            ? c.size / 2 - Math.hypot(dx, dy) - pad
+            : apothem - dx * normals[2 * edge] - dy * normals[2 * edge + 1] - pad;
+        if (gap <= tolerance) {
+          if (c.M === 0) out.push(N === 0 ? { kind: "radial", i } : { kind: "radial", i, vertex });
+          else out.push(N === 0 ? { kind: "wall", i, edge } : { kind: "wall", i, edge, vertex });
+          if (first) return out;
+        }
       }
     }
   }
+  return out;
 }
 
 /** Includes penetrations as well as near contacts, so the same system can repair a start. */
 export function identifyContacts(config: PackingConfig, container?: Container, tolerance = 0.05): ContactConstraint[] {
   const c = container ?? geometryEvaluate(config, { autoOrient: true }).container;
   if (!c) return [];
-  const out: ContactConstraint[] = [];
-  for (const contact of contactCandidates(config, c, tolerance)) if (contact) out.push(contact);
-  return out;
+  return collectContacts(config, c, tolerance, () => false)!;
 }
 
 /** Portable contact-system ordering: piece (x,y,theta) triples, then cx,cy,phi,size. */
@@ -153,104 +205,209 @@ function dot(a: readonly number[], b: readonly number[]): number {
   return v;
 }
 
-/** Central derivatives on only the variables participating in each contact. */
+/**
+ * The contact Jacobian: dense rows, zero outside each contact's own variables, with those
+ * variables listed per row in increasing order (`cols`). The row products below run over the
+ * listed columns only. Every term they skip is a zero times a finite number, a zero, and adding a
+ * zero leaves every sum here as it was (a sum that starts at +0 never becomes -0), so they give
+ * the dense loops' doubles while the direction is finite. Once a direction entry is not finite
+ * (0 * Infinity is NaN, which the sparse loop would miss) the dense loops take over for good.
+ */
+interface ContactRows {
+  rows: number[][];
+  cols: number[][];
+}
+
+class RowSolver {
+  dense = false;
+  constructor(
+    readonly jacobian: ContactRows,
+    readonly direction: number[],
+  ) {}
+  /** rows[k] . direction */
+  product(k: number): number {
+    const row = this.jacobian.rows[k];
+    if (this.dense) return dot(row, this.direction);
+    const cols = this.jacobian.cols[k];
+    const direction = this.direction;
+    let v = 0;
+    for (let n = 0; n < cols.length; n++) v += row[cols[n]] * direction[cols[n]];
+    return v;
+  }
+  /** direction += delta rows[k] */
+  step(k: number, delta: number): void {
+    const row = this.jacobian.rows[k];
+    const direction = this.direction;
+    if (this.dense || !Number.isFinite(delta)) {
+      this.dense = true;
+      for (let j = 0; j < direction.length; j++) direction[j] += delta * row[j];
+      return;
+    }
+    const cols = this.jacobian.cols[k];
+    for (let n = 0; n < cols.length; n++) {
+      const c = cols[n];
+      direction[c] += delta * row[c];
+      if (!Number.isFinite(direction[c])) this.dense = true;
+    }
+  }
+}
+
+/** rows[k] . rows[k] for every row, over its listed columns (the rest are zeros). */
+function rowNorms({ rows, cols }: ContactRows): number[] {
+  return rows.map((row, k) => {
+    let v = 0;
+    for (const c of cols[k]) v += row[c] * row[c];
+    return v;
+  });
+}
+
+/**
+ * Central derivatives on only the variables participating in each contact. Only the poses and
+ * container that a contact reads are copied and perturbed, with the same values the packed
+ * variable vector would give them.
+ */
 function contactJacobian(
   config: PackingConfig,
   container: Container,
   contacts: readonly ContactConstraint[],
   stopped: () => boolean,
-): number[][] | undefined {
-  const x = packContactVariables(config, container);
+): ContactRows | undefined {
+  const width = 3 * config.P + 4;
   const offset = 3 * config.P;
   const rows: number[][] = [];
+  const cols: number[][] = [];
+  const h = 2e-6;
+  const pose: Pose = { x: 0, y: 0, theta: 0 };
+  const other: Pose = { x: 0, y: 0, theta: 0 };
+  const box: Container = { ...container };
+  const key = ["x", "y", "theta"] as const;
+  const boxKey = ["cx", "cy", "phi", "size"] as const;
   for (const contact of contacts) {
     if (stopped()) return undefined;
-    const row = Array<number>(x.length).fill(0);
-    const variables =
-      contact.kind === "pair"
-        ? [3 * contact.i, 3 * contact.i + 1, 3 * contact.i + 2, 3 * contact.j, 3 * contact.j + 1, 3 * contact.j + 2]
-        : [3 * contact.i, 3 * contact.i + 1, 3 * contact.i + 2, offset, offset + 1, offset + 2, offset + 3];
+    const row = Array<number>(width).fill(0);
+    const written: number[] = [];
+    const pair = contact.kind === "pair";
+    const variables = pair
+      ? [3 * contact.i, 3 * contact.i + 1, 3 * contact.i + 2, 3 * contact.j, 3 * contact.j + 1, 3 * contact.j + 2]
+      : [3 * contact.i, 3 * contact.i + 1, 3 * contact.i + 2, offset, offset + 1, offset + 2, offset + 3];
     for (const variable of variables) {
       if (stopped()) return undefined;
       if (config.N === 0 && variable < offset && variable % 3 === 2) continue;
       if (config.M === 0 && variable === offset + 2) continue;
-      const h = 2e-6;
-      const plus = x.slice(),
-        minus = x.slice();
-      plus[variable] += h;
-      minus[variable] -= h;
-      const p = unpackContactVariables(config, plus),
-        m = unpackContactVariables(config, minus);
-      row[variable] =
-        (contactResiduals(p.config, p.container, [contact])[0] -
-          contactResiduals(m.config, m.container, [contact])[0]) /
-        (2 * h);
+      // x - h is x + (-h) exactly, so both sides match the packed vector's x[v] + h and x[v] - h
+      const residual = (delta: number): number => {
+        const a = config.pieces[contact.i];
+        pose.x = a.x;
+        pose.y = a.y;
+        pose.theta = a.theta;
+        if (pair) {
+          const b = config.pieces[contact.j];
+          other.x = b.x;
+          other.y = b.y;
+          other.theta = b.theta;
+        }
+        box.cx = container.cx;
+        box.cy = container.cy;
+        box.phi = container.phi;
+        box.size = container.size;
+        if (variable >= offset) box[boxKey[variable - offset]] += delta;
+        else (variable >= 3 * contact.i && variable < 3 * contact.i + 3 ? pose : other)[key[variable % 3]] += delta;
+        return contactResidual(config.N, pose, pair ? other : undefined, box, contact);
+      };
+      row[variable] = (residual(h) - residual(-h)) / (2 * h);
+      written.push(variable);
     }
     rows.push(row);
+    cols.push(written);
   }
-  return rows;
+  return { rows, cols };
 }
 
-/** Geometric restoration uses a much tighter margin than the server's touching tolerance. */
+/**
+ * Whether the poses are far enough apart for the shortcuts of restoreSeparation and
+ * collectContacts: finite squared centre distance `d2` above `far2`, and orientations of at most
+ * 1000 rad (as for pairSeparation's pruning), whose axis angles round by far less than the
+ * margins. Anything else, NaN and infinities included, goes through the kernel as before.
+ */
+function clearlyApart(a: Pose, b: Pose, d2: number, far2: number): boolean {
+  return d2 > far2 && d2 < Infinity && Math.abs(a.theta) <= 1000 && Math.abs(b.theta) <= 1000;
+}
+
+/**
+ * Geometric restoration uses a much tighter margin than the server's touching tolerance.
+ * Pairs whose centres are farther apart than twice the bounding radius (with a relative margin
+ * of 1e-6) are disjoint by a clear positive gap, so the SAT kernel would neither move them nor
+ * raise `worst`; they are skipped without it (clearlyApart), which leaves every move as it was.
+ */
 function restoreSeparation(config: PackingConfig, stopped: () => boolean): boolean {
+  const reach = 2 * (config.N === 0 ? DISK_RADIUS : circumradius(config.N));
+  const far2 = reach * reach * (1 + 1e-6);
+  const pieces = config.pieces;
   for (let sweep = 0; sweep < 48; sweep++) {
     let worst = 0;
-    for (let i = 0; i < config.P; i++)
+    for (let i = 0; i < config.P; i++) {
+      if (stopped()) return false;
+      const a = pieces[i];
       for (let j = i + 1; j < config.P; j++) {
-        if (stopped()) return false;
-        const contact = pieceSeparation(config.N, config.pieces[i], config.pieces[j]);
+        const b = pieces[j];
+        const dx = a.x - b.x;
+        const dy = a.y - b.y;
+        if (clearlyApart(a, b, dx * dx + dy * dy, far2)) continue;
+        // A polygon pair with sep >= -1.9e-14 neither moves nor brings worst to 2e-14
+        if (config.N !== 0 && !pieceSeparationBelow(config.N, a, b, -1.9e-14)) continue;
+        const contact = pieceSeparation(config.N, a, b);
         worst = Math.max(worst, -contact.sep);
         if (contact.sep < (config.N === 0 ? 0 : -2e-14)) {
           const move = (-contact.sep + 2e-13) / 2;
-          config.pieces[i].x += move * contact.nx;
-          config.pieces[i].y += move * contact.ny;
-          config.pieces[j].x -= move * contact.nx;
-          config.pieces[j].y -= move * contact.ny;
+          a.x += move * contact.nx;
+          a.y += move * contact.ny;
+          b.x -= move * contact.nx;
+          b.y -= move * contact.ny;
         }
       }
+    }
     if (config.N === 0 ? worst === 0 : worst < 2e-14) return true;
   }
-  for (let i = 0; i < config.P; i++)
+  for (let i = 0; i < config.P; i++) {
+    if (stopped()) return false;
     for (let j = i + 1; j < config.P; j++) {
-      if (
-        stopped() ||
-        pieceSeparation(config.N, config.pieces[i], config.pieces[j]).sep < (config.N === 0 ? 0 : -1e-12)
-      )
-        return false;
+      const dx = pieces[i].x - pieces[j].x;
+      const dy = pieces[i].y - pieces[j].y;
+      if (clearlyApart(pieces[i], pieces[j], dx * dx + dy * dy, far2)) continue;
+      if (pieceSeparationBelow(config.N, pieces[i], pieces[j], config.N === 0 ? 0 : -1e-12)) return false;
     }
+  }
   return true;
 }
 
 /** Apply the polish tolerance to both the initial fallback and every scored container. */
 function strictlyFeasible(config: PackingConfig, container: Container, stopped: () => boolean): boolean {
-  let scanned = 0;
-  for (const contact of contactCandidates(config, container, -1e-12)) {
-    if (scanned++ % 256 === 0 && stopped()) return false;
-    if (contact) return false;
-  }
-  return true;
+  const contacts = collectContacts(config, container, -1e-12, stopped, true);
+  return contacts !== undefined && contacts.length === 0;
 }
 
 const IMPROVEMENT_FLOOR = 2e-13;
 
 /** Solve the final contact equalities by rank-tolerant row projections (Newton's step). */
 function contactNewton(
-  rows: readonly number[][],
+  jacobian: ContactRows,
   gaps: readonly number[],
   stopped: () => boolean,
 ): number[] | undefined {
+  const rows = jacobian.rows;
   if (!rows.length) return [];
   const direction = Array<number>(rows[0].length).fill(0);
-  const norms = rows.map((row) => dot(row, row));
+  const solver = new RowSolver(jacobian, direction);
+  const norms = rowNorms(jacobian);
   for (let sweep = 0; sweep < 1000; sweep++) {
     let largest = 0;
     for (let k = 0; k < rows.length; k++) {
       if (stopped()) return undefined;
       if (norms[k] < 1e-20) continue;
-      const residual = 2e-13 - gaps[k] - dot(rows[k], direction);
+      const residual = 2e-13 - gaps[k] - solver.product(k);
       largest = Math.max(largest, Math.abs(residual));
       const delta = residual / norms[k];
-      for (let j = 0; j < direction.length; j++) direction[j] += delta * rows[k][j];
+      solver.step(k, delta);
     }
     if (largest < 5e-14) break;
   }
@@ -301,20 +458,18 @@ export async function polish(config: PackingConfig, options: PolishOptions = {})
     if (stopped() || !(await checkpoint())) break;
     const container = evaluation.container!;
     current = { ...current, container_phi: container.phi };
-    const contacts: ContactConstraint[] = [];
-    for (const contact of contactCandidates(current, container, tolerance)) {
-      if (stopped()) return best;
-      if (contact) contacts.push(contact);
-      if (contacts.length > 2048 || contacts.length * Math.max(current.N, 1) > 50000) return best;
-    }
+    const contacts = collectContacts(current, container, tolerance, stopped);
+    if (!contacts || contacts.length > 2048 || contacts.length * Math.max(current.N, 1) > 50000) return best;
     const x = packContactVariables(current, container);
     const gaps = contactResiduals(current, container, contacts);
-    const rows = contactJacobian(current, container, contacts, stopped);
-    if (!rows) return best;
+    const jacobian = contactJacobian(current, container, contacts, stopped);
+    if (!jacobian) return best;
+    const rows = jacobian.rows;
     const direction = Array<number>(x.length).fill(0);
     direction[x.length - 1] = -trust;
+    const solver = new RowSolver(jacobian, direction);
     const multipliers = Array<number>(rows.length).fill(0);
-    const norms = rows.map((row) => dot(row, row));
+    const norms = rowNorms(jacobian);
     // Hildreth coordinate descent solves the convex QP dual without singular KKT matrices.
     for (let sweep = 0; sweep < 300; sweep++) {
       if (stopped()) return best;
@@ -322,11 +477,11 @@ export async function polish(config: PackingConfig, options: PolishOptions = {})
       for (let k = 0; k < rows.length; k++) {
         if (stopped()) return best;
         if (norms[k] < 1e-20) continue;
-        const next = Math.max(0, multipliers[k] + (-gaps[k] + 2e-13 - dot(rows[k], direction)) / norms[k]);
+        const next = Math.max(0, multipliers[k] + (-gaps[k] + 2e-13 - solver.product(k)) / norms[k]);
         const delta = next - multipliers[k];
         multipliers[k] = next;
         largest = Math.max(largest, Math.abs(delta));
-        for (let j = 0; j < direction.length; j++) direction[j] += delta * rows[k][j];
+        solver.step(k, delta);
       }
       if (largest < 1e-12) break;
     }
@@ -386,16 +541,12 @@ export async function polish(config: PackingConfig, options: PolishOptions = {})
       if (stopped() || !(await checkpoint())) return best;
       const base = bestEvaluation;
       if (!base?.container) return best;
-      const contacts: ContactConstraint[] = [];
-      for (const contact of contactCandidates(best, base.container, 2e-7)) {
-        if (stopped()) return best;
-        if (contact) contacts.push(contact);
-        if (contacts.length > 2048 || contacts.length * Math.max(best.N, 1) > 50000) return best;
-      }
+      const contacts = collectContacts(best, base.container, 2e-7, stopped);
+      if (!contacts || contacts.length > 2048 || contacts.length * Math.max(best.N, 1) > 50000) return best;
       const gaps = contactResiduals(best, base.container, contacts);
-      const rows = contactJacobian(best, base.container, contacts, stopped);
-      if (!rows) return best;
-      const direction = contactNewton(rows, gaps, stopped);
+      const jacobian = contactJacobian(best, base.container, contacts, stopped);
+      if (!jacobian) return best;
+      const direction = contactNewton(jacobian, gaps, stopped);
       if (!direction) return best;
       if (!direction.length || Math.max(...direction.map(Math.abs)) < 5e-14) break;
       const variables = packContactVariables(best, base.container);

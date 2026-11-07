@@ -1,5 +1,5 @@
 /**
- * The floating-point validator of the balls space, as a server runs it on untrusted input.
+ * The floating-point validator of the balls family, as a server runs it on untrusted input.
  *
  * A configuration {s, pieces} of a problem is valid at tolerance tol when
  *  - balls (radius r = BALL_RADIUS): every two centres are at least 2 r - tol apart; in a ball container every
@@ -7,7 +7,7 @@
  *    [-s/2, s/2]^3), in any other solid C every face has N_f . c <= s b_f - r + tol (N_f the unit outward normal and
  *    b_f the offset of face f of the canonical solid, container.ts);
  *  - Platonic solids: every vertex x of every piece has |x| <= s + tol, and no two pieces overlap by more than tol,
- *    i.e. the polyhedra space's separating-axis test (packages/polyhedra geom.ts: face normals of both pieces and
+ *    i.e. the polyhedra family's separating-axis test (packages/polyhedra geom.ts: face normals of both pieces and
  *    the Gauss-map pruned edge cross products, which decide the penetration depth exactly up to rounding) shows a
  *    gap of at least -tol.
  * Pieces may touch. Gaps and protrusions are lengths in the pieces' units (ball radius BALL_RADIUS, solid edge 1).
@@ -27,7 +27,7 @@ export const BALLS_MAX_SIZE = 1e6;
 /** Largest absolute value of a centre coordinate. */
 export const BALLS_MAX_COORD = 1e4;
 
-/** A ball's centre [x, y, z], or a solid's pose [x, y, z, qw, qx, qy, qz] (the polyhedra space's pose). */
+/** A ball's centre [x, y, z], or a solid's pose [x, y, z, qw, qx, qy, qz] (the polyhedra family's pose). */
 export type BallsPose = number[];
 
 export interface BallsConfig {
@@ -55,7 +55,7 @@ const isFiniteNumber = (v: unknown): v is number => typeof v === "number" && Num
 /**
  * The errors of a configuration's form (empty when it is well formed): s positive and at most BALLS_MAX_SIZE;
  * P pieces when P is given; a ball is [x, y, z] of finite numbers of at most BALLS_MAX_COORD; a solid is a pose of
- * 7 finite numbers as the polyhedra space reads it (centre at most 1e4, quaternion components at most 1e100, norm
+ * 7 finite numbers as the polyhedra family reads it (centre at most 1e4, quaternion components at most 1e100, norm
  * at least 1e-6).
  */
 export function ballsConfigErrors(problem: BallsProblem, config: unknown, P?: number, maxErrors = 20): string[] {

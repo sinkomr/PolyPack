@@ -85,6 +85,28 @@ for (const el of [nPicker.select, nPicker.custom, mPicker.select, mPicker.custom
   el.addEventListener("change", problemChanged);
 }
 
+/** The largest P the Random problem button draws on this board: larger ones are open too, but slow to play by hand. */
+const RANDOM_MAX_P = 100;
+
+/** Opens a polygon problem drawn uniformly: N and M from 0 (circle) and 3 to MAX_SIDES, P from 1 to RANDOM_MAX_P. */
+function randomProblem(): void {
+  const shape = () => {
+    const k = Math.floor(Math.random() * (MAX_SIDES - 1));
+    return k === 0 ? 0 : k + 2;
+  };
+  const N = shape();
+  const M = shape();
+  const P = 1 + Math.floor(Math.random() * RANDOM_MAX_P);
+  writePicker(nPicker, N);
+  writePicker(mPicker, M);
+  pInput.value = String(P);
+  problemChanged();
+}
+// the space mode answers the same button with a problem of its own kind
+$("random-problem").addEventListener("click", () => {
+  if (!layout.dataset.space) randomProblem();
+});
+
 // ---------- records and leaderboard ----------
 
 let info: ProblemInfo | null = null;

@@ -1,5 +1,5 @@
 /**
- * The names of the polyhedra space without its geometry: the solids' names, codes and titles and the 86 problems
+ * The names of the polyhedra family without its geometry: the solids' names, codes and titles and the 86 problems
  * of polyhedrainpolyhedra.wiki (upstream's scripts/engine.py: AB, ARCHIMEDEAN, CATALAN, PRISMS, PROBLEMS; MIT, see
  * THIRD_PARTY_NOTICES.md), then PolyPack's 64 in the same scheme (2026-10-25; not on the wiki): the prisms and
  * antiprisms with 7, 9, 10 and 11 sides in themselves and in a cube, and their prisms of height 1.5, 2 and 3 in a

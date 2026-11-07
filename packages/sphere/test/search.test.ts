@@ -61,6 +61,21 @@ describe.skipIf(records.length === 0)("searchSphere", () => {
     expect(validate({ N: 0, P: 6 }, res.config!).valid).toBe(true);
     expect(res.score).toBeLessThan((2 / Math.PI) * 1.01);
   });
+
+  it("returns a valid disk packing even when the budget ends during the first relaxation", () => {
+    // 3,000 evaluations end these runs inside the relaxation of the first start (they returned no
+    // packing before the spiral was kept at its own tight size); on any platform the spiral is a result
+    for (const [P, seed] of [
+      [6, 1],
+      [9, 1],
+      [12, 3],
+    ]) {
+      const res = searchSphere({ N: 0, P }, { seed, maxEvals: 3000 });
+      expect(res.config).not.toBeNull();
+      expect(validate({ N: 0, P }, res.config!).valid).toBe(true);
+      expect(res.score).toBe(res.config!.rho);
+    }
+  });
 });
 
 describe("searchSphere: units", () => {
@@ -76,8 +91,11 @@ describe("searchSphere: units", () => {
     // the radius-1 outcomes were recorded on Apple Silicon; elsewhere V8's Math functions may differ in
     // the last bit and the seeded search can end elsewhere, so they are compared only there
     if (process.platform === "darwin" && process.arch === "arm64") {
-      expect(six.score).toBeCloseTo(1.2732395447356217 / 2, 12);
-      expect(nine.score).toBeCloseTo(1.6247489461908833 / 2, 12);
+      // disks: since 2026-11-06 a fresh search starts disks from the Fibonacci spiral, which changed
+      // these two outcomes (from the radius-1 ones halved, 1.2732395447356217 / 2 and
+      // 1.6247489461908833 / 2, to the values below; the octahedron's 2/pi for six, and nine 4.6e-10 lower)
+      expect(six.score).toBeCloseTo(0.636619772368324, 12);
+      expect(nine.score).toBeCloseTo(0.8123744726412205, 12);
       // polygons are unchanged
       expect(square.score).toBeCloseTo(0.9332432371041922, 12);
     }

@@ -136,3 +136,28 @@ export function torusLayout(
     }
   return { basis: B, x0, x1, y0, y1, pieces, cells, capped };
 }
+
+/**
+ * The 3D torus's map from the plane to its texture, a canvas of W by H pixels wrapped round a ring by three.js: the
+ * cell's longer basis vector (`ring`) runs round the ring along the texture's x (0 to W), the other (`tube`) round
+ * the tube along y, from H at the ring vector's side up to 0 (three.js turns a canvas texture upside down). A slanted
+ * cell is sheared into the texture's rectangle: a ring of revolution has no other way to close up both ways. The tube
+ * vector's sign keeps det(ring, tube) > 0, the same lattice. `m` is the map as canvas setTransform's (a, b, c, d, e, f).
+ */
+export function torusTexture(
+  B: readonly [V2, V2],
+  W: number,
+  H: number,
+): { ring: V2; tube: V2; m: [number, number, number, number, number, number] } {
+  const long = Math.hypot(...B[1]) > Math.hypot(...B[0]);
+  const ring = long ? B[1] : B[0];
+  let tube = long ? B[0] : B[1];
+  if (ring[0] * tube[1] - ring[1] * tube[0] < 0) tube = [-tube[0], -tube[1]];
+  const det = ring[0] * tube[1] - ring[1] * tube[0];
+  // p = s ring + t tube goes to (W s, H (1 - t))
+  return {
+    ring,
+    tube,
+    m: [(W * tube[1]) / det, (H * ring[1]) / det, (-W * tube[0]) / det, (-H * ring[0]) / det, 0, H],
+  };
+}

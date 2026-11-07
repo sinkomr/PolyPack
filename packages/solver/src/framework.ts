@@ -398,7 +398,48 @@ export class MethodRegistry {
         ? Math.min(remainingAfterStart, Math.ceil(overallEvalLimit / 10))
         : 0;
     const reserveTime = appendPolish && Number.isFinite(overallTimeLimit) ? overallTimeLimit / 10 : 0;
+    // shouldStop sits in the methods' innermost loops. Its answer can change only with the abort
+    // flag, the clock, the evaluation count, or a scope ending or failing (each of which bumps
+    // stopEpoch). While none of the others has changed since it last answered false for the same
+    // scope, it reads the clock once and compares the active time with the smallest time limit of
+    // the scope and its parents, instead of walking the chain. The clock is read on every call, so
+    // a time limit is noticed at the first call after it, however long the calls take.
+    let stopEpoch = 0;
+    let fastScope: Scope | undefined;
+    let fastEpoch = -1;
+    let fastEvaluations = -1;
+    let fastLimit = Infinity;
+    const shouldStop = (scope: Scope): boolean => {
+      if (
+        fastScope === scope &&
+        fastEpoch === stopEpoch &&
+        fastEvaluations === evaluations &&
+        !aborted() &&
+        (fastLimit === Infinity || (pausedAt === undefined && !paused() && now() - begun - pausedMilliseconds < fastLimit))
+      )
+        return false;
+      const stop = scopeStop(scope);
+      if (!stop) {
+        fastScope = scope;
+        fastEpoch = stopEpoch;
+        fastEvaluations = evaluations;
+        fastLimit = Infinity;
+        for (let s: Scope | undefined = scope; s; s = s.parent) fastLimit = Math.min(fastLimit, s.timeLimit);
+      }
+      return stop;
+    };
+    // One clock reading serves a whole scopeStop call, parents included.
+    let stopTime = NaN;
+    const stopActive = () => {
+      if (stopTime !== stopTime) stopTime = activeMilliseconds();
+      return stopTime;
+    };
+    /** Whether a scope must stop. */
     const scopeStop = (scope: Scope): boolean => {
+      stopTime = NaN;
+      return scopeStopAt(scope);
+    };
+    const scopeStopAt = (scope: Scope): boolean => {
       if (!scope.active || closed) return true;
       if (scope.error) {
         scope.termination = "error";
@@ -408,11 +449,11 @@ export class MethodRegistry {
         scope.termination = "aborted";
         return true;
       }
-      if (scope.parent && scopeStop(scope.parent)) {
+      if (scope.parent && scopeStopAt(scope.parent)) {
         scope.termination = scope.parent.termination;
         return true;
       }
-      if (scope.timeLimit !== Infinity && activeMilliseconds() >= scope.timeLimit) {
+      if (scope.timeLimit !== Infinity && stopActive() >= scope.timeLimit) {
         scope.termination = "time";
         return true;
       }
@@ -470,6 +511,7 @@ export class MethodRegistry {
         if (scope.busy) {
           const error = new Error("framework calls must be sequential: await the pending call before making another");
           scope.error = error;
+          stopEpoch++;
           return Promise.reject(error);
         }
         if (!scope.active || closed) return Promise.reject(new Error("framework context has ended"));
@@ -505,7 +547,7 @@ export class MethodRegistry {
         initialEvaluation: initial ? clone(initial) : undefined,
         params: clone(method.params),
         random,
-        shouldStop: () => scopeStop(scope),
+        shouldStop: () => shouldStop(scope),
         remaining: () => {
           let evals = Infinity;
           let time = Infinity;
@@ -586,6 +628,7 @@ export class MethodRegistry {
         if (!scopeStop(scope)) await method.execute(context);
       } catch (error) {
         scope.error = error instanceof Error ? error : new Error(String(error));
+        stopEpoch++;
       }
       if (scope.pending) await scope.pending.catch(() => {});
       if (scope.error) {
@@ -595,6 +638,7 @@ export class MethodRegistry {
           reasons = [...reasons.filter((r) => r !== "no valid configuration evaluated"), scope.error.message];
       }
       scope.active = false;
+      stopEpoch++;
       innermost = parent;
       const record: StageResult = {
         method: method.name,
@@ -638,6 +682,7 @@ export class MethodRegistry {
       if (outcome.record.termination !== "completed") termination = outcome.record.termination;
     }
     closed = true;
+    stopEpoch++;
     // The final orientation is intentionally outside the counted search budget. The server scores a
     // submission at its container_phi and does not search itself, so this makes the result ready to send.
     if (best) {

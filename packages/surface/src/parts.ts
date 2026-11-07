@@ -54,42 +54,66 @@ interface HalfPlane {
   b: number;
 }
 
+/** Scratch buffers of clipHalfPlane (clipped corners) and dedupe (kept corners); grown as needed. */
+let clipBuf = new Float64Array(64);
+let keepBuf = new Float64Array(64);
+
 /** Sutherland–Hodgman clip of a convex polygon by one half-plane. */
 export function clipHalfPlane(poly: Float64Array, h: HalfPlane): Float64Array {
   const n = poly.length / 2;
   if (n === 0) return poly;
-  const out: number[] = [];
+  // at most two corners per side
+  if (clipBuf.length < 4 * n) clipBuf = new Float64Array(8 * n);
+  const out = clipBuf;
+  let k = 0;
+  const ax = h.ax;
+  const ay = h.ay;
+  const hb = h.b;
   for (let i = 0; i < n; i++) {
     const j = (i + 1) % n;
     const px = poly[2 * i];
     const py = poly[2 * i + 1];
     const qx = poly[2 * j];
     const qy = poly[2 * j + 1];
-    const dp = h.ax * px + h.ay * py - h.b;
-    const dq = h.ax * qx + h.ay * qy - h.b;
-    if (dp <= 0) out.push(px, py);
+    const dp = ax * px + ay * py - hb;
+    const dq = ax * qx + ay * qy - hb;
+    if (dp <= 0) {
+      out[k++] = px;
+      out[k++] = py;
+    }
     if ((dp < 0 && dq > 0) || (dp > 0 && dq < 0)) {
       const t = dp / (dp - dq);
-      out.push(px + t * (qx - px), py + t * (qy - py));
+      out[k++] = px + t * (qx - px);
+      out[k++] = py + t * (qy - py);
     }
   }
-  return dedupe(out);
+  return dedupeCorners(out, k);
 }
+
+/** Two corners closer than rounding (dedupe's test; not symmetric: a is the corner kept). */
+const sameCorner = (ax: number, ay: number, bx: number, by: number): boolean =>
+  Math.abs(ax - bx) <= 1e-15 * (1 + Math.abs(ax)) && Math.abs(ay - by) <= 1e-15 * (1 + Math.abs(ay));
 
 /**
  * Drops repeated consecutive vertices (a vertex on the clip line is emitted twice), so that no
  * edge has zero length: a zero-length edge has no normal and would break separating-axis tests.
  */
 export function dedupe(out: number[]): Float64Array {
-  const res: number[] = [];
-  const same = (ax: number, ay: number, bx: number, by: number) => Math.abs(ax - bx) <= 1e-15 * (1 + Math.abs(ax)) && Math.abs(ay - by) <= 1e-15 * (1 + Math.abs(ay));
-  for (let i = 0; i < out.length; i += 2) {
-    const n = res.length;
-    if (n >= 2 && same(res[n - 2], res[n - 1], out[i], out[i + 1])) continue;
-    res.push(out[i], out[i + 1]);
+  return dedupeCorners(out, out.length);
+}
+
+/** dedupe of the first `len` numbers of `out`. */
+function dedupeCorners(out: ArrayLike<number>, len: number): Float64Array {
+  if (keepBuf.length < len) keepBuf = new Float64Array(2 * len);
+  const res = keepBuf;
+  let n = 0;
+  for (let i = 0; i < len; i += 2) {
+    if (n >= 2 && sameCorner(res[n - 2], res[n - 1], out[i], out[i + 1])) continue;
+    res[n++] = out[i];
+    res[n++] = out[i + 1];
   }
-  while (res.length >= 4 && same(res[0], res[1], res[res.length - 2], res[res.length - 1])) res.length -= 2;
-  return new Float64Array(res.length >= 6 ? res : []);
+  while (n >= 4 && sameCorner(res[0], res[1], res[n - 2], res[n - 1])) n -= 2;
+  return n >= 6 ? res.slice(0, n) : new Float64Array(0);
 }
 
 /** Half-planes of the closed wedge with apex (cx, cy): cross(lo, p - c) >= 0 and cross(p - c, hi) >= 0. */

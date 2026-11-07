@@ -1,5 +1,5 @@
 /**
- * What a listing of spaces says about the polyhedra space, and the limits a server applies. Pure data, in the
+ * What a listing of families says about the polyhedra family, and the limits a server applies. Pure data, in the
  * shape of packages/spaces' SpaceInfo (without its problem count), so that the registry can take it as it is.
  */
 import { POLYHEDRA_MAX_COORD, POLYHEDRA_MAX_QUATERNION, POLYHEDRA_MIN_QUATERNION_NORM, POLYHEDRA_TOL } from "./validate";

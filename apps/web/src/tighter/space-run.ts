@@ -188,20 +188,69 @@ export class SpaceRun {
   }
 }
 
-/** A start for a space problem: the kernel's first seed layout, else a random start, finished and checked strict. */
+/**
+ * How much more room the loose start has than the smallest size at which every piece is clear: the
+ * board is grown by this factor once more, so that Compact has open space to remove.
+ */
+export const LOOSE_ROOM = 1.3;
+
+/** The most growths by 10 % that make every piece of a start clear. */
+const CLEAR_GROWTHS = 80;
+
+/**
+ * The start spread out: the same layout with the board grown until no piece touches or overlaps
+ * another, and then once more by LOOSE_ROOM. Null when the kernel cannot make a valid board of it
+ * (on curved polygons growth can open overlaps), or the result is not valid by the server's rule.
+ */
+function looseStart(p: SearchProblem, kernel: SpaceKernel, start: ReturnType<SpaceKernel["randomStart"]>) {
+  const s = kernel.clone(start);
+  const allClear = (t: typeof s) => {
+    for (let i = 0; i < kernel.P; i++) if (!kernel.clear(t, i, 0)) return false;
+    return true;
+  };
+  for (let grown = 0; !allClear(s) && grown < CLEAR_GROWTHS; grown++) kernel.setSize(s, s.size * 1.1);
+  if (!allClear(s)) return null;
+  const wide = kernel.clone(s);
+  kernel.setSize(wide, wide.size * LOOSE_ROOM);
+  const board = allClear(wide) ? wide : s;
+  const config = kernel.toConfig(board) as SpaceConfig;
+  const c = checkSpaceConfig(p.space, p.id, config, RULE);
+  return c.valid && c.score !== null && c.score > 0 ? { config, score: c.score } : null;
+}
+
+/**
+ * Load all's start for a space problem: the kernel's first seed layout, else a random start, spread
+ * out (looseStart) so that the first Compact has open space to remove. When no try gives a valid
+ * loose start it falls back to the finished start, which is jammed already (`loose` false).
+ */
 export function spaceStart(request: SpaceStartRequest): SpaceStartAnswer {
   try {
     const { p, kernel } = openProblem(request.family, request.id);
-    const rng = mulberry32(request.seed);
-    const tries: (() => ReturnType<SpaceKernel["finish"]>)[] = [];
-    if (kernel.seeds) tries.push(() => kernel.finish(kernel.seeds!(rng, 5)[0]));
-    tries.push(() => kernel.finish(kernel.randomStart(rng)));
-    for (const make of tries) {
+    const seed = request.seed;
+    const starts = (): (() => ReturnType<SpaceKernel["randomStart"]> | undefined)[] => {
+      const rng = mulberry32(seed);
+      const tries: (() => ReturnType<SpaceKernel["randomStart"]> | undefined)[] = [];
+      if (kernel.seeds) tries.push(() => kernel.seeds!(rng, 5)[0]);
+      tries.push(() => kernel.randomStart(rng));
+      return tries;
+    };
+    for (const make of starts()) {
       try {
-        const f = make();
+        const s = make();
+        const loose = s ? looseStart(p, kernel, s) : null;
+        if (loose) return { ok: true, config: loose.config, score: loose.score, loose: true };
+      } catch {
+        // a kernel that cannot make this start: the next try
+      }
+    }
+    for (const make of starts()) {
+      try {
+        const s = make();
+        const f = s ? kernel.finish(s) : null;
         if (!f) continue;
         const c = checkSpaceConfig(p.space, p.id, f.config, RULE);
-        if (c.valid && c.score !== null) return { ok: true, config: f.config as SpaceConfig, score: c.score };
+        if (c.valid && c.score !== null)
+          return { ok: true, config: f.config as SpaceConfig, score: c.score, loose: false };
       } catch {
         // a kernel that cannot make this start: the next try
       }

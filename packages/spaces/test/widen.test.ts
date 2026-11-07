@@ -45,7 +45,7 @@ describe("curved, sphere and torus range domains", () => {
   it("has bounded deterministic samples, rejects outside choices, and leaves new problems without records", () => {
     for (const space of ["curved", "sphere", "torus"] as const) {
       const d = SPACE_DOMAINS[space]!;
-      const top = space === "torus" ? 500 : 100;
+      const top = space === "sphere" ? 100 : 500;
       const cat = buildSpaceCatalogue(space, { records: [] }, d);
       const parsedNew = parseSpaceId(space, example(space, 100, top).id);
       if (typeof parsedNew === "string") throw new Error(parsedNew);
@@ -209,7 +209,7 @@ describe("curved, sphere and torus range domains", () => {
   });
   it("rejects malformed large-N submissions and enforces the largest P in kernel limit copies", () => {
     for (const space of ["curved", "sphere", "torus"] as const) {
-      const top = space === "torus" ? 500 : 100;
+      const top = space === "sphere" ? 100 : 500;
       const { id } = example(space, 100, 2);
       expect(validateSpaceSubmission(space, id, { pieces: [null, null], poses: [null, null] }).valid).toBe(false);
       const p = parseSearchProblem(example(space, 100, top).id)!;

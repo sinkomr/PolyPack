@@ -137,6 +137,14 @@ export function bbox(piece: number, poly: Float64Array, cuts: HalfPlanes): PartR
 function coneEnergy(solid: Solid, s: number, N: number, p: SurfacePose, nodes: ChainNode[], lam: number): number {
   const rin = N === 0 ? lam : inradius(N) * lam;
   const worst = new Map<number, number>();
+  // the piece's side normals, the same angles for every vertex
+  const ca = new Float64Array(N);
+  const sa = new Float64Array(N);
+  for (let j = 0; j < N; j++) {
+    const a = p.theta + Math.PI / 2 + Math.PI / N + (2 * Math.PI * j) / N;
+    ca[j] = Math.cos(a);
+    sa[j] = Math.sin(a);
+  }
   for (const node of nodes)
     for (let k = 0; k < solid.sides[node.face]; k++) {
       const [fx, fy] = faceVertex(solid, s, node.face, k);
@@ -147,8 +155,7 @@ function coneEnergy(solid: Solid, s: number, N: number, p: SurfacePose, nodes: C
       else {
         out = -Infinity;
         for (let j = 0; j < N; j++) {
-          const a = p.theta + Math.PI / 2 + Math.PI / N + (2 * Math.PI * j) / N;
-          const t = (vx - p.x) * Math.cos(a) + (vy - p.y) * Math.sin(a) - rin;
+          const t = (vx - p.x) * ca[j] + (vy - p.y) * sa[j] - rin;
           if (t > out) out = t;
         }
       }
@@ -196,6 +203,18 @@ export class PolygonEnergy {
   private partFaces: number[][] = [];
   private cone: number[] = [];
   private byFace: PartRec[][];
+  /**
+   * Per piece, the pose its cached parts were computed for, the chains of that pose and the
+   * scale of both (lam can change without a rebuild). The gradient's local energy at the piece's
+   * own pose then reuses the parts, and its steps in theta (same face and centre) reuse the chains,
+   * which depend on the centre and the scale alone: both are what computePiece would compute
+   * again, so every value is unchanged.
+   */
+  private builtPose: (SurfacePose | null)[] = [];
+  private builtChains: (ChainNode[] | null)[] = [];
+  private builtLam: number[] = [];
+  /** total() of the cached parts, until they change (rebuild, update). */
+  private totalMemo: number | null = null;
 
   constructor(solid: Solid, s: number, N: number, lam: number, poses: SurfacePose[], mode: "fold" | "nofold" = "fold") {
     this.solid = solid;
@@ -213,12 +232,25 @@ export class PolygonEnergy {
     this.rebuild();
   }
 
-  private computePiece(i: number, pose: SurfacePose): { recs: PartRec[]; faces: number[]; cone: number } {
+  private computePiece(
+    i: number,
+    pose: SurfacePose,
+    keep = false,
+  ): { recs: PartRec[]; faces: number[]; cone: number } {
     if (this.mode === "nofold") {
       const o = pieceOutline(this.N, pose, this.lam);
       return { recs: [bbox(i, o.poly, o)], faces: [pose.face], cone: wallEnergy(this.solid, this.s, pose.face, o.poly) };
     }
-    const nodes = enumerateChains(this.solid, this.s, pose.face, pose.x, pose.y, this.lam * boundingRadius(this.N));
+    const built = this.builtPose[i];
+    const nodes =
+      built && this.builtLam[i] === this.lam && built.face === pose.face && Object.is(built.x, pose.x) && Object.is(built.y, pose.y)
+        ? this.builtChains[i]!
+        : enumerateChains(this.solid, this.s, pose.face, pose.x, pose.y, this.lam * boundingRadius(this.N));
+    if (keep) {
+      this.builtPose[i] = { ...pose };
+      this.builtChains[i] = nodes;
+      this.builtLam[i] = this.lam;
+    }
     const parts = pieceParts(this.solid, this.s, this.N, pose, i, this.lam, nodes);
     const recs: PartRec[] = [];
     const faces: number[] = [];
@@ -235,8 +267,12 @@ export class PolygonEnergy {
     this.parts = [];
     this.partFaces = [];
     this.cone = [];
+    // the scale may have changed: nothing of the earlier caches is reused
+    this.totalMemo = null;
+    this.builtPose = this.poses.map(() => null);
+    this.builtChains = this.poses.map(() => null);
     this.poses.forEach((p, i) => {
-      const r = this.computePiece(i, p);
+      const r = this.computePiece(i, p, true);
       this.parts.push(r.recs);
       this.partFaces.push(r.faces);
       this.cone.push(r.cone);
@@ -252,7 +288,15 @@ export class PolygonEnergy {
 
   /** Energy terms involving piece i if it had pose `pose` (others as cached). */
   localEnergy(i: number, pose: SurfacePose): number {
-    const r = this.computePiece(i, pose);
+    const built = this.builtPose[i];
+    const same =
+      built &&
+      this.builtLam[i] === this.lam &&
+      built.face === pose.face &&
+      Object.is(built.x, pose.x) &&
+      Object.is(built.y, pose.y) &&
+      Object.is(built.theta, pose.theta);
+    const r = same ? { recs: this.parts[i], faces: this.partFaces[i], cone: this.cone[i] } : this.computePiece(i, pose);
     let e = r.cone;
     for (let t = 0; t < r.recs.length; t++) {
       const a = r.recs[t];
@@ -272,7 +316,9 @@ export class PolygonEnergy {
       if (idx >= 0) l.splice(idx, 1);
     });
     this.poses[i] = pose;
-    const r = this.computePiece(i, pose);
+    this.builtPose[i] = null;
+    this.totalMemo = null;
+    const r = this.computePiece(i, pose, true);
     this.parts[i] = r.recs;
     this.partFaces[i] = r.faces;
     this.cone[i] = r.cone;
@@ -280,10 +326,12 @@ export class PolygonEnergy {
   }
 
   total(): number {
+    if (this.totalMemo !== null) return this.totalMemo;
     let e = 0;
     for (const c of this.cone) e += c;
     for (const l of this.byFace)
       for (let a = 0; a < l.length; a++) for (let b = a + 1; b < l.length; b++) e += PolygonEnergy.pen(l[a], l[b]);
+    this.totalMemo = e;
     return e;
   }
 }

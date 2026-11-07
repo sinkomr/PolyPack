@@ -25,7 +25,15 @@ import {
 import type { SourceReach } from "./dealer";
 import { FinderDeps, Pool, TakenCache, findOpen, firstDealPools } from "./open-finder";
 import { SpaceBoard, mountSpaceBoard, spaceScoreBox } from "./board-space";
-import { ListedSpace, ListedSpaceProblem, SpaceListings, drawSliceProblem, listingOf } from "./catalogue";
+import {
+  ListedSpace,
+  ListedSpaceProblem,
+  RuleLimits,
+  SpaceListings,
+  drawSliceProblem,
+  listingOf,
+  sliceHasCircles,
+} from "./catalogue";
 import { problemTitle, rulesOf } from "./families";
 import {
   FRONTIER,
@@ -63,6 +71,7 @@ import {
   applyStep,
   buy,
   countEvaluations,
+  countedEvals,
   density,
   endRunAtStall,
   drop,
@@ -95,13 +104,13 @@ import {
 import {
   COMBO_BONUS,
   COMBO_RECORDS,
-  RENT_PAYDAY_MS,
-  RENT_RETRY_MS,
   SHAPE_BONUS,
   SHAPE_MILESTONES,
   TIER_BONUS,
   collections,
   collectionsBonus,
+  nextPaydayAfter,
+  paydayDueAt,
   rentRate,
   rentWaiting,
   syncEconomy,
@@ -161,8 +170,11 @@ import {
   exportString,
   fromJson,
   importString,
+  toExportJson,
   toJson,
 } from "./save";
+import { Archive, archiveOf, archiveReady, attachArchive, idbStore, newArchiveId } from "./archive";
+import { recoverRecords } from "./recovery";
 import { renderPace } from "./render-pace";
 import { PHONE_QUERY, TreeRenderer, treeSummary, treeView } from "./shop";
 import {
@@ -179,6 +191,8 @@ import {
   ruleAllowsProblem,
   ruleById,
   ruleOpenProblems,
+  ruleOpenWide,
+  SMALL_PIECES,
   standingMultiplier,
 } from "./standing";
 import {
@@ -295,12 +309,11 @@ const gapTo = (p: ProblemKey & { bound?: number | null }, s: number): number =>
 const sideWord = (p: ProblemKey) => rulesOf(p).scoreWord(p);
 
 /**
- * The milliseconds of one evaluation that auto-eval's speed terms count from: a polygon problem's by
- * its size (rank.ts), and about 5 ms for a space problem, whose evaluations are sized to that
- * (families.ts unitsPerEvaluation).
+ * The milliseconds of one evaluation that auto-eval's speed terms count from: the problem's family
+ * rules (families.ts evalMs), a polygon problem's by its size and a space problem's from the
+ * measured kernel evaluations its game evaluation is.
  */
-const SPACE_EVAL_MS = 5;
-const tableMsOf = (p: ProblemKey): number => (isPolygon(p) ? msPerEval(p.N + p.M + p.P) : SPACE_EVAL_MS);
+const tableMsOf = (p: ProblemKey): number => rulesOf(p).evalMs(p);
 /** The board's stage for Method match: fresh until a run on it ends by itself or it reaches its patience without progress. */
 const stageOf = (p: ProblemState): BoardStage => boardStage(p.endedRuns, p.sinceGain, stallAfter(state, p));
 /** The kind of problem the bandit learns a problem's methods for: its tier, family (polygons: size and piece shape) and stage. */
@@ -443,6 +456,22 @@ function initialState(): GameState {
 let state = initialState();
 // collections and the first cycle's earnings, for a save from before records were an economy
 syncEconomy(state);
+// the records past the save's limit live in IndexedDB (archive.ts): they load right after the save,
+// from the database this save names (it is written with the save before any row is)
+state.archiveId ??= newArchiveId();
+attachArchive(state, new Archive(idbStore(state.archiveId)));
+try {
+  // ask the browser not to clear the archive when it is short of space
+  void navigator.storage?.persist?.().catch(() => undefined);
+} catch {
+  // not offered
+}
+const archiveLoaded: Promise<void> = (() => {
+  let known: Set<string> | null = null;
+  return archiveOf(state)!
+    .load((key) => (known ??= new Set([...state.queue, ...state.past].map((p) => p.key))).has(key))
+    .then(() => undefined);
+})();
 // auto-eval runs live and owes nothing for the time the page was closed; it starts off, so compute
 // starts only on a press
 state.settings.auto = false;
@@ -463,6 +492,8 @@ function saveNow(): void {
     state.pacer = compactPacer(state.pacer, now());
     localStorage.setItem(STORAGE_KEY, toJson(state));
   });
+  // the archive writes only the rows that changed
+  void archiveOf(state)?.flush();
   const warning = $("t-save-warning");
   warning.textContent = ok ? "" : SAVE_FAILED_TEXT;
   warning.hidden = ok;
@@ -481,7 +512,7 @@ document.addEventListener("visibilitychange", () => {
 const owned = () => ownedSet(state);
 const focused = () => problem(state, state.focus);
 /** A problem's points as earned, before standing and collections multiply them: what method match learns from. */
-const basePoints = (p: ProblemState) => state.economy.base[p.key] ?? p.rp;
+const basePoints = (p: ProblemState) => p.base ?? p.rp;
 /** A method the player owns and the cycle's rule allows. */
 const allowedMethod = (o: Owned, m: EvolveMethod): boolean =>
   methods(o).includes(m) && ruleAllowsMethod(state.standing, m);
@@ -705,6 +736,8 @@ interface OpenRunView {
   /** Finished packings its method has handed back (a space run reports it; a 2D run does not), and the count at the problem's last progress. */
   offers?: number;
   offersAtGain: number;
+  /** The offers already counted into the problem's offersSinceGain. */
+  offersCounted: number;
   stage?: RunStage;
   /** The board it opened from (the method's startFrom), and the problem's best then. */
   origin: PackingConfig | SpaceConfig | null;
@@ -920,9 +953,10 @@ const spaceLoads = new Map<string, Promise<boolean>>();
 let startLane: Lane | null = null;
 
 /**
- * Load all for a space problem: the worker's start (a finished seed layout, else a finished random
- * start), which is the free floor and is never sent, as for polygons. When none can be made the
- * problem stays bare, and its first run opens fresh: its Compact gives the board.
+ * Load all for a space problem: the worker's start (a seed layout, else a random start, spread out so
+ * that the first Compact has room to remove), which is the free floor and is never sent, as for
+ * polygons. When none can be made the problem stays bare, and its first run opens fresh: its Compact
+ * gives the board.
  */
 function loadAllSpace(p: ProblemState & SpaceKey): Promise<boolean> {
   if (p.phase !== "bare") return Promise.resolve(true);
@@ -944,7 +978,7 @@ function loadAllSpace(p: ProblemState & SpaceKey): Promise<boolean> {
       reveal(state, "score");
       if (p.key === state.focus)
         say(
-          `${p.P} pieces placed. The ${sideWord(p)} is ${show6(a.score)}, ${fmtPct(a.score / rulesOf(p).bound(p)! - 1)} above the bound. ` +
+          `${p.P} pieces placed${a.loose ? " loosely" : ""}. The ${sideWord(p)} is ${show6(a.score)}, ${fmtPct(a.score / rulesOf(p).bound(p)! - 1)} above the bound. ` +
             `Your first record must beat this ${sideWord(p)}. This board is not sent. Press Evolve to compact it.`,
         );
       persist();
@@ -1157,6 +1191,7 @@ async function openRun(lv: LaneView, p: ProblemState, want: WantedRun, job: Job)
     found: a.state.found,
     offers: isSpaceRunState(a.state) ? a.state.offers : undefined,
     offersAtGain: 0,
+    offersCounted: 0,
     stage: a.state.stage,
     origin: setup.start,
     startScore,
@@ -1223,6 +1258,7 @@ async function openSpaceRun(lv: LaneView, p: ProblemState & SpaceKey, want: Want
     found: a.state.found,
     offers: isSpaceRunState(a.state) ? a.state.offers : undefined,
     offersAtGain: 0,
+    offersCounted: 0,
     stage: a.state.stage,
     origin: start,
     startScore,
@@ -1293,7 +1329,31 @@ async function runJob(lv: LaneView, job: Job): Promise<boolean> {
       r.evalsAt = r.evaluations;
     }
     const run = lv.run!;
-    const t = await lv.lane.step(job.evals);
+    let t = await lv.lane.step(job.evals);
+    let ms = t.ok ? t.ms : 0;
+    // a Compact outside 2D in 2D runs until the method's first finished packing, in steps of Compact's size
+    // so that its progress shows; it counts as COMPACT_EVALS however long it ran (countedEvals)
+    if (job.compact && !isPolygon(p)) {
+      while (
+        t.ok &&
+        isSpaceRunState(t.state) &&
+        t.state.offers < 1 &&
+        !t.state.ended &&
+        !t.state.closed &&
+        !t.state.error &&
+        !stopped &&
+        lv.lane.open &&
+        lv.run === run &&
+        problem(state, p.key) === p &&
+        !p.leaving &&
+        !p.closed
+      ) {
+        lv.progress = t.state as unknown as RunState;
+        scheduleRender();
+        t = await lv.lane.step(COMPACT_EVALS);
+        if (t.ok) ms += t.ms;
+      }
+    }
     if (!t.ok) {
       finishRun(run);
       lv.run = null;
@@ -1301,16 +1361,18 @@ async function runJob(lv: LaneView, job: Job): Promise<boolean> {
       return false;
     }
     const done = Math.max(0, t.state.evaluations - run.evaluations);
-    observeSpeed(run, p, done, t.ms);
-    if (!job.click) autoMeter.addRan(now(), done);
+    const counted = countedEvals(done, job.compact && !isPolygon(p), COMPACT_EVALS);
+    // a space Compact is mostly its finish, which says little of the run's speed afterwards
+    if (!(job.compact && !isPolygon(p))) observeSpeed(run, p, done, ms);
+    if (!job.click) autoMeter.addRan(now(), counted);
     track(run, t.state);
     if (t.state.ended) lv.run = null;
     if (problem(state, p.key) !== p) {
       // the problem left the queue meanwhile; the work still counts as done
-      countEvaluations(state, done, job.click);
+      countEvaluations(state, counted, job.click);
       return true;
     }
-    settle(run, p, job, t.state, done, t.ms);
+    settle(run, p, job, t.state, done, ms);
     if (t.state.ended) finishRun(run);
     return true;
   } finally {
@@ -1351,6 +1413,8 @@ function settle(
   // a space problem compacted from nothing (its start could not be made): the Compact's board is its free floor, as Load all's
   if (!isPolygon(p) && p.phase === "bare" && st.best && st.score !== null && st.score > 0)
     applyLoadAll(p, st.best, st.score, null);
+  // a space Compact counts as COMPACT_EVALS however long it ran; the run's own count stays the real one
+  const counted = countedEvals(done, job.compact && !isPolygon(p), COMPACT_EVALS);
   const record: RunRecord = {
     method: run.method,
     params: run.params,
@@ -1361,7 +1425,7 @@ function settle(
     state,
     p,
     {
-      evaluations: done,
+      evaluations: counted,
       best: st.best,
       score: st.score,
       run: record,
@@ -1376,7 +1440,12 @@ function settle(
   );
   // the offers the stall rule waits for count from the problem's latest progress
   if (p.sinceGain === 0) run.offersAtGain = run.offers ?? 0;
-  lastChange.set(p.key, { ...change, evals: done, seed: run.seed, method: run.method });
+  // and the problem's own count, which Auto-advance's leaving waits on (game.ts leaveReason)
+  if (run.offers !== undefined) {
+    p.offersSinceGain = p.sinceGain === 0 ? 0 : (p.offersSinceGain ?? 0) + Math.max(0, run.offers - run.offersCounted);
+    run.offersCounted = run.offers;
+  }
+  lastChange.set(p.key, { ...change, evals: counted, seed: run.seed, method: run.method });
   if (change.firstRecord) {
     reveal(state, "log");
     banner = {
@@ -1404,15 +1473,24 @@ function settle(
     event(`${ended}${smaller ? ` ${smaller}` : ""} The next click starts a new run${nextStageText(p)}.`);
   }
   // after Stop, the click that was already running does not write over "Stopped"
-  if (job.click && p.key === state.focus && !stopped) say(stepMessage(p, change, run, job, done));
+  if (job.click && p.key === state.focus && !stopped) say(stepMessage(p, change, run, job, done, counted));
   persist();
   scheduleRender();
   void submitTick();
   void dealTick();
 }
 
-function stepMessage(p: ProblemState, c: StepChange, run: OpenRunView, job: Job, done: number): string {
-  const what = `${job.compact ? "Compact" : `Click ${fmtInt(state.stats.clicks)}`} ran ${evals(done)} of ${methodLabel(run.method)}.`;
+function stepMessage(
+  p: ProblemState,
+  c: StepChange,
+  run: OpenRunView,
+  job: Job,
+  done: number,
+  counted: number,
+): string {
+  // a space Compact ran to its first finished packing, and counts as less
+  const as = counted < done ? ` It counts as ${evals(counted)}.` : "";
+  const what = `${job.compact ? "Compact" : `Click ${fmtInt(state.stats.clicks)}`} ran ${evals(done)} of ${methodLabel(run.method)}.${as}`;
   if (!c.improved || c.before === null || c.after === null) {
     const note = methodGame(run.method).stepNote?.(runView(run, p));
     return `${what} No improvement on ${show6(p.best ?? 0)}.${note ? ` ${note}` : ""}`;
@@ -1971,7 +2049,7 @@ function contestedTiers(o: ReadonlySet<UpgradeId>): Set<Tier> {
 /** Set while a deal looks outside the player's filters (an empty queue, nothing that fits): the filters are not applied. */
 let filtersOff = false;
 const dealerFilters = () => (!filtersOff && inUse(owned(), "filters") ? state.picks.filters : null);
-/** The cycle's rule allows a problem: "circles only" and "small problems only" restrict polygon problems only, so space problems are dealt as usual under them. */
+/** The cycle's rule allows a problem ("circles only" and "small problems only" restrict every Dimension: standing.ts hasCircles, isSmall). */
 const ruleOk = (p: ProblemKey): boolean => ruleAllowsProblem(state.standing, p);
 /** The player's filters and the cycle's rule allow a candidate. */
 const allowed = (c: ProblemKey & { tier?: Tier }) => passes(dealerFilters(), c) && ruleOk(c);
@@ -2007,6 +2085,7 @@ async function openCandidate(
   const pass = (p: ProblemKey) => allowed({ ...p, tier: "open" });
   // a cycle rule may need open problems of its own (circles have none in the frontier)
   const ruled = ruleOpenProblems(state.standing);
+  const ruledWide = ruleOpenWide(state.standing);
   const confirm = async (): Promise<Candidate | null> => {
     while (openStock.length && !spentIo(io)) {
       const k = openStock.shift()!;
@@ -2031,7 +2110,7 @@ async function openCandidate(
   const pools: Pool[] =
     firstPools ??
     (ruled
-      ? [{ keys: ruled }]
+      ? [{ keys: ruled }, { wide: true, skew: 2.5, rule: ruledWide }]
       : wideFirst
         ? [{ wide: true, skew: 1 }, { keys: FRONTIER }]
         : [{ keys: FRONTIER }, { wide: true, skew: 2.5 }]);
@@ -2182,6 +2261,20 @@ function dealableSlices(): SliceId[] {
   return spaceBlocked ? [] : openSlices(owned(), state.standing);
 }
 
+/** What the cycle's rule asks of the draws in the other Dimensions: small problems, 30 pieces or fewer; circles, disks or balls. */
+function ruleLimits(): RuleLimits {
+  return {
+    ...(state.standing.rule === "small" ? { maxP: SMALL_PIECES, small: true as const } : {}),
+    ...(state.standing.rule === "circles" ? { circles: true } : {}),
+  };
+}
+
+/** The slices open now that the cycle's rule leaves a problem in (under circles only, not the solids of the polyhedra family). */
+function ruledSlices(): SliceId[] {
+  const open = dealableSlices();
+  return state.standing.rule === "circles" ? open.filter(sliceHasCircles) : open;
+}
+
 /** Problems of a dimension dealt, offered or left so far. */
 const dimensionDealt = (dim: DimensionId): number =>
   [...state.queue, ...state.past, ...state.picks.offers].filter((p) => familyDimension(p.family) === dim).length;
@@ -2224,7 +2317,7 @@ async function spaceCandidate(
   exclude: Set<string>,
   starter?: SliceId,
 ): Promise<Candidate | null> {
-  const slice = starter ?? pickSlice(d, dealableSlices());
+  const slice = starter ?? pickSlice(d, ruledSlices());
   if (!slice) return null;
   const listed = listingOf(slice);
   if (listed && !(await spaceListing(io, listed))) return null;
@@ -2233,6 +2326,7 @@ async function spaceCandidate(
     exclude,
     starter: starter !== undefined,
     open: dealableSlices(),
+    ...ruleLimits(),
   });
   if (!k) return null;
   if (!allowed({ ...k, tier: "open" })) {
@@ -2359,13 +2453,18 @@ async function collectorCandidate(io: DealIo, d: DealerState, exclude: Set<strin
 }
 
 /** What the player has reached, as the sources of a draw go. */
-const sourceReach = (o: ReadonlySet<UpgradeId>): SourceReach => ({
-  contested: contestedTiers(o),
-  ringMin: ringMin(o),
-  wide: o.has("wide"),
-  space: dealableSlices().length > 0,
-  ruled: ruleOpenProblems(state.standing),
-});
+const sourceReach = (o: ReadonlySet<UpgradeId>): SourceReach => {
+  const ruled = ruleOpenProblems(state.standing);
+  return {
+    contested: contestedTiers(o),
+    ringMin: ringMin(o),
+    wide: o.has("wide"),
+    space: ruledSlices().length > 0,
+    ruled,
+    ruledWide: ruleOpenWide(state.standing),
+    used: ruled ? new Set([...seenKeys(state), ...skipped, ...takenCache.keys()]) : undefined,
+  };
+};
 
 /**
  * Up to `want` candidates, each checked with GET just before it counts: a retake first (Retake),
@@ -2426,6 +2525,13 @@ function plainRanked(c: Candidate): Ranked {
   return rankCandidates([c], null, () => 0.5)[0];
 }
 
+/** A retaken problem comes back from the past, and keeps the base its entry still had. */
+function retakeFromPast(p: ProblemState): void {
+  const old = state.past.find((q) => q.key === p.key);
+  if (old?.base !== undefined) p.base = old.base;
+  state.past = state.past.filter((q) => q.key !== p.key);
+}
+
 /**
  * The problem a candidate becomes: an open problem starts bare; a site record, a retake or a
  * published value starts from a packing the server keeps (the leader's, or the best drawable one
@@ -2466,7 +2572,7 @@ async function materialize(c0: Candidate): Promise<ProblemState | null> {
   p.leader = c.leader ? { ...c.leader } : null;
   p.published = c.target;
   // a retaken problem comes back from the past
-  if (c.retake) state.past = state.past.filter((q) => q.key !== p.key);
+  if (c.retake) retakeFromPast(p);
   return p;
 }
 
@@ -2489,7 +2595,7 @@ async function materializeSpace(c: Candidate & SpaceKey): Promise<ProblemState |
     p.leader = { ...read.leader };
   }
   // a retaken problem comes back from the past
-  if (c.retake) state.past = state.past.filter((q) => q.key !== p.key);
+  if (c.retake) retakeFromPast(p);
   return p;
 }
 
@@ -2633,7 +2739,10 @@ async function deal(d: DealerState): Promise<{ p: ProblemState; ranked: Ranked; 
     const io: DealIo = { gets: 0, offline: false };
     const ruled = ruleOpenProblems(state.standing);
     // the starter corner, then the rest of the frontier, then small problems of the wide set: the smallest open one found
-    const pools = ruled ? [{ keys: ruled }] : firstDealPools(STARTER, FRONTIER);
+    const ruledWide = ruleOpenWide(state.standing);
+    const pools: Pool[] = ruled
+      ? [{ keys: ruled }, { wide: true, skew: 2.5, rule: ruledWide }]
+      : firstDealPools(STARTER, FRONTIER);
     for (let attempt = 0; attempt < 3 && !spentIo(io); attempt++) {
       const c = await openCandidate(io, d, exclude, pools);
       if (c) return { p: newProblem(c, "open", now()), ranked: plainRanked(c) };
@@ -2816,8 +2925,13 @@ function noteRival(key: string, leader: Leader | null): void {
  * A leader read from the server: settles a send whose answer was lost (its points confirmed, as its
  * answer would have) and tells the player when a record of theirs was beaten.
  */
-function noteLeader(p: ProblemState | PastProblem, leader: Leader | null): void {
+function noteLeader(p: ProblemState | PastProblem, leader: Leader | null, quiet = false): void {
   const r = applyLeader(p, leader, state, now());
+  // an archived record that is lost leaves the archive (a payday tells of all of them in one line)
+  if (r.lost) {
+    const a = archiveOf(state);
+    if (a?.get(p.key) === p) a.remove(p.key);
+  }
   if (r.reconciled && leader) {
     reveal(state, "points", "upgrades");
     event(
@@ -2829,10 +2943,11 @@ function noteLeader(p: ProblemState | PastProblem, leader: Leader | null): void 
     const retake = inUse(owned(), "retake") && !problem(state, p.key);
     if (retake) addRetake(state.picks, p.key);
     noteRival(p.key, leader);
-    event(
-      `Your record on ${problemTitle(p)} was beaten${leader ? ` by ${leader.name}, with ${show6(leader.score)}` : ""}.` +
-        (retake ? " It will be the first problem offered to you again (Retake)." : ""),
-    );
+    if (!quiet)
+      event(
+        `Your record on ${problemTitle(p)} was beaten${leader ? ` by ${leader.name}, with ${show6(leader.score)}` : ""}.` +
+          (retake ? " It will be the first problem offered to you again (Retake)." : ""),
+      );
   }
 }
 
@@ -2840,7 +2955,7 @@ function onLeaderEvent(e: LeaderboardEvent): void {
   const key = keyOf(poly(e.N, e.M, e.P));
   // our own entry, announced before its answer arrives; a rival's is seen in that answer instead
   if (!ownsGame || inFlight.has(key)) return;
-  const target = problem(state, key) ?? state.past.find((p) => p.key === key);
+  const target = problem(state, key) ?? state.past.find((p) => p.key === key) ?? archiveOf(state)?.get(key);
   if (!target) return;
   noteLeader(target, { score: e.score, name: e.name, id: e.id });
   persist();
@@ -2878,20 +2993,46 @@ async function refreshHeld(): Promise<void> {
   }
 }
 
-// ---------- rent: a payday once a day ----------
+/**
+ * Once per save, after the archive has loaded: records the save lost before the archive existed are
+ * looked up on the server (recovery.ts). A failed try is repeated at a later load.
+ */
+let recovering = false;
+async function findLostRecords(): Promise<void> {
+  if (recovering || !ownsGame || state.archiveRecovered || !state.name) return;
+  recovering = true;
+  try {
+    const s = state;
+    const n = await recoverRecords(s, owned(), { getHolder: api.getHolder, getLeaders: api.getLeaders, now });
+    if (s !== state) return;
+    if (n !== null) persist();
+    if (n) {
+      event(
+        `${fmtInt(n)} of your older records ${n === 1 ? "was" : "were"} found on the server and count${n === 1 ? "s" : ""} again.`,
+      );
+      render();
+    }
+  } finally {
+    recovering = false;
+  }
+}
 
-/** When the next payday runs (0: at once, which is how the page opens). */
-let paydayAt = 0;
+// ---------- rent: a payday every day at noon ----------
+
 let paydayRunning = false;
 
 /**
- * With Rent: at page load and every 24 hours, all records held are looked up in batches (payday.ts)
- * and the ones still ours pay the rent since their last payday. Records the server did not answer
- * are tried again 10 minutes later.
+ * With Rent: once the saved payday time (economy.paydayAt) has come, all records held are looked up
+ * in batches (payday.ts) and, when every batch has answered, the ones still ours pay the rent for
+ * their window. The next payday is the next local noon. A failed request pays nothing and is tried
+ * again 10 minutes later. A save without a payday time runs one at
+ * its next load.
  */
 async function paydayTick(): Promise<void> {
   const o = owned();
-  if (!ownsGame || paydayRunning || !o.has("rent") || now() < paydayAt) return;
+  // the archived records are part of the payday: it waits until they have loaded
+  if (!ownsGame || paydayRunning || !o.has("rent") || !archiveReady(state)) return;
+  if (now() < paydayDueAt(state.economy, now())) return;
   paydayRunning = true;
   try {
     const r = await runPayday({
@@ -2908,7 +3049,12 @@ async function paydayTick(): Promise<void> {
         render();
       },
     });
-    paydayAt = now() + (r.unanswered > 0 ? RENT_RETRY_MS : RENT_PAYDAY_MS);
+    state.economy.paydayAt = nextPaydayAfter(now(), r.unanswered);
+    persist();
+    if (r.archivedLost > 0)
+      event(
+        `${fmtInt(r.archivedLost)} of your records ${r.archivedLost === 1 ? "was" : "were"} beaten since the last payday.`,
+      );
     if (r.paying > 0)
       event(
         `Payday. ${fmtInt(r.paying)} ${r.paying === 1 ? "record paid" : "records paid"} ${fmtRP(r.paid)} RP in rent.`,
@@ -3099,7 +3245,9 @@ function renderToolbar(p: ProblemState | undefined, o: ReadonlySet<UpgradeId>): 
     : p.phase === "bare"
       ? "The pieces are being placed."
       : first
-        ? `Your first click compacts the board with ${evals(COMPACT_EVALS)} of mc_compress. After that, each click runs ${evals(k)}.`
+        ? isPolygon(p)
+          ? `Your first click compacts the board with ${evals(COMPACT_EVALS)} of mc_compress. After that, each click runs ${evals(k)}.`
+          : `Your first click compacts the loosely placed board. It runs until mc_compress hands back its first finished packing, however long that takes, and counts as ${evals(COMPACT_EVALS)}. After that, each click runs ${evals(k)}.`
         : `Each click runs ${evals(k)} on this board.`;
   // the method select: the owned methods (those the cycle's rule refuses greyed), and "Auto" with Method match
   const ms = methods(o);
@@ -4331,7 +4479,8 @@ function renderRecords(o: Owned): void {
   if (rent) {
     rows.push(["Rent per hour", `${fmtRP(rentRate(state, o))} RP`]);
     rows.push(["Rent waiting for payday", `about ${fmtRP(rentWaiting(state, o, now()))} RP`]);
-    rows.push(["Next payday", paydayAt <= now() ? "now" : `in ${fmtSpan(paydayAt - now())}`]);
+    const due = paydayDueAt(state.economy, now());
+    rows.push(["Next payday", due <= now() ? "now" : `in ${fmtSpan(due - now())}`]);
     rows.push(["Rent paid", `${fmtRP(state.economy.rentPaid)} RP`]);
   }
   const c = collections(state.economy);
@@ -4341,7 +4490,7 @@ function renderRecords(o: Owned): void {
   text(
     "t-rc-note",
     rent
-      ? "Once a day, the game asks the server which of your records you still hold. Each one pays the rent it built up since its last payday." +
+      ? "Every day at noon, the game asks the server which of your records you still hold. Each one pays the rent it built up since the last payday, or since you won it if that was later." +
           (last
             ? ` The last rent paid was +${fmtRP(last.rp)} RP on ${titleOf(last.key)}, ${fmtAgo(now() - last.at)}.`
             : "")
@@ -4351,15 +4500,14 @@ function renderRecords(o: Owned): void {
     setLines("t-rc-sets", []);
     return;
   }
-  const comboName = (n: { N: number; M: number }) => problemTitle(poly(n.N, n.M, 0)).replace(/, 0 pieces$/, "");
   const lines = [
-    `${fmtInt(c.combos)} combination${c.combos === 1 ? "" : "s"} of pieces and container with ${COMBO_RECORDS} records (+${fmtPct(COMBO_BONUS, 0)} each).` +
+    `${fmtInt(c.combos)} pairing${c.combos === 1 ? "" : "s"} of pieces and container with ${COMBO_RECORDS} records (+${fmtPct(COMBO_BONUS, 0)} each).` +
       (c.nearest.length
-        ? ` Closest: ${andList(c.nearest.map((n) => `${comboName(n)} (${n.have} of ${COMBO_RECORDS})`))}.`
+        ? ` Closest: ${andList(c.nearest.map((n) => `${n.label} (${n.have} of ${COMBO_RECORDS})`))}.`
         : ""),
     `${fmtInt(c.milestones)} shape milestone${c.milestones === 1 ? "" : "s"} at ${andList(SHAPE_MILESTONES.map(String))} records with one piece shape (+${fmtPct(SHAPE_BONUS, 0)} each).` +
       (c.shapes.length
-        ? ` Your most recorded pieces: ${andList(c.shapes.slice(0, 3).map((x) => `${shapeName(x.N, true)} (${fmtInt(x.count)})`))}.`
+        ? ` Your most recorded pieces: ${andList(c.shapes.slice(0, 3).map((x) => `${x.label} (${fmtInt(x.count)})`))}.`
         : ""),
     `First records in these tiers: ${c.tiers.length ? andList(c.tiers.map((t) => TIER_LABEL[t as Tier] ?? t)) : "none yet"} (+${fmtPct(TIER_BONUS, 0)} each).`,
   ];
@@ -4581,9 +4729,29 @@ $("t-st-rule").addEventListener("change", () => {
   persist();
   render();
 });
+/** A save string longer than this goes to a file: the clipboard and a text box cope badly with more. */
+const EXPORT_TEXT_MAX = 4_000_000;
 $("t-export").addEventListener("click", async () => {
   const area = $<HTMLTextAreaElement>("t-save-text");
-  area.value = await exportString(state);
+  await archiveLoaded;
+  const rows = archiveOf(state)?.values() ?? [];
+  const str = await exportString(state, rows);
+  if (str.length > EXPORT_TEXT_MAX) {
+    // too big to paste: the save document as a file, which Import can read back
+    const blob = new Blob([toExportJson(state, archiveOf(state)?.values() ?? [])], { type: "application/json" });
+    const link = document.createElement("a");
+    link.href = URL.createObjectURL(blob);
+    link.download = `tighter-save-${new Date(now()).toISOString().slice(0, 10)}.json`;
+    link.click();
+    setTimeout(() => URL.revokeObjectURL(link.href), 10_000);
+    area.value = "";
+    text(
+      "t-save-note",
+      "The save is too big to copy, so it was saved as a file. Use Import from file to read it back.",
+    );
+    return;
+  }
+  area.value = str;
   area.select();
   try {
     await navigator.clipboard.writeText(area.value);
@@ -4592,16 +4760,23 @@ $("t-export").addEventListener("click", async () => {
     text("t-save-note", "The browser blocked copying. Copy the save string above by hand.");
   }
 });
-$("t-import").addEventListener("click", async () => {
-  const r = await importString($<HTMLTextAreaElement>("t-save-text").value, now());
+async function doImport(source: string): Promise<void> {
+  const r = await importString(source, now());
   if (!r.ok) {
     text("t-save-note", `The save could not be imported (${r.error}).`);
     return;
   }
   if (!confirm("Replace your current game with this save? You lose the current game unless you exported it.")) return;
+  await archiveLoaded;
   for (const l of lanes) l.lane.terminate();
   lanes.length = 0;
+  // the imported game's archived records replace the current ones, in this save's database
+  state.archiveId ??= newArchiveId();
+  const a = archiveOf(state) ?? new Archive(idbStore(state.archiveId));
+  a.replaceAll(r.archive ?? []);
+  r.state.archiveId = state.archiveId;
   state = r.state;
+  attachArchive(state, a);
   syncEconomy(state);
   state.settings.auto = false;
   lastChange.clear();
@@ -4621,6 +4796,14 @@ $("t-import").addEventListener("click", async () => {
   ].filter(Boolean);
   text("t-save-note", ["Save imported.", ...notes].join(" "));
   render();
+}
+$("t-import").addEventListener("click", () => void doImport($<HTMLTextAreaElement>("t-save-text").value));
+$("t-import-file-btn").addEventListener("click", () => $<HTMLInputElement>("t-import-file").click());
+$<HTMLInputElement>("t-import-file").addEventListener("change", async (e) => {
+  const input = e.target as HTMLInputElement;
+  const file = input.files?.[0];
+  input.value = "";
+  if (file) await doImport(await file.text());
 });
 
 // ---------- "How it works" ----------
@@ -4727,6 +4910,7 @@ function begin(): void {
   listen();
   void dealTick();
   void refreshHeld();
+  void archiveLoaded.then(() => findLostRecords());
   ticker = window.setInterval(() => {
     listen();
     void dealTick();

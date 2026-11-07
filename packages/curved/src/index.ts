@@ -12,4 +12,5 @@ export * from "./engine";
 export * from "./sensitivity";
 export * from "./ideal";
 export * from "./kernel";
-export { curvedBound } from "./kernel-finish";
+
+export * from "./bound";

@@ -36,7 +36,7 @@ The framework's finish (`ctx.offer`) turns the result into a valid configuration
    weights 1e6, 1e7, 1e8 and 1e9, and offered once more. This is the final finish of the best,
    done at once: the budget ends at whatever kernel call spends it, so a polish saved for the end
    would often not happen. New bests are rare once starts accumulate: among n random starts, about
-   ln n set a new best. Where the space's own finish polishes already, as in curved space, a
+   ln n set a new best. Where the family's own finish polishes already, as in curved space, a
    polish gains nothing; after the first such polish the run tries no more. The budget can still
    cut a polish short, and then the best returned is unpolished.
 
@@ -121,9 +121,9 @@ description and its default.
 [CALC] Node.js v26.5.0, Apple Silicon. Every result is checked with the kernel's own validator.
 Times are not given: the machine was shared and loaded.
 
-### Space kernels
+### Family kernels
 
-[CALC] Defaults, seeds 1–3. Each cell is the median excess over the space's record
+[CALC] Defaults, seeds 1–3. Each cell is the median excess over the family's record
 (`score_cert` in `data/<space>/records.json`), then the runs within 1e-3 of it. Every run has a
 result. A negative excess (1e-12 to 1e-7) is a score just below the record's certified score,
 which carries a safety margin; it is not a new record.
@@ -194,8 +194,8 @@ known radius (`data/records.json`, Packomania). The worst excess over it:
 radius: the descent's weights end at 1e4. The seeds of the reference kernel, hexagonal patches,
 trap every start at P = 9 and P = 22 in a worse local optimum, while at P = 25 and P = 28 they lead
 to the best known packing more often than random starts. The share of one half hedges between the
-two; it is not tuned per space. Here a jitter of 1e-5 does better at P = 25 and 28: the lattice
-patches are best kept as they are. The default of 0.1 serves the space kernels instead.
+two; it is not tuned per family. Here a jitter of 1e-5 does better at P = 25 and 28: the lattice
+patches are best kept as they are. The default of 0.1 serves the family kernels instead.
 
 Reproduce with:
 
@@ -228,10 +228,10 @@ JavaScript runtime; another Node.js version may round differently and give other
 
 ## Limits
 
-- [CALC] The defaults were chosen from these runs, on a few problems per space and few seeds.
+- [CALC] The defaults were chosen from these runs, on a few problems per family and few seeds.
   [SPEC] Other problems may want other defaults, the augmented schedule among them.
 - The seeds can trap a whole share of the starts in one local optimum, as at P = 9 above.
-- At 1,000 evaluations a space with a dear finish gets one loose result, not a packing.
+- At 1,000 evaluations a family with a dear finish gets one loose result, not a packing.
 - It is a multistart local method, not a global search; it gives no optimality guarantee.
 
 ## References

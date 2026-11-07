@@ -6,7 +6,7 @@
  * result. A start whose finish fails is restored (relaxed, then grown) and offered again; a new
  * best is polished with heavier weights and offered once more, until a polish gains nothing.
  */
-import type { MethodContext, SpaceMethodDefinition } from "../framework";
+import type { MethodContext, FamilyMethodDefinition } from "../framework";
 import type { KernelState } from "../kernel";
 import { relax, squeeze } from "../local";
 import { descend, type ScheduleOptions } from "./penalty-schedule";
@@ -67,13 +67,13 @@ function run(ctx: MethodContext): void {
         maxIter: fitIterations(ctx, p.innerIterations, POLISH_WEIGHTS.length + 1, false),
       });
       const polished = ctx.offer(s);
-      // where the space's finish polishes already, a polish gains nothing: it is not tried again
+      // where the family's finish polishes already, a polish gains nothing: it is not tried again
       if (!(polished !== null && polished < score * (1 - 1e-12))) polishing = false;
     }
   }
 }
 
-export const penalty: SpaceMethodDefinition = {
+export const penalty: FamilyMethodDefinition = {
   name: "penalty",
   title: "Penalty",
   summary:
@@ -107,7 +107,7 @@ export const penalty: SpaceMethodDefinition = {
         default: 0.5,
         title: "Seed share",
         description:
-          "Fraction of the starts taken from the space's structured seeds, where it has them; the rest are random. A given start always comes first.",
+          "Fraction of the starts taken from the family's structured seeds, where it has them; the rest are random. A given start always comes first.",
       },
       schedule: {
         type: "string",

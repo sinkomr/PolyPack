@@ -160,4 +160,39 @@ describe("framework", () => {
       b = seededRandom(42);
     expect(Array.from({ length: 50 }, a)).toEqual(Array.from({ length: 50 }, b));
   });
+  it("notices a time limit at the first shouldStop after it, also when tight loops give way to slow calls", async () => {
+    // A method that polls shouldStop a million times in a tight loop and then once per 20 ms of
+    // work must not be told to go on once its own clock, started after the run's, is past the
+    // limit; directly and from a sub-run, whose limit is its parent's.
+    const limit = 300;
+    const late: number[] = [];
+    const work = (ctx: { shouldStop(): boolean }, begun: number) => {
+      for (let i = 0; i < 1e6; i++) if (ctx.shouldStop()) return;
+      for (;;) {
+        const before = performance.now() - begun;
+        if (ctx.shouldStop()) return;
+        if (before >= limit) late.push(before);
+        const end = performance.now() + 20;
+        while (performance.now() < end);
+      }
+    };
+    const registry = new MethodRegistry();
+    const method = (name: string, execute: (ctx: Parameters<Parameters<typeof registry.register>[0]["execute"]>[0]) => Promise<void>) => ({
+      name,
+      schema: { type: "object" as const, additionalProperties: false as const },
+      defaults: {},
+      doc: `docs/methods/${name}.md`,
+      execute,
+    });
+    let begun = 0;
+    registry.register(method("slowing", async (ctx) => work(ctx, begun)));
+    registry.register(method("parent", async (ctx) => void (await ctx.run("slowing"))));
+    for (const name of ["slowing", "parent"]) {
+      late.length = 0;
+      begun = performance.now();
+      const result = await registry.run(problem, { method: name, seed: 1, budget: { time_s: limit / 1000 }, finalPolish: false });
+      expect(result.termination).toBe("time");
+      expect(late).toEqual([]);
+    }
+  });
 });

@@ -4,7 +4,7 @@
  *  - "ball": the ball of DIAMETER s about the origin (radius s / 2, catalogue.ts ballContainerRadius);
  *  - "cube": the cube [-s/2, s/2]^3 (an axis-aligned special case with its own, simpler code in every file, kept as
  *    it was before the other solids were containers);
- *  - "polyhedron": s times a canonical solid of the polyhedra space (centred at its vertex centroid, which is the
+ *  - "polyhedron": s times a canonical solid of the polyhedra family (centred at its vertex centroid, which is the
  *    origin), the intersection of the half-spaces N_f . x <= s b_f, N_f the unit outward normal of face f and b_f
  *    its offset. The cube is one too: the same formulas hold for it.
  *

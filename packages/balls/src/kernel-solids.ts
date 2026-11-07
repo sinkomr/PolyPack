@@ -1,6 +1,6 @@
 /**
- * The balls kernel for unit-edge solids, any of the polyhedra space's 94, in a ball (kernel.ts has the whole
- * kernel's description). It is the polyhedra space's kernel (packages/polyhedra/src/kernel.ts) with a ball for the
+ * The balls kernel for unit-edge solids, any of the polyhedra family's 94, in a ball (kernel.ts has the whole
+ * kernel's description). It is the polyhedra family's kernel (packages/polyhedra/src/kernel.ts) with a ball for the
  * container. Its rho and Rc are the solid's inradius (the least face offset) and circumradius (the largest vertex
  * distance), both about the vertex centroid, which is the centre of the solid's largest inscribed ball and of its
  * smallest enclosing ball for all 94 (container.ts); so the soft shapes below lie inside the solid, and the ball of
@@ -39,7 +39,7 @@
  * f c + v = (c + v) + (f - 1) c, at most s + (f - 1) |c| <= f s from the origin, since the centre lies in the
  * piece and so in the ball [EST, elementary].
  */
-import type { KernelCapability, KernelState, Rng, SpaceKernel } from "@polypack/methods";
+import type { KernelCapability, KernelState, Rng, FamilyKernel } from "@polypack/methods";
 import {
   SD_GRADIENT as GR,
   type Pose,
@@ -73,7 +73,7 @@ interface SolidsAux {
 /** Volume fraction of a random start: the pieces fill about this much of the ball. */
 const START_FILL = 0.15;
 
-export function solidPiecesKernel(pb: BallsProblem, P: number, common: { id: string; bound: number }): SpaceKernel {
+export function solidPiecesKernel(pb: BallsProblem, P: number, common: { id: string; bound: number }): FamilyKernel {
   const piece = getSolid(pb.piece);
   // the piece in the units of the canonical solid (edge 1)
   const shape = prepShape(piece, 1);

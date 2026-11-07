@@ -39,6 +39,12 @@ export interface SpaceDomainField {
   min?: number;
   max?: number;
   /**
+   * Values of `values` that are valid in ids but that the board's menu leaves out (curved's six tiling curvatures,
+   * which hold research records and stay on the Records page and in the API). `values` is the whole list, so a link to an
+   * id with one still opens it on the board; the menu then offers it as long as it is the chosen value.
+   */
+  unlisted?: readonly string[];
+  /**
    * For a field whose values or range depend on the value of another field (nD in nD: the shapes and the largest P of
    * each dimension): the other field's key and, by its value, the values or the [min, max] range that hold. `values` and
    * `min` / `max` above are then the union.
@@ -81,6 +87,15 @@ export interface SpaceDomain {
   bound(id: ParsedSpaceId): { value: number; label: string } | null | undefined;
   /** At most `limit` ids of the domain, in a fixed order (that of the volunteers' work list, removed 2026-10-29). */
   sample(limit: number): string[];
+  /**
+   * The values or range a field of the board's picker offers, given the values chosen in the fields before it (by key),
+   * or undefined for the field's own (as `dependent` gives them). A hook of the code, not of /api/spaces: curved's menus
+   * of containers and P depend on the curvature, the piece and the container, which would take a table of about 215,000
+   * rows. The picker (apps/web/src/space/pick.ts) takes it as an argument.
+   */
+  menu?(key: string, chosen: Readonly<Record<string, string>>): { values?: readonly string[]; range?: readonly [number, number] } | undefined;
+  /** A plain sentence saying why the id, which is inside the domain's ranges, cannot be a problem (no bound), or null. */
+  impossible?(id: ParsedSpaceId): string | null;
 }
 
 /** The spaces whose problems are given by a domain. */
@@ -102,6 +117,11 @@ export const SPACE_DOMAINS: Partial<Record<SpaceName, SpaceDomain>> = {
   sphere: sphereDomain,
   torus: torusDomain,
 };
+
+/** Why an id of a space's domain cannot be a problem (the domain's `impossible`), or null. */
+export function impossibleReason(space: SpaceName, parsed: ParsedSpaceId): string | null {
+  return SPACE_DOMAINS[space]?.impossible?.(parsed) ?? null;
+}
 
 /** The largest P of a domain (its field P's range), or 0. */
 export function domainMaxP(d: SpaceDomain): number {

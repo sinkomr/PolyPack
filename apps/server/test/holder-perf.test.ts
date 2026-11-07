@@ -118,7 +118,7 @@ describe("GET /api/holder for a name that leads 30,000 problems", () => {
     // the page agrees with the row of /api/holders, which the server counts its own way
     const holders = await (await app.request("/api/holders")).json();
     const row = (holders as { holders: Holder[] }).holders.find((h) => h.name === "big");
-    expect(row).toEqual({ name: "big", records: 30_000, beat_published: 0, site_bests: 30_000, pending: 0 });
+    expect(row).toEqual({ name: "big", records: 30_000, beat_published: 0, site_bests: 30_000, pending: 0, peak: 30_000 });
 
     const kept = await probed(() => ask("big"));
     expect(kept.result.body).toEqual(body);

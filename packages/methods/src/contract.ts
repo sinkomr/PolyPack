@@ -1,5 +1,5 @@
 /**
- * The checks every kernel must pass (kernel.ts states the rules). A space's kernel test calls
+ * The checks every kernel must pass (kernel.ts states the rules). A family's kernel test calls
  * checkKernel with a factory and expects an empty list of failures:
  *
  *   expect(checkKernel(() => sphereKernel(problem), { seed: 1 })).toEqual([]);
@@ -7,7 +7,7 @@
  * Each failure is one sentence naming the rule and the numbers. The checks are seeded and use the
  * kernel's own randomStart, so they also cover the states the methods will see.
  */
-import type { KernelState, SpaceKernel } from "./kernel";
+import type { KernelState, FamilyKernel } from "./kernel";
 import { mulberry32 } from "./random";
 import { relax } from "./local";
 
@@ -33,7 +33,7 @@ const same = (a: unknown, b: unknown, tol = 1e-9): boolean => {
   return a === b;
 };
 
-export function checkKernel(make: () => SpaceKernel, o: ContractOptions = {}): string[] {
+export function checkKernel(make: () => FamilyKernel, o: ContractOptions = {}): string[] {
   const failures: string[] = [];
   const fail = (m: string) => failures.push(m);
   const k = make();

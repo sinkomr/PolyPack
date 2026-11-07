@@ -1,10 +1,10 @@
 /**
  * Offers and bounded local solves shared by harden and morph (docs/methods/dimensions/harden.md,
  * morph.md): every offer is a true-shape state, the first offer comes from a state that the
- * space's finishing can take, and a local solve can be held to an allowance of evaluations.
+ * family's finishing can take, and a local solve can be held to an allowance of evaluations.
  */
 import type { MethodContext } from "../framework";
-import type { KernelState, SpaceKernel } from "../kernel";
+import type { KernelState, FamilyKernel } from "../kernel";
 import { relax } from "../local";
 
 /** Offers the true-shape version of s (a copy at t = 1); a soft state is never offered. */
@@ -16,11 +16,11 @@ export function offerTrueShape(ctx: MethodContext, s: KernelState): number | nul
 }
 
 /** What one energy() call costs: gradCost with a gradient, 1 without. */
-export const energyCost = (k: SpaceKernel, gradient: boolean) => (gradient ? (k.gradCost ?? 1) : 1);
+export const energyCost = (k: FamilyKernel, gradient: boolean) => (gradient ? (k.gradCost ?? 1) : 1);
 
 /** A view of a kernel whose energy() refuses (returns Infinity) once `allowance` evaluations are spent. */
 export interface Allowance {
-  kernel: SpaceKernel;
+  kernel: FamilyKernel;
   /** Evaluations spent through the view. */
   spent(): number;
   /** True once a call was refused. */
@@ -33,10 +33,10 @@ export interface Allowance {
  * costs nothing. So a solve that runs out of its allowance ends cleanly, where the run's Stop
  * would end the whole method.
  */
-export function withAllowance(k: SpaceKernel, allowance: number): Allowance {
+export function withAllowance(k: FamilyKernel, allowance: number): Allowance {
   let spent = 0;
   let refused = false;
-  const kernel: SpaceKernel = {
+  const kernel: FamilyKernel = {
     ...k,
     energy(s, grad, weights) {
       const cost = energyCost(k, !!grad);
@@ -62,7 +62,7 @@ const FIRST_RANDOM_TRIES = 2;
  * valid result, when nothing valid is held yet. Raw random starts rarely finish (their pieces
  * overlap deeply: none of ten on the boundary's balls or the surface's squares), so it tries, in
  * order: `candidates` (a supplied start, a structured seed), then up to two random starts relaxed
- * apart at their roomy size. It stops at the first that finishes. A space's finishing may still
+ * apart at their roomy size. It stops at the first that finishes. A family's finishing may still
  * refuse them all (curved/-1/3/4/6 refuses about a quarter of its relaxed random starts); then the
  * run has no result until a later offer finishes.
  */

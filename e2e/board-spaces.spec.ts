@@ -345,6 +345,36 @@ test("a closed problem can be viewed but not submitted, and an impossible one ha
   await expect(page.locator("#space-submit")).toBeDisabled();
 });
 
+test("curved menus offer only problems that can exist; a tiling curvature opens from a link; an impossible id says why", async ({
+  page,
+}) => {
+  await page.goto("/#space=curved/1/3/4/3");
+  await shown(page, "curved/1/3/4/3", { timeout: 60_000 });
+  // 16 curvatures, none of the tiling ones; the pieces that exist at K = 1; no P above the area limit
+  await expect(page.locator("#space-f-K option")).toHaveCount(16);
+  await expect(page.locator("#space-f-N option")).toHaveText(["Disk (N = 0)", "3-gon", "4-gon", "5-gon", "6-gon"]);
+  await page.selectOption("#space-f-K", "-0.0001");
+  await expect(page.locator("#space-f-N option")).toHaveCount(99);
+  await page.selectOption("#space-f-M", "100");
+  await expect(page.locator("#space-f-P option")).toHaveCount(500);
+
+  // a tiling curvature stays on the board from a link
+  await page.goto("about:blank");
+  await page.goto("/#space=curved/-1.1892985685754194/3/7/7");
+  await shown(page, "curved/-1.1892985685754194/3/7/7");
+  await expect(page.locator("#space-f-K")).toHaveValue("-1.1892985685754194");
+
+  // an id that cannot exist: the reason, no search
+  await page.goto("about:blank");
+  await page.goto("/#space=curved/1/8/4/3");
+  await expect(page.locator("#space-status")).toHaveText(
+    "No unit 8-gon exists at K = 1: its perimeter, 8, is longer than a great circle, 2π/√K ≈ 6.283.",
+  );
+  await expect(page.locator("#space-f-N")).toHaveValue("8");
+  await expect(page.locator("#space-solve-run")).toBeDisabled();
+  await expect(page.locator("#space-submit")).toBeDisabled();
+});
+
 test("pause holds a run at once, resume goes on, stop ends it at once", async ({ page }) => {
   await page.goto("/#space=torus/sq/5/7");
   await shown(page, "torus/sq/5/7");
@@ -517,6 +547,38 @@ test("the drawing turns with the keyboard", async ({ page }) => {
   await shown(page, DEFAULT_PROBLEM.torus);
   await expect(draw).toHaveAttribute("role", "img");
   await expect(draw).not.toHaveAttribute("tabindex", /.*/);
+});
+
+test("a torus is also drawn as a 3D torus that turns, and the flat views come back", async ({ page }) => {
+  await page.goto("/#space=torus/hex/5/8");
+  await shown(page, "torus/hex/5/8");
+  const draw = page.locator(".space-draw");
+  const ring = page.locator(".space-draw > canvas");
+  await expect(ring).toHaveCount(0);
+  await page.getByRole("button", { name: "3D torus" }).click();
+  await expect(page.getByRole("button", { name: "3D torus" })).toHaveAttribute("aria-pressed", "true");
+  await expect(ring).toHaveAttribute("data-frames", /\d+/, LAZY_VIEW);
+  await expect(ring).toBeVisible();
+  await expect(page.locator(".space-draw > svg")).toBeHidden();
+  await expect(draw).toHaveAttribute("role", "application");
+  await expect(draw).toHaveAttribute(
+    "aria-label",
+    /^8 pentagons on a hexagonal torus of side \d+\.\d{6}, drawn as a 3D torus.* Drag it or use the arrow keys to turn it\.$/,
+  );
+  const before = await ring.screenshot();
+  await draw.focus();
+  await page.keyboard.press("Shift+ArrowRight");
+  expect((await ring.screenshot()).equals(before)).toBe(false);
+  await page.getByRole("button", { name: "One cell" }).click();
+  await expect(page.locator(".space-draw > svg")).toBeVisible();
+  await expect(ring).toBeHidden();
+  await expect(draw).toHaveAttribute("role", "img");
+  // another kind gives back the WebGL context; the torus is drawn anew on return
+  await choose(page, "sphere");
+  await expect(page.locator(".space-draw > canvas")).toHaveCount(1);
+  await choose(page, "torus");
+  await shown(page, "torus/hex/5/8");
+  await expect(page.locator(".space-draw > svg")).toBeVisible();
 });
 
 test("a torus entry in a skewed basis draws at once, and a degenerate lattice is not drawn", async ({ page }) => {

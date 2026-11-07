@@ -5,11 +5,11 @@
  *
  * Conventions (fixed; the Python certifier rebuilds them independently and the two must agree):
  * - Platonic solids: vertices in a documented order (see `vertexList`), at unit edge length. The other
- *   solids: the polyhedra space's canonical solids (python/polyhedra/solids_exact.json), in its vertex
+ *   solids: the polyhedra family's canonical solids (python/polyhedra/solids_exact.json), in its vertex
  *   order and scale (unit edges for Archimedean solids, prisms, antiprisms and Johnson solids; Catalan solids are the
  *   polar reciprocals of the unit-edge Archimedean solids about the midsphere). The score s is the scale factor of that
  *   canonical solid, which for the Platonic, Archimedean and Johnson solids and the prisms and antiprisms is the edge length.
- *   The 92 Johnson solids are named as in the polyhedra space (`square_pyramid`, `gyroelongated_square_bicupola`, ...; J1 to
+ *   The 92 Johnson solids are named as in the polyhedra family (`square_pyramid`, `gyroelongated_square_bicupola`, ...; J1 to
  *   J92 in Johnson's order); none of the names is another solid's.
  * - A face is the cycle of its vertex ids, counter-clockwise seen from outside, rotated so that its
  *   smallest vertex id comes first. Faces are sorted lexicographically by these cycles.
@@ -69,7 +69,7 @@ export type JohnsonName = (typeof JOHNSON_NAMES)[number];
 export type SolidName = PlatonicName | ArchimedeanName | CatalanName | PrismName | AntiprismName | JohnsonName;
 export type SolidFamily = "platonic" | "archimedean" | "catalan" | "prism" | "antiprism" | "johnson";
 
-/** The five Platonic solids (the solids of the space before 2026-10-26), in their catalogue order. */
+/** The five Platonic solids (the solids of the family before 2026-10-26), in their catalogue order. */
 export const SOLID_NAMES: readonly PlatonicName[] = ["tetrahedron", "cube", "octahedron", "dodecahedron", "icosahedron"];
 export const PLATONIC_NAMES = SOLID_NAMES;
 /** The 13 Archimedean solids, in the polyhedra catalogue order. */
@@ -108,7 +108,7 @@ export const PRISM_NAMES: readonly PrismName[] = [3, 5, 6, 7, 8, 9, 10, 11, 12].
 export const ANTIPRISM_NAMES: readonly AntiprismName[] = [4, 5, 6, 7, 8, 9, 10, 11, 12].map(
   (n) => `antiprism${n}` as AntiprismName,
 );
-/** The 92 Johnson solids, J1 to J92 in Johnson's order (the polyhedra space's names and order). */
+/** The 92 Johnson solids, J1 to J92 in Johnson's order (the polyhedra family's names and order). */
 export const JOHNSON_NAMES = [
   "square_pyramid",
   "pentagonal_pyramid",
@@ -204,7 +204,7 @@ export const JOHNSON_NAMES = [
   "triangular_hebesphenorotunda",
 ] as const;
 /**
- * Every solid of the space, grouped by family (Platonic, Archimedean, Catalan, prisms, antiprisms, Johnson) in catalogue
+ * Every solid of the family, grouped by family (Platonic, Archimedean, Catalan, prisms, antiprisms, Johnson) in catalogue
  * order within each family.
  */
 export const ALL_SOLID_NAMES: readonly SolidName[] = [

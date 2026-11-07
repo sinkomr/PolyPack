@@ -151,6 +151,12 @@ export interface Holder {
   site_bests: number;
   /** Of `site_bests`, claims awaiting review. */
   pending: number;
+  /**
+   * The most `records` the name has held at once. Peaks are tracked from 2026-11-05, the deployment of this
+   * field: before it, a name's peak is its `records` at the first count made after that. A name that has lost
+   * every lead stays listed with zero counts and its peak.
+   */
+  peak: number;
 }
 
 /** Answer of GET /api/holders, most records first. */

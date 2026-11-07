@@ -1,5 +1,5 @@
 /**
- * The balls space with the 92 Johnson solids: test packings (python/balls/fixtures/johnson_packings.json, made by
+ * The balls family with the 92 Johnson solids: test packings (python/balls/fixtures/johnson_packings.json, made by
  * scripts/gen-johnson-packings.ts and certified exactly by python/balls/test_johnson_balls.py) against the float
  * validator, adversarial variants, the catalogue's order and ids, and the bounds, which rest on the Chebyshev and
  * enclosing radii (extent.ts) because a Johnson solid's vertex centroid is not the centre of its largest inscribed ball
@@ -31,7 +31,7 @@ const fixture = JSON.parse(readFileSync(new URL("../../../python/balls/fixtures/
 };
 const problem = (code: string) => ballsProblemOf(code)!;
 
-describe("test packings with Johnson solids in the balls space", () => {
+describe("test packings with Johnson solids in the balls family", () => {
   it("are 12: balls in three Johnson solids and three Johnson solids in a ball, valid at tolerance 0", () => {
     expect(fixture.cases).toHaveLength(12);
     expect(new Set(fixture.cases.map((c) => c.code)).size).toBe(6);

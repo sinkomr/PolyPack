@@ -220,7 +220,7 @@ describe("GET /api/spaces", () => {
     expect(r.spaces.find((s) => s.space === "surface")!.records).toBe(2038);
     expect(r.spaces.map((s) => [s.space, s.problems])).toEqual([
       ["surface", 2791800],
-      ["curved", 990000],
+      ["curved", 26830100],
       ["sphere", 9900],
       ["torus", 148500],
       ["boundary", 816 + 2 * (160 + 384 + 4 * 400) + 18 * 24],

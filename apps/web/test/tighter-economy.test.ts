@@ -80,7 +80,7 @@ describe("Tighter points multiplier", () => {
     // the first record pays only its flat bonus, which no multiplier touches and rent does not count
     const first = applyStep(s, p, step(1.2 * B, 1, { evaluations: 100 }), T0);
     expect(first.points!.total).toBe(1000);
-    expect(s.economy.base[p.key]).toBeUndefined();
+    expect(p.base).toBeUndefined();
     const c = applyStep(s, p, step(1.1 * B, 2), T0);
     const paid = c.points as NonNullable<typeof c.points> & { base: number; multiplier: number };
     expect(paid.multiplier).toBeCloseTo(2, 12);
@@ -89,7 +89,7 @@ describe("Tighter points multiplier", () => {
     expect(s.rp).toBeCloseTo(1000 + paid.total, 9);
     expect(p.unconfirmed).toBeCloseTo(1000 + paid.total, 9);
     expect(s.standing.cycleEarned).toBeCloseTo(1000 + paid.total, 9);
-    expect(s.economy.base[p.key]).toBeCloseTo(paid.base, 9);
+    expect(p.base).toBeCloseTo(paid.base, 9);
     // the server makes another entry leader first: everything paid comes back out, the cycle's count too
     markSending(p, 1.2 * B, "Ada", null, T0);
     const a = applyAnswer(s, p, null, 1.2 * B, { kind: "behind", leaderScore: 1.1 * B }, T0);
@@ -97,7 +97,7 @@ describe("Tighter points multiplier", () => {
     expect(s.rp).toBeCloseTo(0, 9);
     expect(s.rpEarned).toBeCloseTo(0, 9);
     expect(s.standing.cycleEarned).toBeCloseTo(0, 9);
-    expect(s.economy.base[p.key]).toBeCloseTo(0, 9);
+    expect(p.base).toBeCloseTo(0, 9);
   });
 
   it("shows unpaid points with the multiplier when the game is given", () => {
@@ -197,6 +197,7 @@ describe("Tighter rent", () => {
   function held(): { s: GameState; p: ProblemState } {
     const { s, p } = game();
     s.owned.push("rent");
+    s.economy.paidUntil = T0;
     confirmed(s, p, 1.2 * B, 7, T0);
     // the first record pays only a bonus, which rent's base does not count: an improvement gives the record a base
     applyStep(s, p, step(1.19 * B, 8), T0);
@@ -206,8 +207,8 @@ describe("Tighter rent", () => {
   it("pays 1 % an hour of what the record earned, when a check finds it still held", () => {
     const { s, p } = held();
     const o = ownedSet(s);
-    expect(s.economy.checks[p.key]).toBe(T0);
-    const base = s.economy.base[p.key];
+    expect(p.heldSince).toBe(T0);
+    const base = p.base!;
     expect(rentPerHour(s, o, p)).toBeCloseTo(0.01 * base, 12);
     expect(rentRate(s, o)).toBeCloseTo(0.01 * base, 12);
     expect(rentWaiting(s, o, T0 + 2 * H)).toBeCloseTo(0.02 * base, 12);
@@ -217,7 +218,8 @@ describe("Tighter rent", () => {
     expect(s.rp).toBeCloseTo(rp0 + paid, 12);
     expect(s.economy.rentPaid).toBeCloseTo(paid, 12);
     expect(s.economy.lastRent).toMatchObject({ key: p.key, at: T0 + 2 * H });
-    // the next window starts at the check; Higher rent adds half again a level, standing multiplies
+    // the payday moves the window on (runPayday does); Higher rent adds half again a level, standing multiplies
+    s.economy.paidUntil = T0 + 2 * H;
     expect(rentWaiting(s, o, T0 + 2 * H)).toBe(0);
     s.owned.push("rentx");
     s.levels.rentx = 2;
@@ -227,7 +229,7 @@ describe("Tighter rent", () => {
 
   it("pays a week at most, and nothing without Rent", () => {
     const { s, p } = held();
-    const base = s.economy.base[p.key];
+    const base = p.base!;
     const paid = settleRent(s, ownedSet(s), p, T0 + 30 * 24 * H);
     expect(paid).toBeCloseTo((0.01 * base * RENT_WINDOW_MS) / H, 9);
     s.owned = s.owned.filter((id) => id !== "rent");
@@ -235,11 +237,11 @@ describe("Tighter rent", () => {
     expect(rentRate(s, ownedSet(s))).toBe(0);
   });
 
-  it("pays nothing for the unchecked time of a record lost", () => {
+  it("pays nothing for the unpaid time of a record lost", () => {
     const { s, p } = held();
     const r = applyLeader(p, { score: 1.1 * B, name: "Bob", id: 99 }, s, T0 + 5 * H);
     expect(r.lost).toBe(true);
-    expect(s.economy.checks[p.key]).toBeUndefined();
+    expect(p.heldSince).toBeUndefined();
     expect(settleRent(s, ownedSet(s), p, T0 + 6 * H)).toBe(0);
     expect(heldRecords(s)).toEqual([]);
   });
@@ -251,19 +253,20 @@ describe("Tighter rent", () => {
     expect(rentRate(s, ownedSet(s))).toBe(0);
     expect(rentWaiting(s, ownedSet(s), T0 + 5 * 24 * H)).toBe(0);
     expect(settleRent(s, ownedSet(s), p, T0 + 5 * 24 * H)).toBe(0);
-    expect(s.economy.checks).toEqual({});
-    // Rent owned again: the record starts earning at that moment
+    expect(s.economy.paidUntil).toBeUndefined();
+    // Rent owned again: the window starts at that moment, whenever the record was won
     s.owned.push("rent");
     tidyRent(s, ownedSet(s), T0 + 5 * 24 * H);
+    expect(s.economy.paidUntil).toBe(T0 + 5 * 24 * H);
     expect(rentWaiting(s, ownedSet(s), T0 + 5 * 24 * H)).toBe(0);
     expect(settleRent(s, ownedSet(s), p, T0 + 5 * 24 * H + H)).toBeCloseTo(rentPerHour(s, ownedSet(s), p), 12);
   });
 
-  it("starts rent for records held before Rent, and forgets the rest", () => {
+  it("starts the window when Rent is bought, and forgets the base of a problem neither held nor queued", () => {
     const { s, p } = game();
     confirmed(s, p, 1.2 * B, 7, T0);
     // held before Rent was bought: no rent owed for that time
-    expect(s.economy.checks).toEqual({});
+    expect(s.economy.paidUntil).toBeUndefined();
     s.owned.push("rent");
     s.past.push({
       N: 21,
@@ -277,16 +280,30 @@ describe("Tighter rent", () => {
       rp: 30,
       leftAt: T0,
     });
-    s.economy.checks["9/9/9"] = T0;
+    s.past.push({
+      N: 9,
+      M: 9,
+      P: 9,
+      key: "9/9/9",
+      tier: "open",
+      best: 5,
+      verified: null,
+      ourId: null,
+      base: 12,
+      rp: 12,
+      leftAt: T0,
+    });
     tidyRent(s, ownedSet(s), T0 + H);
-    expect(s.economy.checks).toEqual({ [p.key]: T0 + H, "21/21/40": T0 + H });
-    s.economy.checks["21/21/40"] = T0;
+    expect(s.economy.paidUntil).toBe(T0 + H);
+    expect(s.past.find((q) => q.key === "9/9/9")!.base).toBeUndefined();
     // a past record without a kept base pays on what it earned
     expect(rentPerHour(s, ownedSet(s), s.past[0])).toBeCloseTo(0.3, 12);
-    // a problem that leaves the queue still holding its record keeps paying from the past list
+    // a problem that leaves the queue still holding its record keeps paying from the past list, with its base
+    const base = p.base;
     leave(s, p.key, T0 + H);
     tidyRent(s, ownedSet(s), T0 + H);
-    expect(Object.keys(s.economy.checks).sort()).toEqual(["21/21/40", "24/30/3"]);
+    expect(heldRecords(s).map((q) => q.key).sort()).toEqual(["21/21/40", "24/30/3"]);
+    expect(s.past.find((q) => q.key === p.key)!.base).toBe(base);
   });
 });
 
@@ -300,11 +317,11 @@ describe("Tighter collections", () => {
     const c = collections(s.economy);
     expect(c.combos).toBe(1);
     expect(c.nearest).toEqual([
-      { N: 24, M: 40, have: 8 },
-      { N: 21, M: 21, have: 7 },
+      { label: "24-gons in a 40-gon", have: 8 },
+      { label: "21-gons in a 21-gon", have: 7 },
     ]);
     // 24-gons: 9 + 8 records, past the 10 milestone; 21-gons: 7
-    expect(c.shapes[0]).toEqual({ N: 24, count: 17, milestones: 1 });
+    expect(c.shapes[0]).toEqual({ label: "24-gons", count: 17, milestones: 1 });
     expect(c.milestones).toBe(1);
     expect(c.tiers).toEqual(["open", "loose"]);
     expect(c.bonus).toBeCloseTo(0.02 + 0.01 + 0.1, 12);
@@ -314,14 +331,13 @@ describe("Tighter collections", () => {
     // counted again when a record is added
     s.owned.push("rent");
     const p = newProblem({ family: "polygon", N: 21, M: 21, P: 250 }, "batch", T0);
-    noteRecorded(s, ownedSet(s), p, T0);
+    noteRecorded(s, p);
     expect(collections(s.economy).tiers).toEqual(["open", "loose", "batch"]);
-    expect(s.economy.checks[p.key]).toBe(T0);
   });
 });
 
 describe("Tighter economy saves", () => {
-  it("round-trip rent, bases, checks, tiers and the last rent", () => {
+  it("round-trip rent, paidUntil, tiers and the last rent", () => {
     const { s, p } = game();
     s.owned.push("rent");
     confirmed(s, p, 1.2 * B, 7, T0);
@@ -349,10 +365,82 @@ describe("Tighter collections, the combination rule", () => {
     const e = newGame(T0, 1).economy;
     e.recorded = Array.from({ length: 8 }, (_, i) => `3/4/${2 + i}`);
     expect(collections(e).combos).toBe(0);
-    expect(collections(e).nearest).toEqual([{ N: 3, M: 4, have: 8 }]);
+    expect(collections(e).nearest).toEqual([{ label: "triangles in a square", have: 8 }]);
     const f = newGame(T0, 1).economy;
     f.recorded = [...e.recorded, "3/4/499"];
     expect(collections(f).combos).toBe(1);
     expect(collections(f).nearest).toEqual([]);
+  });
+});
+
+describe("Tighter collections, every Dimension", () => {
+  const ids = (id: (P: number) => string, n = 9) => Array.from({ length: n }, (_, i) => id(2 + i));
+  const withRecords = (recorded: string[]) => {
+    const e = newGame(T0, 1).economy;
+    e.recorded = recorded;
+    return e;
+  };
+
+  it("counts a pairing of any family at 9 distinct P, with its name", () => {
+    const cases: [(P: number) => string, string][] = [
+      [(P) => `polyhedra/cubintet/${P}`, "cubes in a tetrahedron"],
+      [(P) => `surface/cube/fold/4/${P}`, "squares on a cube"],
+      [(P) => `sphere/4/${P}`, "squares on a sphere"],
+      [(P) => `torus/hex/6/${P}`, "hexagons on a hexagonal torus"],
+      [(P) => `curved/1/5/8/${P}`, "pentagons in an octagon"],
+      [(P) => `balls/ballincub/${P}`, "balls in a cube"],
+    ];
+    for (const [id, label] of cases) {
+      const eight = collections(withRecords(ids(id, 8)));
+      expect(eight.combos).toBe(0);
+      expect(eight.nearest).toEqual([{ label, have: 8 }]);
+      const nine = collections(withRecords(ids(id, 9)));
+      expect(nine.combos).toBe(1);
+      expect(nine.nearest).toEqual([]);
+      expect(nine.bonus).toBeGreaterThanOrEqual(COMBO_BONUS);
+    }
+  });
+
+  it("keeps the folding and the curvature out of the pairing, and the container in", () => {
+    const a = collections(withRecords([...ids((P) => `surface/cube/fold/4/${P}`, 5), ...ids((P) => `surface/cube/nofold/4/${P + 20}`, 4)]));
+    expect(a.combos).toBe(1);
+    const b = collections(withRecords([...ids((P) => `curved/1/5/8/${P}`, 5), ...ids((P) => `curved/-1/5/8/${P + 20}`, 4)]));
+    expect(b.combos).toBe(1);
+    const c = collections(withRecords([...ids((P) => `surface/cube/fold/4/${P}`, 5), ...ids((P) => `surface/octahedron/fold/4/${P}`, 4)]));
+    expect(c.combos).toBe(0);
+  });
+
+  it("counts piece milestones per Dimension and piece shape", () => {
+    const squares2d = ids((P) => `4/4/${P}`, 6).concat(ids((P) => `4/5/${P}`, 4));
+    const e = withRecords([...squares2d, ...ids((P) => `surface/cube/fold/4/${P}`, 10)]);
+    const c = collections(e);
+    expect([...c.shapes].sort((a, b) => a.label.localeCompare(b.label))).toEqual([
+      { label: "squares (2D in 2D)", count: 10, milestones: 1 },
+      { label: "squares (2D on 3D)", count: 10, milestones: 1 },
+    ]);
+    expect(c.milestones).toBe(2);
+    // 2D in 2D alone: 10 records is one milestone; 9 on the surface and 9 in the plane are none
+    expect(collections(withRecords([...squares2d.slice(0, 9), ...ids((P) => `surface/cube/fold/4/${P}`, 9)])).milestones).toBe(0);
+    // solids are pieces too: cubes in tetrahedra and in octahedra share the piece
+    const solids = withRecords([...ids((P) => `polyhedra/cubintet/${P}`, 5), ...ids((P) => `polyhedra/cubinoct/${P}`, 5)]);
+    expect(collections(solids).shapes).toEqual([{ label: "cubes (3D in 3D)", count: 10, milestones: 1 }]);
+  });
+
+  it("counts first records of a tier in any family, and an old save's family keys at once", () => {
+    const s = newGame(T0, 1);
+    noteRecorded(s, newProblem({ family: "surface", id: "surface/cube/fold/4/9", P: 9 }, "batch", T0));
+    expect(collections(s.economy).tiers).toEqual(["batch"]);
+    const old = newGame(T0, 1);
+    old.economy.recorded = ids((P) => `polyhedra/cubintet/${P}`);
+    old.owned.push("collections");
+    const back = fromJson(toJson(old), T0);
+    expect(back.ok && collections(back.state.economy).combos).toBe(1);
+    expect(back.ok && collectionsBonus(back.state, ownedSet(back.state))).toBeCloseTo(COMBO_BONUS, 12);
+  });
+
+  it("leaves polygon-only records as they were", () => {
+    const c = collections(withRecords(FRONTIER_P.map((P) => `24/30/${P}`)));
+    expect(c.combos).toBe(1);
+    expect(c.shapes).toEqual([{ label: "24-gons", count: FRONTIER_P.length, milestones: 0 }]);
   });
 });

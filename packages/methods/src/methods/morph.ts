@@ -13,7 +13,7 @@
  * Further continuations start afresh from random starts until the budget ends or `restarts`
  * continuations are done; the framework keeps the best.
  */
-import type { MethodContext, SpaceMethodDefinition } from "../framework";
+import type { MethodContext, FamilyMethodDefinition } from "../framework";
 import type { KernelState } from "../kernel";
 import { relax, squeeze } from "../local";
 import { energyCost, offerFirst, offerTrueShape, withAllowance } from "./harden-offers";
@@ -31,7 +31,7 @@ const numeric = (
   integer = false,
 ) => ({ type: integer ? "integer" : "number", title, description, default: value, minimum, maximum }) as const;
 
-export const morph: SpaceMethodDefinition = {
+export const morph: FamilyMethodDefinition = {
   name: "morph",
   title: "Shape continuation",
   summary:
@@ -166,7 +166,7 @@ export function runMorph(ctx: MethodContext): void {
       s = k.randomStart(ctx.rng);
       structured = false;
     }
-    // Before any long work, a first result that the space's finishing can take: the start when
+    // Before any long work, a first result that the family's finishing can take: the start when
     // it is supplied or structured, otherwise the start relaxed apart (harden-offers.ts).
     if (run === 0) offerFirst(ctx, structured ? [() => s] : [], () => s);
     if (jitter > 0) for (let i = 0; i < k.P; i++) k.jiggle(s, i, jitter, ctx.rng);
@@ -197,7 +197,7 @@ export function runMorph(ctx: MethodContext): void {
         cut = stage.exhausted();
       } else {
         // A quarter of the slice is kept for a closing relaxation: a squeeze cut short by its slice
-        // stops at a low penalty weight with deep overlaps, which the space's finishing refuses.
+        // stops at a low penalty weight with deep overlaps, which the family's finishing refuses.
         const stage = withAllowance(k, slice === Infinity ? Infinity : Math.floor(0.75 * slice));
         // The harder shape overlaps where the softer one touched: a homothety removes the overlap
         // and tightens to the new first contact before the squeeze. The start is squeezed as it
