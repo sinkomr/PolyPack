@@ -1,7 +1,10 @@
 //! The client's side of the PolyPack HTTP API (apps/volunteer/src/http.ts).
 //!
 //! - Every request has a 30 s timeout and an answer of at most 16 MB.
-//! - A 429 is retried after a 65 s wait, at most three times.
+//! - A 429 is retried after a 65 s wait (or the seconds of its Retry-After, which the server sends
+//!   when the limit is verification time), at most three times.
+//! - A 503 on a POST means the server was too busy to look at it and stored nothing (the API
+//!   documentation's promise): it is sent again after its Retry-After, at most three times.
 //! - A GET is also retried after network failures, timeouts and 5xx answers, with exponential
 //!   backoff (2 s doubling to 60 s), and gives up after 10 failed attempts.
 //! - A POST is never sent again blindly: after a failure the server may have stored it. `submit`
@@ -34,10 +37,18 @@ pub struct Answer {
     pub body: Value,
 }
 
-/// One request's result: an answer below 500, or a failure and whether the request went out.
+/// One request's result: an answer below 500 (with its Retry-After seconds), a 503 (the server is
+/// busy and, as the API documents, examined and stored nothing), or a failure and whether the
+/// request went out.
 enum Attempt {
-    Answer(Answer),
+    Answer(Answer, Option<u64>),
+    Busy { why: String, retry_after: Option<u64> },
     Failed { why: String, sent: bool },
+}
+
+/// Seconds to wait from a Retry-After header (a number of seconds; dates are not used).
+fn retry_after(resp: &ureq::Response) -> Option<u64> {
+    resp.header("retry-after").and_then(|v| v.trim().parse::<u64>().ok()).map(|s| s.min(3600))
 }
 
 /// Sleeps `ms`, waking early (false) when `stop` is set.
@@ -196,10 +207,14 @@ impl Api {
             }
         };
         let status = resp.status();
+        let retry = retry_after(&resp);
         let text = match Self::read_body(resp) {
             Ok(t) => t,
             Err(e) => return Attempt::Failed { why: format!("{method} {path} failed: {e}"), sent: true },
         };
+        if status == 503 {
+            return Attempt::Busy { why: format!("HTTP 503 (server busy) from {method} {path}"), retry_after: retry };
+        }
         if status >= 500 {
             return Attempt::Failed { why: format!("HTTP {status} from {method} {path}"), sent: true };
         }
@@ -213,7 +228,7 @@ impl Api {
                 (self.on_upgrade)(&said);
             }
         }
-        Attempt::Answer(Answer { status, body: parsed })
+        Attempt::Answer(Answer { status, body: parsed }, retry)
     }
 
     /// A GET, retried as described above. The answer (any status below 500, or the 429 that
@@ -226,17 +241,18 @@ impl Api {
                 return None;
             }
             match self.attempt("GET", path, None) {
-                Attempt::Answer(a) => {
+                Attempt::Answer(a, retry) => {
                     if a.status != 429 || limited >= RATE_LIMIT_RETRIES {
                         return Some(a);
                     }
                     limited += 1;
-                    (self.log)(&format!("HTTP 429 (rate limit) from GET {path}: waiting 65 s (retry {limited} of {RATE_LIMIT_RETRIES})"));
-                    if !sleep_unless(&self.stop, RATE_LIMIT_WAIT_MS) {
+                    let wait = retry.map_or(RATE_LIMIT_WAIT_MS, |s| (1000 * s).max(1000));
+                    (self.log)(&format!("HTTP 429 (rate limit) from GET {path}: waiting {} s (retry {limited} of {RATE_LIMIT_RETRIES})", wait / 1000));
+                    if !sleep_unless(&self.stop, wait) {
                         return None;
                     }
                 }
-                Attempt::Failed { why, .. } => {
+                Attempt::Busy { why, .. } | Attempt::Failed { why, .. } => {
                     if self.stopped() {
                         return None;
                     }
@@ -287,14 +303,27 @@ impl Api {
             }
             match self.attempt("POST", path, Some(body)) {
                 Attempt::Failed { why, sent } => return (None, Some(why), requests + if sent { 1 } else { 0 }),
-                Attempt::Answer(a) => {
+                // a busy server stored nothing: sending again is safe once its Retry-After has passed
+                Attempt::Busy { why, retry_after } => {
+                    requests += 1;
+                    if limited >= RATE_LIMIT_RETRIES {
+                        return (None, Some(why), requests);
+                    }
+                    limited += 1;
+                    let wait = 1000 * retry_after.unwrap_or(5).max(1);
+                    (self.log)(&format!("{why}: nothing was stored; sending again in {} s (retry {limited} of {RATE_LIMIT_RETRIES})", wait / 1000));
+                    self.pacer.lock().unwrap().block(wait);
+                }
+                Attempt::Answer(a, retry) => {
                     requests += 1;
                     if a.status != 429 || limited >= RATE_LIMIT_RETRIES {
                         return (Some(a), None, requests);
                     }
                     limited += 1;
-                    (self.log)(&format!("HTTP 429 (rate limit) from POST {path}: waiting 65 s (retry {limited} of {RATE_LIMIT_RETRIES})"));
-                    self.pacer.lock().unwrap().block(RATE_LIMIT_WAIT_MS);
+                    // the verification-time limit says how long in Retry-After; the count limit does not
+                    let wait = retry.map_or(RATE_LIMIT_WAIT_MS, |s| (1000 * s).max(1000));
+                    (self.log)(&format!("HTTP 429 (rate limit) from POST {path}: waiting {} s (retry {limited} of {RATE_LIMIT_RETRIES})", wait / 1000));
+                    self.pacer.lock().unwrap().block(wait);
                 }
             }
         }
