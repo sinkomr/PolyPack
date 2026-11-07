@@ -315,17 +315,30 @@ export function findOverlaps(N: number, poses: readonly Pose[], tol = TOL, scale
   const reach2 = reach * reach;
   const OFFSET = 2 ** 25;
   const SPAN = 2 ** 26;
-  const grid = new Map<number, number[]>();
   const out: Overlap[] = [];
-  for (let i = 0; i < poses.length; i++) {
+  const P = poses.length;
+  const grid = cellTable(P);
+  const { keys, stamps, head, tail, next, mask, shift } = grid;
+  const stamp = grid.stamp;
+  // the cell with this key, or ~slot of the free slot where it would go
+  const find = (key: number): number => {
+    let h = Math.imul((key | 0) ^ Math.imul((key / 4294967296) | 0, 0x27d4eb2f), 0x9e3779b1) >>> shift;
+    while (stamps[h] === stamp) {
+      if (keys[h] === key || (key !== key && keys[h] !== keys[h])) return h;
+      h = (h + 1) & mask;
+    }
+    return ~h;
+  };
+  for (let i = 0; i < P; i++) {
     const a = poses[i];
     const ix = Math.floor(a.x / reach);
     const iy = Math.floor(a.y / reach);
     for (let gx = ix - 1; gx <= ix + 1; gx++) {
       for (let gy = iy - 1; gy <= iy + 1; gy++) {
-        const cell = grid.get((gx + OFFSET) * SPAN + (gy + OFFSET));
-        if (!cell) continue;
-        for (const j of cell) {
+        const cell = find((gx + OFFSET) * SPAN + (gy + OFFSET));
+        if (cell < 0) continue;
+        for (let link = head[cell]; link !== 0; link = next[link]) {
+          const j = link - 1;
           const b = poses[j];
           const dx = a.x - b.x;
           const dy = a.y - b.y;
@@ -337,10 +350,58 @@ export function findOverlaps(N: number, poses: readonly Pose[], tol = TOL, scale
         }
       }
     }
-    const key = (ix + OFFSET) * SPAN + (iy + OFFSET);
-    const cell = grid.get(key);
-    if (cell) cell.push(i);
-    else grid.set(key, [i]);
+    let cell = find((ix + OFFSET) * SPAN + (iy + OFFSET));
+    if (cell < 0) {
+      cell = ~cell;
+      stamps[cell] = stamp;
+      keys[cell] = (ix + OFFSET) * SPAN + (iy + OFFSET);
+      head[cell] = i + 1;
+    } else next[tail[cell]] = i + 1;
+    tail[cell] = i + 1;
+    next[i + 1] = 0;
   }
   return out;
+}
+
+/**
+ * The cells of findOverlaps: an open-addressing table from a cell's key, the double a Map was
+ * keyed by before, to the pieces in it as linked lists in insertion order. Keys match as Map keys
+ * do (SameValueZero: NaN matches NaN). A slot is in use when its stamp is the current call's.
+ * Reused between calls; findOverlaps runs no callbacks, so no second call can start while one
+ * uses it.
+ */
+interface CellTable {
+  keys: Float64Array;
+  stamps: Uint32Array;
+  head: Int32Array;
+  tail: Int32Array;
+  next: Int32Array;
+  mask: number;
+  shift: number;
+  stamp: number;
+}
+let cells: CellTable | undefined;
+
+function cellTable(pieces: number): CellTable {
+  let bits = 4;
+  while (1 << bits < 4 * pieces) bits++;
+  if (!cells || cells.mask + 1 < 1 << bits || cells.next.length < pieces + 1) {
+    const size = 1 << bits;
+    cells = {
+      keys: new Float64Array(size),
+      stamps: new Uint32Array(size),
+      head: new Int32Array(size),
+      tail: new Int32Array(size),
+      next: new Int32Array(pieces + 1),
+      mask: size - 1,
+      shift: 32 - bits,
+      stamp: 0,
+    };
+  }
+  if (cells.stamp === 0xffffffff) {
+    cells.stamp = 0;
+    cells.stamps.fill(0);
+  }
+  cells.stamp++;
+  return cells;
 }

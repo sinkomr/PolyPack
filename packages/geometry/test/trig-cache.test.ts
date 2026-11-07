@@ -4,6 +4,7 @@ import {
   type Container,
   type Pose,
   circumradius,
+  findOverlaps,
   inradius,
   pairPenetration,
   pairSeparation,
@@ -256,5 +257,30 @@ describe("trig cache under forced slot collisions", () => {
         const b: Pose = { x: bad, y: 1, theta: bad };
         for (const t of [0, -1e-9]) expect(separationBelow(N, a, b, t)).toBe(pairSeparation(N, a, b) < t);
       }
+  });
+
+  it("findOverlaps reports the reference's pairs, in its order, on crowded, sparse and NaN boards", () => {
+    const coordinate = fc.oneof(
+      fc.double({ min: -4, max: 4, noNaN: true }),
+      // not infinite: a cell index of Infinity never advances, and both versions loop forever
+      fc.constantFrom(0, -0, 1, NaN, 3e7, -3e7),
+    );
+    fc.assert(
+      fc.property(
+        fc.constantFrom(0, 3, 4, 6, 7, 12, 100),
+        fc.array(fc.record({ x: coordinate, y: coordinate, theta: fc.double({ min: -7, max: 7, noNaN: true }) }), {
+          maxLength: 60,
+        }),
+        fc.constantFrom(1e-9, 0, -Number.MIN_VALUE, 1e-12),
+        fc.constantFrom(1, 1 - 1e-8, 1.2),
+        fc.constantFrom(Infinity, 1, 3),
+        (N, poses, tol, scale, limit) => {
+          const got = findOverlaps(N, poses, tol, scale, limit);
+          const want = refOverlap.findOverlaps(N, poses, tol, scale, limit);
+          expect(JSON.stringify(got, replacer)).toBe(JSON.stringify(want, replacer));
+        },
+      ),
+      { numRuns: 1500 },
+    );
   });
 });
