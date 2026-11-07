@@ -23,9 +23,11 @@
  *    harden, seeds 1 to 3, 20 s each, the same CPU time) scored 4.677649 against 4.677651 on
  *    4/4/17, 4.863068 against 4.864090 on 3/3/20, 5.034070 against 5.041270 on 5/5/20 and
  *    7.618295 against 7.617542 on 7/0/40. Four problems, one seed: weak evidence.
+ * The benchmark of 2026-11-06 below (catalogue credits) supersedes these for the choice of arms.
  */
 import type { PackingConfig } from "@polypack/geometry";
 import type { Problem } from "../types";
+import type { FamilyRecord } from "./memory";
 
 export type StartKind = "fresh" | "warm" | "iterate";
 
@@ -41,6 +43,8 @@ export interface Arm {
   start: StartKind;
   /** Parameters for one job, given the engine's seeded stream; undefined keeps the defaults. */
   params?: (random: () => number) => Record<string, unknown>;
+  /** Catalogue credit in [0, 1], the prior on a family without memory. */
+  credit: number;
 }
 
 interface Recipe {
@@ -50,17 +54,41 @@ interface Recipe {
   params?: (random: () => number) => Record<string, unknown>;
   /** Whether the recipe applies to the problem; every problem when left out. */
   when?: (problem: Problem) => boolean;
+  /**
+   * Catalogue credit by start, in [0, 1]: the arm's share of the reward on a family the memory
+   * has never seen (see `catalogueFamily`). Left out: 0.5.
+   */
+  credit?: Partial<Record<StartKind, number>>;
 }
+
+/**
+ * Catalogue credits and the arms left out. [CALC] scratch/methods-flat (2026-11-06, Apple M1 Pro,
+ * Node v26.5.0, CPU seconds, one lane, no memory, seeds 1 to 3, 24 flat problems from 10 disks in
+ * a circle to 150 squares, and 9 polygon problems started from the site's leader):
+ *  - `shrink_repair` made the first good packing nearly everywhere and its iterations most later
+ *    gains; alone for 60 s it reached a median gap to the reference (the better of the literature
+ *    and the site) of 0.014%, where the engine with every arm took 0.15%, and with these arms,
+ *    credits and capShare 0.017%;
+ *  - `harden` rigid with noise 1 and `asc` from the best came next, far behind; `harden` from
+ *    scratch won now and then on polygons;
+ *  - `asc`, `basin_hopping` and `morph` from scratch and `ls_growth` never improved the best in
+ *    about 400 searches, and `basin_hopping` and `morph` from a start gained below 1e-5 in all,
+ *    with a fifth of the time between them. Rewards are sparse, so Thompson sampling gives many
+ *    weak arms most of the time even with low priors (the largest of many draws wins): they are
+ *    left out rather than given a low credit.
+ */
+const CORE: Partial<Record<StartKind, number>> = { fresh: 1, warm: 1, iterate: 1 };
 
 /**
  * The arms. Constructors run from scratch ("fresh"); improvers start from the best known packing
  * ("warm", input.known) or from the engine's own best ("iterate"), which every improvement
  * replaces. `seed`, `penalty` and `polish` run inside these methods already and are not arms;
- * `mc_compress` is left out as dominated by `asc` in the method pages' tables.
+ * `mc_compress` is left out as dominated by `asc` in the method pages' tables, and `basin_hopping`,
+ * `morph`, `ls_growth` and `asc` from scratch as above.
  */
 const RECIPES: Recipe[] = [
-  { name: "harden", method: "harden", starts: ["fresh"] },
-  { name: "shrink_repair", method: "shrink_repair", starts: ["fresh", "warm", "iterate"] },
+  { name: "shrink_repair", method: "shrink_repair", starts: ["fresh", "warm", "iterate"], credit: CORE },
+  { name: "harden", method: "harden", starts: ["fresh"], credit: { fresh: 0.25 } },
   // The reference's control path: better than the harden path on triangles (docs/methods/harden.md,
   // 12 triangles), identical to it for circles
   {
@@ -69,21 +97,18 @@ const RECIPES: Recipe[] = [
     starts: ["fresh"],
     params: () => ({ path: "rigid" }),
     when: (p) => p.N !== 0,
+    credit: { fresh: 0.15 },
   },
   // harden.md: "to refine an existing packing rather than search from it, use the rigid path with
   // a small noise"; it gained on all four problems of the improver calibration above
-  { name: "harden-refine", method: "harden", starts: ["warm", "iterate"], params: () => ({ path: "rigid", noise: 1 }) },
-  { name: "asc", method: "asc", starts: ["fresh", "warm", "iterate"] },
-  { name: "basin_hopping", method: "basin_hopping", starts: ["fresh", "warm", "iterate"] },
-  // Neither shape family is better in general (morph.md, "Benchmark conclusions"), so each job
-  // draws one
   {
-    name: "morph",
-    method: "morph",
-    starts: ["fresh", "warm", "iterate"],
-    params: (random) => ({ family: random() < 0.5 ? "inscribed" : "circumscribed" }),
+    name: "harden-refine",
+    method: "harden",
+    starts: ["warm", "iterate"],
+    params: () => ({ path: "rigid", noise: 1 }),
+    credit: { warm: 0.4, iterate: 0.4 },
   },
-  { name: "ls_growth", method: "ls_growth", starts: ["fresh"], when: (p) => p.N === 0 },
+  { name: "asc", method: "asc", starts: ["warm", "iterate"], credit: { warm: 0.3, iterate: 0.3 } },
 ];
 
 /**
@@ -101,9 +126,24 @@ export function armsFor(problem: Problem): Arm[] {
         method: recipe.method,
         start,
         params: recipe.params,
+        credit: recipe.credit?.[start] ?? 0.5,
       });
   }
   return arms;
+}
+
+/**
+ * The family record the engine assumes for a family its memory has never seen: every arm as if
+ * it had run on POLICY.catalogueWeight problems with its catalogue credit. It sets the priors and
+ * the exploration round as a remembered family would; it is never stored.
+ */
+export function catalogueFamily(arms: readonly Arm[]): FamilyRecord {
+  const n = POLICY.catalogueWeight;
+  return {
+    used: 0,
+    arms: Object.fromEntries(arms.map((arm) => [arm.key, { n, r: n * Math.min(1, Math.max(0, arm.credit)) }])),
+    rates: {},
+  };
 }
 
 export const POLICY = {
@@ -120,13 +160,29 @@ export const POLICY = {
   /** T0 bounds, seconds: below 4 s the fixed costs of a run (seed slices, polish) dominate. */
   baseMinSeconds: 4,
   baseMaxSeconds: 120,
-  /** The exploration round (one T0 job per arm) may take at most this share of all lane time. */
-  explorationShare: 0.25,
   /**
-   * Largest job: a sixth of maxSeconds, so that a lane still makes six choices at the top level,
-   * and at most 15 minutes, beyond the 30,000-evaluation runs of the method pages for P <= 100.
+   * The exploration round (one T0 job per arm) may take at most this share of all lane time: when
+   * T0 jobs for every arm do not fit, only the first arms in the exploration order get one.
    */
-  capShare: 1 / 6,
+  explorationShare: 0.25,
+  /** T0 is at most this share of maxSeconds less the polish reserve. */
+  baseMaxShare: 1 / 3,
+  /**
+   * Only arms whose credit (remembered, or the catalogue's on a new family) is at least this share
+   * of the family's best arm's get a job in the exploration round; the others wait for the
+   * bandit. Arms the family's memory has no record of are always explored.
+   */
+  exploreCredit: 0.5,
+  /** Weight of the catalogue credits, in remembered problems (memory.ts caps a prior's at 4). */
+  catalogueWeight: 4,
+  /**
+   * Largest job: half of maxSeconds, and at most 15 minutes, beyond the 30,000-evaluation runs of
+   * the method pages for P <= 100. [CALC] scratch/methods-flat: `shrink_repair` keeps improving in
+   * one long run (its own ruins and restarts) where a chain of short runs from the best stays in
+   * one basin; with jobs of at most a sixth of 60 s, one lane reached a median gap of 0.033% on
+   * the 24 problems, with at most half 0.017%.
+   */
+  capShare: 1 / 2,
   capMaxSeconds: 900,
   /**
    * A job's evaluation cap is this share of what its time budget buys at the learned rate, so
@@ -203,6 +259,8 @@ export interface Plan {
   stagnationFloor: number;
   /** No job shorter than this is started. */
   minJob: number;
+  /** Arms that get a job in the exploration round, the first in the exploration order. */
+  explore: number;
 }
 
 const clamp = (x: number, lo: number, hi: number) => Math.min(hi, Math.max(lo, x));
@@ -217,12 +275,14 @@ export function makePlan(maxSeconds: number, lanes: number, arms: number, evalua
     T / 4,
   );
   const bySize = clamp(POLICY.baseEvaluations / evaluationsPerSecond, POLICY.baseMinSeconds, POLICY.baseMaxSeconds);
-  const byShare = (POLICY.explorationShare * T * lanes) / Math.max(1, arms);
-  const base = Math.max(0.5, Math.min(bySize, byShare));
+  // A job shorter than the size's base is mostly fixed costs (seeding, polish), so a short search
+  // keeps the base, up to a share of its time, and explores fewer arms rather than shorter jobs
+  const base = Math.max(0.5, Math.min(bySize, POLICY.baseMaxShare * Math.max(0, T - polishReserve)));
+  const explore = Math.max(1, Math.min(arms, Math.floor((POLICY.explorationShare * T * lanes) / base)));
   const cap = Math.max(base, Math.min(POLICY.capShare * T, POLICY.capMaxSeconds));
   const maxLevel = Math.max(0, Math.floor(Math.log2(cap / base) + 1e-9));
   const floor = Math.max(POLICY.stagnationFloorBases * base, POLICY.fairShare * T);
-  return { base, cap, maxLevel, polishReserve, stagnationFloor: Math.min(T, floor), minJob: base / 2 };
+  return { base, cap, maxLevel, polishReserve, stagnationFloor: Math.min(T, floor), minJob: base / 2, explore };
 }
 
 /** Budget in seconds of a job at a level, before clipping to the remaining time. */

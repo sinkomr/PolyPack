@@ -7,15 +7,19 @@
  *    becomes the start of the next improver jobs). Warm arms need input.known; iterate arms need
  *    a packing, the strict best or else the best valid one that is not strict. A packing that is
  *    not strict is a start only, never the best.
- * 2. Exploration round. Each arm runs once at the base budget T0, in the order of its family's
- *    memory (best first); an iterate arm waits for a packing, and meanwhile the bandit fills the
- *    lanes.
- * 3. Bandit. Thompson sampling: each eligible arm draws theta from its Beta posterior and the arm
- *    with the largest theta / expected seconds of its next job runs. A finished job pulls its
+ * 2. Exploration round. Arms run once at the base budget T0, in the order of their family's
+ *    memory (best first), or of the catalogue's credits (policy.ts) on a family the memory has
+ *    never seen; an iterate arm waits for a packing, and meanwhile the bandit fills the lanes.
+ *    Only arms without a record and arms whose credit is at least POLICY.exploreCredit of the
+ *    best arm's take part, and only as many as fit in the exploration share of the lane time
+ *    (makePlan); the others wait for the bandit.
+ * 3. Bandit. Thompson sampling: each eligible arm draws theta from its Beta posterior (its prior
+ *    from the family's memory, or from the catalogue on a new family) and the arm with the
+ *    largest theta / expected seconds of its next job runs. A finished job pulls its
  *    arm's posterior back toward the prior by POLICY.discount, then adds its reward r in [0, 1]
  *    (policy.ts `reward`: the job's relative improvement of the best, on a log scale) to alpha
  *    and 1 - r to beta. Expected seconds are the job's budget times the share of their budgets
- *    the arm's jobs have used, so arms that stop early (asc, morph) are charged what they spend.
+ *    the arm's jobs have used, so arms that stop early (asc) are charged what they spend.
  * 4. Budgets. Each arm has a level, starting at 0; its jobs get T0 * 2^level seconds, up to the
  *    cap, clipped to the time left. The level rises by one after a job at that level improves
  *    the best (an arm that keeps improving gets longer runs) and after every two at that level
@@ -60,7 +64,18 @@ import type {
   SearchProblem,
 } from "../types";
 import { armCredit, armPrior, parseMemory, remember, type FamilyRecord, type Memory } from "./memory";
-import { POLICY, armsFor, familyKey, fitsProblem, levelSeconds, makePlan, reward, type Arm, type Plan } from "./policy";
+import {
+  POLICY,
+  armsFor,
+  catalogueFamily,
+  familyKey,
+  fitsProblem,
+  levelSeconds,
+  makePlan,
+  reward,
+  type Arm,
+  type Plan,
+} from "./policy";
 import { betaSample, mixSeed, seededStream, toUint32 } from "./random";
 
 type Stop = SearchOutcome["stopped"];
@@ -160,9 +175,6 @@ class Search {
     this.random = seededStream(mixSeed(this.seed, 0xffffffff));
     this.memory = parseMemory(input.memory);
     this.family = familyKey(this.problem);
-    const family: FamilyRecord | undefined = Object.hasOwn(this.memory.families, this.family)
-      ? this.memory.families[this.family]
-      : undefined;
     const known = input.known;
     if (known && fitsProblem(known.config, this.problem))
       this.known = {
@@ -171,6 +183,11 @@ class Search {
       };
 
     const arms = armsFor(this.problem).filter((arm) => arm.start !== "warm" || this.known);
+    const remembered: FamilyRecord | undefined = Object.hasOwn(this.memory.families, this.family)
+      ? this.memory.families[this.family]
+      : undefined;
+    // A family the memory has never seen starts from the catalogue's credits
+    const family = remembered ?? catalogueFamily(arms);
     this.states = arms.map((arm) => {
       const prior = armPrior(family, arm.key);
       return {
@@ -189,24 +206,31 @@ class Search {
         spent: 0,
       };
     });
-    // Stable sort: arms without a record keep the catalogue's order, after those with one
-    this.order = [...this.states].sort(
-      (a, b) => (armCredit(family, b.arm.key) ?? -1) - (armCredit(family, a.arm.key) ?? -1),
-    );
+    // The exploration round: arms without a record, and those whose credit is at least
+    // exploreCredit of the best arm's. Stable sort: arms without a record keep the catalogue's
+    // order, after those with one
+    const top = Math.max(0, ...arms.map((arm) => armCredit(family, arm.key) ?? 0));
+    const order = this.states
+      .filter((s) => {
+        const credit = armCredit(family, s.arm.key);
+        return credit === undefined || credit >= POLICY.exploreCredit * top;
+      })
+      .sort((a, b) => (armCredit(family, b.arm.key) ?? -1) - (armCredit(family, a.arm.key) ?? -1));
 
     const generic = 1 / (POLICY.secondsPerEvaluationPerPiece * P);
-    const remembered = Object.entries(family?.rates ?? {}).map(([method, rate]) => [method, rate / P] as const);
+    const rated = Object.entries(family.rates).map(([method, rate]) => [method, rate / P] as const);
     for (const arm of arms)
       if (!this.rates.has(arm.method)) this.rates.set(arm.method, { evaluations: 0, seconds: 0, prior: generic });
-    for (const [method, rate] of remembered) {
+    for (const [method, rate] of rated) {
       const totals = this.rates.get(method);
       if (totals) totals.prior = rate;
     }
     // The base budget follows the family's measured rates when there are any
-    const typical = remembered.length
-      ? Math.exp(remembered.reduce((sum, [, rate]) => sum + Math.log(rate), 0) / remembered.length)
+    const typical = rated.length
+      ? Math.exp(rated.reduce((sum, [, rate]) => sum + Math.log(rate), 0) / rated.length)
       : generic;
-    this.plan = makePlan(this.maxSeconds, this.lanes, this.states.length, typical);
+    this.plan = makePlan(this.maxSeconds, this.lanes, order.length, typical);
+    this.order = order.slice(0, this.plan.explore);
     this.t0 = input.now();
   }
 
