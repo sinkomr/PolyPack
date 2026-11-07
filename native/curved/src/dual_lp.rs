@@ -556,7 +556,8 @@ impl DualLp {
                 }
                 self.recompute();
             }
-            // ---- leaving row: the largest bound violation
+            // ---- leaving row: the largest bound violation (dual steepest edge took more iterations
+            // on these programs)
             let mut r = usize::MAX;
             let mut worst = TOL_P;
             let mut delta = 0.0;

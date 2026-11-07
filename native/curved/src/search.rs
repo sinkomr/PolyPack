@@ -80,6 +80,20 @@ impl Searcher {
         e <= FEAS
     }
 
+    /// Minimises the overlap energy with a clearance `margin` at container variable t (not
+    /// stopped); true when every gap is then within 1e-13 of the margin.
+    pub fn repair_with_margin(&mut self, z: &mut [f64], t: f64, margin: f64, iters: usize) -> bool {
+        let ev = &mut self.ev;
+        let mut f = |x: &[f64], g: &mut [f64]| ev.energy(x, t, margin, g);
+        let opts = LbfgsOptions {
+            max_iter: iters,
+            gtol: 1e-16,
+            stop_below: 1e-26,
+        };
+        let (e, _) = self.lbfgs.minimize(z, &mut f, &opts, &mut || false);
+        e <= 1e-26
+    }
+
     fn tight_t(&mut self, z: &[f64]) -> f64 {
         self.ev.set_poses(z);
         self.ev.required_t()

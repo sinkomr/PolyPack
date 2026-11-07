@@ -301,6 +301,20 @@ pub fn run_job_with(
                         }
                     }
                 }
+                if !ok && best.is_none() {
+                    // the polishes were stopped (the time is up) and nothing passes yet: in a
+                    // container 1e-9 larger, minimise the overlap energy with a clearance of
+                    // 3e-11 (a few cheap L-BFGS iterations, not stopped)
+                    let t2 = pol.t + 1e-9 * pol.t.max(1.0);
+                    let mut z = pol.z.clone();
+                    if t2 < searcher.ev.t_max && searcher.repair_with_margin(&mut z, t2, 3e-11, 200) {
+                        let c2 = CurvedConfig::from_vector(side_from_apothem(problem.m, problem.k, t2), &z);
+                        if check_config(problem, &c2, &rule).valid {
+                            cfg = c2;
+                            ok = true;
+                        }
+                    }
+                }
                 if ok && best.as_ref().is_none_or(|(_, s)| cfg.size < *s) {
                     warm = Some((cfg.to_vector(), cfg.size));
                     best = Some((cfg.clone(), cfg.size));
