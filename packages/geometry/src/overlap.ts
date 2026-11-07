@@ -115,6 +115,59 @@ export function regularPolygonSeparation(N: number, a: Pose, b: Pose, scale = 1)
   return { sep: best, nx, ny };
 }
 
+/** circumradius(N) and inradius(N) of the last N regularPolygonOverlap saw. */
+let memoN = -1;
+let memoR = NaN;
+let memoInr = NaN;
+
+/**
+ * regularPolygonSeparation(N, a, b, scale).sep when it is negative (the pieces overlap), the same
+ * double; otherwise a candidate gap of at least `enough` (>= 0), as soon as one is found, or the
+ * maximum when none is (for penalty energies, which ignore separated pairs). The candidates are
+ * those of regularPolygonSeparation, visited in its order, so a result below `enough` is its
+ * maximum bit for bit. Poses are passed as numbers, so a caller in a hot loop builds no objects.
+ */
+export function regularPolygonOverlap(
+  N: number,
+  ax: number,
+  ay: number,
+  at: number,
+  bx: number,
+  by: number,
+  bt: number,
+  scale = 1,
+  enough = 0,
+): number {
+  if (N !== memoN) {
+    memoN = N;
+    memoR = circumradius(N);
+    memoInr = inradius(N);
+  }
+  const R = memoR * scale;
+  const r = memoInr * scale;
+  const step = (2 * Math.PI) / N;
+  const dx = bx - ax;
+  const dy = by - ay;
+  let best = -Infinity;
+  const ea = pieceTrig(N, at);
+  const eb = pieceTrig(N, bt, ea);
+  const axA = axesOf(ea);
+  const axB = axesOf(eb);
+  for (let k = 0; k < N; k++) {
+    let sep = dx * axA[3 * k + 1] + dy * axA[3 * k + 2] - r - R * cosToNearestVertex(axA[3 * k] + Math.PI / 2 - bt, step);
+    if (sep > best) {
+      best = sep;
+      if (best >= enough) return best;
+    }
+    sep = -(dx * axB[3 * k + 1] + dy * axB[3 * k + 2]) - r - R * cosToNearestVertex(axB[3 * k] + Math.PI / 2 - at, step);
+    if (sep > best) {
+      best = sep;
+      if (best >= enough) return best;
+    }
+  }
+  return best;
+}
+
 /** Fewest sides for which pairSeparation prunes the axes: below, the plain loop is as fast (measured 2026-10-21). */
 const PRUNE_FROM_N = 12;
 /** Largest |theta| for which the pruning's margin covers the rounding of the axis angles (see pairSeparation). */

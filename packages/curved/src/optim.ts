@@ -197,6 +197,7 @@ export function solveLp(
   let status: LpResult["status"] = "optimal";
   let degenerate = 0;
   const pivotWork = m * (n + 2 * m) + m * W;
+  const red = new Float64Array(n + 2 * m);
   for (let piv = 0; ; piv++) {
     if (piv >= maxPivots || poll?.(pivotWork)) {
       status = "iteration_limit";
@@ -208,13 +209,27 @@ export function solveLp(
     let bestScore = 0;
     let enterDir = 0;
     const useBland = degenerate > 50;
+    // reduced costs of every column, row by row through the tableau (contiguous reads). Each column
+    // gets the same operations in the same order as the column-wise sum d_j = c_j - sum_k cB_k T_kj
+    // over its nonzero entries; rows whose basic cost is 0 change no column and are skipped.
+    for (let col = 0; col < n + 2 * m; col++) red[col] = cost(col);
+    for (let k = 0; k < m; k++) {
+      const cb = cost(basis[k]);
+      if (cb === 0) continue;
+      const rk = k * W;
+      for (let col = 0; col < W; col++) {
+        const e = T[rk + col];
+        if (e !== 0) red[col] -= cb * e;
+      }
+      // the virtual r columns: entry -T_k,(n + i)
+      for (let i = 0; i < m; i++) {
+        const e = -T[rk + n + i];
+        if (e !== 0) red[W + i] -= cb * e;
+      }
+    }
     for (let col = 0; col < n + 2 * m; col++) {
       if (isBasic[col]) continue;
-      let d = cost(col);
-      for (let k = 0; k < m; k++) {
-        const e = entry(k, col);
-        if (e !== 0) d -= cost(basis[k]) * e;
-      }
+      const d = red[col];
       let dir = 0;
       if (col < n) {
         if (!atUpper[col] && d < -tolD && U[col] > 0) dir = 1;

@@ -25,6 +25,8 @@
  *    size. A better packing is kept; a worse one becomes the current packing with probability
  *    exp(-(rho'/rho - 1)/T), T = 1e-3, and the current packing returns to the best after ten hops
  *    without a gain.
+ *  - Starts: the given start; without one (or when it fails), disks first try the Fibonacci
+ *    spiral turned at random (spiralStart), polygons random poses.
  *
  * Budget: `maxEvals` counts objective and gradient evaluations (each one costs about one sweep
  * over the near pairs), `maxSeconds` is a wall-clock ceiling and `shouldStop` an external stop
@@ -37,8 +39,10 @@ import {
   type SphereProblem,
   areaBound,
   circumradiusAngle,
+  inradiusAngle,
   pieceAngle,
   pieceExists,
+  quatFromCentreTheta,
   rhoForAngle,
   quatMul,
   standardVertices,
@@ -254,7 +258,8 @@ export function tightRho(problem: SphereProblem, q: Quat[], rho0: number, tick: 
   const validAt = (rho: number): boolean => {
     tick();
     if (!(pieceAngle(N, rho) < aMax) || !pieceExists(N, rho)) return false;
-    const v = validate(problem, { rho, pieces: q.map((x) => ({ q: x })) }, { tol: 0 });
+    // the first overlap decides (maxErrors 1): the answer is the full check's
+    const v = validate(problem, { rho, pieces: q.map((x) => ({ q: x })) }, { tol: 0, maxErrors: 1 });
     return v.errors.length === 0 && v.minGap >= 0;
   };
   return tightSize(validAt, rho0, rhoForAngle(N, aMax));
@@ -313,13 +318,27 @@ class Model {
   base: Quat[];
   /** neighbour lists over the near pairs (both directions) */
   private nbrs: number[][] = [];
+  /** per piece, the index in `pairs` of each entry of nbrs */
+  private nbrPair: number[][] = [];
   private pairs: [number, number][] = [];
+  /**
+   * Per pair, set by total(LIVE_SLACK): 0 when an edge separates the placed pieces by at least
+   * LIVE_SLACK (disks: their chord exceeds the touching chord by that much). A finite-difference
+   * step of the gradient moves a piece's points by at most about its step h = 1e-7 (the left
+   * Jacobian of SO(3) has norm <= 1), so such a pair stays separated in every step and adds
+   * exactly 0 to local(): local() skips it.
+   */
+  private live = new Uint8Array(0);
+  /** scratch pose of local(), filled by poseInto */
+  readonly scratch: Quat = [1, 0, 0, 0];
   /** per piece: centre (3), vertices (3N), edge normals (3N) */
   private C: Float64Array[];
   private V: Float64Array[];
   private E: Float64Array[];
   private stdV: Float64Array;
   private a = NaN;
+  /** 2 sin(a), the chord two touching disks need; set with a. */
+  private chord2 = NaN;
   private readonly mat = new Float64Array(9);
   private readonly tmpC = new Float64Array(3);
   private readonly tmpV: Float64Array;
@@ -342,6 +361,7 @@ class Model {
   setSize(a: number): void {
     if (a === this.a) return;
     this.a = a;
+    this.chord2 = 2 * Math.sin(a);
     if (this.N === 0) return;
     const R = circumradiusAngle(this.N, 1 / a);
     const sv = standardVertices(this.N, R);
@@ -397,9 +417,34 @@ class Model {
     return quatMul(expQuat(wx, wy, wz), this.base[i]);
   }
 
+  /** pose(i, wx, wy, wz) written into `out`, the same numbers without allocating. */
+  poseInto(i: number, wx: number, wy: number, wz: number, out: Quat): Quat {
+    // expQuat
+    const t = Math.hypot(wx, wy, wz);
+    let w1 = 1;
+    let x1 = 0;
+    let y1 = 0;
+    let z1 = 0;
+    if (!(t < 1e-300)) {
+      const s = Math.sin(t / 2) / t;
+      w1 = Math.cos(t / 2);
+      x1 = wx * s;
+      y1 = wy * s;
+      z1 = wz * s;
+    }
+    // quatMul(exp(w), base)
+    const [w2, x2, y2, z2] = this.base[i];
+    out[0] = w1 * w2 - x1 * x2 - y1 * y2 - z1 * z2;
+    out[1] = w1 * x2 + x1 * w2 + y1 * z2 - z1 * y2;
+    out[2] = w1 * y2 - x1 * z2 + y1 * w2 + z1 * x2;
+    out[3] = w1 * z2 + x1 * y2 - y1 * x2 + z1 * w2;
+    return out;
+  }
+
   placeAll(x: Float64Array): void {
+    const q = this.scratch;
     for (let i = 0; i < this.P; i++)
-      this.place(this.pose(i, x[3 * i], x[3 * i + 1], x[3 * i + 2]), this.C[i], this.V[i], this.E[i]);
+      this.place(this.poseInto(i, x[3 * i], x[3 * i + 1], x[3 * i + 2], q), this.C[i], this.V[i], this.E[i]);
   }
 
   /** Near pairs at angular size aMax: centre angle below 2R + slack. */
@@ -409,11 +454,14 @@ class Model {
     const cosReach = Math.cos(reach);
     this.pairs = [];
     this.nbrs = Array.from({ length: this.P }, () => []);
+    this.nbrPair = Array.from({ length: this.P }, () => []);
     for (let i = 0; i < this.P; i++)
       for (let j = i + 1; j < this.P; j++) {
         const ci = this.C[i];
         const cj = this.C[j];
         if (ci[0] * cj[0] + ci[1] * cj[1] + ci[2] * cj[2] > cosReach) {
+          this.nbrPair[i].push(this.pairs.length);
+          this.nbrPair[j].push(this.pairs.length);
           this.pairs.push([i, j]);
           this.nbrs[i].push(j);
           this.nbrs[j].push(i);
@@ -421,7 +469,14 @@ class Model {
       }
   }
 
-  /** Overlap of two placed pieces (positive when they overlap). */
+  /**
+   * Overlap of two placed pieces when they overlap (positive); a value <= 0 otherwise, which the
+   * energy ignores. For polygons the separating-edge value is the largest, over the edges, of the
+   * smallest distance of the other piece's vertices beyond the edge: an edge's scan ends once its
+   * minimum cannot exceed the largest so far, and the whole test ends at the first edge that
+   * separates the pieces by `enough` (>= 0) or more, returning minus that edge's value. Both cuts
+   * leave every result above -enough unchanged, bit for bit.
+   */
   private overlap(
     ca: Float64Array,
     va: Float64Array,
@@ -429,10 +484,11 @@ class Model {
     cb: Float64Array,
     vb: Float64Array,
     eb: Float64Array,
+    enough = 0,
   ): number {
     if (this.N === 0) {
       const chord = Math.hypot(ca[0] - cb[0], ca[1] - cb[1], ca[2] - cb[2]);
-      return 2 * Math.sin(this.a) - chord;
+      return this.chord2 - chord;
     }
     const N = this.N;
     let sat = -Infinity;
@@ -447,34 +503,83 @@ class Model {
         for (let l = 0; l < N; l++) {
           // sine distance of the vertex beyond the edge great circle (positive outside)
           const d = -(nx * w[3 * l] + ny * w[3 * l + 1] + nz * w[3 * l + 2]);
-          if (d < lo) lo = d;
+          if (d < lo) {
+            lo = d;
+            if (lo <= sat) break;
+          }
         }
-        if (lo > sat) sat = lo;
+        if (lo > sat) {
+          sat = lo;
+          if (sat >= enough) return -sat;
+        }
       }
     }
     return -sat;
   }
 
-  total(): number {
+  /**
+   * The energy of the placed pieces; with `slack` > 0 it also marks the live pairs (see `live`).
+   * With `skipDead` it leaves out the pairs that were not live, for a size step of the gradient
+   * (a relative change of 1e-9 in a moves every point by less than 1e-8): they add exactly 0.
+   */
+  total(slack = 0, skipDead = false): number {
     let E = 0;
-    for (const [i, j] of this.pairs) {
-      const o = this.overlap(this.C[i], this.V[i], this.E[i], this.C[j], this.V[j], this.E[j]);
+    const pairs = this.pairs;
+    if (slack > 0 && this.live.length < pairs.length) this.live = new Uint8Array(pairs.length);
+    for (let p = 0; p < pairs.length; p++) {
+      if (skipDead && !this.live[p]) continue;
+      const [i, j] = pairs[p];
+      const o = this.overlap(this.C[i], this.V[i], this.E[i], this.C[j], this.V[j], this.E[j], slack);
+      if (slack > 0) this.live[p] = o > -slack ? 1 : 0;
       if (o > 0) E += o * o;
     }
     return E;
   }
 
-  /** Energy of piece i's pairs with piece i at pose q (the others as placed). */
+  /** True when piece i has a live pair (as last marked by total(slack)). */
+  hasLive(i: number): boolean {
+    for (const p of this.nbrPair[i]) if (this.live[p]) return true;
+    return false;
+  }
+
+  /**
+   * Energy of piece i's pairs with piece i at pose q (the others as placed), over its live pairs
+   * as last marked by total(slack): the others add exactly 0 for poses within a gradient step.
+   */
   local(i: number, q: Quat): number {
     this.place(q, this.tmpC, this.tmpV, this.tmpE);
     let E = 0;
-    for (const j of this.nbrs[i]) {
+    const nb = this.nbrs[i];
+    const np = this.nbrPair[i];
+    for (let t = 0; t < nb.length; t++) {
+      if (!this.live[np[t]]) continue;
+      const j = nb[t];
       const o = this.overlap(this.tmpC, this.tmpV, this.tmpE, this.C[j], this.V[j], this.E[j]);
       if (o > 0) E += o * o;
     }
     return E;
   }
 }
+
+/**
+ * P poses whose centres are the Fibonacci spiral on the sphere (z = 1 - (2 i + 1) / P, longitude
+ * advancing by the golden angle), all turned by the rotation `turn`: near-uniform points, a good
+ * start for spherical codes.
+ */
+export function spiralStart(P: number, turn: Quat): Quat[] {
+  const golden = Math.PI * (3 - Math.sqrt(5));
+  const out: Quat[] = [];
+  for (let i = 0; i < P; i++) {
+    const z = 1 - (2 * (i + 0.5)) / P;
+    const r = Math.sqrt(Math.max(0, 1 - z * z));
+    const a = golden * i;
+    out.push(normalized(quatMul(turn, quatFromCentreTheta([r * Math.cos(a), r * Math.sin(a), z], 0))));
+  }
+  return out;
+}
+
+/** Separation beyond which a pair is left out of the gradient's local energies (Model.live). */
+const LIVE_SLACK = 1e-6;
 
 /** Search state: the poses and the tight rho of a valid packing. */
 interface Packing {
@@ -526,30 +631,63 @@ export function searchSphere(problem: SphereProblem, o: SphereSearchOptions): Sp
           }
           model.setSize(a);
           model.placeAll(z);
-          const E = model.total();
+          const E = model.total(LIVE_SLACK);
+          const q = model.scratch;
           for (let i = 0; i < P; i++) {
+            // no live pair: every local energy below is 0, and so is the gradient
+            if (!model.hasLive(i)) {
+              g[3 * i] = 0;
+              g[3 * i + 1] = 0;
+              g[3 * i + 2] = 0;
+              continue;
+            }
             for (let c = 0; c < 3; c++) {
-              const w = [z[3 * i], z[3 * i + 1], z[3 * i + 2]];
-              w[c] += h;
-              const ep = model.local(i, model.pose(i, w[0], w[1], w[2]));
-              w[c] -= 2 * h;
-              const em = model.local(i, model.pose(i, w[0], w[1], w[2]));
+              const w0 = z[3 * i];
+              const w1 = z[3 * i + 1];
+              const w2 = z[3 * i + 2];
+              // the steps +h and then -2h of the coordinate c, as w[c] += h; w[c] -= 2 h
+              const up = (c === 0 ? w0 : c === 1 ? w1 : w2) + h;
+              const down = up - 2 * h;
+              const ep = model.local(i, model.poseInto(i, c === 0 ? up : w0, c === 1 ? up : w1, c === 2 ? up : w2, q));
+              const em = model.local(
+                i,
+                model.poseInto(i, c === 0 ? down : w0, c === 1 ? down : w1, c === 2 ? down : w2, q),
+              );
               g[3 * i + c] = (mu * (ep - em)) / (2 * h);
             }
           }
           const ha = 1e-9 * a;
           let Ep = Infinity;
           let Em = Infinity;
+          // the pairs that are not live stay separated in the size steps when the steps move every
+          // point by much less than LIVE_SLACK: disks change their touching chord by at most 2 ha,
+          // polygons their vertices by the change of the circumradius and their edge normals by
+          // that of the inradius (both steep only near the existence limit, where this is checked)
+          let skipDead = true;
+          if (N !== 0) {
+            const R0 = circumradiusAngle(N, 1 / a);
+            const r0 = inradiusAngle(N, 1 / a);
+            const am = a - ha;
+            const ap = Math.min(a + ha, aMax);
+            const move = Math.max(
+              Math.abs(circumradiusAngle(N, 1 / ap) - R0),
+              Math.abs(circumradiusAngle(N, 1 / am) - R0),
+              Math.abs(inradiusAngle(N, 1 / ap) - r0),
+              Math.abs(inradiusAngle(N, 1 / am) - r0),
+            );
+            skipDead = 4 * move + 1e-12 < 0.5 * LIVE_SLACK;
+          }
+          // disks are placed by their centres alone, which do not depend on a
           if (a + ha < aMax) {
             model.setSize(a + ha);
-            model.placeAll(z);
-            Ep = model.total();
+            if (N !== 0) model.placeAll(z);
+            Ep = model.total(0, skipDead);
           }
           model.setSize(a - ha);
-          model.placeAll(z);
-          Em = model.total();
+          if (N !== 0) model.placeAll(z);
+          Em = model.total(0, skipDead);
           model.setSize(a);
-          model.placeAll(z);
+          if (N !== 0) model.placeAll(z);
           g[3 * P] = -1 + (Number.isFinite(Ep) ? (mu * (Ep - Em)) / (2 * ha) : (mu * (E - Em)) / ha);
           return -a + mu * E;
         };
@@ -570,8 +708,14 @@ export function searchSphere(problem: SphereProblem, o: SphereSearchOptions): Sp
     return rho === null ? null : { q: r.q, rho };
   };
 
+  let starts = 0;
   const randomStart = (): Packing | null => {
-    const q = Array.from({ length: P }, () => randomQuat(rand));
+    // disks start from the Fibonacci spiral, turned at random, on the first try: [CALC] after
+    // 20,000 evaluations it beat a random start on 4 or 5 of 5 seeds at P = 24, 40 and 72 (at 72
+    // by about 4 %), and after 100,000 on 4 or 5 of 5 at P = 72 and 100 (2 of 5 at P = 40); for
+    // polygons it did not help, and they start at random as before
+    const q =
+      N === 0 && starts++ === 0 ? spiralStart(P, randomQuat(rand)) : Array.from({ length: P }, () => randomQuat(rand));
     return local(q, 0.7 / (N === 0 ? 2 * areaBound(N, P) : areaBound(N, P)), [1e2, 1e3, 1e4, 1e5, 1e6, 1e7, 1e8]);
   };
 
