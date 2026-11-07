@@ -199,6 +199,7 @@ function paddedClosestPair(N: number, a: Pose, b: Pose, scale: number, padding: 
   let by = 0;
   let ux = 1;
   let uy = 0;
+  let distance2 = Infinity;
   for (let pass = 0; pass < 2; pass++) {
     const vertices = pass === 0 ? A : B;
     const edges = pass === 0 ? B : A;
@@ -220,12 +221,17 @@ function paddedClosestPair(N: number, a: Pose, b: Pose, scale: number, padding: 
         const qy = edges[2 * j + 1] + t * ey;
         const vx = x - cx - qx;
         const vy = y - cy - qy;
+        // A clearly farther pair (squared distance beyond the best's by a relative 1e-9, far
+        // above the rounding of either) is neither zero nor closer: hypot is not needed for it
+        if (vx * vx + vy * vy > distance2) continue;
         const d = Math.hypot(vx, vy);
         // SAT may report +ulp at exact core contact. Reuse its bounded branch
         // derivative when the closest features coincide.
         if (d === 0) return undefined;
         if (d >= distance) continue;
         distance = d;
+        // squares of tiny distances lose their relative accuracy: no shortcut below 1e-140
+        distance2 = d > 1e-140 ? d * d * (1 + 1e-9) : Infinity;
         ax = pass === 0 ? x : qx;
         ay = pass === 0 ? y : qy;
         bx = pass === 0 ? qx : x;

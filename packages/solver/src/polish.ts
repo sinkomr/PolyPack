@@ -202,6 +202,62 @@ function dot(a: readonly number[], b: readonly number[]): number {
 }
 
 /**
+ * The contact Jacobian: dense rows, zero outside each contact's own variables, with those
+ * variables listed per row in increasing order (`cols`). The row products below run over the
+ * listed columns only. Every term they skip is a zero times a finite number, a zero, and adding a
+ * zero leaves every sum here as it was (a sum that starts at +0 never becomes -0), so they give
+ * the dense loops' doubles while the direction is finite. Once a direction entry is not finite
+ * (0 * Infinity is NaN, which the sparse loop would miss) the dense loops take over for good.
+ */
+interface ContactRows {
+  rows: number[][];
+  cols: number[][];
+}
+
+class RowSolver {
+  dense = false;
+  constructor(
+    readonly jacobian: ContactRows,
+    readonly direction: number[],
+  ) {}
+  /** rows[k] . direction */
+  product(k: number): number {
+    const row = this.jacobian.rows[k];
+    if (this.dense) return dot(row, this.direction);
+    const cols = this.jacobian.cols[k];
+    const direction = this.direction;
+    let v = 0;
+    for (let n = 0; n < cols.length; n++) v += row[cols[n]] * direction[cols[n]];
+    return v;
+  }
+  /** direction += delta rows[k] */
+  step(k: number, delta: number): void {
+    const row = this.jacobian.rows[k];
+    const direction = this.direction;
+    if (this.dense || !Number.isFinite(delta)) {
+      this.dense = true;
+      for (let j = 0; j < direction.length; j++) direction[j] += delta * row[j];
+      return;
+    }
+    const cols = this.jacobian.cols[k];
+    for (let n = 0; n < cols.length; n++) {
+      const c = cols[n];
+      direction[c] += delta * row[c];
+      if (!Number.isFinite(direction[c])) this.dense = true;
+    }
+  }
+}
+
+/** rows[k] . rows[k] for every row, over its listed columns (the rest are zeros). */
+function rowNorms({ rows, cols }: ContactRows): number[] {
+  return rows.map((row, k) => {
+    let v = 0;
+    for (const c of cols[k]) v += row[c] * row[c];
+    return v;
+  });
+}
+
+/**
  * Central derivatives on only the variables participating in each contact. Only the poses and
  * container that a contact reads are copied and perturbed, with the same values the packed
  * variable vector would give them.
@@ -211,10 +267,11 @@ function contactJacobian(
   container: Container,
   contacts: readonly ContactConstraint[],
   stopped: () => boolean,
-): number[][] | undefined {
+): ContactRows | undefined {
   const width = 3 * config.P + 4;
   const offset = 3 * config.P;
   const rows: number[][] = [];
+  const cols: number[][] = [];
   const h = 2e-6;
   const pose: Pose = { x: 0, y: 0, theta: 0 };
   const other: Pose = { x: 0, y: 0, theta: 0 };
@@ -224,6 +281,7 @@ function contactJacobian(
   for (const contact of contacts) {
     if (stopped()) return undefined;
     const row = Array<number>(width).fill(0);
+    const written: number[] = [];
     const pair = contact.kind === "pair";
     const variables = pair
       ? [3 * contact.i, 3 * contact.i + 1, 3 * contact.i + 2, 3 * contact.j, 3 * contact.j + 1, 3 * contact.j + 2]
@@ -253,10 +311,12 @@ function contactJacobian(
         return contactResidual(config.N, pose, pair ? other : undefined, box, contact);
       };
       row[variable] = (residual(h) - residual(-h)) / (2 * h);
+      written.push(variable);
     }
     rows.push(row);
+    cols.push(written);
   }
-  return rows;
+  return { rows, cols };
 }
 
 /**
@@ -314,22 +374,24 @@ const IMPROVEMENT_FLOOR = 2e-13;
 
 /** Solve the final contact equalities by rank-tolerant row projections (Newton's step). */
 function contactNewton(
-  rows: readonly number[][],
+  jacobian: ContactRows,
   gaps: readonly number[],
   stopped: () => boolean,
 ): number[] | undefined {
+  const rows = jacobian.rows;
   if (!rows.length) return [];
   const direction = Array<number>(rows[0].length).fill(0);
-  const norms = rows.map((row) => dot(row, row));
+  const solver = new RowSolver(jacobian, direction);
+  const norms = rowNorms(jacobian);
   for (let sweep = 0; sweep < 1000; sweep++) {
     let largest = 0;
     for (let k = 0; k < rows.length; k++) {
       if (stopped()) return undefined;
       if (norms[k] < 1e-20) continue;
-      const residual = 2e-13 - gaps[k] - dot(rows[k], direction);
+      const residual = 2e-13 - gaps[k] - solver.product(k);
       largest = Math.max(largest, Math.abs(residual));
       const delta = residual / norms[k];
-      for (let j = 0; j < direction.length; j++) direction[j] += delta * rows[k][j];
+      solver.step(k, delta);
     }
     if (largest < 5e-14) break;
   }
@@ -384,12 +446,14 @@ export async function polish(config: PackingConfig, options: PolishOptions = {})
     if (!contacts || contacts.length > 2048 || contacts.length * Math.max(current.N, 1) > 50000) return best;
     const x = packContactVariables(current, container);
     const gaps = contactResiduals(current, container, contacts);
-    const rows = contactJacobian(current, container, contacts, stopped);
-    if (!rows) return best;
+    const jacobian = contactJacobian(current, container, contacts, stopped);
+    if (!jacobian) return best;
+    const rows = jacobian.rows;
     const direction = Array<number>(x.length).fill(0);
     direction[x.length - 1] = -trust;
+    const solver = new RowSolver(jacobian, direction);
     const multipliers = Array<number>(rows.length).fill(0);
-    const norms = rows.map((row) => dot(row, row));
+    const norms = rowNorms(jacobian);
     // Hildreth coordinate descent solves the convex QP dual without singular KKT matrices.
     for (let sweep = 0; sweep < 300; sweep++) {
       if (stopped()) return best;
@@ -397,11 +461,11 @@ export async function polish(config: PackingConfig, options: PolishOptions = {})
       for (let k = 0; k < rows.length; k++) {
         if (stopped()) return best;
         if (norms[k] < 1e-20) continue;
-        const next = Math.max(0, multipliers[k] + (-gaps[k] + 2e-13 - dot(rows[k], direction)) / norms[k]);
+        const next = Math.max(0, multipliers[k] + (-gaps[k] + 2e-13 - solver.product(k)) / norms[k]);
         const delta = next - multipliers[k];
         multipliers[k] = next;
         largest = Math.max(largest, Math.abs(delta));
-        for (let j = 0; j < direction.length; j++) direction[j] += delta * rows[k][j];
+        solver.step(k, delta);
       }
       if (largest < 1e-12) break;
     }
@@ -464,9 +528,9 @@ export async function polish(config: PackingConfig, options: PolishOptions = {})
       const contacts = collectContacts(best, base.container, 2e-7, stopped);
       if (!contacts || contacts.length > 2048 || contacts.length * Math.max(best.N, 1) > 50000) return best;
       const gaps = contactResiduals(best, base.container, contacts);
-      const rows = contactJacobian(best, base.container, contacts, stopped);
-      if (!rows) return best;
-      const direction = contactNewton(rows, gaps, stopped);
+      const jacobian = contactJacobian(best, base.container, contacts, stopped);
+      if (!jacobian) return best;
+      const direction = contactNewton(jacobian, gaps, stopped);
       if (!direction) return best;
       if (!direction.length || Math.max(...direction.map(Math.abs)) < 5e-14) break;
       const variables = packContactVariables(best, base.container);
