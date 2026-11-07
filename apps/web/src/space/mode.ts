@@ -285,6 +285,10 @@ class SpaceMode {
     // dimension-switch.ts shows a placeholder while this module loads
     layout.querySelector(".space-placeholder")?.remove();
     layout.prepend(stage);
+    // the board's Random problem button: the polygon board answers it while no kind is shown
+    $("random-problem").addEventListener("click", () => {
+      if (layout.dataset.space) this.random();
+    });
 
     problem.append(
       h(
@@ -669,6 +673,25 @@ class SpaceMode {
     return domain
       ? pickFromDomain(space, domain, wish, scope, SPACE_DOMAINS[space]?.menu, keep)
       : pickProblem(space, (this.records.get(space) ?? []).filter((p) => !scope || scopeHasId(scope, p.id)), wish);
+  }
+
+  /**
+   * Opens a problem of this kind drawn at random: each shown field of the picker in turn takes one of the values
+   * it offers once the fields before it are drawn (a solid's P depend on the solid), and a field the family's
+   * scope fixes keeps its value.
+   */
+  private random(): void {
+    const space = this.space;
+    if (!space || this.loading || !this.records.has(space)) return;
+    const wish: Record<string, string> = {};
+    let pick = this.pick(space, wish);
+    for (let i = 0; i < pick.fields.length; i++) {
+      const f = pick.fields[i]!;
+      wish[f.key] = f.hidden || !f.options.length ? f.value : f.options[Math.floor(Math.random() * f.options.length)]!.value;
+      pick = this.pick(space, wish);
+    }
+    this.renderPicker(space, pick.fields);
+    if (pick.id) void this.load(space, pick.id, ++this.token, "");
   }
 
   private renderPicker(space: SpaceName, fields: PickField[]): void {

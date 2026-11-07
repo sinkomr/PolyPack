@@ -120,6 +120,9 @@ const CURSOR = "pieces_cursor";
 /** 1 once the pieces migration has reached the last row. */
 const MIGRATED = "pieces_migrated";
 
+/** The most records each name has held at once (see Store.holderPeaks); a name that never held one has no row. */
+const HOLDER_PEAKS = `CREATE TABLE IF NOT EXISTS holder_peaks (name TEXT PRIMARY KEY, peak INTEGER NOT NULL);`;
+
 const ENTRY_COLUMNS = "id, name, found_with, agent_note, score, created_at, verification";
 // Rows are no longer marked rejected (they are deleted); older databases still have such rows
 // until the pieces migration or a prune of their problem deletes them.
@@ -200,6 +203,7 @@ export class SqliteStore implements Store, SpaceStore {
     const fresh = !this.db.prepare("SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = 'submissions'").get();
     this.db.exec(SCHEMA);
     this.db.exec(META);
+    this.db.exec(HOLDER_PEAKS);
     // a new database never holds pieces in the older format, so there is nothing to migrate
     if (fresh) this.setMeta(MIGRATED, 1);
     // A database from before a column existed: add it. The legacy `agent` column stays as it was
@@ -715,6 +719,29 @@ export class SqliteStore implements Store, SpaceStore {
           .get(...values, id) as Row | undefined)
       : (this.db.prepare("SELECT space, problem FROM space_entries WHERE id = ?").get(id) as Row | undefined);
     return r ? { space: r.space as string, problem: r.problem as string } : null;
+  }
+
+  async holderPeaks(): Promise<{ name: string; peak: number }[]> {
+    return (this.db.prepare("SELECT name, peak FROM holder_peaks").all() as Row[]).map((r) => ({
+      name: r.name as string,
+      peak: r.peak as number,
+    }));
+  }
+
+  async raiseHolderPeaks(rows: readonly { name: string; peak: number }[]): Promise<void> {
+    if (rows.length === 0) return;
+    // one transaction; every call in it is synchronous, so no other request runs in between
+    const up = this.db.prepare(
+      "INSERT INTO holder_peaks (name, peak) VALUES (?, ?) ON CONFLICT (name) DO UPDATE SET peak = MAX(peak, excluded.peak)",
+    );
+    this.db.exec("BEGIN IMMEDIATE");
+    try {
+      for (const r of rows) up.run(r.name, r.peak);
+      this.db.exec("COMMIT");
+    } catch (e) {
+      this.db.exec("ROLLBACK");
+      throw e;
+    }
   }
 
   private getMeta(key: string): number | null {

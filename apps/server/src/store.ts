@@ -137,6 +137,16 @@ export interface Store {
    */
   leadersOf(problems: readonly { N: number; M: number; P: number }[]): Promise<ProblemLeader[]>;
   /**
+   * The most records each name has held at once, as /api/holders keeps them (`Holder.peak`): one row per name
+   * that has held at least one. Read once, when the holders' counts are done.
+   */
+  holderPeaks(): Promise<{ name: string; peak: number }[]>;
+  /**
+   * Raises the stored peak of each name to `peak`, or stores it for a new name; a peak already stored that is
+   * higher stays (an upsert with MAX), so a peak never falls. All rows in one transaction.
+   */
+  raiseHolderPeaks(rows: readonly { name: string; peak: number }[]): Promise<void>;
+  /**
    * The next `limit` problems, after the problem `after` (null: from the first), by N, then M, then P, in which
    * a listed entry has exactly this name (byte for byte, so case counts). Not the problems the
    * name leads: an entry may sit behind a better one, so a caller asks `leadersOf` who leads them. An indexed
