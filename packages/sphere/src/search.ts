@@ -26,7 +26,8 @@
  *    exp(-(rho'/rho - 1)/T), T = 1e-3, and the current packing returns to the best after ten hops
  *    without a gain.
  *  - Starts: the given start; without one (or when it fails), disks first try the Fibonacci
- *    spiral turned at random (spiralStart), polygons random poses.
+ *    spiral turned at random (spiralStart), kept at its own tight size before it is relaxed, so
+ *    that a search stopped early still has a result; polygons start from random poses.
  *
  * Budget: `maxEvals` counts objective and gradient evaluations (each one costs about one sweep
  * over the near pairs), `maxSeconds` is a wall-clock ceiling and `shouldStop` an external stop
@@ -708,16 +709,15 @@ export function searchSphere(problem: SphereProblem, o: SphereSearchOptions): Sp
     return rho === null ? null : { q: r.q, rho };
   };
 
-  let starts = 0;
-  const randomStart = (): Packing | null => {
-    // disks start from the Fibonacci spiral, turned at random, on the first try: [CALC] after
-    // 20,000 evaluations it beat a random start on 4 or 5 of 5 seeds at P = 24, 40 and 72 (at 72
-    // by about 4 %), and after 100,000 on 4 or 5 of 5 at P = 72 and 100 (2 of 5 at P = 40); for
-    // polygons it did not help, and they start at random as before
-    const q =
-      N === 0 && starts++ === 0 ? spiralStart(P, randomQuat(rand)) : Array.from({ length: P }, () => randomQuat(rand));
-    return local(q, 0.7 / (N === 0 ? 2 * areaBound(N, P) : areaBound(N, P)), [1e2, 1e3, 1e4, 1e5, 1e6, 1e7, 1e8]);
-  };
+  /** The angular size a fresh start is relaxed from, and its penalty weights. */
+  const freshAngle = 0.7 / (N === 0 ? 2 * areaBound(N, P) : areaBound(N, P));
+  const freshMus = [1e2, 1e3, 1e4, 1e5, 1e6, 1e7, 1e8];
+  const randomStart = (): Packing | null =>
+    local(
+      Array.from({ length: P }, () => randomQuat(rand)),
+      freshAngle,
+      freshMus,
+    );
 
   const perturb = (pk: Packing): Quat[] => {
     const q = pk.q.map((x) => [...x] as Quat);
@@ -757,7 +757,24 @@ export function searchSphere(problem: SphereProblem, o: SphereSearchOptions): Sp
         startScore = rho;
         log(`start: rho ${rho}`);
       }
-      const r = local(best?.q ?? q, best ? pieceAngle(N, best.rho) : pieceAngle(N, o.start.rho), [1e4, 1e5, 1e6, 1e7, 1e8]);
+      const r = local(
+        best?.q ?? q,
+        best ? pieceAngle(N, best.rho) : pieceAngle(N, o.start.rho),
+        [1e4, 1e5, 1e6, 1e7, 1e8],
+      );
+      if (r && (!best || r.rho < best.rho)) best = r;
+    }
+    if (!best && N === 0) {
+      // disks start from the Fibonacci spiral, turned at random: [CALC] after 20,000 evaluations it
+      // beat a random start on 4 or 5 of 5 seeds at P = 24, 40 and 72 (at 72 by about 4 %), and after
+      // 100,000 on 4 or 5 of 5 at P = 72 and 100 (2 of 5 at P = 40); for polygons it did not help, and
+      // they start at random. The spiral is a packing as it is, at the tight size of its closest
+      // pair: kept before the relaxation, which can take a few thousand evaluations, so that a short
+      // search still returns one
+      const q = spiralStart(P, randomQuat(rand));
+      const rho = tight(q, rhoForAngle(N, freshAngle));
+      if (rho !== null) best = { q, rho };
+      const r = local(q, freshAngle, freshMus);
       if (r && (!best || r.rho < best.rho)) best = r;
     }
     while (!best) best = randomStart();

@@ -61,6 +61,21 @@ describe.skipIf(records.length === 0)("searchSphere", () => {
     expect(validate({ N: 0, P: 6 }, res.config!).valid).toBe(true);
     expect(res.score).toBeLessThan((2 / Math.PI) * 1.01);
   });
+
+  it("returns a valid disk packing even when the budget ends during the first relaxation", () => {
+    // 3,000 evaluations end these runs inside the relaxation of the first start (they returned no
+    // packing before the spiral was kept at its own tight size); on any platform the spiral is a result
+    for (const [P, seed] of [
+      [6, 1],
+      [9, 1],
+      [12, 3],
+    ]) {
+      const res = searchSphere({ N: 0, P }, { seed, maxEvals: 3000 });
+      expect(res.config).not.toBeNull();
+      expect(validate({ N: 0, P }, res.config!).valid).toBe(true);
+      expect(res.score).toBe(res.config!.rho);
+    }
+  });
 });
 
 describe("searchSphere: units", () => {
@@ -70,10 +85,6 @@ describe("searchSphere: units", () => {
     const six = searchSphere({ N: 0, P: 6 }, { seed: 5, maxEvals: 3000 });
     const nine = searchSphere({ N: 0, P: 9 }, { seed: 5, maxEvals: 3000 });
     const square = searchSphere({ N: 4, P: 7 }, { seed: 5, maxEvals: 3000 });
-    for (const [k, r, n, pp] of [["six", six, 0, 6], ["nine", nine, 0, 9], ["square", square, 4, 7]] as const) {
-      const v = validate({ N: n, P: pp }, r.config!);
-      console.log("DIAG", k, r.score, v.valid, v.minGap, JSON.stringify(v.errors).slice(0, 400), JSON.stringify(r.config).slice(0, 2000));
-    }
     expect(validate({ N: 0, P: 6 }, six.config!).valid).toBe(true);
     expect(validate({ N: 0, P: 9 }, nine.config!).valid).toBe(true);
     expect(validate({ N: 4, P: 7 }, square.config!).valid).toBe(true);
