@@ -559,7 +559,7 @@ describe("engine: robustness and determinism", () => {
     const sim = new Sim(improving);
     const outcome = await search(sim, { maxSeconds: 600 });
     const memory = outcome.memory as { version: number; families: Record<string, unknown> };
-    expect(memory.version).toBe(1);
+    expect(memory.version).toBe(2);
     expect(Object.keys(memory.families)).toEqual([familyKey(SQUARES)]);
   });
 });

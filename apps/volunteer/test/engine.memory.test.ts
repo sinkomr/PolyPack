@@ -70,6 +70,21 @@ describe("engine memory", () => {
     for (const input of inputs) expect(parseMemory(input)).toEqual(emptyMemory());
   });
 
+  it("reads memory of version 1 (clients before 0.4.0) with its arms and without its rates", () => {
+    const memory = sample();
+    const old = parseMemory({ ...(json(memory) as object), version: 1 });
+    expect(old.version).toBe(MEMORY_VERSION);
+    expect(old.used).toBe(memory.used);
+    for (const key of Object.keys(memory.families)) {
+      expect(old.families[key].arms).toEqual(memory.families[key].arms);
+      expect(old.families[key].rates).toEqual({});
+    }
+    // the rates measured from then on are taken as they are, not averaged with the old ones
+    const next = remember(old, "4/4/10", { arms: [], rates: [{ method: "harden", rate: 20000 }] });
+    expect(next.families["4/4/10"].rates.harden).toBe(20000);
+    expect(parseMemory(json(next))).toEqual(next);
+  });
+
   it("drops malformed parts and keeps the rest", () => {
     const memory = json(sample()) as {
       families: Record<string, { arms: Record<string, unknown>; rates: Record<string, unknown> }>;
