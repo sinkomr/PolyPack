@@ -3126,6 +3126,11 @@ describe("the API page", () => {
     expect(page).toContain('<h3 id="snapshot"><code>GET /api/snapshot</code></h3>');
     expect(page).toContain('<a href="/volunteer.html">volunteer client</a>');
     expect(page).toContain('<a href="/volunteer.html">Pack@Home</a>');
+    // format 3: files generated on request, no bytes or hash, the release for everything at once
+    expect(page).toContain("{N, M, file, records, pieces, as_of, fingerprint}");
+    expect(page).toContain("x-snapshot-fingerprint");
+    expect(page).toContain('href="https://github.com/sinkomr/PolyPack/releases/tag/records"');
+    expect(page).not.toContain("bytes, sha256");
   });
 });
 

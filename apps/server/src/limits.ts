@@ -28,6 +28,30 @@ export class RateLimiter {
 }
 
 /**
+ * Runs at most `max` jobs at once; the others wait and start in order of arrival. A job that fails
+ * frees its place like any other.
+ */
+export class Gate {
+  private active = 0;
+  private waiting: (() => void)[] = [];
+
+  constructor(private max: number) {}
+
+  async run<T>(job: () => Promise<T>): Promise<T> {
+    if (this.active < this.max) this.active++;
+    // the place of the job that ends passes to the first waiting, so `active` does not drop in between
+    else await new Promise<void>((resolve) => this.waiting.push(resolve));
+    try {
+      return await job();
+    } finally {
+      const next = this.waiting.shift();
+      if (next) next();
+      else this.active--;
+    }
+  }
+}
+
+/**
  * Milliseconds of work each key may cause, refilled continuously at `perMinute` a minute, with at
  * most `perMinute` saved up. Work is charged after it is done, so one long piece of work can take a
  * key below zero; the key then waits until its balance is positive again.
@@ -122,6 +146,13 @@ export function sanitizeText(raw: string, maxLength: number): string {
     .slice(0, maxLength)
     .trim();
 }
+/**
+ * Snapshot files (GET /api/snapshot/{file}) one address may fetch an hour. The server generates each one from the
+ * database, and the mirror workflow fetches every file of the snapshot, sequentially, from one address: up to 9,801
+ * pairs and the spaces, in well under an hour. This leaves it room to be twice as fast, and stops a client that asks
+ * for the files again and again.
+ */
+export const SNAPSHOT_FILES_PER_HOUR = 20_000;
 /** Submissions per minute from one address. Cloud batch sessions may share one address. */
 export const SUBMISSIONS_PER_MINUTE = 120;
 /**

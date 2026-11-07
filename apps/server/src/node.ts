@@ -53,22 +53,25 @@ store.startPiecesMigration({
   log: (msg) => console.log(msg),
 });
 
-// The nightly records snapshot (snapshot.ts), built into SNAPSHOT_DIR at SNAPSHOT_HOUR (UTC, 11 by
-// default: after the nightly trim-down job) and served at /api/snapshot. Off without SNAPSHOT_DIR.
+// The records snapshot (snapshot.ts): a manifest built into SNAPSHOT_DIR at SNAPSHOT_HOUR (UTC, 11 by
+// default: after the nightly trim-down job) and served at /api/snapshot; each file of it is generated
+// from the database when it is asked for, and none is stored (files an older server stored in
+// SNAPSHOT_DIR are deleted at startup). Off without SNAPSHOT_DIR.
 const snapshotDir = process.env.SNAPSHOT_DIR || undefined;
-if (snapshotDir) {
-  const literature = new Map(records.map((r) => [`${r.N}/${r.M}/${r.P}`, r]));
-  const hourUtc = wholeNumber("SNAPSHOT_HOUR", 11);
+const literature = new Map(records.map((r) => [`${r.N}/${r.M}/${r.P}`, r]));
+const snapshotClosed = (N: number, M: number, P: number) => closedToSubmissions(literature.get(`${N}/${M}/${P}`));
+// the spaces' site entries, one file per space, for their open problems
+const snapshotSpaceEntries = snapshotSpaces(spaces, store);
+const snapshotHour = wholeNumber("SNAPSHOT_HOUR", 11);
+if (snapshotDir)
   scheduleSnapshots({
     store,
     dir: snapshotDir,
-    closed: (N, M, P) => closedToSubmissions(literature.get(`${N}/${M}/${P}`)),
-    // the spaces' site entries, one file per space, for their open problems
-    spaces: snapshotSpaces(spaces, store),
-    hourUtc: hourUtc < 24 ? hourUtc : 11,
+    closed: snapshotClosed,
+    spaces: snapshotSpaceEntries,
+    hourUtc: snapshotHour < 24 ? snapshotHour : 11,
     log: (msg) => console.log(msg),
   });
-}
 
 // One log line per submission and one a minute with the counts and verification times, so that
 // the load in production can be read from the log.
@@ -85,7 +88,9 @@ const app = createApp({
   limits: { overloadDelayMs: wholeNumber("OVERLOAD_DELAY_MS", OVERLOAD_DELAY_MS) },
   loopDelay: () => delay.ms(),
   stats,
-  snapshots: snapshotDir ? snapshotSource(snapshotDir) : undefined,
+  snapshots: snapshotDir
+    ? snapshotSource({ dir: snapshotDir, store, closed: snapshotClosed, spaces: snapshotSpaceEntries })
+    : undefined,
   spaces: { index: spaces, store },
   // Behind a proxy the socket address is the proxy's, so a header set by the proxy is used instead.
   // Only set CLIENT_IP_HEADER or TRUST_PROXY when a proxy that sets the header is really in front.
