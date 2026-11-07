@@ -182,7 +182,7 @@ impl Seen {
 
 // ---- events of the disk dynamics (ls_growth/events.ts) ----
 
-#[derive(Clone, Copy, Default)]
+#[derive(Clone, Copy, Debug, Default)]
 struct Vel {
     x: f64,
     y: f64,
@@ -222,6 +222,10 @@ fn disc_disc_time(a: &Pose, b: &Pose, va: &Vel, vb: &Vel, radius: f64, growth: f
     let qc = dx * dx + dy * dy - 4.0 * radius * radius;
     if qc <= 0.0 && qb < 0.0 {
         return 0.0;
+    }
+    // apart and not approaching (the quadratic never falls to zero for t >= 0): no sqrt needed
+    if qc > 0.0 && qb >= 0.0 && qa >= 0.0 {
+        return f64::INFINITY;
     }
     let (r, count) = roots(qa, qb, qc);
     for &t in &r[..count] {
@@ -308,6 +312,23 @@ fn two_mut(v: &mut [Vel], i: usize, j: usize) -> (&mut Vel, &mut Vel) {
 
 // ---- dynamics (ls_growth/dynamics.ts) ----
 
+/// What the dynamics need of their run: whether to stop, and a cooperative pause point.
+trait Host {
+    fn stopped(&mut self) -> bool;
+    /// False when the method must end.
+    fn pause(&mut self) -> bool;
+}
+
+impl Host for Ctx<'_> {
+    #[inline]
+    fn stopped(&mut self) -> bool {
+        self.should_stop()
+    }
+    fn pause(&mut self) -> bool {
+        self.checkpoint()
+    }
+}
+
 struct Advance {
     dt: f64,
     collision: bool,
@@ -315,6 +336,26 @@ struct Advance {
 }
 
 const FAILED: Advance = Advance { dt: 0.0, collision: false, failed: true };
+
+/// Signed separation of two congruent pieces, `Shape::sep` with the distance to the nearest
+/// multiple of the vertex spacing taken by rounding instead of `%` (the same value; the
+/// remainder function is the slowest part of the closed form).
+#[inline]
+fn pair_sep(shape: &Shape, a: &Pose, b: &Pose) -> f64 {
+    let dx = b.x - a.x;
+    let dy = b.y - a.y;
+    let d = dx.hypot(dy);
+    if shape.n == 0 {
+        return d - 2.0 * DISK_RADIUS;
+    }
+    let step = shape.step;
+    let near = |x: f64| (x - step * (x / step).round()).abs();
+    let phi = dy.atan2(dx);
+    let alpha_a = near(phi - a.theta - shape.normal0);
+    let alpha_b = near(phi + PI - b.theta - shape.normal0);
+    let rel = a.theta - b.theta + PI + PI / shape.n as f64;
+    d * alpha_a.min(alpha_b).cos() - (shape.r + shape.big_r * near(rel).cos())
+}
 
 /// First pair of unit-coordinate poses with negative separation.
 fn first_overlap(shape: &Shape, grid: &mut NeighborGrid, poses: &[Pose], reach: f64) -> Option<(usize, usize)> {
@@ -325,7 +366,7 @@ fn first_overlap(shape: &Shape, grid: &mut NeighborGrid, poses: &[Pose], reach: 
             for j in i + 1..p {
                 let dx = poses[i].x - poses[j].x;
                 let dy = poses[i].y - poses[j].y;
-                if dx * dx + dy * dy <= r2 && shape.sep(&poses[i], &poses[j]) < 0.0 {
+                if dx * dx + dy * dy <= r2 && pair_sep(shape, &poses[i], &poses[j]) < 0.0 {
                     return Some((i, j));
                 }
             }
@@ -335,7 +376,7 @@ fn first_overlap(shape: &Shape, grid: &mut NeighborGrid, poses: &[Pose], reach: 
     grid.build(poses, reach);
     let mut hit = None;
     grid.for_each_pair(poses, |i, j| {
-        if shape.sep(&poses[i], &poses[j]) < 0.0 {
+        if pair_sep(shape, &poses[i], &poses[j]) < 0.0 {
             hit = Some((i, j));
             false
         } else {
@@ -366,6 +407,8 @@ struct Growth {
     unit: Vec<Pose>,
     base: Vec<Pose>,
     grid: NeighborGrid,
+    /// Outward wall normals of a polygon container: angle, cosine and sine of each.
+    wall_angle: Vec<f64>,
     wall_cos: Vec<f64>,
     wall_sin: Vec<f64>,
     apothem: f64,
@@ -383,8 +426,9 @@ impl Growth {
     ) -> Self {
         let (n, m) = (template.n, template.m);
         let p = template.pieces.len();
+        // the container moves to the origin and the pieces with it
+        let pieces: Vec<Pose> = template.pieces.iter().map(|q| Pose::new(q.x - container.cx, q.y - container.cy, q.theta)).collect();
         let container = Container { cx: 0.0, cy: 0.0, ..container };
-        let pieces: Vec<Pose> = template.pieces.iter().map(|q| Pose::new(q.x, q.y, q.theta)).collect();
         let mut vel = Vec::with_capacity(p);
         for _ in 0..p {
             let angle = 2.0 * PI * rng.next();
@@ -392,12 +436,9 @@ impl Growth {
             vel.push(Vel { x: speed * angle.cos(), y: speed * angle.sin(), omega });
         }
         let initial_energy = vel.iter().map(|v| v.x * v.x + v.y * v.y).sum();
-        let (wall_cos, wall_sin): (Vec<f64>, Vec<f64>) = (0..m as usize)
-            .map(|edge| {
-                let angle = container.phi - PI / 2.0 + (2.0 * PI * edge as f64) / m as f64;
-                (angle.cos(), angle.sin())
-            })
-            .unzip();
+        let wall_angle: Vec<f64> = (0..m as usize).map(|edge| container.phi - PI / 2.0 + (2.0 * PI * edge as f64) / m as f64).collect();
+        let wall_cos: Vec<f64> = wall_angle.iter().map(|a| a.cos()).collect();
+        let wall_sin: Vec<f64> = wall_angle.iter().map(|a| a.sin()).collect();
         Growth {
             n,
             m,
@@ -415,6 +456,7 @@ impl Growth {
             unit: vec![Pose::default(); p],
             base: Vec::with_capacity(p),
             grid: NeighborGrid::new(),
+            wall_angle,
             wall_cos,
             wall_sin,
             apothem: container_inradius(m),
@@ -461,15 +503,17 @@ impl Growth {
         Container { size: self.container.size / scale, ..self.container }
     }
 
-    /// No wall protrusion of the unit poses in `unit` (NaN counts as protruding).
-    fn walls_ok(&self, scale: f64) -> bool {
+    /// First piece of `unit` protruding through a wall (NaN counts as protruding), with the wall's
+    /// outward normal. One scan serves both the feasibility test and the collision it reports, so
+    /// that the two never disagree about a contact within rounding.
+    fn wall_scan(&self, scale: f64) -> Option<(usize, f64, f64)> {
         let n = self.n;
         let size_u = self.container.size / scale;
         let reach_in = size_u * self.apothem;
         // a piece whose bounding circle stays inside the inscribed circle touches no wall
         let skip = reach_in - bounding_radius(n) - 1e-12 * reach_in.max(1.0);
         let unit_container = self.unit_container(scale);
-        for q in &self.unit {
+        for (i, q) in self.unit.iter().enumerate() {
             if q.x.hypot(q.y) <= skip {
                 continue;
             }
@@ -477,22 +521,35 @@ impl Growth {
                 for (c, s) in self.wall_cos.iter().zip(self.wall_sin.iter()) {
                     let depth = q.x * c + q.y * s + DISK_RADIUS - reach_in;
                     if !(depth <= 0.0) {
-                        return false;
+                        return Some((i, *c, *s));
+                    }
+                }
+            } else if self.m != 0 {
+                // the furthest vertex along a wall normal is the one nearest it in angle
+                let a0 = q.theta + PI / 2.0;
+                let step = self.shape.step;
+                for e in 0..self.wall_angle.len() {
+                    let rel = self.wall_angle[e] - a0;
+                    let near = rel - step * (rel / step).round();
+                    let depth = q.x * self.wall_cos[e] + q.y * self.wall_sin[e] + self.shape.big_r * near.cos() - reach_in;
+                    if !(depth <= 0.0) {
+                        return Some((i, self.wall_cos[e], self.wall_sin[e]));
                     }
                 }
             } else {
-                let mut ok = true;
+                // circle container: every vertex against the circle
+                let mut hit = None;
                 visit_protrusions(n, q, &unit_container, true, 1.0, 0.0, |pr| {
-                    if !(pr.depth <= 0.0) {
-                        ok = false;
+                    if !(pr.depth <= 0.0) && hit.is_none() {
+                        hit = Some((i, pr.px, pr.py));
                     }
                 });
-                if !ok {
-                    return false;
+                if hit.is_some() {
+                    return hit;
                 }
             }
         }
-        true
+        None
     }
 
     /// No overlap and no wall protrusion with the pieces at `scale`, tested in unit coordinates.
@@ -506,17 +563,17 @@ impl Growth {
         if first_overlap(&self.shape, &mut self.grid, &self.unit, self.pair_reach).is_some() {
             return false;
         }
-        self.walls_ok(scale)
+        self.wall_scan(scale).is_none()
     }
 
     /// Only roundoff-size violations are repaired; substantial missed events end the run.
-    fn repair(&mut self, ctx: &mut Ctx) -> bool {
+    fn repair(&mut self, ctx: &mut impl Host) -> bool {
         if self.feasible_at(self.scale) {
             return true;
         }
         let original = self.scale;
         for fraction in [2e-14, 2e-13, 2e-12, 2e-11, 2e-10, 2e-9] {
-            if ctx.should_stop() {
+            if ctx.stopped() {
                 return false;
             }
             self.scale = original * (1.0 - fraction);
@@ -538,7 +595,7 @@ impl Growth {
         self.scale += self.growth * dt;
     }
 
-    fn disc_advance(&mut self, ctx: &mut Ctx) -> Advance {
+    fn disc_advance(&mut self, ctx: &mut impl Host) -> Advance {
         let p = self.pieces.len();
         let mut vmax = 0.0f64;
         for v in &self.vel {
@@ -656,29 +713,11 @@ impl Growth {
         self.do_move(t);
     }
 
-    /// First piece protruding through a wall at the current scale, with the wall's outward normal
-    /// (the state must be in `unit`).
-    fn first_wall(&self) -> Option<(usize, f64, f64)> {
-        let unit_container = self.unit_container(self.scale);
-        for (i, q) in self.unit.iter().enumerate() {
-            let mut hit = None;
-            visit_protrusions(self.n, q, &unit_container, true, 1.0, 0.0, |pr| {
-                if pr.depth > 0.0 && hit.is_none() {
-                    hit = Some((pr.px, pr.py));
-                }
-            });
-            if let Some((nx, ny)) = hit {
-                return Some((i, nx, ny));
-            }
-        }
-        None
-    }
-
     /// One polygon step: the largest step keeping the fastest surface point within a fraction of
     /// the piece size, four samples to catch transient contacts, then bisection back to the
     /// contact and an impulse. Four samples are not continuous collision detection: a brief
     /// grazing rotational overlap between samples can be missed.
-    fn polygon_step(&mut self, ctx: &mut Ctx, max_step: f64, work: &mut Work) -> Advance {
+    fn polygon_step(&mut self, ctx: &mut impl Host, max_step: f64, work: &mut Work) -> Advance {
         let radius = bounding_radius(self.n);
         let mut fastest = f64::NEG_INFINITY;
         for v in &self.vel {
@@ -694,13 +733,13 @@ impl Growth {
         let mut high = dt;
         let mut hit = false;
         for sample in 1..=4 {
-            if ctx.should_stop() {
+            if ctx.stopped() {
                 return FAILED;
             }
             let t = (dt * sample as f64) / 4.0;
             self.trial(scale0, t);
             let free = self.feasible_at(self.scale);
-            if work.due(self.work) && !ctx.checkpoint() {
+            if work.due(self.work) && !ctx.pause() {
                 return FAILED;
             }
             if !free {
@@ -712,13 +751,13 @@ impl Growth {
         }
         if hit {
             for _ in 0..40 {
-                if ctx.should_stop() {
+                if ctx.stopped() {
                     return FAILED;
                 }
                 let mid = (low + high) / 2.0;
                 self.trial(scale0, mid);
                 let free = self.feasible_at(self.scale);
-                if work.due(self.work) && !ctx.checkpoint() {
+                if work.due(self.work) && !ctx.pause() {
                     return FAILED;
                 }
                 if free {
@@ -731,7 +770,7 @@ impl Growth {
             self.trial(scale0, high);
             let scale = self.scale;
             let pair = if self.fill_unit(scale) { first_overlap(&self.shape, &mut self.grid, &self.unit, self.pair_reach) } else { None };
-            let wall = if pair.is_none() { self.first_wall() } else { None };
+            let wall = if pair.is_none() { self.wall_scan(scale) } else { None };
             self.trial(scale0, low);
             if let Some((i, j)) = pair {
                 let contact = piece_separation(self.n, &self.pieces[i], &self.pieces[j], self.scale);
@@ -755,7 +794,7 @@ impl Growth {
                 v.omega = -v.omega;
             }
             // locating the contact scanned the pieces about twice more
-            if work.due(2.0 * self.work) && !ctx.checkpoint() {
+            if work.due(2.0 * self.work) && !ctx.pause() {
                 return FAILED;
             }
         }
@@ -836,7 +875,7 @@ fn random_loose(ctx: &mut Ctx, work: &mut Work, timed: bool, reserve: f64) -> Lo
                         let mut k = head[(gy * cols + gx) as usize];
                         while k >= 0 {
                             scanned += 1.0;
-                            if shape.sep(&pieces[k as usize], &q) < 0.0 {
+                            if pair_sep(&shape, &pieces[k as usize], &q) < 0.0 {
                                 blocked = true;
                                 break 'scan;
                             }
@@ -1120,6 +1159,129 @@ mod tests {
         let t = disc_disc_time(&a, &b, &va, &vb, 1.0, 0.0);
         assert!((t - 0.5).abs() < 1e-12, "{t}");
         assert_eq!(disc_disc_time(&a, &b, &vb, &va, 1.0, 0.0), f64::INFINITY);
+    }
+
+    #[test]
+    fn rounded_separation_equals_the_closed_form() {
+        let mut rng = Rng::new(9);
+        for &n in &[0u32, 3, 4, 5, 8, 12, 30] {
+            let shape = Shape::new(n);
+            for _ in 0..2000 {
+                let a = Pose::new(2.0 * rng.next(), 2.0 * rng.next(), 20.0 * rng.next() - 10.0);
+                let b = Pose::new(2.0 * rng.next(), 2.0 * rng.next(), 20.0 * rng.next() - 10.0);
+                assert!((pair_sep(&shape, &a, &b) - shape.sep(&a, &b)).abs() < 1e-12);
+            }
+        }
+    }
+
+    struct Free;
+
+    impl Host for Free {
+        fn stopped(&mut self) -> bool {
+            false
+        }
+        fn pause(&mut self) -> bool {
+            true
+        }
+    }
+
+    /// The dynamics from the jitter-free grid (default growth, speeds and thermostat, initial
+    /// scale 0.8) follow those of packages/solver/src/methods/ls_growth/dynamics.ts: the scale
+    /// after a number of operations, from the reference at the same start and seed.
+    #[test]
+    fn dynamics_follow_the_reference_trajectory() {
+        // (N, M, P, seed, operations, scale of the reference, tolerance)
+        let cases: [(u32, u32, usize, u32, u32, f64, f64); 7] = [
+            (0, 4, 30, 1, 300, 0.8530543710, 2e-10),
+            (0, 0, 40, 3, 300, 0.8572803688, 2e-10),
+            (5, 5, 20, 2, 300, 0.8312876562884013, 1e-10),
+            (4, 4, 17, 1, 1000, 0.8738685799089297, 1e-10),
+            (3, 6, 20, 5, 800, 0.8495310781484793, 1e-10),
+            (7, 0, 30, 3, 600, 0.8695307362073798, 1e-10),
+            (12, 4, 20, 7, 600, 0.8970035742394085, 1e-10),
+        ];
+        for (n, m, p, seed, ops, want, tolerance) in cases {
+            let problem = crate::shapes::Problem::new(n, m, p);
+            let grid = scatter(problem, || 0.5);
+            let tight = strict_enclose(&grid, grid.phi);
+            let mut rng = Rng::new(seed);
+            let mut state = Growth::new(&grid, tight, 0.8, 0.01, 1.0, 0.3, &mut rng);
+            let mut work = Work::default();
+            for _ in 0..ops {
+                let advance = if n == 0 { state.disc_advance(&mut Free) } else { state.polygon_step(&mut Free, 0.02, &mut work) };
+                assert!(!advance.failed, "n={n} m={m} p={p}: a step failed");
+                state.thermostat(4.0);
+            }
+            assert!((state.scale - want).abs() < tolerance, "n={n} m={m} p={p}: scale {} against the reference {want}", state.scale);
+        }
+    }
+
+    #[test]
+    fn wall_test_equals_the_shared_protrusions() {
+        let mut rng = Rng::new(21);
+        let (mut inside, mut outside) = (0, 0);
+        for &(n, m) in &[(0u32, 4u32), (0, 0), (0, 7), (3, 5), (4, 4), (6, 3), (5, 0), (9, 6), (30, 4)] {
+            for _ in 0..600 {
+                let phi = 6.0 * rng.next();
+                let container = Container { m, cx: 0.0, cy: 0.0, phi, size: 4.0 };
+                let template = Config { n, m, pieces: vec![Pose::new(0.0, 0.0, 0.0)], phi };
+                let mut state = Growth::new(&template, container, 1.0, 0.01, 1.0, 0.3, &mut rng);
+                let (x, y, t) = (2.6 * rng.signed(), 2.6 * rng.signed(), 7.0 * rng.signed());
+                state.pieces[0] = Pose::new(x, y, t);
+                state.fill_unit(1.0);
+                let got = state.wall_scan(1.0).is_none();
+                let mut want = true;
+                visit_protrusions(n, &state.unit[0], &state.unit_container(1.0), true, 1.0, 0.0, |pr| {
+                    if !(pr.depth <= 0.0) {
+                        want = false;
+                    }
+                });
+                // a disagreement is allowed only within rounding of the wall
+                if got != want {
+                    let mut margin = f64::INFINITY;
+                    visit_protrusions(n, &state.unit[0], &state.unit_container(1.0), true, 1.0, 0.0, |pr| margin = margin.min(pr.depth.abs()));
+                    assert!(margin < 1e-9, "n={n} m={m}: got {got}, want {want}, margin {margin}");
+                }
+                if want {
+                    inside += 1;
+                } else {
+                    outside += 1;
+                }
+            }
+        }
+        assert!(inside > 200 && outside > 200, "{inside} inside, {outside} outside");
+    }
+
+    /// Runs of the method on small problems: strictly valid, reproducible from the seed under an
+    /// evaluation budget, and never below the area bound.
+    #[test]
+    fn runs_are_strict_and_reproducible() {
+        use crate::clock::ClockKind;
+        use crate::framework::{run, Budget, Control, RunOptions};
+        use crate::shapes::{area_lower_bound, Problem};
+        for &(n, m, p) in &[(0u32, 4u32, 10usize), (0, 0, 12), (0, 6, 7), (4, 4, 6), (3, 0, 8), (5, 5, 6)] {
+            let go = |seed: u32| {
+                let control = Control::new();
+                run(
+                    Problem::new(n, m, p),
+                    RunOptions {
+                        method: Method::LsGrowth,
+                        params: Value::Null,
+                        start: None,
+                        budget: Budget { evals: Some(120), time_s: Some(60.0) },
+                        seed,
+                        final_polish: false,
+                        control: &control,
+                        clock: ClockKind::ThreadCpu,
+                    },
+                )
+            };
+            let (a, b) = (go(3), go(3));
+            assert!(a.valid && a.strict, "n={n} m={m} p={p}: {:?}", a.reasons);
+            assert_eq!(a.score, b.score, "n={n} m={m} p={p}: not reproducible");
+            assert_eq!(a.evaluations, b.evaluations);
+            assert!(a.score.unwrap() >= area_lower_bound(n, m, p) * (1.0 - 1e-9));
+        }
     }
 
     #[test]
