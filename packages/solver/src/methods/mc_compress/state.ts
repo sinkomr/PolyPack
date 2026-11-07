@@ -4,11 +4,11 @@ import {
   enclose,
   findOverlaps,
   MAX_COORD,
-  pieceSeparation,
   visitContainerProtrusions,
   type Container,
   type PackingConfig,
   type Pose,
+  separationBelow,
 } from "@polypack/geometry";
 
 export const MIN_STEP = 1e-7;
@@ -61,7 +61,7 @@ export class CellGrid {
           const other = this.pieces[j];
           // Bounding disks rigorously exclude contacts outside the 3x3 block.
           if ((trial.x - other.x) ** 2 + (trial.y - other.y) ** 2 > this.reach ** 2) continue;
-          if (pieceSeparation(this.N, trial, other).sep < 0) return false;
+          if (separationBelow(this.N, trial, other, 0)) return false;
         }
       }
     }

@@ -1,6 +1,7 @@
 import { createHash } from "node:crypto";
 import { fileURLToPath } from "node:url";
 import { afterEach, describe, expect, it, vi } from "vitest";
+import type { Pose } from "@polypack/geometry";
 
 // The geometry kernel memoises each piece's trigonometry (packages/geometry/src/trig.ts). A seeded
 // run must not notice. This test runs the same seeded cases twice in one process: once with the
@@ -48,6 +49,10 @@ describe("trig cache leaves seeded solver runs identical to the inline-trig kern
       return {
         ...ref,
         pieceSeparation: (...args: Parameters<typeof ref.pieceSeparation>) => (calls.pieceSeparation++, ref.pieceSeparation(...args)),
+        // newer than the reference: its definition, from the reference kernel
+        separationBelow: (N: number, a: Pose, b: Pose, threshold: number, scale = 1) => (
+          calls.pieceSeparation++, ref.pairSeparation(N, a, b, scale) < threshold
+        ),
       };
     });
     vi.doMock(penaltyPath, async () => {

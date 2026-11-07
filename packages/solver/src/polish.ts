@@ -8,6 +8,7 @@ import {
   pairSeparation,
   pieceSeparation,
   pieceVertices,
+  separationBelow,
   type PackingConfig,
   type Evaluation,
   type Pose,
@@ -358,7 +359,7 @@ function restoreSeparation(config: PackingConfig, stopped: () => boolean): boole
       const dx = pieces[i].x - pieces[j].x;
       const dy = pieces[i].y - pieces[j].y;
       if (dx * dx + dy * dy > far2) continue;
-      if (pairSeparation(config.N, pieces[i], pieces[j]) < (config.N === 0 ? 0 : -1e-12)) return false;
+      if (separationBelow(config.N, pieces[i], pieces[j], config.N === 0 ? 0 : -1e-12)) return false;
     }
   }
   return true;

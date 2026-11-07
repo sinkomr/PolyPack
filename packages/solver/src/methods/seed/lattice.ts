@@ -1,4 +1,4 @@
-import { boundingRadius, DISK_RADIUS, defaultTheta, inradius, pieceInradius, pieceSeparation, pieceVertices, type Pose } from "@polypack/geometry";
+import { boundingRadius, DISK_RADIUS, defaultTheta, inradius, pieceInradius, pieceVertices, type Pose, separationBelow } from "@polypack/geometry";
 import type { MethodContext } from "../../framework";
 
 export interface Cell {
@@ -107,7 +107,7 @@ export async function tightScale(ctx: MethodContext, cell: Cell): Promise<number
     for (let step = 0; step < 44; step++) {
       if (ctx.shouldStop()) return undefined;
       const mid = (lo + hi) / 2;
-      if (pieceSeparation(N, { x: 0, y: 0, theta: a.theta }, { x: mid * dx, y: mid * dy, theta: b.theta }).sep < 0)
+      if (separationBelow(N, { x: 0, y: 0, theta: a.theta }, { x: mid * dx, y: mid * dy, theta: b.theta }, 0))
         lo = mid;
       else hi = mid;
     }

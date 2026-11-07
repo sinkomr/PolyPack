@@ -1,4 +1,4 @@
-import { boundingRadius, pieceSeparation, MAX_COORD, type PackingConfig } from "@polypack/geometry";
+import { boundingRadius, pieceSeparation, MAX_COORD, type PackingConfig, separationBelow } from "@polypack/geometry";
 import { nearbyPairs } from "./objective";
 
 /** Unit pieces on a loose jittered grid; only the context's seeded stream is used. */
@@ -91,7 +91,7 @@ export function restore(
     }
     if (!accepted()) return false;
     for (const [i, j] of nearbyPairs(config.pieces, reach, stopped)) {
-      if (stopped() || pieceSeparation(input.N, config.pieces[i], config.pieces[j]).sep < 0) return false;
+      if (stopped() || separationBelow(input.N, config.pieces[i], config.pieces[j], 0)) return false;
     }
     return !stopped();
   };

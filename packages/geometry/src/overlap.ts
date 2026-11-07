@@ -197,6 +197,40 @@ export function pairSeparation(N: number, a: Pose, b: Pose, scale = 1): number {
   return best;
 }
 
+/**
+ * pairSeparation(N, a, b, scale) < threshold, without the separation itself. The separation is
+ * the largest of the SAT gaps (regularPolygonSeparation), so it is below the threshold exactly
+ * when every gap is: the gaps are computed with the same expressions and the test ends at the
+ * first one that reaches the threshold. A gap is at most lin - 2r (lin as in
+ * regularPolygonSeparation), so an axis whose lin is below threshold + 2r by more than the margin
+ * cannot reach it and needs no cosine. Many-sided pieces and non-finite thresholds or offsets
+ * go through pairSeparation itself.
+ */
+export function separationBelow(N: number, a: Pose, b: Pose, threshold: number, scale = 1): boolean {
+  if (N === 0) return circleSeparation(a, b, scale).sep < threshold;
+  const dx = b.x - a.x;
+  const dy = b.y - a.y;
+  const R = circumradius(N) * scale;
+  const r = inradius(N) * scale;
+  const need = threshold + 2 * r - 1e-11 * (Math.abs(dx) + Math.abs(dy) + R);
+  if (N >= PRUNE_FROM_N || !Number.isFinite(need) || !Number.isFinite(threshold))
+    return pairSeparation(N, a, b, scale) < threshold;
+  const step = (2 * Math.PI) / N;
+  const ea = pieceTrig(N, a.theta);
+  const eb = pieceTrig(N, b.theta, ea);
+  const axA = axesOf(ea);
+  const axB = axesOf(eb);
+  for (let k = 0; k < N; k++) {
+    const linA = dx * axA[3 * k + 1] + dy * axA[3 * k + 2];
+    if (linA >= need && linA - r - R * cosToNearestVertex(axA[3 * k] + Math.PI / 2 - b.theta, step) >= threshold)
+      return false;
+    const linB = -(dx * axB[3 * k + 1] + dy * axB[3 * k + 2]);
+    if (linB >= need && linB - r - R * cosToNearestVertex(axB[3 * k] + Math.PI / 2 - a.theta, step) >= threshold)
+      return false;
+  }
+  return true;
+}
+
 /** Circle-circle separation from the centre distance. Exact in both signs. */
 export function circleSeparation(a: Pose, b: Pose, scale = 1): Contact {
   const dx = a.x - b.x;
@@ -296,6 +330,8 @@ export function findOverlaps(N: number, poses: readonly Pose[], tol = TOL, scale
           const dx = a.x - b.x;
           const dy = a.y - b.y;
           if (dx * dx + dy * dy > reach2) continue;
+          // most pairs within reach do not overlap: the cheaper test settles them
+          if (!separationBelow(N, a, b, -tol, scale)) continue;
           const sep = pairSeparation(N, a, b, scale);
           if (sep < -tol && out.push({ i: j, j: i, sep }) >= limit) return out;
         }

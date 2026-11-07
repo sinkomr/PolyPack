@@ -9,6 +9,7 @@ import {
   pairSeparation,
   penaltyEdgeNormals,
   regularPolygonSeparation,
+  separationBelow,
   visitContainerProtrusions,
 } from "../src";
 import * as refOverlap from "./reference/overlap";
@@ -226,5 +227,30 @@ describe("trig cache under forced slot collisions", () => {
       expect(same(regularPolygonSeparation(5, a, b), refOverlap.regularPolygonSeparation(5, a, b))).toBe(true);
       expect(same(regularPolygonSeparation(5, b, a), refOverlap.regularPolygonSeparation(5, b, a))).toBe(true);
     }
+  });
+
+  it("separationBelow is pairSeparation < threshold", () => {
+    fc.assert(
+      fc.property(
+        pairArb,
+        fc.constantFrom(1, 0.9, 1.3),
+        fc.constantFrom(0, -0, -1e-9, 1e-9, -1e-12, -2e-14, -Number.MIN_VALUE, 0.05, -0.3, Infinity, -Infinity, NaN),
+        ({ N, a, b }, scale, threshold) => {
+          expect(separationBelow(N, a, b, threshold, scale)).toBe(pairSeparation(N, a, b, scale) < threshold);
+          expect(separationBelow(N, b, a, threshold, scale)).toBe(pairSeparation(N, b, a, scale) < threshold);
+          // at the separation itself, and one step either side
+          const sep = pairSeparation(N, a, b, scale);
+          for (const t of [sep, sep + Math.abs(sep) * 2 ** -52 + Number.MIN_VALUE, sep - Math.abs(sep) * 2 ** -52])
+            expect(separationBelow(N, a, b, t, scale)).toBe(pairSeparation(N, a, b, scale) < t);
+        },
+      ),
+      { numRuns: 3000 },
+    );
+    for (const N of [0, 3, 4, 6, 7])
+      for (const bad of [NaN, Infinity]) {
+        const a: Pose = { x: 0, y: 0, theta: 0 };
+        const b: Pose = { x: bad, y: 1, theta: bad };
+        for (const t of [0, -1e-9]) expect(separationBelow(N, a, b, t)).toBe(pairSeparation(N, a, b) < t);
+      }
   });
 });
