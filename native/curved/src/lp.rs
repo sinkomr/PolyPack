@@ -576,6 +576,7 @@ mod tests {
             gi,
             gj,
             gt,
+            key: 0,
         }
     }
 

@@ -12,6 +12,11 @@
 //! The geometry (homogeneous model, lifted coordinates, exponential-coordinate poses) is described
 //! in docs/spaces/CURVED.md; each module names the TypeScript file it follows.
 //!
+//! JSON: read configurations with correctly rounded floats (serde_json with its `float_roundtrip`
+//! feature). The default float parser of serde_json can be one unit in the last place off, which
+//! is enough to move a touching configuration across the strict tolerance; serialization is exact
+//! either way.
+//!
 //! ```
 //! use polypack_curved::{check_config, run_job_with, Budget, CurvedProblem, JobOptions, Rule};
 //! use std::sync::atomic::AtomicBool;
@@ -36,7 +41,9 @@
 // Index loops over coordinates read as the formulas they implement.
 #![allow(clippy::needless_range_loop, clippy::too_many_arguments, clippy::collapsible_match)]
 
+mod basis;
 pub mod bound;
+mod dual_lp;
 mod eval;
 pub mod geom;
 pub mod job;

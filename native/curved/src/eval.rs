@@ -38,6 +38,8 @@ pub struct Row {
     pub gi: [f64; 3],
     pub gj: [f64; 3],
     pub gt: f64,
+    /// identity of the constraint across evaluations (kind, pieces, vertex, edge or wall), for warm starts
+    pub key: u64,
 }
 
 /// Separating-axis result of a polygon pair in n . v units (before asn_K).
@@ -515,6 +517,7 @@ impl Evaluator {
             i: p as u32,
             j: q as u32,
             value,
+            key: (p as u64) << 2 | (e as u64) << 18 | (q as u64) << 26 | (kv as u64) << 42,
             ..Row::default()
         };
         if grad {
@@ -564,6 +567,7 @@ impl Evaluator {
             i: a as u32,
             j: b as u32,
             value: d - 2.0 * self.r,
+            key: 1 | (a as u64) << 2 | (b as u64) << 18,
             ..Row::default()
         };
         if grad {
@@ -611,6 +615,7 @@ impl Evaluator {
             i: i as u32,
             j: NONE,
             value: -sd - if kv.is_some() { 0.0 } else { self.r },
+            key: 2 | (i as u64) << 2 | (kv.map_or(0, |v| v + 1) as u64) << 18 | (w as u64) << 26,
             ..Row::default()
         };
         if grad {
@@ -653,6 +658,7 @@ impl Evaluator {
             j: NONE,
             value: t - d - if kv.is_some() { 0.0 } else { self.r },
             gt: 1.0,
+            key: 3 | (i as u64) << 2 | (kv.map_or(0, |v| v + 1) as u64) << 18,
             ..Row::default()
         };
         if grad {

@@ -22,9 +22,11 @@ pub struct Searcher {
     lbfgs: Lbfgs,
     pub polisher: Polisher,
     pub p: usize,
-    /// cumulative work counters
+    /// cumulative work counters, and CPU seconds of the energy minimisations and the polishes
     pub repairs: u64,
     pub polishes: u64,
+    pub repair_seconds: f64,
+    pub polish_seconds: f64,
 }
 
 pub struct SearchOptions<'a> {
@@ -53,6 +55,8 @@ impl Searcher {
             p,
             repairs: 0,
             polishes: 0,
+            repair_seconds: 0.0,
+            polish_seconds: 0.0,
         }
     }
 
@@ -67,7 +71,9 @@ impl Searcher {
             gtol: 1e-12,
             stop_below: FEAS,
         };
+        let c0 = crate::job::thread_cpu_seconds();
         let (e, _) = self.lbfgs.minimize(z, &mut f, &opts, stop);
+        self.repair_seconds += crate::job::thread_cpu_seconds() - c0;
         e <= FEAS
     }
 
@@ -299,9 +305,11 @@ impl Searcher {
         stop: &mut dyn FnMut() -> bool,
     ) -> Option<(Vec<f64>, f64)> {
         self.polishes += 1;
+        let c0 = crate::job::thread_cpu_seconds();
         let pol = self
             .polisher
             .polish(&mut self.ev, z, Some(t), &PolishOptions::default(), stop);
+        self.polish_seconds += crate::job::thread_cpu_seconds() - c0;
         if !(pol.feasibility > -1e-10) || !(pol.t < self.ev.t_max) {
             return None;
         }

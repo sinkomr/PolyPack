@@ -58,7 +58,7 @@ fn main() {
                 &opts,
             );
             let line = format!(
-                "{{\"label\":\"{label}\",\"id\":\"{id}\",\"seed\":{seed},\"seconds\":{},\"score\":{},\"valid\":{},\"evaluations\":{},\"cpu\":{:.3},\"evalsPerCpuS\":{:.3},\"rounds\":{},\"repairs\":{},\"polishes\":{},\"pivots\":{},\"termination\":\"{:?}\"}}",
+                "{{\"label\":\"{label}\",\"id\":\"{id}\",\"seed\":{seed},\"seconds\":{},\"score\":{},\"valid\":{},\"evaluations\":{},\"cpu\":{:.3},\"evalsPerCpuS\":{:.3},\"rounds\":{},\"repairs\":{},\"polishes\":{},\"pivots\":{},\"repairS\":{:.2},\"polishS\":{:.2},\"termination\":\"{:?}\"}}",
                 seconds.map_or("null".into(), |s| s.to_string()),
                 out.score.map_or("null".into(), |s| format!("{s}")),
                 out.config.is_some(),
@@ -69,6 +69,8 @@ fn main() {
                 out.repairs,
                 out.polishes,
                 out.lp_pivots,
+                out.repair_seconds,
+                out.polish_seconds,
                 out.termination,
             );
             println!("{line}");

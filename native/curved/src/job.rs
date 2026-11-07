@@ -57,6 +57,9 @@ pub struct JobOutcome {
     pub repairs: u64,
     pub polishes: u64,
     pub lp_pivots: u64,
+    /// CPU seconds of the energy minimisations (starts, compression, hops) and of the polishes
+    pub repair_seconds: f64,
+    pub polish_seconds: f64,
 }
 
 /// Options beyond the budget.
@@ -206,6 +209,8 @@ pub fn run_job_with(
         repairs: 0,
         polishes: 0,
         lp_pivots: 0,
+        repair_seconds: 0.0,
+        polish_seconds: 0.0,
     };
     let fail = |mut out: JobOutcome, gate: &mut Gate, reason: String| {
         gate.account();
@@ -316,6 +321,8 @@ pub fn run_job_with(
     out.repairs = searcher.repairs;
     out.polishes = searcher.polishes;
     out.lp_pivots = searcher.polisher.lp_pivots();
+    out.repair_seconds = searcher.repair_seconds;
+    out.polish_seconds = searcher.polish_seconds;
     out.termination = gate.why.unwrap_or(ran);
     match best {
         Some((c, s)) => {
