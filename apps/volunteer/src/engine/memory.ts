@@ -20,7 +20,14 @@
  */
 import type { EngineMemory } from "../types";
 
-export const MEMORY_VERSION = 1;
+/**
+ * 2 since client 0.4.0, whose searches run about 2 to 10 times as many evaluations a second as before. Memory of
+ * version 1 keeps its arms' credit and loses its rates, which would make the first jobs' evaluation caps that much too
+ * small and, through the geometric mean in `remember`, keep them low for several problems.
+ */
+export const MEMORY_VERSION = 2;
+/** The version before; its memory is read without its rates (see MEMORY_VERSION). */
+const MEMORY_VERSION_RATES_STALE = 1;
 export const MAX_FAMILIES = 48;
 export const MAX_ARMS = 32;
 export const MAX_RATES = 16;
@@ -93,12 +100,18 @@ function parseFamily(value: unknown): FamilyRecord | undefined {
 /** Memory from whatever the host stored: anything unusable gives empty memory or is dropped. */
 export function parseMemory(value: EngineMemory): Memory {
   try {
-    if (!isRecord(value) || value.version !== MEMORY_VERSION || !isCount(value.used) || !isRecord(value.families))
+    if (
+      !isRecord(value) ||
+      (value.version !== MEMORY_VERSION && value.version !== MEMORY_VERSION_RATES_STALE) ||
+      !isCount(value.used) ||
+      !isRecord(value.families)
+    )
       return emptyMemory();
+    const staleRates = value.version === MEMORY_VERSION_RATES_STALE;
     const families: [string, FamilyRecord][] = [];
     for (const [key, family] of entries(value.families, 4 * MAX_FAMILIES)) {
       const parsed = FAMILY_KEY.test(key) ? parseFamily(family) : undefined;
-      if (parsed) families.push([key, parsed]);
+      if (parsed) families.push([key, staleRates ? { ...parsed, rates: {} } : parsed]);
     }
     return { version: MEMORY_VERSION, used: value.used, families: Object.fromEntries(newest(families)) };
   } catch {
