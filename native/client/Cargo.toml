@@ -1,0 +1,20 @@
+[package]
+name = "polypack-native"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+description = "Native PolyPack volunteer client"
+
+[[bin]]
+name = "polypack-native"
+path = "src/main.rs"
+
+[dependencies]
+polypack-flat = { path = "../flat" }
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+ureq = { version = "2", default-features = false, features = ["tls", "json"] }
+ctrlc = "3"
+
+[target.'cfg(unix)'.dependencies]
+libc = "0.2"

@@ -1,0 +1,13 @@
+[package]
+name = "polypack-flat"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+description = "Flat 2D packing geometry, validation and search methods for PolyPack"
+
+[lib]
+name = "polypack_flat"
+
+[dependencies]
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"

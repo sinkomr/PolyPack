@@ -1,0 +1,21 @@
+[workspace]
+resolver = "2"
+members = ["flat", "client"]
+
+[workspace.package]
+version = "0.1.0"
+edition = "2021"
+license = "MIT"
+rust-version = "1.80"
+
+[profile.release]
+opt-level = 3
+lto = "fat"
+codegen-units = 1
+panic = "unwind"
+debug = false
+
+# `cargo build --profile profiling` keeps symbols for a profiler.
+[profile.profiling]
+inherits = "release"
+debug = true
