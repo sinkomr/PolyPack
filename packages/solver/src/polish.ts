@@ -340,6 +340,8 @@ function restoreSeparation(config: PackingConfig, stopped: () => boolean): boole
         const dx = a.x - b.x;
         const dy = a.y - b.y;
         if (dx * dx + dy * dy > far2) continue;
+        // A polygon pair with sep >= -1.9e-14 neither moves nor brings worst to 2e-14
+        if (config.N !== 0 && !separationBelow(config.N, a, b, -1.9e-14)) continue;
         const contact = pieceSeparation(config.N, a, b);
         worst = Math.max(worst, -contact.sep);
         if (contact.sep < (config.N === 0 ? 0 : -2e-14)) {

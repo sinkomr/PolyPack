@@ -57,8 +57,9 @@ export function restore(
       let moved = false;
       for (const [i, j] of nearbyPairs(config.pieces, reach, stopped)) {
         if (stopped()) return undefined;
+        // separated pairs (sep >= 0) are settled without the full SAT
+        if (!separationBelow(input.N, config.pieces[i], config.pieces[j], 0)) continue;
         const c = pieceSeparation(input.N, config.pieces[i], config.pieces[j]);
-        if (c.sep >= 0) continue;
         const delta = (-c.sep + 2e-12) / 2;
         let nx = c.nx;
         let ny = c.ny;

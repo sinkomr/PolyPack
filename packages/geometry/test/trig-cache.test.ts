@@ -206,7 +206,7 @@ describe("trig cache under forced slot collisions", () => {
     }
   });
 
-  it("regularPolygonSeparation on lattice ties, exact contact and far coordinates (axes skipped by the lin bound)", () => {
+  it("regularPolygonSeparation and pairPenetration on lattice ties, exact contact and far coordinates (axes skipped by the lin bound)", () => {
     const same = (x: { sep: number; nx: number; ny: number }, y: { sep: number; nx: number; ny: number }) =>
       Object.is(x.sep, y.sep) && Object.is(x.nx, y.nx) && Object.is(x.ny, y.ny);
     for (const N of [3, 4, 5, 6, 7, 8, 12, 24, 100])
@@ -219,6 +219,10 @@ describe("trig cache under forced slot collisions", () => {
               const b: Pose = { x: base + dist * Math.cos(dir), y: base / 3 + dist * Math.sin(dir), theta: theta + (k % 3) * 0.1 };
               expect(same(regularPolygonSeparation(N, a, b), refOverlap.regularPolygonSeparation(N, a, b))).toBe(true);
               expect(same(regularPolygonSeparation(N, b, a, 0.5), refOverlap.regularPolygonSeparation(N, b, a, 0.5))).toBe(true);
+              for (const padding of [0, 0.05])
+                expect(JSON.stringify(pairPenetration(N, a, b, undefined, undefined, 1, padding), replacer)).toBe(
+                  JSON.stringify(refPenalty.pairPenetration(N, a, b, undefined, undefined, 1, padding), replacer),
+                );
             }
           }
     for (const bad of [NaN, Infinity, -Infinity]) {

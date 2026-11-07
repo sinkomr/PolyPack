@@ -127,21 +127,37 @@ export function pairPenetration(
   let bestUy = 0;
   let bestDx = 0;
   let bestDy = 0;
+  // Each gap lies in [lin - r - R, lin - 2r], lin = (q - p) . u. An axis whose lin is below the
+  // largest by more than R - r (plus a margin far above the rounding of either bound) has a gap
+  // strictly below the largest, so it is never selected and its cosine is skipped; the axes left
+  // hold every one attaining the maximum, in the same order, so every result is the same double.
+  let top = -Infinity;
+  for (let edge = 0; edge < N; edge++) {
+    const linA = (b.x - a.x) * cacheA[3 * edge + 1] + (b.y - a.y) * cacheA[3 * edge + 2];
+    const linB = (a.x - b.x) * cacheB[3 * edge + 1] + (a.y - b.y) * cacheB[3 * edge + 2];
+    if (linA > top) top = linA;
+    if (linB > top) top = linB;
+  }
+  let threshold = top - (R - r) - 1e-11 * (Math.abs(b.x - a.x) + Math.abs(b.y - a.y) + R);
+  // infinite or NaN inputs: every axis, as without the bound
+  if (!Number.isFinite(threshold)) threshold = -Infinity;
   for (let edge = 0; edge < N; edge++) {
     for (let pass = 0; pass < 2; pass++) {
       const p = pass === 0 ? a : b;
       const q = pass === 0 ? b : a;
       const axes = pass === 0 ? cacheA : cacheB;
-      const angle = axes ? axes[3 * edge] : p.theta + Math.PI / 2 + Math.PI / N + edge * step;
-      const ux = axes ? axes[3 * edge + 1] : Math.cos(angle);
-      const uy = axes ? axes[3 * edge + 2] : Math.sin(angle);
+      const angle = axes[3 * edge];
+      const ux = axes[3 * edge + 1];
+      const uy = axes[3 * edge + 2];
+      const dx = q.x - p.x;
+      const dy = q.y - p.y;
+      const lin = dx * ux + dy * uy;
+      if (lin < threshold) continue;
       const rel = angle + Math.PI / 2 - q.theta;
       let delta = rel % step;
       if (delta < 0) delta += step;
       if (delta > step / 2) delta = step - delta;
-      const dx = q.x - p.x;
-      const dy = q.y - p.y;
-      const separation = dx * ux + dy * uy - r - R * Math.cos(delta);
+      const separation = lin - r - R * Math.cos(delta);
       if (separation <= best) continue;
       best = separation;
       bestEdge = edge;
