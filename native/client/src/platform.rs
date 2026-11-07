@@ -1,13 +1,19 @@
 //! What depends on the operating system: thread priority, the power source, process liveness.
 
 /// Lower the calling thread's CPU priority. On Linux each thread has its own nice value; on macOS
-/// this lowers the whole process, which only lowers the idle main thread as well. Elsewhere it
-/// does nothing.
+/// this lowers the whole process, which only lowers the idle main thread as well; on Windows the
+/// thread runs at idle priority.
 pub fn lower_thread_priority() {
     #[cfg(unix)]
     unsafe {
         // SAFETY: setpriority only reads its arguments; failure leaves the priority as it was.
         libc::setpriority(libc::PRIO_PROCESS, 0, 19);
+    }
+    #[cfg(windows)]
+    unsafe {
+        use windows_sys::Win32::System::Threading::{GetCurrentThread, SetThreadPriority, THREAD_PRIORITY_IDLE};
+        // SAFETY: the pseudo-handle of the current thread needs no closing; failure changes nothing.
+        SetThreadPriority(GetCurrentThread(), THREAD_PRIORITY_IDLE);
     }
 }
 
