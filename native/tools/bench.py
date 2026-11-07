@@ -43,22 +43,24 @@ def run_one(args):
 
 
 def summary(path):
+    """Mean score over the seeds (and the number of seeds), mean evaluations per CPU second."""
     rows = [json.loads(l) for l in open(path) if l.strip()]
     impls = sorted({r["impl"] for r in rows})
-    print(f"{'problem':<26} {'P':>4} " + " ".join(f"{i + ' score':>20} {i + ' ev/s':>14}" for i in impls))
+    print("| problem | P | " + " | ".join(f"{i} score | {i} ev/s" for i in impls) + " |")
+    print("|---|---:|" + "---:|---:|" * len(impls))
     for nm in PANEL:
         for p in SIZES:
             cells = []
             for i in impls:
                 rs = [r for r in rows if r["impl"] == i and (r["N"], r["M"]) == nm and r["P"] == p and r.get("score")]
                 if not rs:
-                    cells.append(f"{'-':>20} {'-':>14}")
+                    cells.append("- | -")
                     continue
                 mean = sum(r["score"] for r in rs) / len(rs)
-                best = min(r["score"] for r in rs)
                 eps = sum(r["evaluations_per_second"] for r in rs) / len(rs)
-                cells.append(f"{mean:>11.6f} ({best:.5f})"[:20].rjust(20) + f" {eps:>14.0f}")
-            print(f"{NAMES[nm]:<26} {p:>4} " + " ".join(cells))
+                cells.append(f"{mean:.6f} ({len(rs)}) | {eps:,.0f}")
+            if any(c != "- | -" for c in cells):
+                print(f"| {NAMES[nm]} | {p} | " + " | ".join(cells) + " |")
 
 
 def main():

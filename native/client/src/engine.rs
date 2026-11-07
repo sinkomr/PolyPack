@@ -268,8 +268,12 @@ fn arm_params(kind: ParamsKind, rng: &mut Rng) -> Value {
 }
 
 pub mod policy {
-    /// Prior cost of one counted evaluation per piece, in seconds.
-    pub const SECONDS_PER_EVALUATION_PER_PIECE: f64 = 1.5e-4;
+    /// Prior cost of one counted evaluation per piece, in seconds, until the problem's own jobs
+    /// (or the family's memory) give the rate. The reference's 1.5e-4 is the JavaScript solver's;
+    /// [CALC] the native panel of native/tools/bench.py (20 CPU seconds, squares, triangles,
+    /// disks and heptagons, P = 5 to 50) ran 37,000 to 350,000 evaluations per second times P,
+    /// median about 120,000: 1e-5 keeps the first jobs' evaluation caps near their time budgets.
+    pub const SECONDS_PER_EVALUATION_PER_PIECE: f64 = 1e-5;
     pub const BASE_EVALUATIONS: f64 = 1500.0;
     pub const BASE_MIN_SECONDS: f64 = 4.0;
     pub const BASE_MAX_SECONDS: f64 = 120.0;

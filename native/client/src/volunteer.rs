@@ -13,7 +13,7 @@ use crate::pick::{draw_problem, note_search, prune_recent, FlatKind};
 use crate::state::{random_u32, StateDir};
 use polypack_flat::clock::ClockKind;
 use polypack_flat::rng::Rng;
-use polypack_flat::shapes::{area_lower_bound, Config, Pose, Problem};
+use polypack_flat::shapes::{Config, Pose, Problem};
 use polypack_flat::validate::{canonical, improves_on, server_check, SCORE_TIE};
 use polypack_flat::{Control, Method};
 use serde_json::{json, Value};
@@ -720,7 +720,7 @@ fn search_one(s: &Arc<Shared>, problem: Problem, lanes: usize) -> Searched {
         SearchInput {
             problem,
             known: known.as_ref().map(|k| k.0.clone()),
-            area_bound: info.area_bound.max(area_lower_bound(problem.n, problem.m, problem.p) * 0.0),
+            area_bound: info.area_bound,
             max_seconds,
             lanes,
             seed: engine_seed,
