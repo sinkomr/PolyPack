@@ -1782,6 +1782,53 @@ describe("GET /api/holders: peaks", () => {
     expect(await old.holderPeaks()).toEqual([{ name: "ann", peak: 3 }]);
   });
 
+  it("takes peaks known from earlier lists from an administrator, raising and never lowering them", async () => {
+    const path = join(mkdtempSync(join(tmpdir(), "polypack-peaks-")), "admin.sqlite");
+    open(new SqliteStore(path));
+    for (const P of [2, 3]) await submit(entry(P, "ann", 1.1));
+    // given before the first count: the count lists it
+    expect((await adminPost("/api/admin/holder-peaks", { peaks: [{ name: "dot", peak: 7 }] })).status).toBe(200);
+    expect(await table()).toEqual([
+      ["ann", 2, 2, 2],
+      ["dot", 0, 0, 7],
+    ]);
+    // given after it: the rows change at once
+    const res = await adminPost("/api/admin/holder-peaks", {
+      peaks: [
+        { name: "ann", peak: 9 },
+        { name: "dot", peak: 3 },
+        { name: "eve", peak: 1 },
+        { name: "eve", peak: 4 },
+      ],
+    });
+    expect(await res.json()).toEqual({ ok: true, raised: 2 });
+    const after = [
+      ["ann", 2, 2, 9],
+      ["dot", 0, 0, 7],
+      ["eve", 0, 0, 4],
+    ];
+    expect(await table()).toEqual(after);
+    // stored: a restart lists them too
+    open(new SqliteStore(path));
+    expect(await table()).toEqual(after);
+    // malformed rows, and names not in the form a submission stores, change nothing
+    for (const peaks of [
+      [],
+      [{ name: "fay", peak: 0 }],
+      [{ name: "fay", peak: 1.5 }],
+      [{ name: " fay ", peak: 1 }],
+      [{ peak: 1 }],
+    ])
+      expect((await adminPost("/api/admin/holder-peaks", { peaks })).status).toBe(400);
+    const anon = await app.request("/api/admin/holder-peaks", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ peaks: [{ name: "fay", peak: 1 }] }),
+    });
+    expect(anon.status).toBe(401);
+    expect(await table()).toEqual(after);
+  });
+
   it("follows an administrator's removal and edit that move leaders", async () => {
     open(new SqliteStore(":memory:"));
     const lead = await submit(entry(2, "ann", 1.001));

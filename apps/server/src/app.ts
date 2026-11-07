@@ -127,6 +127,8 @@ export const ATLAS_MAX_PIECES = 6000;
  * work, and some tens on the throttled CPU of the live server. The event loop is let in between steps.
  */
 export const HOLDERS_CHUNK = 250;
+/** Rows one POST /api/admin/holder-peaks takes at most. */
+export const MAX_PEAK_ROWS = 10_000;
 /**
  * Problems one step of GET /api/holder reads: a page of the problems that have an entry of the name and the
  * leaders of those problems, a few milliseconds of work, with the event loop let in between steps.
@@ -1175,6 +1177,45 @@ export function createApp(opts: AppOptions): Hono {
     if (ok) entriesChanged();
     if (ok) log(`[review] submission ${body.id} edited: ${Object.keys(changes).join(", ") || "nothing"}`);
     return ok ? c.json({ ok: true }) : c.json({ error: "no such listed submission" }, 404);
+  });
+
+  // Peaks known from before they were counted (lists of holders saved earlier): raises each name's peak, never
+  // lowers one, and lists a name that leads nothing at zero. Names are taken as given, so they must already be
+  // in the form a submission stores.
+  app.post("/api/admin/holder-peaks", async (c) => {
+    const denied = admin(c);
+    if (denied) return denied;
+    const body = (await c.req.json().catch(() => null)) as { peaks?: unknown } | null;
+    const rows = body && Array.isArray(body.peaks) ? (body.peaks as { name?: unknown; peak?: unknown }[]) : null;
+    if (!rows || rows.length === 0 || rows.length > MAX_PEAK_ROWS)
+      return c.json(
+        { error: `body must be {"peaks": [{"name": string, "peak": number}, ...]} with 1 to ${MAX_PEAK_ROWS} rows` },
+        400,
+      );
+    const given = new Map<string, number>();
+    for (const r of rows) {
+      const name = typeof r?.name === "string" ? r.name : "";
+      if (!name || sanitizeText(name, MAX_NAME_LENGTH) !== name || !Number.isInteger(r.peak) || (r.peak as number) < 1)
+        return c.json({ error: `bad row ${JSON.stringify(r)}: a name as stored and a positive integer peak` }, 400);
+      given.set(name, Math.max(r.peak as number, given.get(name) ?? 0));
+    }
+    const raised = await inTurn(async () => {
+      const up = [...given].filter(([name, peak]) => peak > (peaks.get(name) ?? 0));
+      // stored first: a failure leaves memory as it was, and the request fails
+      await store.raiseHolderPeaks(up.map(([name, peak]) => ({ name, peak })));
+      for (const [name, peak] of up) {
+        peaks.set(name, peak);
+        // before the counts are done, finishPeaks lists the name from `peaks`
+        if (!counts.done) continue;
+        const h = counts.byName.get(name);
+        if (h) h.peak = Math.max(h.peak, peak);
+        else counts.byName.set(name, { name, records: 0, beat_published: 0, site_bests: 0, pending: 0, peak });
+      }
+      if (up.length) holdersBody = null;
+      return up.length;
+    });
+    log(`[holders] ${raised} of ${given.size} peak(s) raised by an administrator`);
+    return c.json({ ok: true, raised });
   });
 
   // The nightly records snapshot (snapshot.ts): the manifest, then one gzipped file per shape pair or space.

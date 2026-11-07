@@ -554,7 +554,7 @@ The counts follow every entry as it changes, so the answer is current. After a s
 <tr><th scope="row"><code>records</code></th><td>Of those, the leads that are the record: at least as good as the published value, to the precision the source prints, or for a problem without one. A claim <a href="#verification">pending verification</a> is not counted until it is confirmed.</td></tr>
 <tr><th scope="row"><code>beat_published</code></th><td>Of the records, those below the published value by more than that precision.</td></tr>
 <tr><th scope="row"><code>pending</code></th><td>Of the leads, the claims awaiting review.</td></tr>
-<tr><th scope="row"><code>peak</code></th><td>The most <code>records</code> the name has held at once. Peaks are counted since 2026-11-05: before that, a name's peak is its <code>records</code> at the first count made after it. It never falls.</td></tr>
+<tr><th scope="row"><code>peak</code></th><td>The most <code>records</code> the name has held at once. Peaks are counted since 2026-11-05; before that, a name's peak is the most it showed in the lists of holders saved since 2026-11-02, or its <code>records</code> at the first count made after 2026-11-05. It never falls.</td></tr>
 </table>
 
 <h3 id="holder"><code>GET /api/holder?name=</code></h3>
@@ -630,6 +630,10 @@ a confirmed one stays as the problem's only entry.
 <p>Body <code>{"id": 17, ...}</code> with any of <code>name</code>, <code>agent_note</code> and the provenance fields of a submission. Corrects how an entry is labelled; its packing and score never change.
 Provenance is replaced as a whole, so <code>found_with</code> is required whenever any provenance field is given, and the same validation as on submission applies.
 <code>{"ok": true}</code>, 400 for a malformed body, 404 when there is no such listed entry.</p>
+
+<h3><code>POST /api/admin/holder-peaks</code></h3>
+<p>Body <code>{"peaks": [{"name": "...", "peak": 12}, ...]}</code>, up to 10,000 rows. Raises the <code>peak</code> of each name in <a href="#holders">the holders</a>, for peaks known from before they were counted; a peak is never lowered, and a name that leads nothing is listed at zero. Names must be given as stored.
+<code>{"ok": true, "raised": n}</code>, 400 for a malformed body or row.</p>
 
 <h2 id="automated-search">Automated search</h2>
 <p>The optimizers are not HTTP endpoints: this server validates and stores packings and does not search for them. They run in two places.</p>
