@@ -204,4 +204,27 @@ describe("trig cache under forced slot collisions", () => {
           }
     }
   });
+
+  it("regularPolygonSeparation on lattice ties, exact contact and far coordinates (axes skipped by the lin bound)", () => {
+    const same = (x: { sep: number; nx: number; ny: number }, y: { sep: number; nx: number; ny: number }) =>
+      Object.is(x.sep, y.sep) && Object.is(x.nx, y.nx) && Object.is(x.ny, y.ny);
+    for (const N of [3, 4, 5, 6, 7, 8, 12, 24, 100])
+      for (const base of [0, 1e5, -3e8])
+        for (const theta of [0, Math.PI / N, 0.3, -2.1])
+          for (let k = 0; k < 24; k++) {
+            const dir = (2 * Math.PI * k) / 24;
+            for (const dist of [0, 2 * inradius(N), 2 * circumradius(N), inradius(N) + circumradius(N), 0.7, 5]) {
+              const a: Pose = { x: base, y: base / 3, theta };
+              const b: Pose = { x: base + dist * Math.cos(dir), y: base / 3 + dist * Math.sin(dir), theta: theta + (k % 3) * 0.1 };
+              expect(same(regularPolygonSeparation(N, a, b), refOverlap.regularPolygonSeparation(N, a, b))).toBe(true);
+              expect(same(regularPolygonSeparation(N, b, a, 0.5), refOverlap.regularPolygonSeparation(N, b, a, 0.5))).toBe(true);
+            }
+          }
+    for (const bad of [NaN, Infinity, -Infinity]) {
+      const a: Pose = { x: 0, y: 0, theta: 0 };
+      const b: Pose = { x: bad, y: 1, theta: 0.2 };
+      expect(same(regularPolygonSeparation(5, a, b), refOverlap.regularPolygonSeparation(5, a, b))).toBe(true);
+      expect(same(regularPolygonSeparation(5, b, a), refOverlap.regularPolygonSeparation(5, b, a))).toBe(true);
+    }
+  });
 });

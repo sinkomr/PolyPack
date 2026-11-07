@@ -47,6 +47,8 @@ export function unpackState(template: PackingConfig, x: readonly number[]): Pena
 export function nearbyPairs(poses: readonly Pose[], reach: number, stopped: () => boolean): [number, number][] {
   const grid = new Map<number, Map<number, number[]>>();
   const pairs: [number, number][] = [];
+  const far2 = reach * reach * (1 + 1e-9);
+  const near2 = reach * reach * (1 - 1e-9);
   for (let i = 0; i < poses.length; i++) {
     if (stopped()) return pairs;
     const a = poses[i];
@@ -70,8 +72,16 @@ export function nearbyPairs(poses: readonly Pose[], reach: number, stopped: () =
       if (!column) continue;
       for (let oy = -1; oy <= 1; oy++) {
         if (stopped()) return pairs;
-        for (const j of column.get(iy + oy) ?? []) {
-          if (Math.hypot(a.x - poses[j].x, a.y - poses[j].y) <= reach) pairs.push([j, i]);
+        const cell = column.get(iy + oy);
+        if (!cell) continue;
+        for (let n = 0; n < cell.length; n++) {
+          const j = cell[n];
+          const dx = a.x - poses[j].x;
+          const dy = a.y - poses[j].y;
+          const d2 = dx * dx + dy * dy;
+          // Clear cases are settled on the squared distance; near the reach, hypot decides as before
+          if (d2 > far2) continue;
+          if (d2 < near2 || Math.hypot(dx, dy) <= reach) pairs.push([j, i]);
         }
       }
     }

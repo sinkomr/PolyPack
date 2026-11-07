@@ -177,11 +177,19 @@ export function pairPenetration(
   };
 }
 
+/** Vertex scratch of paddedClosestPair (no callbacks run while it is in use); only the first 2N entries are read. */
+let paddedA = new Float64Array(0);
+let paddedB = new Float64Array(0);
+
 /** Closest vertex/segment pair; envelope derivatives include the selected lever arms. */
 function paddedClosestPair(N: number, a: Pose, b: Pose, scale: number, padding: number): PairPenetration | undefined {
   // Keep offsets local: tiny cores must not collapse at large absolute centres.
-  const A = pieceVertices(N, { x: 0, y: 0, theta: a.theta }, scale);
-  const B = pieceVertices(N, { x: 0, y: 0, theta: b.theta }, scale);
+  if (paddedA.length < 2 * N) {
+    paddedA = new Float64Array(2 * N);
+    paddedB = new Float64Array(2 * N);
+  }
+  const A = pieceVertices(N, { x: 0, y: 0, theta: a.theta }, scale, paddedA);
+  const B = pieceVertices(N, { x: 0, y: 0, theta: b.theta }, scale, paddedB);
   const dx = b.x - a.x;
   const dy = b.y - a.y;
   let distance = Infinity;

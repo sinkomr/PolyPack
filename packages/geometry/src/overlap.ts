@@ -76,6 +76,14 @@ function cosToNearestVertex(rel: number, step: number): number {
  * toward A, where delta is the angle between -u and B's nearest vertex direction
  * (the support function of a regular polygon). So the gap along u is
  *   (cB - cA) . u - inradius - R cos(delta).
+ *
+ * The axes are visited A0, B0, A1, B1, ... and the first largest gap wins. Since
+ * r <= R cos(delta) <= R, each gap lies in [lin - r - R, lin - 2r], lin = (cB - cA) . u (with the
+ * sign of the piece the axis belongs to). So an axis whose lin is below the largest lin by more
+ * than R - r (plus a margin of 1e-11 (|dx| + |dy| + R), far above the rounding of either bound)
+ * has a gap strictly below the largest gap, and its cosine is not needed: the axes that remain
+ * hold every one attaining the maximum, visited in the same order with the same expressions, so
+ * the result is the same double, normal included.
  */
 export function regularPolygonSeparation(N: number, a: Pose, b: Pose, scale = 1): Contact {
   const R = circumradius(N) * scale;
@@ -91,25 +99,39 @@ export function regularPolygonSeparation(N: number, a: Pose, b: Pose, scale = 1)
   const eb = pieceTrig(N, b.theta, ea);
   const axA = axesOf(ea);
   const axB = axesOf(eb);
+  let top = -Infinity;
+  for (let k = 0; k < N; k++) {
+    const linA = dx * axA[3 * k + 1] + dy * axA[3 * k + 2];
+    const linB = -(dx * axB[3 * k + 1] + dy * axB[3 * k + 2]);
+    if (linA > top) top = linA;
+    if (linB > top) top = linB;
+  }
+  let threshold = top - (R - r) - 1e-11 * (Math.abs(dx) + Math.abs(dy) + R);
+  // infinite or NaN inputs: every axis, as without the bound
+  if (!Number.isFinite(threshold)) threshold = -Infinity;
   for (let k = 0; k < N; k++) {
     // edge normals bisect consecutive vertex directions
-    const angA = axA[3 * k];
     let ux = axA[3 * k + 1];
     let uy = axA[3 * k + 2];
-    let sep = dx * ux + dy * uy - r - R * cosToNearestVertex(angA + Math.PI / 2 - b.theta, step);
-    if (sep > best) {
-      best = sep;
-      nx = -ux;
-      ny = -uy;
+    const linA = dx * ux + dy * uy;
+    if (!(linA < threshold)) {
+      const sep = linA - r - R * cosToNearestVertex(axA[3 * k] + Math.PI / 2 - b.theta, step);
+      if (sep > best) {
+        best = sep;
+        nx = -ux;
+        ny = -uy;
+      }
     }
-    const angB = axB[3 * k];
     ux = axB[3 * k + 1];
     uy = axB[3 * k + 2];
-    sep = -(dx * ux + dy * uy) - r - R * cosToNearestVertex(angB + Math.PI / 2 - a.theta, step);
-    if (sep > best) {
-      best = sep;
-      nx = ux;
-      ny = uy;
+    const linB = -(dx * ux + dy * uy);
+    if (!(linB < threshold)) {
+      const sep = linB - r - R * cosToNearestVertex(axB[3 * k] + Math.PI / 2 - a.theta, step);
+      if (sep > best) {
+        best = sep;
+        nx = ux;
+        ny = uy;
+      }
     }
   }
   return { sep: best, nx, ny };
