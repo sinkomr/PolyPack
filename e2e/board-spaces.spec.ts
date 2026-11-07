@@ -549,6 +549,38 @@ test("the drawing turns with the keyboard", async ({ page }) => {
   await expect(draw).not.toHaveAttribute("tabindex", /.*/);
 });
 
+test("a torus is also drawn as a 3D torus that turns, and the flat views come back", async ({ page }) => {
+  await page.goto("/#space=torus/hex/5/8");
+  await shown(page, "torus/hex/5/8");
+  const draw = page.locator(".space-draw");
+  const ring = page.locator(".space-draw > canvas");
+  await expect(ring).toHaveCount(0);
+  await page.getByRole("button", { name: "3D torus" }).click();
+  await expect(page.getByRole("button", { name: "3D torus" })).toHaveAttribute("aria-pressed", "true");
+  await expect(ring).toHaveAttribute("data-frames", /\d+/, LAZY_VIEW);
+  await expect(ring).toBeVisible();
+  await expect(page.locator(".space-draw > svg")).toBeHidden();
+  await expect(draw).toHaveAttribute("role", "application");
+  await expect(draw).toHaveAttribute(
+    "aria-label",
+    /^8 pentagons on a hexagonal torus of side \d+\.\d{6}, drawn as a 3D torus.* Drag it or use the arrow keys to turn it\.$/,
+  );
+  const before = await ring.screenshot();
+  await draw.focus();
+  await page.keyboard.press("Shift+ArrowRight");
+  expect((await ring.screenshot()).equals(before)).toBe(false);
+  await page.getByRole("button", { name: "One cell" }).click();
+  await expect(page.locator(".space-draw > svg")).toBeVisible();
+  await expect(ring).toBeHidden();
+  await expect(draw).toHaveAttribute("role", "img");
+  // another kind gives back the WebGL context; the torus is drawn anew on return
+  await choose(page, "sphere");
+  await expect(page.locator(".space-draw > canvas")).toHaveCount(1);
+  await choose(page, "torus");
+  await shown(page, "torus/hex/5/8");
+  await expect(page.locator(".space-draw > svg")).toBeVisible();
+});
+
 test("a torus entry in a skewed basis draws at once, and a degenerate lattice is not drawn", async ({ page }) => {
   const id = "torus/free/6/30";
   await page.route(`**/api/spaces/torus/problems/${id}`, async (route) => {
