@@ -2,6 +2,7 @@
 //! they apply to flat problems. Parsing is pure: the machine's core count and home directory are
 //! passed in.
 
+use crate::target::{DEFAULT_TARGET_MARGIN, DEFAULT_TARGET_MIN_SECONDS};
 use std::path::PathBuf;
 
 pub const DEFAULT_BASE: &str = "https://polypack.fly.dev";
@@ -24,7 +25,8 @@ pub struct Options {
     pub minutes_per_problem: f64,
     pub n: Option<Vec<u32>>,
     pub m: Option<Vec<u32>>,
-    pub max_p: Option<usize>,
+    /// The numbers of pieces allowed (--P and --max-P together); None for 1 to 500.
+    pub p: Option<Vec<usize>>,
     /// True when nothing is submitted: --dry-run, or no --name.
     pub dry_run: bool,
     pub state_dir: PathBuf,
@@ -32,6 +34,16 @@ pub struct Options {
     pub battery_pause: bool,
     pub low_priority: bool,
     pub once: bool,
+    /// Only problems without a leader (--open-only).
+    pub open_only: bool,
+    /// Target mode: only the problems this holder leads (--target-holder).
+    pub target_holder: Option<String>,
+    pub target_refresh: bool,
+    pub target_any_entry: bool,
+    pub target_max_budget: Option<f64>,
+    pub target_include_unknown: bool,
+    pub target_min_seconds: f64,
+    pub target_margin: f64,
 }
 
 #[derive(Clone, Debug, PartialEq)]
@@ -78,7 +90,11 @@ Usage: polypack-native [options]
   --minutes-per-problem T  most minutes of search per problem, pauses excluded (default {DEFAULT_MINUTES_PER_PROBLEM})
   --N LIST                 piece shapes, e.g. 0,3-6 (0 = circle; default: all)
   --M LIST                 container shapes, same syntax (default: all)
-  --max-P K                only problems of at most K pieces
+  --P LIST                 only problems with these numbers of pieces, e.g. 10-50 or 1-10,100-150
+                           (default: all)
+  --max-P K                shorthand for --P 1-K; with both, the numbers in both
+  --open-only              skip problems that already have a leader: only first entries are made
+                           (not with --target-holder)
   --dry-run                search, but never submit
   --note TEXT              free text shown with your entries (at most {MAX_NOTE_LENGTH} characters)
   --state DIR              where the client keeps its state (default {state})
@@ -87,6 +103,29 @@ Usage: polypack-native [options]
   --once                   search one problem, then exit
   --help                   this text
   --version                the version
+
+Target mode: re-search the low-effort records of one holder.
+
+  --target-holder NAME     search only the problems that NAME leads now and whose only accepted
+                           submission is NAME's (a \"first entry\": the server's count of accepted
+                           submissions, total of /api/leaderboard, is 1; such records are nearly all
+                           low-effort ones). The list comes from /api/holder, is kept in the state
+                           directory (targets.json) and fetched again after 24 hours. A drawn problem
+                           whose leader is no longer NAME, or that has more than one accepted submission
+                           (a count that never goes down), is skipped and dropped from the list. --N, --M
+                           and --P still narrow the list. Not with --open-only
+  --target-refresh         fetch the list again now, whatever its age
+  --target-any-entry       do not require a first entry: also search problems with several accepted submissions
+  --target-max-budget S    also require that the leader's entry says it took at most S seconds (budget.time_s);
+                           off by default. Each entry is looked up once (/api/submissions/ID), the answer is kept (lazy.json)
+  --target-include-unknown with --target-max-budget: also search a leader whose entry gives no time_s (default: skipped)
+  --target-min-seconds A   a target's search ends early only after A active seconds (default {DEFAULT_TARGET_MIN_SECONDS})
+  --target-margin R        ... and ends then as soon as its best strict packing is at most
+                           leader * (1 - R), R relative (default {DEFAULT_TARGET_MARGIN}); otherwise it runs up to
+                           --minutes-per-problem (0.5 is 30 s). Any result that beats the leader is
+                           submitted, margin or not
+
+The modes are meant to run as separate processes, each with its own --state directory.
 
 Benchmark (no server): polypack-native bench --N n --M m --P p [--seconds S] [--seed K]
   [--lanes L] [--clock cpu|wall]: one problem's search, printed as JSON.
@@ -155,8 +194,54 @@ fn positive_number(name: &str, text: &str) -> Result<f64, OptionError> {
     }
 }
 
-const VALUE_OPTIONS: &[&str] = &["name", "base", "server", "cores", "parallel-problems", "hours", "minutes-per-problem", "N", "M", "max-P", "state", "note", "priority"];
-const FLAG_OPTIONS: &[&str] = &["dry-run", "no-battery-pause", "once", "help", "version"];
+fn non_negative_number(name: &str, text: &str) -> Result<f64, OptionError> {
+    match text.trim().parse::<f64>() {
+        Ok(v) if v.is_finite() && v >= 0.0 => Ok(v),
+        _ => Err(OptionError(format!("--{name} must be a number, 0 or more"))),
+    }
+}
+
+/// --P and --max-P together: the numbers of pieces both allow; None when neither is given.
+fn parse_pieces(list: Option<&str>, max: Option<&str>) -> Result<Option<Vec<usize>>, OptionError> {
+    let listed = match list {
+        Some(l) => Some(parse_int_list(l, "P", 1, MAX_PIECES as u32, |_| true)?.into_iter().map(|v| v as usize).collect::<Vec<_>>()),
+        None => None,
+    };
+    let Some(max) = max else { return Ok(listed) };
+    let cap = positive_integer("max-P", max, MAX_PIECES)?;
+    match listed {
+        None => Ok(Some((1..=cap).collect())),
+        Some(l) => {
+            let both: Vec<usize> = l.into_iter().filter(|&p| p <= cap).collect();
+            if both.is_empty() {
+                return Err(OptionError(format!("--P {} and --max-P {cap} together allow no number of pieces", list.unwrap_or_default())));
+            }
+            Ok(Some(both))
+        }
+    }
+}
+
+const VALUE_OPTIONS: &[&str] = &[
+    "name",
+    "base",
+    "server",
+    "cores",
+    "parallel-problems",
+    "hours",
+    "minutes-per-problem",
+    "N",
+    "M",
+    "P",
+    "max-P",
+    "state",
+    "note",
+    "priority",
+    "target-holder",
+    "target-max-budget",
+    "target-min-seconds",
+    "target-margin",
+];
+const FLAG_OPTIONS: &[&str] = &["dry-run", "no-battery-pause", "once", "help", "version", "open-only", "target-refresh", "target-any-entry", "target-include-unknown"];
 const UNSUPPORTED: &[&str] = &["dimensions", "spaces", "only-dimensions", "only-spaces", "space-method", "space-params"];
 
 /// The options as name -> value (flags have "true"), from `--name value` or `--name=value`.
@@ -253,6 +338,54 @@ pub fn parse_options(argv: &[String], machine: &Machine) -> Result<Parsed, Optio
             "--parallel-problems ({parallel_problems}) is more than the search threads (--cores {cores}): each problem needs a thread"
         )));
     }
+    let target_holder = get("target-holder").map(|h| h.trim().to_string());
+    if target_holder.as_deref() == Some("") {
+        return Err(OptionError("--target-holder is empty".into()));
+    }
+    if target_holder.as_ref().map_or(false, |h| h.chars().count() > MAX_NAME_LENGTH) {
+        return Err(OptionError(format!("--target-holder: a name has at most {MAX_NAME_LENGTH} characters")));
+    }
+    let open_only = flag("open-only");
+    if target_holder.is_some() && open_only {
+        return Err(OptionError(
+            "--target-holder and --open-only cannot be combined: a target is a problem with a leader, open-only skips those; run two processes with different --state directories".into(),
+        ));
+    }
+    if target_holder.is_none() {
+        for f in ["target-refresh", "target-any-entry", "target-max-budget", "target-include-unknown", "target-min-seconds", "target-margin"] {
+            if pairs.iter().any(|(key, _)| key == f) {
+                return Err(OptionError(format!("--{f} needs --target-holder NAME")));
+            }
+        }
+    }
+    let target_max_budget = match get("target-max-budget") {
+        Some(v) => Some(non_negative_number("target-max-budget", &v)?),
+        None => None,
+    };
+    if flag("target-include-unknown") && target_max_budget.is_none() {
+        return Err(OptionError("--target-include-unknown needs --target-max-budget S (without it no budget is looked at)".into()));
+    }
+    let target_min_seconds = match get("target-min-seconds") {
+        Some(v) => non_negative_number("target-min-seconds", &v)?,
+        None => DEFAULT_TARGET_MIN_SECONDS,
+    };
+    let target_margin = match get("target-margin") {
+        Some(v) => non_negative_number("target-margin", &v)?,
+        None => DEFAULT_TARGET_MARGIN,
+    };
+    if target_margin >= 1.0 {
+        return Err(OptionError("--target-margin is relative and must be below 1".into()));
+    }
+    let minutes_per_problem = match get("minutes-per-problem") {
+        Some(v) => positive_number("minutes-per-problem", &v)?,
+        None => DEFAULT_MINUTES_PER_PROBLEM,
+    };
+    if target_holder.is_some() && target_min_seconds > minutes_per_problem * 60.0 {
+        return Err(OptionError(format!(
+            "--target-min-seconds ({target_min_seconds}) is longer than --minutes-per-problem ({minutes_per_problem} minutes): no search could end early"
+        )));
+    }
+    let p = parse_pieces(get("P").as_deref(), get("max-P").as_deref())?;
     let mut state_dir = match get("state") {
         Some(s) => PathBuf::from(s),
         None => machine.home.join(".polypack-native"),
@@ -274,10 +407,7 @@ pub fn parse_options(argv: &[String], machine: &Machine) -> Result<Parsed, Optio
             Some(v) => positive_number("hours", &v)?,
             None => f64::INFINITY,
         },
-        minutes_per_problem: match get("minutes-per-problem") {
-            Some(v) => positive_number("minutes-per-problem", &v)?,
-            None => DEFAULT_MINUTES_PER_PROBLEM,
-        },
+        minutes_per_problem,
         n: match get("N") {
             Some(v) => Some(parse_int_list(&v, "N", 0, MAX_SIDES, is_shape)?),
             None => None,
@@ -286,16 +416,21 @@ pub fn parse_options(argv: &[String], machine: &Machine) -> Result<Parsed, Optio
             Some(v) => Some(parse_int_list(&v, "M", 0, MAX_SIDES, is_shape)?),
             None => None,
         },
-        max_p: match get("max-P") {
-            Some(v) => Some(positive_integer("max-P", &v, MAX_PIECES)?),
-            None => None,
-        },
+        p,
         dry_run,
         state_dir,
         note,
         battery_pause: !flag("no-battery-pause"),
         low_priority: priority == "low",
         once,
+        open_only,
+        target_refresh: flag("target-refresh"),
+        target_any_entry: flag("target-any-entry"),
+        target_include_unknown: flag("target-include-unknown"),
+        target_holder,
+        target_max_budget,
+        target_min_seconds,
+        target_margin,
     }))
 }
 
@@ -326,5 +461,30 @@ mod tests {
         assert!(parse_options(&args(&["--N", "1"]), &machine()).is_err());
         assert!(parse_options(&args(&["--dimensions", "all"]), &machine()).is_err());
         assert!(parse_options(&args(&["--server", "ftp://x"]), &machine()).is_err());
+    }
+
+    #[test]
+    fn pieces_and_target_mode() {
+        let run = |a: &[&str]| match parse_options(&args(a), &machine()) {
+            Ok(Parsed::Run(o)) => Ok(o),
+            Ok(_) => panic!(),
+            Err(e) => Err(e.0),
+        };
+        assert_eq!(run(&["--P", "3,10-12"]).unwrap().p, Some(vec![3, 10, 11, 12]));
+        assert_eq!(run(&["--P", "3,10-12", "--max-P", "10"]).unwrap().p, Some(vec![3, 10]));
+        assert_eq!(run(&["--max-P", "3"]).unwrap().p, Some(vec![1, 2, 3]));
+        assert!(run(&["--P", "20-30", "--max-P", "10"]).is_err());
+        assert!(run(&["--P", "501"]).is_err());
+        let o = run(&["--target-holder", " jg-claude ", "--target-max-budget", "30", "--target-include-unknown"]).unwrap();
+        assert_eq!(o.target_holder.as_deref(), Some("jg-claude"));
+        assert_eq!((o.target_max_budget, o.target_min_seconds, o.target_margin), (Some(30.0), 10.0, 1e-6));
+        assert!(o.target_include_unknown && !o.target_any_entry && !o.open_only);
+        assert!(run(&["--target-holder", "jg", "--open-only"]).is_err());
+        assert!(run(&["--target-margin", "0.01"]).is_err());
+        assert!(run(&["--target-holder", "jg", "--target-include-unknown"]).is_err());
+        assert!(run(&["--target-holder", "jg", "--target-margin", "1"]).is_err());
+        assert!(run(&["--target-holder", "jg", "--target-min-seconds", "90", "--minutes-per-problem", "1"]).is_err());
+        assert!(run(&["--target-holder", ""]).is_err());
+        assert!(run(&["--open-only"]).unwrap().open_only);
     }
 }

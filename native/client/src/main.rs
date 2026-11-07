@@ -12,6 +12,7 @@ mod options;
 mod pick;
 mod platform;
 mod state;
+mod target;
 mod volunteer;
 
 use engine::{search, InlineRunner, Runner, SearchInput, ThreadRunner};

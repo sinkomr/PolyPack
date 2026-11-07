@@ -2,8 +2,13 @@
 //! (pick.rs), read it from the server, search it with the engine on its share of the threads,
 //! submit the best only when it beats the site's leader, and draw the next. Several problems are
 //! searched at once (--parallel-problems), each in its own slot.
+//!
+//! Two modes narrow the draws: --open-only skips problems that have a leader, and target mode
+//! (--target-holder, target.rs) draws only from the problems one holder leads, checks before each
+//! search that it still leads (and, by default, that its entry is the problem's only one), and ends
+//! a search early once it is ahead by --target-margin.
 
-use crate::answers::{clean_text, describe_answer, read_problem_info, read_stored_entry, read_submit_response, stored_name, ProblemInfo};
+use crate::answers::{clean_text, describe_answer, read_problem_info, read_stored_entry, read_submit_response, stored_name, ProblemInfo, SiteBest};
 use crate::engine::{search, Candidate, Known, SearchInput, ThreadRunner};
 use crate::format::{format_duration, format_score, iso_now, now_ms, relative_percent, timestamp};
 use crate::http::{sleep_unless, Answer, Api, Pacer, SubmitCheck, SubmitOutcome, SUBMISSIONS_PER_MINUTE, SUBMISSION_WINDOW_MS};
@@ -11,6 +16,7 @@ use crate::memory::Memory;
 use crate::options::Options;
 use crate::pick::{draw_problem, note_search, prune_recent, FlatKind};
 use crate::state::{random_u32, StateDir};
+use crate::target::{is_lazy, leaderboard_verdict, load_targets, read_budget_seconds, stop_early, BudgetCache, Filters, TargetPool, Verdict, BUDGETS_FILE};
 use polypack_flat::clock::ClockKind;
 use polypack_flat::rng::Rng;
 use polypack_flat::shapes::{Config, Pose, Problem};
@@ -30,6 +36,12 @@ pub const SKIPS_BEFORE_WAIT: usize = 20;
 pub const STOP_GRACE_MS: u64 = 30_000;
 pub const MIN_PROBLEM_SECONDS: f64 = 120.0;
 pub const MAX_METHOD_PARAMS_BYTES: usize = 4096;
+/// Target mode: the wait after a drawn problem turned out not to be a target.
+pub const TARGET_DROP_PAUSE_MS: u64 = 250;
+/// --open-only: problems with a leader in a row before a minute's wait.
+pub const OPEN_ONLY_SKIPS_BEFORE_WAIT: usize = 500;
+/// Target mode: how often a search checks whether it may end early.
+pub const EARLY_CHECK_MS: u64 = 100;
 
 pub fn log(message: &str) {
     println!("[{}] {message}", timestamp());
@@ -81,6 +93,22 @@ enum Searched {
     Done(bool),
     Skipped,
     Unreachable,
+    /// Not searched: it has a leader (--open-only), or it is not a target now (target mode).
+    Held,
+}
+
+/// No answer, or one that says to come back later.
+fn unreachable(a: Option<&Answer>) -> bool {
+    a.map_or(true, |a| a.status == 429 || a.status >= 500)
+}
+
+/// A relative margin as the personal JavaScript build prints it: 1e-6, 0.01.
+fn format_margin(r: f64) -> String {
+    if r > 0.0 && r < 1e-3 {
+        format!("{r:e}")
+    } else {
+        format!("{r}")
+    }
 }
 
 struct Shared {
@@ -101,6 +129,11 @@ struct Shared {
     currents: Mutex<Vec<Arc<Current>>>,
     rng: Mutex<Rng>,
     kind: FlatKind,
+    /// Target mode's list and the leaders' search times (--target-max-budget).
+    targets: Mutex<Option<TargetPool>>,
+    budgets: Mutex<Option<BudgetCache>>,
+    reloading: AtomicBool,
+    held_skipped: AtomicUsize,
     counts: Mutex<[usize; 4]>,
     started: Instant,
 }
@@ -202,6 +235,34 @@ impl Shared {
         }
     }
 
+    fn target_mode(&self) -> bool {
+        self.o.target_holder.is_some()
+    }
+
+    fn holder(&self) -> &str {
+        self.o.target_holder.as_deref().unwrap_or("")
+    }
+
+    /// Takes a problem off the target list for good (and from the draws of this run).
+    fn drop_target(&self, problem: &Problem) {
+        self.skip_until.lock().unwrap().insert(problem.key(), i64::MAX);
+        if let Some(t) = self.targets.lock().unwrap().as_mut() {
+            if let Err(e) = t.drop_problem(problem) {
+                log(&format!("could not save the target list: {e}"));
+            }
+        }
+    }
+
+    fn flush_targets(&self) {
+        let t = self.targets.lock().unwrap().as_mut().map(|t| t.flush());
+        let b = self.budgets.lock().unwrap().as_mut().map(|b| b.flush());
+        for r in [t, b].into_iter().flatten() {
+            if let Err(e) = r {
+                log(&format!("could not save the target files: {e}"));
+            }
+        }
+    }
+
     fn read_problem(&self, api: &Api, p: &Problem) -> (Option<ProblemInfo>, Option<Answer>) {
         let a = api.problem(p.n, p.m, p.p);
         let info = a.as_ref().filter(|a| a.status == 200).and_then(|a| read_problem_info(&a.body, p.n, p.m, p.p));
@@ -260,7 +321,7 @@ pub fn run(o: Options) -> i32 {
     let logger: Arc<dyn Fn(&str) + Send + Sync> = Arc::new(|m: &str| log(m));
     let reader = Api::new(&o.base, &user_agent, stop.clone(), pacer.clone(), logger.clone(), on_upgrade.clone());
     let submitter = Api::new(&o.base, &user_agent, hard.clone(), pacer, logger, on_upgrade);
-    let kind = FlatKind::new(o.n.as_ref(), o.m.as_ref(), o.max_p);
+    let kind = FlatKind::new(o.n.as_ref(), o.m.as_ref(), o.p.as_ref());
     let shared = Arc::new(Shared {
         clock: ActiveClock::new(),
         stop,
@@ -278,12 +339,47 @@ pub fn run(o: Options) -> i32 {
         currents: Mutex::new(Vec::new()),
         rng: Mutex::new(Rng::new(random_u32())),
         kind,
+        targets: Mutex::new(None),
+        budgets: Mutex::new(None),
+        reloading: AtomicBool::new(false),
+        held_skipped: AtomicUsize::new(0),
         counts: Mutex::new([0; 4]),
         started: Instant::now(),
         o,
     });
     *shared_cell.lock().unwrap() = Some(Arc::downgrade(&shared));
     banner(&shared);
+    if let Some(holder) = shared.o.target_holder.clone() {
+        let o = &shared.o;
+        let filters = Filters { n: o.n.clone(), m: o.m.clone(), p: o.p.clone() };
+        let fetch = || shared.reader.holder(&holder);
+        match load_targets(&o.state_dir, &holder, &o.base, &filters, o.target_refresh, &fetch, &|m: &str| log(m)) {
+            Err(why) => {
+                log(&format!("Cannot start: {why}."));
+                shared.state.lock().unwrap().close();
+                return 1;
+            }
+            Ok(pool) => {
+                log(&format!(
+                    "{} of them pass --N, --M and --P; {}{}",
+                    pool.size(),
+                    if o.target_any_entry {
+                        "any of them is searched while the holder leads it (--target-any-entry)"
+                    } else {
+                        "only those whose only accepted submission is the holder's (first entries) are searched"
+                    },
+                    o.target_max_budget.map_or(String::new(), |b| format!(
+                        ", and only if the leader's entry took {b} s or less{}",
+                        if o.target_include_unknown { " or says nothing" } else { "" }
+                    ))
+                ));
+                *shared.targets.lock().unwrap() = Some(pool);
+                if o.target_max_budget.is_some() {
+                    *shared.budgets.lock().unwrap() = Some(BudgetCache::open(o.state_dir.join(BUDGETS_FILE)));
+                }
+            }
+        }
+    }
 
     // Ctrl-C: the first stops, the second exits at once
     {
@@ -338,8 +434,12 @@ pub fn run(o: Options) -> i32 {
             }
         });
     }
-    let code = if shared.kind.size() == 0 {
-        log("No problem passes --N, --M and --max-P together: there is nothing to search.");
+    let targets_left = shared.targets.lock().unwrap().as_ref().map(|t| (t.size(), t.total(), t.holder().to_string()));
+    let code = if let Some((0, total, holder)) = targets_left {
+        log(&format!("None of the {total} problem(s) \"{holder}\" leads passes --N, --M and --P: there is nothing to search."));
+        1
+    } else if shared.kind.size() == 0 {
+        log("No problem passes --N, --M, --P and --max-P together: there is nothing to search.");
         1
     } else {
         let shares = lane_shares(shared.o.cores, shared.o.parallel_problems);
@@ -354,6 +454,7 @@ pub fn run(o: Options) -> i32 {
         i32::from(codes.iter().any(|&c| c != 0))
     };
     done.store(true, Ordering::Relaxed);
+    shared.flush_targets();
     if let Some(up) = shared.upgrade.lock().unwrap().clone() {
         log(&format!("This client ({}) is out of date: {up} Download the current client and start it again.", env!("CARGO_PKG_VERSION")));
     }
@@ -414,7 +515,25 @@ fn banner(s: &Shared) {
         if o.hours.is_finite() { format!("; stops after {} h", o.hours) } else { String::new() },
         methods.join(", ")
     ));
-    log(&format!("Draws each problem at random, every one as likely, from {} flat problems", s.kind.size()));
+    if let Some(holder) = &o.target_holder {
+        log(&format!(
+            "Target mode: targets {holder}'s {}{}; stops ≥{} s once ahead by {}; ≤{} s each",
+            if o.target_any_entry { "records, first entries or not (--target-any-entry)" } else { "first entries (problems whose only accepted submission is theirs)" },
+            o.target_max_budget.map_or(String::new(), |b| format!(
+                ", only those of at most {b} s{} (--target-max-budget)",
+                if o.target_include_unknown { " or of unknown effort" } else { "" }
+            )),
+            o.target_min_seconds,
+            format_margin(o.target_margin),
+            (o.minutes_per_problem * 60.0).max(1.0)
+        ));
+    } else {
+        log(&format!(
+            "Draws each problem at random, every one as likely, from {} flat problems{}",
+            s.kind.size(),
+            if o.open_only { "; open problems only (a problem that already has a leader is skipped)" } else { "" }
+        ));
+    }
 }
 
 fn status(s: &Shared) {
@@ -440,6 +559,7 @@ fn status(s: &Shared) {
 fn slot(s: &Arc<Shared>, lanes: usize) -> i32 {
     let mut failures = 0u32;
     let mut skipped = 0usize;
+    let mut held = 0usize;
     while !s.stopped() {
         while s.paused.load(Ordering::Relaxed) && !s.stopped() {
             std::thread::sleep(Duration::from_millis(500));
@@ -456,18 +576,31 @@ fn slot(s: &Arc<Shared>, lanes: usize) -> i32 {
             let mut all: HashSet<String> = skip.keys().cloned().collect();
             let mut in_flight = s.in_flight.lock().unwrap();
             all.extend(in_flight.iter().cloned());
-            let d = draw_problem(&s.kind, &recent, &all, now, &mut s.rng.lock().unwrap());
+            let targets = s.targets.lock().unwrap();
+            let d = match targets.as_ref() {
+                Some(t) => draw_problem(&|r: &mut Rng| t.draw(r), &recent, &all, now, &mut s.rng.lock().unwrap()),
+                None => draw_problem(&|r: &mut Rng| s.kind.draw(r), &recent, &all, now, &mut s.rng.lock().unwrap()),
+            };
             if let Some(p) = &d {
                 in_flight.insert(p.key());
             }
             d
         };
         let Some(problem) = pick else {
-            log("Nothing to search: every problem drawn was closed, could not be read lately, or is being searched by another slot.");
+            match s.targets.lock().unwrap().as_ref() {
+                Some(t) => log(&format!(
+                    "No target is left: the list holds {} problem(s) \"{}\" may still lead, {} of them not skipped yet (and those are being searched or could not be read lately).",
+                    t.total(),
+                    t.holder(),
+                    t.size()
+                )),
+                None => log("Nothing to search: every problem drawn was closed, could not be read lately, or is being searched by another slot."),
+            }
             if s.o.once {
                 return 0;
             }
             sleep_unless(&s.stop, NOTHING_WAIT_MS);
+            reload_targets(s);
             continue;
         };
         let key = problem.key();
@@ -492,8 +625,22 @@ fn slot(s: &Arc<Shared>, lanes: usize) -> i32 {
                 sleep_unless(&s.stop, ms);
                 continue;
             }
+            Searched::Held => {
+                failures = 0;
+                if s.o.open_only {
+                    held += 1;
+                    if held % OPEN_ONLY_SKIPS_BEFORE_WAIT == 0 {
+                        log(&format!("{held} problems in a row already had a leader; drawing again in 1m00s"));
+                        sleep_unless(&s.stop, NOTHING_WAIT_MS);
+                    }
+                } else if s.target_mode() {
+                    sleep_unless(&s.stop, TARGET_DROP_PAUSE_MS);
+                }
+                continue;
+            }
             Searched::Skipped => {
                 failures = 0;
+                held = 0;
                 skipped += 1;
                 if skipped % SKIPS_BEFORE_WAIT == 0 {
                     log(&format!("{skipped} problems in a row were closed or unknown to the server; drawing again in 1m00s"));
@@ -504,6 +651,7 @@ fn slot(s: &Arc<Shared>, lanes: usize) -> i32 {
             Searched::Done(ok) => {
                 failures = 0;
                 skipped = 0;
+                held = 0;
                 if s.o.once {
                     return if ok || s.stopped() { 0 } else { 1 };
                 }
@@ -511,6 +659,131 @@ fn slot(s: &Arc<Shared>, lanes: usize) -> i32 {
         }
     }
     0
+}
+
+/// Target mode: fetches the list again when it is older than a day, once the draws have run out
+/// of problems.
+fn reload_targets(s: &Arc<Shared>) {
+    let Some(holder) = s.o.target_holder.clone() else { return };
+    let fetched = s.targets.lock().unwrap().as_ref().map_or(i64::MAX, |t| t.fetched_at_ms);
+    if s.stopped() || now_ms() - fetched < crate::target::TARGET_MAX_AGE_MS || s.reloading.swap(true, Ordering::Relaxed) {
+        return;
+    }
+    let o = &s.o;
+    let filters = Filters { n: o.n.clone(), m: o.m.clone(), p: o.p.clone() };
+    let fetch = || s.reader.holder(&holder);
+    if let Ok(mut fresh) = load_targets(&o.state_dir, &holder, &o.base, &filters, true, &fetch, &|m: &str| log(m)) {
+        let file = fresh.to_file();
+        if let Some(t) = s.targets.lock().unwrap().as_mut() {
+            if let Err(e) = t.replace(file) {
+                log(&format!("could not save the target list: {e}"));
+            }
+        }
+        let _ = fresh.flush();
+    }
+    s.reloading.store(false, Ordering::Relaxed);
+}
+
+/// Target mode, before a drawn problem is read: one GET /api/leaderboard/N/M/P says whether it is
+/// still a target. It is not (Held, and dropped from the list) when it is closed, the holder does
+/// not lead it, or more than one submission was accepted (the count never decreases, so it cannot
+/// be a first entry again). None when the search goes on. Not made with --target-any-entry.
+fn first_entry_gate(s: &Arc<Shared>, problem: &Problem, label: &str) -> Option<Searched> {
+    let a = s.reader.leaderboard(problem.n, problem.m, problem.p);
+    if s.stopped() {
+        return Some(Searched::Done(false));
+    }
+    if a.as_ref().map_or(false, |a| a.status == 404) {
+        log(&format!("{label}: the server has no such problem; dropping it from the list"));
+        s.drop_target(problem);
+        return Some(Searched::Held);
+    }
+    let verdict = a.as_ref().filter(|a| a.status == 200).and_then(|a| leaderboard_verdict(&a.body, s.holder(), false));
+    let Some(verdict) = verdict else {
+        if unreachable(a.as_ref()) {
+            return Some(Searched::Unreachable);
+        }
+        log(&format!(
+            "Could not read the leaderboard of {label} ({}); skipping it for 10 minutes",
+            if a.as_ref().map_or(false, |a| a.status == 200) { "malformed answer".into() } else { describe_answer(a.as_ref()) }
+        ));
+        s.skip_until.lock().unwrap().insert(problem.key(), now_ms() + SKIP_MS);
+        return Some(Searched::Done(false));
+    };
+    let other = |leader: &Option<String>| {
+        format!(
+            "{}, not \"{}\": dropping it from the list",
+            leader.as_ref().map_or("no leader".into(), |l| format!("now led by \"{}\"", clean_text(l, 60))),
+            s.holder()
+        )
+    };
+    match verdict {
+        Verdict::Keep => return None,
+        Verdict::Closed { .. } => log(&format!("{label} is closed: its published optimum is proven. Dropping it from the list")),
+        Verdict::NotFirst { total } => log(&format!("{label}: {total} accepted submissions, not a first entry: dropping it")),
+        Verdict::NoLeader => log(&format!("{label}: {}", other(&None))),
+        Verdict::OtherLeader { leader } => log(&format!("{label}: {}", other(&Some(leader)))),
+    }
+    s.drop_target(problem);
+    Some(Searched::Held)
+}
+
+/// Target mode, a drawn problem with its leader read: Err(Held) when it is not a target now (its
+/// leader is not the holder: it is dropped from the list; or its entry took more than
+/// --target-max-budget seconds, or says nothing), Err(Unreachable) or Err(Done(false)) when the
+/// entry could not be read; else the entry's answer when it had to be fetched (it has the packing
+/// too), or None when a cached search time made the fetch unnecessary.
+fn target_verdict(s: &Arc<Shared>, problem: &Problem, label: &str, leader: Option<&SiteBest>) -> Result<Option<Answer>, Searched> {
+    let Some(l) = leader.filter(|l| l.name == s.holder()) else {
+        log(&format!(
+            "{label}: {}, not \"{}\": dropping it from the list",
+            leader.map_or("no leader".into(), |l| format!("now led by \"{}\"", clean_text(&l.name, 60))),
+            s.holder()
+        ));
+        s.drop_target(problem);
+        return Err(Searched::Held);
+    };
+    let Some(max) = s.o.target_max_budget else { return Ok(None) };
+    let cached = s.budgets.lock().unwrap().as_ref().and_then(|b| b.get(l.id));
+    let mut entry = None;
+    let seconds = match cached {
+        Some(seconds) => seconds,
+        None => {
+            let a = s.reader.entry(l.id);
+            if s.stopped() {
+                return Err(Searched::Done(false));
+            }
+            if a.as_ref().map_or(true, |a| a.status != 200) {
+                if unreachable(a.as_ref()) {
+                    return Err(Searched::Unreachable);
+                }
+                log(&format!("Could not read entry #{} of {label} ({}); skipping it for 10 minutes", l.id, describe_answer(a.as_ref())));
+                s.skip_until.lock().unwrap().insert(problem.key(), now_ms() + SKIP_MS);
+                return Err(Searched::Done(false));
+            }
+            let seconds = read_budget_seconds(&a.as_ref().unwrap().body);
+            if let Some(b) = s.budgets.lock().unwrap().as_mut() {
+                if let Err(e) = b.set(l.id, seconds) {
+                    log(&format!("could not save the target files: {e}"));
+                }
+            }
+            entry = a;
+            seconds
+        }
+    };
+    if !is_lazy(seconds, max, s.o.target_include_unknown) {
+        log(&format!(
+            "{label}: the leader's entry #{} {}: skipping it",
+            l.id,
+            seconds.map_or("gives no search time".into(), |t| format!("took {t} s, over --target-max-budget {max}"))
+        ));
+        s.skip_until.lock().unwrap().insert(problem.key(), i64::MAX);
+        if let Some(t) = s.targets.lock().unwrap().as_mut() {
+            t.hold(problem);
+        }
+        return Err(Searched::Held);
+    }
+    Ok(entry)
 }
 
 /// The packing the engine starts from: the leader's, or the published one when it is better or
@@ -630,6 +903,11 @@ fn check_stored(info: &ProblemInfo, name: &str, score: f64) -> SubmitCheck {
 fn search_one(s: &Arc<Shared>, problem: Problem, lanes: usize) -> Searched {
     let key = problem.key();
     let label = problem.label();
+    if s.target_mode() && !s.o.target_any_entry {
+        if let Some(r) = first_entry_gate(s, &problem, &label) {
+            return r;
+        }
+    }
     let (info, answer) = s.read_problem(&s.reader, &problem);
     if s.stopped() {
         return Searched::Done(false);
@@ -645,21 +923,46 @@ fn search_one(s: &Arc<Shared>, problem: Problem, lanes: usize) -> Searched {
             if gone { "" } else { " for 10 minutes" }
         ));
         s.skip_until.lock().unwrap().insert(key, if gone { i64::MAX } else { now_ms() + SKIP_MS });
+        if gone && s.target_mode() {
+            s.drop_target(&problem);
+            return Searched::Held;
+        }
         return if gone { Searched::Skipped } else { Searched::Done(false) };
     };
     if !info.accepts_submissions {
         log(&format!("{label} is closed: its published optimum is proven. Skipping it."));
         s.skip_until.lock().unwrap().insert(key, i64::MAX);
+        if s.target_mode() {
+            s.drop_target(&problem);
+            return Searched::Held;
+        }
         return Searched::Skipped;
     }
     let leader = info.site_best.clone();
+    if s.o.open_only {
+        if let Some(l) = &leader {
+            s.skip_until.lock().unwrap().insert(key, i64::MAX);
+            let n = s.held_skipped.fetch_add(1, Ordering::Relaxed) + 1;
+            if n <= 5 || n % 100 == 0 {
+                log(&format!("{label} has a leader (#{}): skipping it (--open-only; {n} skipped so far)", l.id));
+            }
+            return Searched::Held;
+        }
+    }
+    let mut leader_entry = None;
+    if s.target_mode() {
+        match target_verdict(s, &problem, &label, leader.as_ref()) {
+            Err(r) => return r,
+            Ok(entry) => leader_entry = entry,
+        }
+    }
     let published = info.literature.as_ref().map(|l| l.value);
     let published_start = info.literature.as_ref().map_or(false, |l| l.pieces.is_some());
     // the leader's coordinates are read only when they are the better start
     let mut stored = None;
     if let Some(l) = &leader {
         if !(published_start && published.map_or(false, |v| v < l.score)) {
-            let a = s.reader.entry(l.id);
+            let a = leader_entry.take().or_else(|| s.reader.entry(l.id));
             stored = a.as_ref().filter(|a| a.status == 200).and_then(|a| read_stored_entry(&a.body, problem.p));
             if stored.is_none() && !s.stopped() {
                 log(&format!("Could not read the leader's packing #{} ({})", l.id, describe_answer(a.as_ref())));
@@ -716,27 +1019,65 @@ fn search_one(s: &Arc<Shared>, problem: Problem, lanes: usize) -> Searched {
     let memory_now = || s.memory.lock().unwrap().clone();
     let mut runner = ThreadRunner::new(control.clone(), ClockKind::Wall, s.o.low_priority);
     let started_at = s.clock.now();
-    let outcome = search(
-        SearchInput {
-            problem,
-            known: known.as_ref().map(|k| k.0.clone()),
-            area_bound: info.area_bound,
-            max_seconds,
-            lanes,
-            seed: engine_seed,
-            memory,
-            now: &now,
-            control: control.clone(),
-            on_result: &mut on_result,
-            memory_now: &memory_now,
-        },
-        &mut runner,
-    );
+    // target mode: the search ends early once it is ahead of the holder by --target-margin, after
+    // --target-min-seconds (checked every EARLY_CHECK_MS on a thread of its own)
+    let early = AtomicBool::new(false);
+    let finished = AtomicBool::new(false);
+    let target_leader = if s.target_mode() { leader.as_ref().map(|l| l.score) } else { None };
+    let outcome = std::thread::scope(|scope| {
+        if let Some(leader_score) = target_leader {
+            let (cur, control, early, finished, sub) = (&cur, &control, &early, &finished, &sub);
+            scope.spawn(move || {
+                while !finished.load(Ordering::Relaxed) {
+                    std::thread::sleep(Duration::from_millis(EARLY_CHECK_MS));
+                    if control.aborted.load(Ordering::Relaxed) {
+                        continue;
+                    }
+                    let seconds = s.clock.now() - cur.started_at;
+                    let best = *cur.best.lock().unwrap();
+                    if stop_early(best, Some(leader_score), seconds, s.o.target_min_seconds, s.o.target_margin) {
+                        early.store(true, Ordering::Relaxed);
+                        control.aborted.store(true, Ordering::Relaxed);
+                        log(&format!(
+                            "{sub}{} is {} against the leader after {}: ending the search (--target-margin {}, --target-min-seconds {})",
+                            format_score(best.unwrap()),
+                            relative_percent(best.unwrap(), leader_score),
+                            format_duration(seconds),
+                            format_margin(s.o.target_margin),
+                            s.o.target_min_seconds
+                        ));
+                        return;
+                    }
+                }
+            });
+        }
+        let outcome = search(
+            SearchInput {
+                problem,
+                known: known.as_ref().map(|k| k.0.clone()),
+                area_bound: info.area_bound,
+                max_seconds,
+                lanes,
+                seed: engine_seed,
+                memory,
+                now: &now,
+                control: control.clone(),
+                on_result: &mut on_result,
+                memory_now: &memory_now,
+            },
+            &mut runner,
+        );
+        finished.store(true, Ordering::Relaxed);
+        outcome
+    });
     let active = s.clock.now() - started_at;
     s.currents.lock().unwrap().retain(|c| !Arc::ptr_eq(c, &cur));
     *s.memory.lock().unwrap() = outcome.memory.clone();
     s.save_memory();
-    let stopped = outcome.stopped.as_str();
+    let mut stopped = outcome.stopped.as_str();
+    if early.load(Ordering::Relaxed) && stopped == "aborted" {
+        stopped = "early";
+    }
 
     // this search's best, kept on disk when it is the best this machine has found for the problem
     let found = outcome.best.clone().filter(|b| b.strict);
@@ -849,6 +1190,10 @@ fn search_one(s: &Arc<Shared>, problem: Problem, lanes: usize) -> Searched {
                 });
             }
         }
+    }
+    // a target the holder no longer leads (taken here, or by someone else meanwhile) leaves the list
+    if s.target_mode() && leader_after.as_ref().map_or(false, |l| l.name != s.holder()) {
+        s.drop_target(&problem);
     }
     let leader_ref = |l: &Option<crate::answers::SiteBest>| l.as_ref().map_or(Value::Null, |l| json!({ "id": l.id, "score": l.score, "name": l.name }));
     let best_json = offer.as_ref().map_or(Value::Null, |(c, from)| {

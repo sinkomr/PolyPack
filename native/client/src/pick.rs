@@ -1,6 +1,7 @@
 //! Which problem to search next (apps/volunteer/src/pick.ts, flat problems): one drawn uniformly
 //! at random from every problem this client may search, with or without a record: N and M a
-//! circle (0) or 3 to 100 sides and P from 1 to 500, narrowed by --N, --M and --max-P. A problem
+//! circle (0) or 3 to 100 sides and P from 1 to 500, narrowed by --N, --M and --P (or, in target
+//! mode, one of the holder's problems, target.rs). A problem
 //! this machine searched in the last week is drawn again at most RECENT_TRIES - 1 times in a row;
 //! problems to skip (closed, unreadable, being searched by another slot) are never drawn.
 
@@ -20,27 +21,30 @@ pub fn shape_codes() -> Vec<u32> {
 pub struct FlatKind {
     pub ns: Vec<u32>,
     pub ms: Vec<u32>,
-    pub max_p: usize,
+    pub ps: Vec<usize>,
 }
 
 impl FlatKind {
-    pub fn new(n: Option<&Vec<u32>>, m: Option<&Vec<u32>>, max_p: Option<usize>) -> Self {
+    pub fn new(n: Option<&Vec<u32>>, m: Option<&Vec<u32>>, p: Option<&Vec<usize>>) -> Self {
         FlatKind {
             ns: n.cloned().unwrap_or_else(shape_codes),
             ms: m.cloned().unwrap_or_else(shape_codes),
-            max_p: max_p.unwrap_or(500).min(500),
+            ps: p.cloned().unwrap_or_else(|| (1..=500).collect()),
         }
     }
 
     pub fn size(&self) -> usize {
-        self.ns.len() * self.ms.len() * self.max_p
+        self.ns.len() * self.ms.len() * self.ps.len()
     }
 
-    fn draw(&self, rng: &mut Rng) -> Problem {
+    pub fn draw(&self, rng: &mut Rng) -> Option<Problem> {
+        if self.size() == 0 {
+            return None;
+        }
         let n = self.ns[rng.below(self.ns.len())];
         let m = self.ms[rng.below(self.ms.len())];
-        let p = 1 + rng.below(self.max_p);
-        Problem::new(n, m, p)
+        let p = self.ps[rng.below(self.ps.len())];
+        Some(Problem::new(n, m, p))
     }
 }
 
@@ -71,15 +75,13 @@ pub fn prune_recent(recent: &mut HashMap<String, i64>, now: i64) {
     recent.retain(|_, t| now - *t < RECENT_MS);
 }
 
-/// The next problem: a uniform draw not in `skip`, and not searched here within a week unless
-/// RECENT_TRIES draws in a row were. None when DRAW_TRIES draws found only problems to skip.
-pub fn draw_problem(kind: &FlatKind, recent: &HashMap<String, i64>, skip: &HashSet<String>, now: i64, rng: &mut Rng) -> Option<Problem> {
-    if kind.size() == 0 {
-        return None;
-    }
+/// The next problem: a uniform draw (of `draw`: the flat kind's, or the target list's) not in
+/// `skip`, and not searched here within a week unless RECENT_TRIES draws in a row were. None when
+/// DRAW_TRIES draws found only problems to skip, or there is nothing to draw.
+pub fn draw_problem(draw: &dyn Fn(&mut Rng) -> Option<Problem>, recent: &HashMap<String, i64>, skip: &HashSet<String>, now: i64, rng: &mut Rng) -> Option<Problem> {
     let mut recent_in_a_row = 0;
     for _ in 0..DRAW_TRIES {
-        let d = kind.draw(rng);
+        let d = draw(rng)?;
         let key = d.key();
         if skip.contains(&key) {
             continue;
@@ -101,13 +103,14 @@ mod tests {
 
     #[test]
     fn draws_within_filters() {
-        let kind = FlatKind::new(Some(&vec![4]), Some(&vec![0, 4]), Some(10));
+        let kind = FlatKind::new(Some(&vec![4]), Some(&vec![0, 4]), Some(&(1..=10).collect()));
         assert_eq!(kind.size(), 20);
+        let draw = |r: &mut Rng| kind.draw(r);
         let mut rng = Rng::new(3);
         let recent = HashMap::new();
         let mut skip = HashSet::new();
         for _ in 0..200 {
-            let p = draw_problem(&kind, &recent, &skip, 0, &mut rng).unwrap();
+            let p = draw_problem(&draw, &recent, &skip, 0, &mut rng).unwrap();
             assert!(p.n == 4 && (p.m == 0 || p.m == 4) && (1..=10).contains(&p.p));
         }
         for m in [0, 4] {
@@ -115,6 +118,6 @@ mod tests {
                 skip.insert(format!("4-{m}-{p}"));
             }
         }
-        assert!(draw_problem(&kind, &recent, &skip, 0, &mut rng).is_none());
+        assert!(draw_problem(&draw, &recent, &skip, 0, &mut rng).is_none());
     }
 }

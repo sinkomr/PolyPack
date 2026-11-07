@@ -127,6 +127,20 @@ pub enum SubmitCheck {
 
 pub const SOFTWARE_REFUSAL: &str = "software needs found_with \"external\"";
 
+/// `text` as JavaScript's encodeURIComponent writes it: UTF-8, every byte but the unreserved ones
+/// percent-encoded.
+pub fn encode_component(text: &str) -> String {
+    let mut out = String::new();
+    for b in text.bytes() {
+        if b.is_ascii_alphanumeric() || b"-_.!~*'()".contains(&b) {
+            out.push(b as char);
+        } else {
+            out.push_str(&format!("%{b:02X}"));
+        }
+    }
+    out
+}
+
 pub fn is_software_refusal(status: u16, body: &Value) -> bool {
     status == 400 && body.get("reasons").and_then(|r| r.as_array()).map_or(false, |r| r.iter().any(|x| x.as_str() == Some(SOFTWARE_REFUSAL)))
 }
@@ -337,6 +351,17 @@ impl Api {
         self.get(&format!("/api/submissions/{id}"))
     }
 
+    /// GET /api/leaderboard/N/M/P: the leader, `total` (accepted submissions, never decreasing)
+    /// and whether the problem is open.
+    pub fn leaderboard(&self, n: u32, m: u32, p: usize) -> Option<Answer> {
+        self.get(&format!("/api/leaderboard/{n}/{m}/{p}"))
+    }
+
+    /// GET /api/holder?name=: the flat problems `name` leads (target mode).
+    pub fn holder(&self, name: &str) -> Option<Answer> {
+        self.get(&format!("/api/holder?name={}", encode_component(name)))
+    }
+
     /// POST /api/submit. A server that refuses `software` with found_with "optimizer" (exactly that
     /// 400) gets the body once more without it. After a POST without an answer, `check` reads the
     /// problem, and the POST is sent again, after a backoff, only when the packing is not there.
@@ -393,6 +418,13 @@ mod tests {
         p.sent.push_back(t);
         assert!(p.delay(t) > 900);
         assert_eq!(p.delay(t + Duration::from_millis(1001)), 0);
+    }
+
+    #[test]
+    fn encodes_names() {
+        assert_eq!(encode_component("jg-claude"), "jg-claude");
+        assert_eq!(encode_component("Michael Sinko"), "Michael%20Sinko");
+        assert_eq!(encode_component("a/b&c=d?é"), "a%2Fb%26c%3Dd%3F%C3%A9");
     }
 
     #[test]

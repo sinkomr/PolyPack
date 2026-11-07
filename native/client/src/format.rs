@@ -55,9 +55,13 @@ fn parts(secs: i64) -> (i64, u32, u32, i64, i64, i64) {
 
 /// UTC time as ISO 8601 with milliseconds, like JavaScript's toISOString.
 pub fn iso_now() -> String {
-    let now = SystemTime::now().duration_since(UNIX_EPOCH).unwrap_or_default();
-    let (y, mo, d, h, mi, s) = parts(now.as_secs() as i64);
-    format!("{y:04}-{mo:02}-{d:02}T{h:02}:{mi:02}:{s:02}.{:03}Z", now.subsec_millis())
+    iso_of_ms(now_ms())
+}
+
+/// A time in milliseconds since the epoch as ISO 8601 with milliseconds, UTC.
+pub fn iso_of_ms(ms: i64) -> String {
+    let (y, mo, d, h, mi, s) = parts(ms.div_euclid(1000));
+    format!("{y:04}-{mo:02}-{d:02}T{h:02}:{mi:02}:{s:02}.{:03}Z", ms.rem_euclid(1000))
 }
 
 /// Milliseconds since the epoch of an ISO 8601 UTC time as iso_now writes it; None otherwise.
@@ -114,5 +118,6 @@ mod tests {
         let ms = parse_iso(&iso).unwrap();
         assert!((ms - now_ms()).abs() < 5000);
         assert_eq!(parse_iso("1970-01-02T00:00:01.500Z"), Some(86_401_500));
+        assert_eq!(iso_of_ms(86_401_500), "1970-01-02T00:00:01.500Z");
     }
 }
