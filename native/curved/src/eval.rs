@@ -20,7 +20,7 @@
 //! variable t (apothem h or radius r): first in the body frame of a piece (the generators P_x, P_y
 //! and J acting on the lifted point), then through the body Jacobian of the pose.
 
-use crate::geom::{line_covector, line_value, pair_vs, transvection_of};
+use crate::geom::{line_value, pair_vs, transvection_of};
 use crate::kfun::{ang_k, asn_k, cs_k, dist_from_vs, sfun, sn_k, ufun, vfun, vs_k};
 use crate::problem::Space;
 use std::f64::consts::PI;
@@ -59,6 +59,29 @@ fn sn_threshold(k: f64, d: f64) -> f64 {
     } else {
         sn_k(k, d)
     }
+}
+
+/// S(t) and V(t) together (kfun.rs), the closed forms from one sine and cosine (t > 0) or one
+/// exponential (t < 0) of half the argument: S = 2 sn(r/2) cs(r/2) / r, V = 2 sn(r/2)^2 / t.
+#[inline]
+fn sv_pair(t: f64) -> (f64, f64) {
+    if t.abs() < 0.5 {
+        return (sfun(t), vfun(t));
+    }
+    if t > 0.0 {
+        let r = t.sqrt();
+        let (s, c) = libm::sincos(r / 2.0);
+        return (2.0 * s * c / r, (2.0 * s * s) / t);
+    }
+    let r = (-t).sqrt();
+    // r / 2 >= 0.35 here, where (e - 1/e) / 2 loses no accuracy
+    let e = libm::exp(r / 2.0);
+    if !e.is_finite() {
+        return (sfun(t), vfun(t));
+    }
+    let sh = (e - 1.0 / e) / 2.0;
+    let ch = (e + 1.0 / e) / 2.0;
+    (2.0 * sh * ch / r, (2.0 * sh * sh) / -t)
 }
 
 /// Generators P_x, P_y, J of the isometry group acting on a lifted point p, as lifted tangent
@@ -112,7 +135,6 @@ pub struct Evaluator {
     eloc_a: Vec<[f64; 3]>,
     /// generators at each standard vertex: gen_loc[k][a]
     gen_loc: Vec<[[f64; 3]; 3]>,
-    wall_angles: Vec<f64>,
     // ---- state of the current poses
     gl: Vec<[f64; 9]>,
     gb: Vec<[f64; 3]>,
@@ -125,8 +147,13 @@ pub struct Evaluator {
     stamp: u32,
     verts: Vec<[f64; 3]>,
     edges: Vec<[f64; 3]>,
-    /// largest distance of a centre from O, as its lifted e (for the inscribed-disk tests)
+    /// wall directions (cos, sin of the outward normal angles)
+    wall_u: Vec<[f64; 2]>,
+    /// wall lines at the container variable wall_t, with sn_K(wall_t) and cs_K(wall_t)
     walls: Vec<[f64; 3]>,
+    wall_t: f64,
+    wall_sn_t: f64,
+    wall_cs_t: f64,
     // ---- scratch
     pairs: Vec<(u32, u32)>,
     cell_of: Vec<u32>,
@@ -159,7 +186,6 @@ impl Evaluator {
             eloc0,
             eloc_a,
             gen_loc,
-            wall_angles: space.wall_angles.clone(),
             gl: vec![[0.0; 9]; p],
             gb: vec![[0.0; 3]; p],
             il: vec![[0.0; 9]; p],
@@ -170,7 +196,15 @@ impl Evaluator {
             stamp: 1,
             verts: vec![[0.0; 3]; p * n],
             edges: vec![[0.0; 3]; p * n],
+            wall_u: space
+                .wall_angles
+                .iter()
+                .map(|&a| [libm::cos(a), libm::sin(a)])
+                .collect(),
             walls: Vec::new(),
+            wall_t: f64::NAN,
+            wall_sn_t: f64::NAN,
+            wall_cs_t: f64::NAN,
             pairs: Vec::new(),
             cell_of: vec![0; p],
             cell_start: Vec::new(),
@@ -190,10 +224,8 @@ impl Evaluator {
             let (x, y, th) = (z[3 * i], z[3 * i + 1], z[3 * i + 2]);
             let d2 = x * x + y * y;
             let t = k * d2;
-            let s_ = sfun(t);
-            let v_ = vfun(t);
-            let c = libm::cos(th);
-            let s = libm::sin(th);
+            let (s_, v_) = sv_pair(t);
+            let (s, c) = libm::sincos(th);
             self.frame[i] = [x, y, t, s_, v_, c, s];
             // G = T(x, y) R(theta): R = [[1, 0, 0], [0, c, -s], [0, s, c]]
             let tm = transvection_of(k, x, y, d2, s_, v_);
@@ -600,9 +632,9 @@ impl Evaluator {
             let j = self.jb(i);
             row.gi = to_pose(&j, &body);
             // d(n . v)/dt with n = (-sn(t), cs(t) u): -cs(t) v0 - K sn(t) (u . v_vec)
-            let ang = self.wall_angles[w];
-            let (u0, u1) = (libm::cos(ang), libm::sin(ang));
-            let dndt = -cs_k(k, t) * (1.0 - k * p[0]) - k * sn_k(k, t) * (u0 * p[1] + u1 * p[2]);
+            debug_assert_eq!(self.wall_t, t);
+            let [u0, u1] = self.wall_u[w];
+            let dndt = -self.wall_cs_t * (1.0 - k * p[0]) - k * self.wall_sn_t * (u0 * p[1] + u1 * p[2]);
             row.gt = -dval * dndt;
         }
         row
@@ -741,9 +773,16 @@ impl Evaluator {
             }
             return;
         }
-        self.walls.clear();
-        for &a in &self.wall_angles {
-            self.walls.push(line_covector(k, t, a));
+        if self.wall_t != t || self.walls.len() != self.m {
+            // the wall lines (line_covector) at t, from the directions computed once
+            self.wall_t = t;
+            self.wall_sn_t = sn_k(k, t);
+            self.wall_cs_t = cs_k(k, t);
+            self.walls.clear();
+            for &[u0, u1] in &self.wall_u {
+                self.walls
+                    .push([-self.wall_sn_t, self.wall_cs_t * u0, self.wall_cs_t * u1]);
+            }
         }
         let y_point = -sn_threshold(k, below);
         let y_piece = -sn_threshold(k, r + below);
@@ -861,7 +900,8 @@ impl Evaluator {
             let c = self.gb[i];
             let dc = dist_from_vs(k, c[0]);
             // every point of the piece lies within dc + R of O, and a point at distance d needs at most d
-            if dc + r <= t {
+            // (inside the open hemisphere when K > 0; beyond it the apothem of a point is not monotone)
+            if dc + r <= t && (k <= 0.0 || (dc + r) * k.sqrt() < PI / 2.0) {
                 break;
             }
             let pts: &[[f64; 3]] = if n == 0 {
@@ -875,13 +915,20 @@ impl Evaluator {
                     continue;
                 }
                 let c0 = 1.0 - k * pt[0];
-                // wall angles -pi/2 + 2 pi w / M: the nearest to the point's direction, and its neighbours
+                // wall angles -pi/2 + 2 pi w / M: the nearest to the point's direction, and its
+                // neighbours; every wall for a point beyond the hemisphere (c0 <= 0), where a no
+                // longer grows with X
                 let phi = libm::atan2(pt[2], pt[1]);
                 let w0 = ((phi + PI / 2.0) * m as f64 / (2.0 * PI)).round() as i64;
-                for dw in -1..=1i64 {
+                let (lo, hi) = if c0 > 0.0 && m > 3 {
+                    (-1i64, 1i64)
+                } else {
+                    (0, m as i64 - 1)
+                };
+                for dw in lo..=hi {
                     let w = (w0 + dw).rem_euclid(m as i64) as usize;
-                    let ang = self.wall_angles[w];
-                    let x = libm::cos(ang) * pt[1] + libm::sin(ang) * pt[2];
+                    let [u0, u1] = self.wall_u[w];
+                    let x = u0 * pt[1] + u1 * pt[2];
                     let a = ang_k(k, x, c0);
                     if n == 0 {
                         let aa = (c0 * c0 + k * x * x).max(0.0).sqrt();
@@ -974,6 +1021,61 @@ mod tests {
                     (fd - row.gt).abs() < 1e-6 * (1.0 + fd.abs()),
                     "K={k} N={n} M={m} row {ri} dt: {fd} vs {}",
                     row.gt
+                );
+            }
+        }
+    }
+
+    /// required_t looks at the nearest walls only and stops at pieces that cannot raise t: it must
+    /// equal the reference's maximum over every point and every wall.
+    #[test]
+    fn required_t_matches_every_wall() {
+        let mut rng = crate::rng::Rng::new(5);
+        for &(k, n, m) in &[
+            (-1.0, 3u32, 6u32),
+            (0.3, 0, 5),
+            (0.0, 4, 3),
+            (-0.2, 0, 8),
+            (1.0, 3, 4),
+            (-0.01, 7, 0),
+        ] {
+            let sp = space(k, n, m);
+            let p = 9;
+            let mut ev = Evaluator::new(&sp, p);
+            for _ in 0..50 {
+                let z: Vec<f64> = (0..3 * p).map(|_| (rng.next_f64() - 0.5) * 2.0).collect();
+                ev.set_poses(&z);
+                let fast = ev.required_t();
+                let mut full = f64::NEG_INFINITY;
+                let s1 = sn_k(k, ev.r);
+                for i in 0..p {
+                    let pts: Vec<[f64; 3]> = if n == 0 {
+                        vec![ev.gb[i]]
+                    } else {
+                        ev.verts[i * ev.n..(i + 1) * ev.n].to_vec()
+                    };
+                    for pt in pts {
+                        if m == 0 {
+                            full = full.max(dist_from_vs(k, pt[0]) + if n == 0 { ev.r } else { 0.0 });
+                            continue;
+                        }
+                        let c0 = 1.0 - k * pt[0];
+                        for (w, &ang) in sp.wall_angles.iter().enumerate() {
+                            let x = libm::cos(ang) * pt[1] + libm::sin(ang) * pt[2];
+                            let a = ang_k(k, x, c0);
+                            let v = if n == 0 {
+                                a + asn_k(k, s1 / (c0 * c0 + k * x * x).max(0.0).sqrt())
+                            } else {
+                                a
+                            };
+                            assert!(v.is_finite() || w > m as usize);
+                            full = full.max(v);
+                        }
+                    }
+                }
+                assert!(
+                    (fast - full).abs() <= 1e-14 * full.abs().max(1.0),
+                    "K={k} N={n} M={m}: {fast} vs {full}"
                 );
             }
         }

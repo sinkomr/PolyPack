@@ -62,7 +62,8 @@ pub struct JobOutcome {
 /// Options beyond the budget.
 pub struct JobOptions<'a> {
     /// The server's rule for results: bound, certified size, no research record. Results are
-    /// checked by it (erring strict); the default checks validity at 1e-9 only.
+    /// checked by it (erring strict). The default is the strict check (as for a problem without a
+    /// research record), so that a result is accepted by any problem's rule but the bound's.
     pub rule: Rule,
     /// While set, the job blocks in its next poll (CPU time does not advance while blocked).
     pub paused: Option<&'a AtomicBool>,
@@ -77,7 +78,10 @@ pub struct JobOptions<'a> {
 impl Default for JobOptions<'_> {
     fn default() -> Self {
         JobOptions {
-            rule: Rule::default(),
+            rule: Rule {
+                no_record: true,
+                ..Rule::default()
+            },
             paused: None,
             clock: None,
             lbfgs_iter: None,

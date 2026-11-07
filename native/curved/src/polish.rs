@@ -68,6 +68,7 @@ impl Default for PolishOptions {
 pub struct Polisher {
     lp: LpSolver,
     lbfgs: Lbfgs,
+    best_z: Vec<f64>,
     step: Vec<f64>,
     soc: Vec<f64>,
     zn: Vec<f64>,
@@ -80,6 +81,7 @@ impl Polisher {
         Polisher {
             lp: LpSolver::new(),
             lbfgs: Lbfgs::new(nz, 10),
+            best_z: Vec::with_capacity(nz),
             step: vec![0.0; nz + 1],
             soc: vec![0.0; nz + 1],
             zn: vec![0.0; nz],
@@ -182,6 +184,14 @@ impl Polisher {
             tt + w * ev.violation(zz, tt, margin)
         };
         let mut merit = merit_at(ev, &z, t);
+        // the accepted point of smallest t whose gaps are all within 1e-12 of the margin: returned
+        // when the polish ends (or is stopped) at a point that is not feasible
+        let mut best_t = f64::INFINITY;
+        if merit - t <= w * 1e-12 || ev.feasibility(&z, t, margin) > -1e-10 {
+            best_t = t;
+            self.best_z.clear();
+            self.best_z.extend_from_slice(&z);
+        }
         let reach_of = |r: f64| margin + 4.0 * r * (1.0 + r_piece) + 1e-7;
         let mut it = 0;
         while it < opts.max_iter {
@@ -268,6 +278,11 @@ impl Polisher {
             if accepted {
                 t = tn;
                 merit = trial;
+                if merit - t <= w * 1e-12 && t < best_t {
+                    best_t = t;
+                    self.best_z.clear();
+                    self.best_z.extend_from_slice(&z);
+                }
                 let mut max_step = 0.0f64;
                 for j in 0..nz {
                     max_step = max_step.max(self.step[j].abs());
@@ -290,7 +305,14 @@ impl Polisher {
             it += 1;
         }
         ev.set_poses(&z);
-        let feasibility = ev.feasibility(&z, t, margin);
+        let mut feasibility = ev.feasibility(&z, t, margin);
+        if !(feasibility > -1e-10) && best_t.is_finite() {
+            // the merit decreases, so this iterate has a larger t than the final one, but it is feasible
+            z.copy_from_slice(&self.best_z);
+            t = best_t;
+            ev.set_poses(&z);
+            feasibility = ev.feasibility(&z, t, margin);
+        }
         let size = side_from_apothem(ev.m as u32, ev.k, t);
         if debug() {
             eprintln!(

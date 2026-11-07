@@ -1,11 +1,11 @@
 //! Runs jobs on a panel of problems and prints one JSON line per job (development tool).
 //!
 //!   cargo run --release --example bench -- --ids curved/-1/3/6/8,curved/0.1/0/0/40 --seeds 1,2 \
-//!       --seconds 10 [--evals N] [--save DIR] [--no-record] [--bound]
+//!       --seconds 10 [--evals N] [--save DIR] [--loose] [--bound]
 //!
 //! --seconds: CPU seconds per job (thread CPU time). --evals: evaluation cap (restarts plus hops).
-//! --save: write each job's configuration to DIR/<id with _>-<seed>.json. --no-record: check
-//! results by the rule of a problem without a research record (strict); --bound: with the problem's
+//! --save: write each job's configuration to DIR/<id with _>-<seed>.json. --loose: check
+//! results at 1e-9 only (default: the strict rule of a problem without a research record); --bound: with the problem's
 //! lower bound.
 
 use polypack_curved::{run_job_with, Budget, CurvedProblem, JobOptions, Rule};
@@ -40,7 +40,7 @@ fn main() {
             let rule = Rule {
                 bound: if flag("bound") { problem.lower_bound() } else { None },
                 certified: None,
-                no_record: flag("no-record"),
+                no_record: !flag("loose"),
             };
             let opts = JobOptions {
                 rule,

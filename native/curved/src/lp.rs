@@ -56,8 +56,6 @@ pub struct LpSolver {
     nzl: Vec<u32>,
     pi: Vec<f64>,
     res: Vec<f64>,
-    /// Devex reference weights of the variables
-    w: Vec<f64>,
     pub stats: LpStats,
 }
 
@@ -113,7 +111,6 @@ impl LpSolver {
             nzl: Vec::new(),
             pi: Vec::new(),
             res: Vec::new(),
-            w: Vec::new(),
             stats: LpStats::default(),
         }
     }
@@ -180,8 +177,6 @@ impl LpSolver {
         self.prow.resize(cc, 0.0);
         self.pi.resize(rr, 0.0);
         self.res.resize(rr, 0.0);
-        self.w.clear();
-        self.w.resize(nvar, 1.0);
 
         let kind = |v: usize| -> Var {
             if v < m {
@@ -242,7 +237,7 @@ impl LpSolver {
                 status = LpStatus::IterationLimit;
                 break;
             }
-            // ---- pricing: Devex (largest squared reduced cost over the reference weight), Bland's
+            // ---- pricing: Dantzig (the largest reduced cost), Bland's
             // first candidate when degenerate
             let bland = degenerate > 50;
             let mut cand = Candidate {
@@ -257,9 +252,9 @@ impl LpSolver {
                 }
                 let dk = self.d[k];
                 if !self.at_upper[k] && dk < -TOL_D {
-                    cand.offer(k, 1.0, dk * dk / self.w[k]);
+                    cand.offer(k, 1.0, -dk);
                 } else if self.at_upper[k] && dk > TOL_D {
-                    cand.offer(k, -1.0, dk * dk / self.w[k]);
+                    cand.offer(k, -1.0, dk);
                 }
             }
             for j in 0..rr {
@@ -267,16 +262,16 @@ impl LpSolver {
                 let tau = m + j;
                 if self.pos[tau] < 0 {
                     if !self.at_upper[tau] && dt_ < -TOL_D {
-                        cand.offer(tau, 1.0, dt_ * dt_ / self.w[tau]);
+                        cand.offer(tau, 1.0, -dt_);
                     } else if self.at_upper[tau] && dt_ > TOL_D {
-                        cand.offer(tau, -1.0, dt_ * dt_ / self.w[tau]);
+                        cand.offer(tau, -1.0, dt_);
                     }
                 }
                 let alp = m + rr + j;
                 if self.pos[alp] < 0 {
                     let da = (if j < nz { rho } else { dd }) - dt_;
                     if da < -TOL_D {
-                        cand.offer(alp, 1.0, da * da / self.w[alp]);
+                        cand.offer(alp, 1.0, -da);
                     }
                 }
                 if j < nz {
@@ -284,7 +279,7 @@ impl LpSolver {
                     if self.pos[bet] < 0 {
                         let db = rho + dt_;
                         if db < -TOL_D {
-                            cand.offer(bet, 1.0, db * db / self.w[bet]);
+                            cand.offer(bet, 1.0, -db);
                         }
                     }
                 }
@@ -476,26 +471,6 @@ impl LpSolver {
                 let j = j as usize;
                 self.d[j] -= dq * self.prow[j];
             }
-            // Devex: w_j = max(w_j, (a_rj / a_rq)^2 w_q) for the nonbasic columns of the pivot row,
-            // w = max(w_q / a_rq^2, 1) for the leaving variable
-            let wq = self.w[enter];
-            for &j in &self.nzl {
-                let j = j as usize;
-                let r2 = self.prow[j] * self.prow[j] * wq;
-                if j < m {
-                    if self.pos[j] < 0 && self.w[j] < r2 {
-                        self.w[j] = r2;
-                    }
-                } else {
-                    let jj = j - m;
-                    for v in [j, m + rr + jj, m + 2 * rr + jj] {
-                        if v < nvar && (v != m + 2 * rr + jj || jj < nz) && self.pos[v] < 0 && self.w[v] < r2 {
-                            self.w[v] = r2;
-                        }
-                    }
-                }
-            }
-            self.w[leaving] = (wq / (piv * piv)).max(1.0);
             self.d[scol] = match kind(enter) {
                 Var::Lam(_) | Var::Tau(_) => 0.0,
                 Var::Alp(j) => {

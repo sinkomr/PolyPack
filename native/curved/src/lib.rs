@@ -11,6 +11,25 @@
 //!
 //! The geometry (homogeneous model, lifted coordinates, exponential-coordinate poses) is described
 //! in docs/spaces/CURVED.md; each module names the TypeScript file it follows.
+//!
+//! ```
+//! use polypack_curved::{check_config, run_job_with, Budget, CurvedProblem, JobOptions, Rule};
+//! use std::sync::atomic::AtomicBool;
+//!
+//! // the problem as GET /api/spaces/curved/problems/<id> names it, and what the server knows of it
+//! let problem = CurvedProblem::parse("curved/-1/3/6/8").unwrap();
+//! let rule = Rule { bound: problem.lower_bound(), certified: Some(1.724148891504105), no_record: false };
+//! // a fresh job (no start), 20 restarts and hops or 30 CPU seconds, whichever ends first
+//! let stop = AtomicBool::new(false);
+//! let opts = JobOptions { rule, ..JobOptions::default() };
+//! let budget = Budget { evals: Some(20), cpu_seconds: Some(30.0) };
+//! let out = run_job_with(&problem, None, budget, 42, &stop, &opts);
+//! let config = out.config.expect("a configuration that passes the rule");
+//! assert!(check_config(&problem, &config, &rule).valid);
+//! // the `config` of POST /api/spaces/submit
+//! let json = serde_json::to_string(&config).unwrap();
+//! assert!(json.starts_with("{\"size\":"));
+//! ```
 
 // Negated comparisons are deliberate: `!(a < b)` is true for NaN, as in the reference.
 #![allow(clippy::neg_cmp_op_on_partial_ord)]
