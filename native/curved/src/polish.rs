@@ -51,6 +51,7 @@ fn lp_default() -> LpKind {
     })
 }
 
+#[derive(Clone)]
 pub struct PolishResult {
     pub z: Vec<f64>,
     /// container variable (apothem or radius)

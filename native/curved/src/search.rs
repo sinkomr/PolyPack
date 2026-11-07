@@ -27,6 +27,8 @@ pub struct Searcher {
     pub polishes: u64,
     pub repair_seconds: f64,
     pub polish_seconds: f64,
+    /// the last warm start (poses and size) and the local optimum its restart reached
+    restart_cache: Option<(Vec<f64>, f64, Option<PolishResult>)>,
 }
 
 pub struct SearchOptions<'a> {
@@ -57,6 +59,7 @@ impl Searcher {
             polishes: 0,
             repair_seconds: 0.0,
             polish_seconds: 0.0,
+            restart_cache: None,
         }
     }
 
@@ -170,6 +173,31 @@ impl Searcher {
                     t0
                 };
             }
+            // the warm start's restart has no randomness: the same start gives the same local
+            // optimum, so a round that starts where the last one did reuses it
+            let warm = if rs == 0 { opts.start } else { None };
+            if let (Some((zs, size)), Some((cz, cs, cres))) = (warm, &self.restart_cache) {
+                if *cs == size && cz.as_slice() == zs {
+                    let Some(pol) = cres.clone() else { continue };
+                    let local = (pol.z.clone(), pol.t);
+                    best = Some(pol);
+                    let (cur_z, cur_t) = local;
+                    self.hops(
+                        opts,
+                        &mut rng,
+                        &mut best,
+                        cur_z,
+                        cur_t,
+                        t_area,
+                        t_cap,
+                        &mut hops_done,
+                        &mut z,
+                        &mut zz,
+                        stop,
+                    );
+                    continue;
+                }
+            }
             let feasible;
             if let (0, Some((zs, size))) = (rs, opts.start) {
                 // warm start: repair, growing t if needed
@@ -232,66 +260,100 @@ impl Searcher {
                     delta /= 2.0;
                 }
             }
-            let Some(local) = self.consider(&z, tf, &mut best, stop) else {
-                continue;
-            };
-            let mut cur_z = local.0;
-            let mut cur_t = local.1;
-            for _ in 0..opts.hops {
-                if stop() {
-                    break;
-                }
-                hops_done += 1;
-                zz.copy_from_slice(&cur_z);
-                let kind = rng.next_f64();
-                let n_move = 1 + (rng.next_f64() * (3.min(p) as f64)).floor() as usize;
-                if kind < 0.5 {
-                    // re-place random pieces anywhere
-                    let r_max = self.placement_radius(cur_t);
-                    for _ in 0..n_move {
-                        let i = (rng.next_f64() * p as f64).floor() as usize;
-                        let (x, y) = Self::random_centre(k, r_max, &mut rng);
-                        zz[3 * i] = x;
-                        zz[3 * i + 1] = y;
-                        zz[3 * i + 2] = 2.0 * PI * rng.next_f64();
-                    }
-                } else if kind < 0.8 {
-                    // jiggle everything
-                    let s = 0.05 + 0.15 * rng.next_f64();
-                    for (j, v) in zz.iter_mut().enumerate() {
-                        *v += s * rng.gaussian() * if j % 3 == 2 { 1.0 } else { 0.5 };
-                    }
-                } else {
-                    // turn a few pieces
-                    for _ in 0..n_move {
-                        let i = (rng.next_f64() * p as f64).floor() as usize;
-                        zz[3 * i + 2] += (rng.next_f64() - 0.5) * PI;
-                    }
-                }
-                // repair at a slightly smaller container to push for improvement, then at the same size
-                let target = cur_t - 1e-3 * (cur_t - t_area).max(1e-3);
-                z.copy_from_slice(&zz);
-                let mut ok = self.repair(&mut z, target, iters, stop);
-                if !ok {
-                    z.copy_from_slice(&zz);
-                    ok = self.repair(&mut z, cur_t, iters, stop);
-                }
-                if !ok {
-                    continue;
-                }
-                let tt = self.tight_t(&z).min(t_cap);
-                if let Some((pz, pt)) = self.consider(&z, tt, &mut best, stop) {
-                    if pt < cur_t - 1e-12 {
-                        cur_z = pz;
-                        cur_t = pt;
-                    }
-                }
+            let local = self.consider(&z, tf, &mut best, stop);
+            if let (Some((zs, size)), false) = (warm, stop()) {
+                self.restart_cache = Some((zs.to_vec(), size, local.as_ref().and(best.clone())));
             }
+            let Some((cur_z, cur_t)) = local else { continue };
+            self.hops(
+                opts,
+                &mut rng,
+                &mut best,
+                cur_z,
+                cur_t,
+                t_area,
+                t_cap,
+                &mut hops_done,
+                &mut z,
+                &mut zz,
+                stop,
+            );
         }
         SearchResult {
             best,
             restarts_done,
             hops_done,
+        }
+    }
+
+    /// Basin hopping from the local optimum (cur_z, cur_t): re-place, jiggle or turn pieces,
+    /// repair, polish, and move to the result when it is smaller.
+    fn hops(
+        &mut self,
+        opts: &SearchOptions,
+        rng: &mut Rng,
+        best: &mut Option<PolishResult>,
+        mut cur_z: Vec<f64>,
+        mut cur_t: f64,
+        t_area: f64,
+        t_cap: f64,
+        hops_done: &mut usize,
+        z: &mut [f64],
+        zz: &mut [f64],
+        stop: &mut dyn FnMut() -> bool,
+    ) {
+        let p = self.p;
+        let k = self.ev.k;
+        let iters = opts.lbfgs_iter;
+        for _ in 0..opts.hops {
+            if stop() {
+                break;
+            }
+            *hops_done += 1;
+            zz.copy_from_slice(&cur_z);
+            let kind = rng.next_f64();
+            let n_move = 1 + (rng.next_f64() * (3.min(p) as f64)).floor() as usize;
+            if kind < 0.5 {
+                // re-place random pieces anywhere
+                let r_max = self.placement_radius(cur_t);
+                for _ in 0..n_move {
+                    let i = (rng.next_f64() * p as f64).floor() as usize;
+                    let (x, y) = Self::random_centre(k, r_max, rng);
+                    zz[3 * i] = x;
+                    zz[3 * i + 1] = y;
+                    zz[3 * i + 2] = 2.0 * PI * rng.next_f64();
+                }
+            } else if kind < 0.8 {
+                // jiggle everything
+                let s = 0.05 + 0.15 * rng.next_f64();
+                for (j, v) in zz.iter_mut().enumerate() {
+                    *v += s * rng.gaussian() * if j % 3 == 2 { 1.0 } else { 0.5 };
+                }
+            } else {
+                // turn a few pieces
+                for _ in 0..n_move {
+                    let i = (rng.next_f64() * p as f64).floor() as usize;
+                    zz[3 * i + 2] += (rng.next_f64() - 0.5) * PI;
+                }
+            }
+            // repair at a slightly smaller container to push for improvement, then at the same size
+            let target = cur_t - 1e-3 * (cur_t - t_area).max(1e-3);
+            z.copy_from_slice(zz);
+            let mut ok = self.repair(z, target, iters, stop);
+            if !ok {
+                z.copy_from_slice(zz);
+                ok = self.repair(z, cur_t, iters, stop);
+            }
+            if !ok {
+                continue;
+            }
+            let tt = self.tight_t(z).min(t_cap);
+            if let Some((pz, pt)) = self.consider(z, tt, best, stop) {
+                if pt < cur_t - 1e-12 {
+                    cur_z = pz;
+                    cur_t = pt;
+                }
+            }
         }
     }
 
