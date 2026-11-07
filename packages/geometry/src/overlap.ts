@@ -231,6 +231,18 @@ export function separationBelow(N: number, a: Pose, b: Pose, threshold: number, 
   return true;
 }
 
+/**
+ * pieceSeparation(N, a, b, scale).sep < threshold, for the callers that compare pieceSeparation.
+ * It is separationBelow except for many-sided pieces with a non-finite centre offset, where
+ * pairSeparation (NaN) and pieceSeparation (the largest gap that is a number, -Infinity when
+ * none is) part ways: there the full kernel answers.
+ */
+export function pieceSeparationBelow(N: number, a: Pose, b: Pose, threshold: number, scale = 1): boolean {
+  if (N >= PRUNE_FROM_N && !(Number.isFinite(b.x - a.x) && Number.isFinite(b.y - a.y)))
+    return regularPolygonSeparation(N, a, b, scale).sep < threshold;
+  return separationBelow(N, a, b, threshold, scale);
+}
+
 /** Circle-circle separation from the centre distance. Exact in both signs. */
 export function circleSeparation(a: Pose, b: Pose, scale = 1): Contact {
   const dx = a.x - b.x;

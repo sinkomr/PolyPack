@@ -5,10 +5,9 @@ import {
   parseConfig,
   circumradius,
   inradius,
-  pairSeparation,
   pieceSeparation,
   pieceVertices,
-  separationBelow,
+  pieceSeparationBelow,
   type PackingConfig,
   type Evaluation,
   type Pose,
@@ -124,8 +123,12 @@ function collectContacts(
     for (let j = i + 1; j < pieces.length; j++) {
       const q = pieces[j];
       const distance = Math.hypot(q.x - pose.x, q.y - pose.y);
-      if (separationFloor(N, distance) > tolerance + 1e-9 * (distance + R)) continue;
-      if (pairSeparation(N, pose, q) <= tolerance) {
+      if (
+        separationFloor(N, distance) > tolerance + 1e-9 * (distance + R) &&
+        clearlyApart(pose, q, distance * distance, 0)
+      )
+        continue;
+      if (pieceSeparation(N, pose, q).sep <= tolerance) {
         out.push({ kind: "pair", i, j });
         if (first) return out;
       }
@@ -321,10 +324,20 @@ function contactJacobian(
 }
 
 /**
+ * Whether the poses are far enough apart for the shortcuts of restoreSeparation and
+ * collectContacts: finite squared centre distance `d2` above `far2`, and orientations of at most
+ * 1000 rad (as for pairSeparation's pruning), whose axis angles round by far less than the
+ * margins. Anything else, NaN and infinities included, goes through the kernel as before.
+ */
+function clearlyApart(a: Pose, b: Pose, d2: number, far2: number): boolean {
+  return d2 > far2 && d2 < Infinity && Math.abs(a.theta) <= 1000 && Math.abs(b.theta) <= 1000;
+}
+
+/**
  * Geometric restoration uses a much tighter margin than the server's touching tolerance.
  * Pairs whose centres are farther apart than twice the bounding radius (with a relative margin
  * of 1e-6) are disjoint by a clear positive gap, so the SAT kernel would neither move them nor
- * raise `worst`; they are skipped without it, which leaves every move as it was.
+ * raise `worst`; they are skipped without it (clearlyApart), which leaves every move as it was.
  */
 function restoreSeparation(config: PackingConfig, stopped: () => boolean): boolean {
   const reach = 2 * (config.N === 0 ? DISK_RADIUS : circumradius(config.N));
@@ -339,9 +352,9 @@ function restoreSeparation(config: PackingConfig, stopped: () => boolean): boole
         const b = pieces[j];
         const dx = a.x - b.x;
         const dy = a.y - b.y;
-        if (dx * dx + dy * dy > far2) continue;
+        if (clearlyApart(a, b, dx * dx + dy * dy, far2)) continue;
         // A polygon pair with sep >= -1.9e-14 neither moves nor brings worst to 2e-14
-        if (config.N !== 0 && !separationBelow(config.N, a, b, -1.9e-14)) continue;
+        if (config.N !== 0 && !pieceSeparationBelow(config.N, a, b, -1.9e-14)) continue;
         const contact = pieceSeparation(config.N, a, b);
         worst = Math.max(worst, -contact.sep);
         if (contact.sep < (config.N === 0 ? 0 : -2e-14)) {
@@ -360,8 +373,8 @@ function restoreSeparation(config: PackingConfig, stopped: () => boolean): boole
     for (let j = i + 1; j < config.P; j++) {
       const dx = pieces[i].x - pieces[j].x;
       const dy = pieces[i].y - pieces[j].y;
-      if (dx * dx + dy * dy > far2) continue;
-      if (separationBelow(config.N, pieces[i], pieces[j], config.N === 0 ? 0 : -1e-12)) return false;
+      if (clearlyApart(pieces[i], pieces[j], dx * dx + dy * dy, far2)) continue;
+      if (pieceSeparationBelow(config.N, pieces[i], pieces[j], config.N === 0 ? 0 : -1e-12)) return false;
     }
   }
   return true;

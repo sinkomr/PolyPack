@@ -10,6 +10,8 @@ import {
   pairSeparation,
   penaltyEdgeNormals,
   regularPolygonSeparation,
+  pieceSeparation,
+  pieceSeparationBelow,
   separationBelow,
   visitContainerProtrusions,
 } from "../src";
@@ -226,12 +228,31 @@ describe("trig cache under forced slot collisions", () => {
                 );
             }
           }
-    for (const bad of [NaN, Infinity, -Infinity]) {
-      const a: Pose = { x: 0, y: 0, theta: 0 };
-      const b: Pose = { x: bad, y: 1, theta: 0.2 };
-      expect(same(regularPolygonSeparation(5, a, b), refOverlap.regularPolygonSeparation(5, a, b))).toBe(true);
-      expect(same(regularPolygonSeparation(5, b, a), refOverlap.regularPolygonSeparation(5, b, a))).toBe(true);
-    }
+    // a non-finite value in any field of either pose, near and far, with and without caller axes
+    const fields = ["x", "y", "theta"] as const;
+    for (const N of [3, 4, 5, 7, 12, 24, 100])
+      for (const bad of [NaN, Infinity, -Infinity])
+        for (const field of fields)
+          for (const which of [0, 1])
+            for (const dist of [0.8, 5]) {
+              const a: Pose = { x: 0.1, y: -0.2, theta: 0.3 };
+              const b: Pose = { x: dist, y: 0.4, theta: -1.1 };
+              (which === 0 ? a : b)[field] = bad;
+              expect(same(regularPolygonSeparation(N, a, b), refOverlap.regularPolygonSeparation(N, a, b))).toBe(true);
+              expect(same(regularPolygonSeparation(N, b, a), refOverlap.regularPolygonSeparation(N, b, a))).toBe(true);
+              for (const t of [0, -1e-9]) {
+                expect(separationBelow(N, a, b, t)).toBe(pairSeparation(N, a, b) < t);
+                expect(pieceSeparationBelow(N, a, b, t)).toBe(pieceSeparation(N, a, b).sep < t);
+              }
+              for (const padding of [0, 0.05])
+                for (const withAxes of [false, true]) {
+                  const axA = withAxes ? penaltyEdgeNormals(N, a.theta) : undefined;
+                  const axB = withAxes ? penaltyEdgeNormals(N, b.theta) : undefined;
+                  expect(JSON.stringify(pairPenetration(N, a, b, axA, axB, 1, padding), replacer)).toBe(
+                    JSON.stringify(refPenalty.pairPenetration(N, a, b, axA, axB, 1, padding), replacer),
+                  );
+                }
+            }
   });
 
   it("separationBelow is pairSeparation < threshold", () => {
@@ -242,6 +263,7 @@ describe("trig cache under forced slot collisions", () => {
         fc.constantFrom(0, -0, -1e-9, 1e-9, -1e-12, -2e-14, -Number.MIN_VALUE, 0.05, -0.3, Infinity, -Infinity, NaN),
         ({ N, a, b }, scale, threshold) => {
           expect(separationBelow(N, a, b, threshold, scale)).toBe(pairSeparation(N, a, b, scale) < threshold);
+          expect(pieceSeparationBelow(N, a, b, threshold, scale)).toBe(pieceSeparation(N, a, b, scale).sep < threshold);
           expect(separationBelow(N, b, a, threshold, scale)).toBe(pairSeparation(N, b, a, scale) < threshold);
           // at the separation itself, and one step either side
           const sep = pairSeparation(N, a, b, scale);

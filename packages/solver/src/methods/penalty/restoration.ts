@@ -1,4 +1,4 @@
-import { boundingRadius, pieceSeparation, MAX_COORD, type PackingConfig, separationBelow } from "@polypack/geometry";
+import { boundingRadius, pieceSeparation, MAX_COORD, type PackingConfig, pieceSeparationBelow } from "@polypack/geometry";
 import { nearbyPairs } from "./objective";
 
 /** Unit pieces on a loose jittered grid; only the context's seeded stream is used. */
@@ -58,7 +58,7 @@ export function restore(
       for (const [i, j] of nearbyPairs(config.pieces, reach, stopped)) {
         if (stopped()) return undefined;
         // separated pairs (sep >= 0) are settled without the full SAT
-        if (!separationBelow(input.N, config.pieces[i], config.pieces[j], 0)) continue;
+        if (!pieceSeparationBelow(input.N, config.pieces[i], config.pieces[j], 0)) continue;
         const c = pieceSeparation(input.N, config.pieces[i], config.pieces[j]);
         const delta = (-c.sep + 2e-12) / 2;
         let nx = c.nx;
@@ -92,7 +92,7 @@ export function restore(
     }
     if (!accepted()) return false;
     for (const [i, j] of nearbyPairs(config.pieces, reach, stopped)) {
-      if (stopped() || separationBelow(input.N, config.pieces[i], config.pieces[j], 0)) return false;
+      if (stopped() || pieceSeparationBelow(input.N, config.pieces[i], config.pieces[j], 0)) return false;
     }
     return !stopped();
   };

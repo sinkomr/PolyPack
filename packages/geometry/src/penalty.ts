@@ -131,16 +131,26 @@ export function pairPenetration(
   // largest by more than R - r (plus a margin far above the rounding of either bound) has a gap
   // strictly below the largest, so it is never selected and its cosine is skipped; the axes left
   // hold every one attaining the maximum, in the same order, so every result is the same double.
+  // That needs every gap to be a number: the loop below lets a NaN gap replace the best (NaN <=
+  // best is false) and any later gap replace a NaN best, so with a non-finite pose or a NaN in the
+  // axes every axis is visited, as without the bound.
   let top = -Infinity;
-  for (let edge = 0; edge < N; edge++) {
+  let numeric =
+    Number.isFinite(a.x) &&
+    Number.isFinite(a.y) &&
+    Number.isFinite(a.theta) &&
+    Number.isFinite(b.x) &&
+    Number.isFinite(b.y) &&
+    Number.isFinite(b.theta);
+  for (let edge = 0; numeric && edge < N; edge++) {
     const linA = (b.x - a.x) * cacheA[3 * edge + 1] + (b.y - a.y) * cacheA[3 * edge + 2];
     const linB = (a.x - b.x) * cacheB[3 * edge + 1] + (a.y - b.y) * cacheB[3 * edge + 2];
+    if (linA !== linA || linB !== linB) numeric = false;
     if (linA > top) top = linA;
     if (linB > top) top = linB;
   }
   let threshold = top - (R - r) - 1e-11 * (Math.abs(b.x - a.x) + Math.abs(b.y - a.y) + R);
-  // infinite or NaN inputs: every axis, as without the bound
-  if (!Number.isFinite(threshold)) threshold = -Infinity;
+  if (!numeric || !Number.isFinite(threshold)) threshold = -Infinity;
   for (let edge = 0; edge < N; edge++) {
     for (let pass = 0; pass < 2; pass++) {
       const p = pass === 0 ? a : b;

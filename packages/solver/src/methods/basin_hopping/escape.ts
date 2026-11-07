@@ -6,7 +6,7 @@ import {
   MAX_COORD,
   type PackingConfig,
   type Pose,
-  separationBelow,
+  pieceSeparationBelow,
 } from "@polypack/geometry";
 import { copy, type Random } from "./operators";
 
@@ -84,7 +84,7 @@ export function* peelLayer(
           const dx = other.x - pose.x;
           const dy = other.y - pose.y;
           if (dx * dx + dy * dy >= reach * reach) continue;
-          if (separationBelow(N, pose, other, -1e-9)) {
+          if (pieceSeparationBelow(N, pose, other, -1e-9)) {
             free = false;
             break;
           }

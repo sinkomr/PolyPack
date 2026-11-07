@@ -53,6 +53,9 @@ describe("trig cache leaves seeded solver runs identical to the inline-trig kern
         separationBelow: (N: number, a: Pose, b: Pose, threshold: number, scale = 1) => (
           calls.pieceSeparation++, ref.pairSeparation(N, a, b, scale) < threshold
         ),
+        pieceSeparationBelow: (N: number, a: Pose, b: Pose, threshold: number, scale = 1) => (
+          calls.pieceSeparation++, ref.pieceSeparation(N, a, b, scale).sep < threshold
+        ),
       };
     });
     vi.doMock(penaltyPath, async () => {
