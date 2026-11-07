@@ -70,6 +70,10 @@ describe("searchSphere: units", () => {
     const six = searchSphere({ N: 0, P: 6 }, { seed: 5, maxEvals: 3000 });
     const nine = searchSphere({ N: 0, P: 9 }, { seed: 5, maxEvals: 3000 });
     const square = searchSphere({ N: 4, P: 7 }, { seed: 5, maxEvals: 3000 });
+    for (const [k, r, n, pp] of [["six", six, 0, 6], ["nine", nine, 0, 9], ["square", square, 4, 7]] as const) {
+      const v = validate({ N: n, P: pp }, r.config!);
+      console.log("DIAG", k, r.score, v.valid, v.minGap, JSON.stringify(v.errors).slice(0, 400), JSON.stringify(r.config).slice(0, 2000));
+    }
     expect(validate({ N: 0, P: 6 }, six.config!).valid).toBe(true);
     expect(validate({ N: 0, P: 9 }, nine.config!).valid).toBe(true);
     expect(validate({ N: 4, P: 7 }, square.config!).valid).toBe(true);
