@@ -77,17 +77,10 @@ const MEMORY: usize = 8;
 const REFINE_STEPS: usize = 10;
 const WEIGHT_CEILING: f64 = 1e12;
 
+/// Distance from `rel` to the nearest multiple of `step`, in [0, step / 2].
 #[inline]
 fn offset(rel: f64, step: f64) -> f64 {
-    let mut t = rel % step;
-    if t < 0.0 {
-        t += step;
-    }
-    if t > step / 2.0 {
-        step - t
-    } else {
-        t
-    }
+    crate::sep::fold(rel, step)
 }
 
 /// Support-form protrusions of one piece: sum of squares, the deepest, and the sum's gradient.

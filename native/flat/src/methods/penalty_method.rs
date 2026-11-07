@@ -771,3 +771,181 @@ pub fn solve(ctx: &mut Ctx, params: &Params, supplied: Option<(Config, Option<Ev
         previous = violation;
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn lcg(seed: &mut u64) -> f64 {
+        *seed = seed.wrapping_mul(6364136223846793005).wrapping_add(1442695040888963407);
+        ((*seed >> 11) as f64) / ((1u64 << 53) as f64)
+    }
+
+    /// The (non-augmented) objective written out with the shared penetration and protrusion routines.
+    fn reference(n: u32, m: u32, p: usize, scale: f64, padding: f64, weight: f64, x: &[f64], grad: &mut [f64]) -> f64 {
+        let stride = if n == 0 { 2 } else { 3 };
+        let off = stride * p;
+        grad.fill(0.0);
+        let shape = Shape::new(n);
+        let poses: Vec<Pose> = (0..p).map(|i| Pose::new(x[stride * i], x[stride * i + 1], if stride == 3 { x[stride * i + 2] } else { 0.0 })).collect();
+        let container = Container { m, cx: x[off], cy: x[off + 1], size: x[off + 2], phi: if m == 0 { 0.0 } else { x[off + 3] } };
+        let mut value = x[off + 2];
+        grad[off + 2] = 1.0;
+        let reach = 2.0 * (bounding_radius(n) * scale + padding);
+        for i in 0..p {
+            for j in i + 1..p {
+                if (poses[i].x - poses[j].x).hypot(poses[i].y - poses[j].y) > reach {
+                    continue;
+                }
+                let pp = pair_penetration(&shape, &poses[i], &poses[j], scale, padding);
+                let f = (2.0 * weight * pp.depth).max(0.0);
+                if f == 0.0 {
+                    continue;
+                }
+                value += f * f / (4.0 * weight);
+                for k in 0..stride {
+                    grad[stride * i + k] += f * pp.ga[k];
+                    grad[stride * j + k] += f * pp.gb[k];
+                }
+            }
+            visit_protrusions(n, &poses[i], &container, true, scale, padding, |pr| {
+                let f = (2.0 * weight * pr.depth).max(0.0);
+                if f == 0.0 {
+                    return;
+                }
+                value += f * f / (4.0 * weight);
+                grad[stride * i] += f * pr.px;
+                grad[stride * i + 1] += f * pr.py;
+                if stride == 3 {
+                    grad[stride * i + 2] += f * pr.pt;
+                }
+                grad[off] += f * pr.cx;
+                grad[off + 1] += f * pr.cy;
+                grad[off + 2] += f * pr.size;
+                if m != 0 {
+                    grad[off + 3] += f * pr.phi;
+                }
+            });
+        }
+        value
+    }
+
+    #[test]
+    fn resolve_fills_defaults_and_checks_ranges() {
+        let v = resolve(&Value::Null).unwrap();
+        assert_eq!(v["outerIterations"], 10);
+        assert_eq!(v["innerIterations"], 200);
+        assert_eq!(v["schedule"], "augmented");
+        for bad in [
+            json!({ "start": "elsewhere" }),
+            json!({ "schedule": "cubic" }),
+            json!({ "restoration": "shake" }),
+            json!({ "initialWeight": 0 }),
+            json!({ "growthFactor": 0.5 }),
+            json!({ "outerIterations": 0 }),
+            json!({ "innerIterations": 10001 }),
+            json!({ "memory": 101 }),
+            json!({ "gradientTolerance": 0 }),
+            json!({ "jitter": 2 }),
+            json!({ "violationReduction": 1 }),
+            json!({ "extra": true }),
+        ] {
+            assert!(resolve(&bad).is_err(), "{bad}");
+        }
+        assert_eq!(next_penalty_weight(10.0, 4.0, true, 0.4, 1.0, 0.5), 10.0);
+        assert_eq!(next_penalty_weight(10.0, 4.0, true, 0.6, 1.0, 0.5), 40.0);
+        assert_eq!(next_penalty_weight(10.0, 4.0, false, 0.0, 1.0, 0.5), 40.0);
+    }
+
+    #[test]
+    fn runs_are_valid_and_reproducible() {
+        use crate::clock::ClockKind;
+        use crate::framework::{run, Budget, Control, RunOptions};
+        use crate::shapes::Problem;
+        for problem in [Problem::new(4, 4, 6), Problem::new(0, 0, 7), Problem::new(5, 5, 7), Problem::new(0, 4, 9)] {
+            for params in [json!({}), json!({ "schedule": "quadratic", "restoration": "expand" }), json!({ "start": "scatter" })] {
+                let go = || {
+                    let control = Control::new();
+                    run(
+                        problem,
+                        RunOptions {
+                            method: Method::Penalty,
+                            params: params.clone(),
+                            start: None,
+                            budget: Budget { evals: Some(800), time_s: Some(1000.0) },
+                            seed: 3,
+                            final_polish: true,
+                            control: &control,
+                            clock: ClockKind::Wall,
+                        },
+                    )
+                };
+                let (a, b) = (go(), go());
+                assert!(a.valid && a.strict, "{problem:?} {params}: {:?}", a.reasons);
+                assert_eq!(a.best, b.best);
+                assert_eq!(a.evaluations, b.evaluations);
+            }
+        }
+    }
+
+    #[test]
+    fn objective_matches_reference_and_finite_differences() {
+        let mut seed = 11u64;
+        for &(n, m) in &[(4u32, 4u32), (3, 6), (0, 4), (7, 0), (5, 5), (0, 0), (6, 3)] {
+            for &(scale, padding) in &[(1.0, 0.0), (0.6, 0.25), (0.0, 0.5)] {
+                for augmented in [false, true] {
+                    let p = 14;
+                    let stride = if n == 0 { 2 } else { 3 };
+                    let mut obj = PenaltyObjective::new(n, m, p, scale, padding, augmented);
+                    let len = obj.len();
+                    let mut x = vec![0.0; len];
+                    for i in 0..p {
+                        x[stride * i] = (lcg(&mut seed) - 0.5) * 4.0;
+                        x[stride * i + 1] = (lcg(&mut seed) - 0.5) * 4.0;
+                        if stride == 3 {
+                            x[stride * i + 2] = lcg(&mut seed) * 6.0;
+                        }
+                    }
+                    x[stride * p] = 0.1;
+                    x[stride * p + 1] = -0.2;
+                    x[stride * p + 2] = 2.2;
+                    if m != 0 {
+                        x[stride * p + 3] = 0.3;
+                    }
+                    let weight = 7.0;
+                    if augmented {
+                        // multipliers from a first pass, then the augmented objective itself
+                        obj.begin(weight);
+                        obj.update_multipliers(&x);
+                    }
+                    obj.begin(weight);
+                    let mut g = vec![0.0; len];
+                    let v = obj.value(&x, &mut g);
+                    if !augmented {
+                        let mut gr = vec![0.0; len];
+                        let vr = reference(n, m, p, scale, padding, weight, &x, &mut gr);
+                        assert!((v - vr).abs() < 1e-9 * vr.abs().max(1.0), "n={n} m={m} value {v} {vr}");
+                        for k in 0..len {
+                            assert!((g[k] - gr[k]).abs() < 1e-9 * gr[k].abs().max(1.0), "n={n} m={m} grad[{k}] {} {}", g[k], gr[k]);
+                        }
+                    }
+                    // central differences (the objective is piecewise smooth: a switch or two is allowed)
+                    let mut bad = 0;
+                    for k in 0..len {
+                        let h = 1e-6;
+                        let mut xp = x.clone();
+                        let mut xm = x.clone();
+                        xp[k] += h;
+                        xm[k] -= h;
+                        let mut scratch = vec![0.0; len];
+                        let fd = (obj.value(&xp, &mut scratch) - obj.value(&xm, &mut scratch)) / (2.0 * h);
+                        if (fd - g[k]).abs() > 1e-4 * g[k].abs().max(1.0) {
+                            bad += 1;
+                        }
+                    }
+                    assert!(bad <= 1, "n={n} m={m} scale={scale} padding={padding} augmented={augmented}: {bad} of {len} derivatives differ from finite differences");
+                }
+            }
+        }
+    }
+}

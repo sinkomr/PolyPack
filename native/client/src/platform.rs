@@ -11,6 +11,7 @@ pub fn lower_thread_priority() {
     }
 }
 
+#[allow(dead_code)]
 /// macOS `pmset -g batt`: the first line names the power source. True on 'Battery Power' and
 /// 'UPS Power'; false on 'AC Power' and anything unrecognised.
 pub fn on_battery_from_pmset(output: &str) -> bool {
@@ -20,6 +21,7 @@ pub fn on_battery_from_pmset(output: &str) -> bool {
     matches!(&rest[..end], "Battery Power" | "UPS Power")
 }
 
+#[allow(dead_code)]
 /// Linux power supplies (name, type, online): on battery when there is a battery and external
 /// supplies, none of them online. Without any external supply listed, AC.
 pub fn on_battery_from_supplies(supplies: &[(String, String, Option<String>)]) -> bool {

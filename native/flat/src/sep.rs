@@ -145,6 +145,13 @@ pub fn pair_separation(n: u32, a: &Pose, b: &Pose, scale: f64) -> f64 {
     best
 }
 
+/// Distance of `x` to the nearest multiple of `step`, in [0, step / 2], by rounding the quotient
+/// (fast; exact up to the rounding of x - k step).
+#[inline]
+pub fn fold(x: f64, step: f64) -> f64 {
+    (x - step * (x / step).round()).abs().min(step / 2.0)
+}
+
 /// Constants of one piece shape, for the closed-form kernels of the search.
 #[derive(Clone, Copy, Debug)]
 pub struct Shape {
@@ -182,19 +189,12 @@ impl Shape {
         }
     }
 
-    /// Distance of `x` to the nearest multiple of `step`, in [0, step / 2].
+    /// Distance of `x` to the nearest multiple of `step`, in [0, step / 2]. A rounding-to-nearest
+    /// reduction instead of the reference's exact remainder (fmod is slow): the two differ in the
+    /// last bits only, and only the search uses this kernel.
     #[inline]
     pub fn fold(&self, x: f64) -> f64 {
-        let s = self.step;
-        let mut t = x % s;
-        if t < 0.0 {
-            t += s;
-        }
-        if t > s / 2.0 {
-            s - t
-        } else {
-            t
-        }
+        fold(x, self.step)
     }
 
     /// Reach of B toward A, plus A's inradius: r + R cos(delta). For congruent regular polygons

@@ -11,11 +11,11 @@
 //! local optima is emitted at the end.
 //!
 //! Differences from the reference. The removal sizes that rank pieces for reinsertion are computed
-//! as enclosures directly: the reference assessed a partial arrangement through the framework,
-//! which charged one evaluation each; here they are not counted, so the guard that stops
-//! reinsertion near the end of the budget is not needed. The reference's list of starts from
-//! earlier pipeline stages does not exist in a single run; the restart pool holds the supplied
-//! start and the automatic seed result.
+//! as enclosures directly: the reference read them from the framework's assessment of a partial
+//! arrangement, which this framework scores as invalid without a size. The assessment is still
+//! made (and counted, one per piece), so budgets behave as documented. The reference's list of
+//! starts from earlier pipeline stages does not exist in a single run; the restart pool holds the
+//! supplied start and the automatic seed result.
 
 use super::common::{restore, scatter, PairTester, Strategy};
 use super::lbfgs::{Lbfgs, Options, Status};
@@ -574,12 +574,18 @@ fn cross_cleave(ctx: &mut Ctx, config: &Config) -> Config {
     let mut rest: Vec<Pose> = Vec::with_capacity(count);
     let mut sizes = Vec::with_capacity(count);
     for i in 0..count {
+        if ctx.should_stop() {
+            return result;
+        }
         rest.clear();
         rest.extend(config.pieces.iter().enumerate().filter(|(j, _)| *j != i).map(|(_, p)| *p));
         sizes.push(encloser.enclose(&rest, container.phi).size);
     }
     let smallest = sizes.iter().cloned().fold(f64::INFINITY, f64::min);
     let tied: Vec<usize> = (0..count).filter(|&i| sizes[i] <= smallest + 1e-9).collect();
+    if tied.is_empty() {
+        return result; // not-a-number sizes: no ranking
+    }
     let moved = tied[floor_below(&mut ctx.rng, tied.len())];
     let others: Vec<usize> = (0..count).filter(|&i| i != moved).collect();
     let owner = config.pieces[others[floor_below(&mut ctx.rng, others.len())]];
@@ -943,6 +949,9 @@ pub fn execute(ctx: &mut Ctx) {
         if n == 0 {
             weights[SWAP] = 0.0;
         }
+        if ctx.remaining().0 < reserve + np as f64 + 1.0 {
+            weights[REINSERT] = 0.0;
+        }
         // An operator-only parameter set can have no legal move. Bounded redraws fall back to a
         // kick, rather than burning solves or looping forever.
         if redraws >= 8 {
@@ -956,18 +965,24 @@ pub fn execute(ctx: &mut Ctx) {
             CLUSTER => rotate_cluster(&cur, &mut ctx.rng, p.cluster_radius, p.rotation_magnitude),
             RESTART => global_restart(&cur, &seeds, &mut ctx.rng, kick_magnitude * p.restart_strength, p.rotation_magnitude),
             REINSERT => {
-                // the piece whose removal shrinks the (auto-oriented) enclosure most
+                // The piece whose removal shrinks the (auto-oriented) enclosure most. Each removal
+                // is one counted assessment of the partial arrangement, as in the reference; the
+                // framework scores a partial arrangement as invalid without a size, so the size
+                // comes from the enclosure directly.
                 let mut worst = 0;
                 let mut smallest = f64::INFINITY;
                 if np > 1 {
-                    let mut rest: Vec<Pose> = Vec::with_capacity(np);
+                    let mut partial = Config { n, m, pieces: Vec::with_capacity(np), phi: cur.phi };
                     for i in 0..np {
-                        if ctx.should_stop() {
+                        if ctx.should_stop() || ctx.remaining().0 <= reserve + 1.0 {
                             break;
                         }
-                        rest.clear();
-                        rest.extend(cur.pieces.iter().enumerate().filter(|(j, _)| *j != i).map(|(_, q)| *q));
-                        let size = oriented_size(n, m, &rest, cur.phi);
+                        partial.pieces.clear();
+                        partial.pieces.extend(cur.pieces.iter().enumerate().filter(|(j, _)| *j != i).map(|(_, q)| *q));
+                        if ctx.evaluate(&partial, true).is_none() {
+                            break;
+                        }
+                        let size = oriented_size(n, m, &partial.pieces, cur.phi);
                         if size < smallest {
                             smallest = size;
                             worst = i;
@@ -1096,5 +1111,108 @@ fn refinement_params(local: &penalty_method::Params) -> penalty_method::Params {
         gradient_tolerance: local.gradient_tolerance.min(1e-10),
         jitter: 0.0,
         ..local.clone()
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::clock::ClockKind;
+    use crate::framework::{run, Budget, Control, RunOptions};
+    use crate::shapes::Problem;
+    use serde_json::json;
+
+    #[test]
+    fn resolve_fills_defaults_and_checks_ranges() {
+        let v = resolve(&Value::Null).unwrap();
+        assert_eq!(v["localEvals"], 150);
+        assert_eq!(v["penalty"]["outerIterations"], 6);
+        assert_eq!(v["penalty"]["innerIterations"], 120);
+        assert_eq!(v["weights"]["peel"], 2.0);
+        // a given nested penalty object overrides key by key and keeps the local defaults
+        let v = resolve(&json!({ "penalty": { "memory": 5 }, "weights": { "kick": 1 } })).unwrap();
+        assert_eq!(v["penalty"]["memory"], 5);
+        assert_eq!(v["penalty"]["outerIterations"], 6);
+        assert_eq!(v["weights"]["kick"], 1.0);
+        assert_eq!(v["weights"]["swap"], 1.0);
+        for bad in [
+            json!({ "bogus": 1 }),
+            json!({ "localEvals": 1 }),
+            json!({ "temperature": -1 }),
+            json!({ "weights": { "kick": -1 } }),
+            json!({ "weights": { "jump": 1 } }),
+            json!({ "penalty": { "start": "nowhere" } }),
+            json!({ "penalty": 3 }),
+        ] {
+            assert!(resolve(&bad).is_err(), "{bad}");
+        }
+    }
+
+    fn square_grid(count: usize) -> Config {
+        let width = (count as f64).sqrt().ceil() as usize;
+        let pieces = (0..count).map(|i| Pose::new((i % width) as f64 * 1.1, (i / width) as f64 * 1.1, 0.3 * i as f64)).collect();
+        Config { n: 4, m: 4, pieces, phi: 0.0 }
+    }
+
+    #[test]
+    fn operators_keep_their_invariants() {
+        let config = square_grid(12);
+        let mut rng = Rng::new(5);
+        let kicked = random_kick(&config, &mut rng, 0.3, 0.25, 1.0);
+        let moved = (0..12).filter(|&i| kicked.pieces[i] != config.pieces[i]).count();
+        assert_eq!(moved, 3);
+        let swapped = swap_orientations(&config, &mut rng);
+        let mut a: Vec<u64> = config.pieces.iter().map(|p| p.theta.to_bits()).collect();
+        let mut b: Vec<u64> = swapped.pieces.iter().map(|p| p.theta.to_bits()).collect();
+        a.sort();
+        b.sort();
+        assert_eq!(a, b);
+        assert!((0..12).all(|i| swapped.pieces[i].x == config.pieces[i].x && swapped.pieces[i].y == config.pieces[i].y));
+        let turned = rotate_cluster(&config, &mut rng, 1.8, 1.0);
+        let changed: Vec<usize> = (0..12).filter(|&i| turned.pieces[i] != config.pieces[i]).collect();
+        assert!(changed.len() >= 2);
+        for &i in &changed {
+            for &j in &changed {
+                let d0 = (config.pieces[i].x - config.pieces[j].x).hypot(config.pieces[i].y - config.pieces[j].y);
+                let d1 = (turned.pieces[i].x - turned.pieces[j].x).hypot(turned.pieces[i].y - turned.pieces[j].y);
+                assert!((d0 - d1).abs() < 1e-12);
+            }
+        }
+        assert!(same_packing(&config, &config));
+        assert!(!same_packing(&config, &kicked));
+        let mut metropolis_rng = Rng::new(1);
+        assert!(metropolis(2.0, 1.0, 0.0, &mut metropolis_rng));
+        assert!(!metropolis(1.0, 2.0, 0.0, &mut metropolis_rng));
+        assert!(!metropolis(1.0, f64::NAN, 1.0, &mut metropolis_rng));
+    }
+
+    fn run_method(problem: Problem, evals: u64, seed: u32, params: Value) -> crate::framework::RunResult {
+        let control = Control::new();
+        run(
+            problem,
+            RunOptions {
+                method: Method::BasinHopping,
+                params,
+                start: None,
+                budget: Budget { evals: Some(evals), time_s: Some(1000.0) },
+                seed,
+                final_polish: true,
+                control: &control,
+                clock: ClockKind::Wall,
+            },
+        )
+    }
+
+    #[test]
+    fn runs_are_valid_and_reproducible() {
+        for problem in [Problem::new(4, 4, 6), Problem::new(0, 0, 7), Problem::new(3, 6, 8)] {
+            let a = run_method(problem, 1200, 9, Value::Null);
+            let b = run_method(problem, 1200, 9, Value::Null);
+            assert!(a.valid && a.strict, "{problem:?}: {:?}", a.reasons);
+            assert_eq!(a.score, b.score, "{problem:?}");
+            assert_eq!(a.evaluations, b.evaluations);
+            assert_eq!(a.best, b.best);
+            assert!(a.evaluations <= 1200);
+        }
     }
 }

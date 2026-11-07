@@ -704,7 +704,8 @@ fn search_one(s: &Arc<Shared>, problem: Problem, lanes: usize) -> Searched {
         cur.jobs.fetch_add(1, Ordering::Relaxed);
         if let Some(b) = best {
             let mut cb = cur.best.lock().unwrap();
-            if cb.map_or(true, |x| b.score < x) {
+            // improvements below 1e-9 relative are rounding: not worth a line
+            if cb.map_or(true, |x| b.score < x * (1.0 - 1e-9)) {
                 *cb = Some(b.score);
                 let vs = cur.leader.lock().unwrap().map_or(String::new(), |l| format!(", {} against the leader", relative_percent(b.score, l)));
                 log(&format!("{sub}best so far {} ({}, {}, seed {}){vs}", format_score(b.score), b.job.method.name(), b.job.kind, b.job.seed));

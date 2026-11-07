@@ -21,6 +21,7 @@ pub struct NeighborGrid {
     start: Vec<u32>,
     items: Vec<u32>,
     cell_of: Vec<u32>,
+    fill: Vec<u32>,
     // sparse mode: (cell key, piece) sorted
     keys: Vec<(i64, i64, u32)>,
 }
@@ -84,11 +85,12 @@ impl NeighborGrid {
             }
             self.items.resize(n, 0);
             // fill in index order so that each cell lists its pieces in ascending order
-            let mut fill: Vec<u32> = self.start[..cells].to_vec();
+            self.fill.clear();
+            self.fill.extend_from_slice(&self.start[..cells]);
             for i in 0..n {
                 let c = self.cell_of[i] as usize;
-                self.items[fill[c] as usize] = i as u32;
-                fill[c] += 1;
+                self.items[self.fill[c] as usize] = i as u32;
+                self.fill[c] += 1;
             }
         } else {
             self.dense = false;

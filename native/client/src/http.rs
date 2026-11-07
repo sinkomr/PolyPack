@@ -97,6 +97,7 @@ pub struct SubmitOutcome {
     pub answer: Option<Answer>,
     /// POST requests actually made.
     pub requests: u32,
+    #[allow(dead_code)]
     pub without_software: bool,
     pub failure: Option<String>,
     pub check: Option<SubmitCheck>,

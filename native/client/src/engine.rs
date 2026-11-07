@@ -53,6 +53,7 @@ pub struct JobResult {
     /// The method's resolved parameters.
     pub params: Value,
     pub evaluations: u64,
+    #[allow(dead_code)]
     pub wall_time: f64,
     pub termination: String,
 }

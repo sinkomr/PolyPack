@@ -696,3 +696,108 @@ pub fn execute(ctx: &mut Ctx) {
     // The last raw state is repaired even when a stage failed; a duplicate assessment is skipped.
     st.submit_config(ctx, &config);
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::clock::ClockKind;
+    use crate::framework::{run, Budget, Control, RunOptions};
+    use crate::shapes::Problem;
+    use serde_json::json;
+
+    #[test]
+    fn resolve_fills_defaults_and_checks_ranges() {
+        let v = resolve(&Value::Null).unwrap();
+        assert_eq!(v["path"], "rounded");
+        assert_eq!(v["stages"], 7);
+        assert_eq!(v["outerIterations"], 6);
+        for bad in [
+            json!({ "path": "blob" }),
+            json!({ "family": "other" }),
+            json!({ "localMethod": "magic" }),
+            json!({ "stages": 1 }),
+            json!({ "spacing": 5 }),
+            json!({ "vertices": 8 }),
+            json!({ "jitter": 0.9 }),
+            json!({ "unknown": 1 }),
+        ] {
+            assert!(resolve(&bad).is_err(), "{bad}");
+        }
+        assert!(resolve(&json!({ "path": "superellipse", "family": "circumscribed", "localMethod": "mc_compress" })).is_ok());
+    }
+
+    #[test]
+    fn polygon_gap_of_squares() {
+        // unit squares as counter-clockwise vertices about their centres
+        let square = [-0.5, -0.5, 0.5, -0.5, 0.5, 0.5, -0.5, 0.5];
+        assert!((polygon_gap(&square, (0.0, 0.0), &square, (1.5, 0.0)) - 0.5).abs() < 1e-15);
+        assert!((polygon_gap(&square, (0.0, 0.0), &square, (0.75, 0.0)) + 0.25).abs() < 1e-15);
+        assert!((polygon_gap(&square, (0.0, 0.0), &square, (0.0, -1.0))).abs() < 1e-15);
+    }
+
+    #[test]
+    fn superellipse_is_a_disk_at_p_two_and_the_square_for_large_p() {
+        let mut v = vec![0.0; 128];
+        super_rel(0.7, 2.0, 64, &mut v);
+        for k in 0..64 {
+            assert!((v[2 * k].hypot(v[2 * k + 1]) - 0.5).abs() < 1e-12);
+        }
+        super_rel(0.0, 128.0, 64, &mut v);
+        // unrotated, the axes are at pi/4: the vertices of the unit square lie on the diagonals
+        let far = (0..64).map(|k| v[2 * k].hypot(v[2 * k + 1])).fold(0.0, f64::max);
+        assert!(far > 0.70 && far < 0.7072);
+    }
+
+    #[test]
+    fn signature_ignores_what_does_not_matter() {
+        let a = Config { n: 0, m: 0, pieces: vec![Pose::new(1.0, 2.0, 0.3), Pose::new(-0.0, 0.5, 0.1)], phi: 0.7 };
+        let mut b = a.clone();
+        b.pieces[0].theta = 2.0;
+        b.pieces[1].x = 0.0;
+        b.phi = 0.1;
+        assert_eq!(signature(&a), signature(&b));
+        b.pieces[0].x = 1.0000001;
+        assert_ne!(signature(&a), signature(&b));
+        let c = Config { n: 4, m: 4, ..a.clone() };
+        let mut d = c.clone();
+        d.pieces[0].theta = 2.0;
+        assert_ne!(signature(&c), signature(&d));
+    }
+
+    fn run_morph(problem: Problem, evals: u64, seed: u32, params: Value) -> crate::framework::RunResult {
+        let control = Control::new();
+        run(
+            problem,
+            RunOptions {
+                method: Method::Morph,
+                params,
+                start: None,
+                budget: Budget { evals: Some(evals), time_s: Some(1000.0) },
+                seed,
+                final_polish: true,
+                control: &control,
+                clock: ClockKind::Wall,
+            },
+        )
+    }
+
+    #[test]
+    fn runs_are_valid_and_reproducible() {
+        let cases = [
+            (Problem::new(4, 4, 6), json!({})),
+            (Problem::new(4, 4, 6), json!({ "family": "circumscribed" })),
+            (Problem::new(4, 4, 6), json!({ "path": "superellipse", "vertices": 16, "stages": 4 })),
+            (Problem::new(3, 6, 8), json!({ "localMethod": "mc_compress", "mcSweeps": 60 })),
+            (Problem::new(0, 4, 7), json!({})),
+            (Problem::new(7, 0, 9), json!({})),
+        ];
+        for (problem, params) in cases {
+            let a = run_morph(problem, 1500, 4, params.clone());
+            let b = run_morph(problem, 1500, 4, params.clone());
+            assert!(a.valid && a.strict, "{problem:?} {params}: {:?}", a.reasons);
+            assert_eq!(a.score, b.score, "{problem:?} {params}");
+            assert_eq!(a.best, b.best);
+            assert!(a.evaluations <= 1500);
+        }
+    }
+}

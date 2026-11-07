@@ -38,25 +38,155 @@ pub fn dilate(config: &Config, factor: f64) -> Config {
     out
 }
 
-/// Zero-tolerance pair tests with reusable buffers.
+/// Pieces of at most this many sides use their cached edge normals; more sides the closed form.
+const CACHED_NORMALS_UP_TO: u32 = 16;
+
+/// Pair tests with reusable buffers. The edge normals of every piece are cached and recomputed
+/// only when its angle changes (restoration and legalisation move centres, never angles), so a
+/// pair test is 2N products and one cosine instead of the closed form's arctangent and cosines.
 pub struct PairTester {
     pub shape: Shape,
     pub grid: NeighborGrid,
     reach: f64,
+    nn: usize,
+    cached: bool,
+    base_cos: Vec<f64>,
+    base_sin: Vec<f64>,
+    normals: Vec<f64>,
+    thetas: Vec<u64>,
 }
 
 impl PairTester {
     pub fn new(n: u32) -> Self {
-        PairTester { shape: Shape::new(n), grid: NeighborGrid::new(), reach: 2.0 * bounding_radius(n) }
+        let shape = Shape::new(n);
+        let nn = n as usize;
+        let angles: Vec<f64> = (0..nn).map(|k| shape.normal0 + k as f64 * shape.step).collect();
+        PairTester {
+            shape,
+            grid: NeighborGrid::new(),
+            reach: 2.0 * bounding_radius(n),
+            nn,
+            cached: n != 0 && n <= CACHED_NORMALS_UP_TO,
+            base_cos: angles.iter().map(|a| a.cos()).collect(),
+            base_sin: angles.iter().map(|a| a.sin()).collect(),
+            normals: Vec::new(),
+            thetas: Vec::new(),
+        }
+    }
+
+    /// Bring the cached normals up to date with the pieces' angles.
+    pub fn refresh(&mut self, pieces: &[Pose]) {
+        if !self.cached {
+            return;
+        }
+        let nn = self.nn;
+        if self.thetas.len() != pieces.len() {
+            self.thetas.clear();
+            self.thetas.resize(pieces.len(), u64::MAX);
+            self.normals.resize(2 * nn * pieces.len(), 0.0);
+        }
+        for (i, p) in pieces.iter().enumerate() {
+            let bits = p.theta.to_bits();
+            if self.thetas[i] == bits {
+                continue;
+            }
+            self.thetas[i] = bits;
+            let (s, c) = p.theta.sin_cos();
+            let out = &mut self.normals[2 * nn * i..2 * nn * (i + 1)];
+            for k in 0..nn {
+                out[2 * k] = c * self.base_cos[k] - s * self.base_sin[k];
+                out[2 * k + 1] = s * self.base_cos[k] + c * self.base_sin[k];
+            }
+        }
+    }
+
+    /// Largest projection of d on the edge normals of piece i, and the normal's index.
+    #[inline]
+    fn reach_along(&self, i: usize, dx: f64, dy: f64) -> (f64, usize) {
+        let nn = self.nn;
+        let u = &self.normals[2 * nn * i..2 * nn * (i + 1)];
+        let mut best = f64::NEG_INFINITY;
+        let mut at = 0;
+        for k in 0..nn {
+            let g = dx * u[2 * k] + dy * u[2 * k + 1];
+            if g > best {
+                best = g;
+                at = k;
+            }
+        }
+        (best, at)
+    }
+
+    /// Separation of pieces i and j (cached normals after `refresh`).
+    #[inline]
+    pub fn sep_ij(&self, i: usize, j: usize, pieces: &[Pose]) -> f64 {
+        let (a, b) = (&pieces[i], &pieces[j]);
+        if !self.cached {
+            return self.shape.sep(a, b);
+        }
+        let (dx, dy) = (b.x - a.x, b.y - a.y);
+        let (ma, _) = self.reach_along(i, dx, dy);
+        let (mb, _) = self.reach_along(j, -dx, -dy);
+        ma.max(mb) - self.shape.contact_offset(a.theta, b.theta)
+    }
+
+    /// Whether pieces i and j overlap (separation below zero); decided without the cosine when
+    /// the reach alone settles it: the offset r + R cos(delta) lies in [2r, r + R].
+    #[inline]
+    pub fn overlap_ij(&self, i: usize, j: usize, pieces: &[Pose]) -> bool {
+        let (a, b) = (&pieces[i], &pieces[j]);
+        if !self.cached {
+            return self.shape.sep(a, b) < 0.0;
+        }
+        let (dx, dy) = (b.x - a.x, b.y - a.y);
+        let (ma, _) = self.reach_along(i, dx, dy);
+        let s = &self.shape;
+        if ma >= s.r + s.big_r {
+            return false;
+        }
+        let (mb, _) = self.reach_along(j, -dx, -dy);
+        let m = ma.max(mb);
+        if m >= s.r + s.big_r {
+            return false;
+        }
+        if m < 2.0 * s.r {
+            return true;
+        }
+        m - s.contact_offset(a.theta, b.theta) < 0.0
+    }
+
+    /// Separation and the direction in which moving piece i increases it.
+    #[inline]
+    pub fn contact_ij(&self, i: usize, j: usize, pieces: &[Pose]) -> crate::sep::Contact {
+        let (a, b) = (&pieces[i], &pieces[j]);
+        if !self.cached {
+            return self.shape.contact(a, b);
+        }
+        let nn = self.nn;
+        let (dx, dy) = (b.x - a.x, b.y - a.y);
+        let (ma, ka) = self.reach_along(i, dx, dy);
+        let (mb, kb) = self.reach_along(j, -dx, -dy);
+        let off = self.shape.contact_offset(a.theta, b.theta);
+        if ma >= mb {
+            // A's normal points from A toward B: A retreats along -u
+            let u = &self.normals[2 * nn * i..];
+            crate::sep::Contact { sep: ma - off, nx: -u[2 * ka], ny: -u[2 * ka + 1] }
+        } else {
+            // B's normal pushes A along +u
+            let u = &self.normals[2 * nn * j..];
+            crate::sep::Contact { sep: mb - off, nx: u[2 * kb], ny: u[2 * kb + 1] }
+        }
     }
 
     /// True when some pair has a separation below -tol (tol = 0: any penetration at all).
     pub fn any_below(&mut self, pieces: &[Pose], tol: f64) -> bool {
+        self.refresh(pieces);
         self.grid.build(pieces, self.reach);
-        let shape = self.shape;
         let mut hit = false;
-        self.grid.for_each_pair(pieces, |i, j| {
-            if shape.sep(&pieces[i], &pieces[j]) < -tol {
+        let me = &*self;
+        me.grid.for_each_pair(pieces, |i, j| {
+            let below = if tol == 0.0 { me.overlap_ij(i, j, pieces) } else { me.sep_ij(i, j, pieces) < -tol };
+            if below {
                 hit = true;
                 return false;
             }
@@ -67,11 +197,12 @@ impl PairTester {
 
     /// The deepest penetration (0 when nothing overlaps) of pairs below zero separation.
     pub fn deepest(&mut self, pieces: &[Pose]) -> f64 {
+        self.refresh(pieces);
         self.grid.build(pieces, self.reach);
-        let shape = self.shape;
         let mut deepest = 0.0f64;
-        self.grid.for_each_pair(pieces, |i, j| {
-            let s = shape.sep(&pieces[i], &pieces[j]);
+        let me = &*self;
+        me.grid.for_each_pair(pieces, |i, j| {
+            let s = me.sep_ij(i, j, pieces);
             if s < 0.0 && -s > deepest {
                 deepest = -s;
             }
@@ -123,7 +254,6 @@ pub fn restore(
         ctx.should_stop()
     };
     let n = input.n;
-    let shape = tester.shape;
     let mut config = input.clone();
     let reach = 2.0 * bounding_radius(n);
     let accepted = |c: &Config| c.pieces.iter().all(|p| p.x.is_finite() && p.y.is_finite() && p.x.abs() <= coordinate_limit && p.y.abs() <= coordinate_limit);
@@ -149,17 +279,45 @@ pub fn restore(
             config.pieces[j].y -= dy;
         }
     }
+    tester.refresh(&config.pieces);
     if strategy == Strategy::Separate {
-        for _sweep in 0..48 {
+        // The pairs within 2R plus a slack are listed once, and listed again only after some piece
+        // has moved by half the slack. A pair is tested again only when one of its pieces moved
+        // since its last test: a pair found apart stays apart while neither piece moves.
+        let p = config.pieces.len();
+        let slack = 0.25 * reach;
+        let mut drift = vec![0.0f64; p];
+        let mut moved_at = vec![0u64; p];
+        let mut tested_at: Vec<u64> = Vec::new();
+        let mut clock: u64 = 1;
+        let mut listed = false;
+        for _sweep in 0..48u32 {
             if stopped(ctx) {
                 return None;
             }
+            if !listed || drift.iter().any(|&d| 2.0 * d > slack) {
+                pairs.clear();
+                tester.grid.build(&config.pieces, reach + slack);
+                let pieces = &config.pieces;
+                tester.grid.for_each_pair(pieces, |i, j| {
+                    pairs.push((i as u32, j as u32));
+                    true
+                });
+                drift.iter_mut().for_each(|d| *d = 0.0);
+                // a fresh list is tested in full
+                tested_at.clear();
+                tested_at.resize(pairs.len(), 0);
+                listed = true;
+            }
             let mut moved = false;
-            tester.pairs(&config.pieces, &mut pairs);
-            for &(i, j) in &pairs {
+            for (k, &(i, j)) in pairs.iter().enumerate() {
                 let (i, j) = (i as usize, j as usize);
+                if tested_at[k] != 0 && moved_at[i].max(moved_at[j]) <= tested_at[k] {
+                    continue;
+                }
+                tested_at[k] = clock;
                 // the normal moves piece i (A) away from j
-                let c = shape.contact(&config.pieces[i], &config.pieces[j]);
+                let c = tester.contact_ij(i, j, &config.pieces);
                 if c.sep >= 0.0 {
                     continue;
                 }
@@ -178,6 +336,12 @@ pub fn restore(
                 config.pieces[i].y += delta * ny;
                 config.pieces[j].x -= delta * nx;
                 config.pieces[j].y -= delta * ny;
+                drift[i] += delta;
+                drift[j] += delta;
+                clock += 1;
+                moved_at[i] = clock;
+                moved_at[j] = clock;
+                tested_at[k] = clock;
                 moved = true;
             }
             if !moved {
@@ -189,6 +353,9 @@ pub fn restore(
     let cx = config.pieces.iter().map(|p| p.x).sum::<f64>() / np;
     let cy = config.pieces.iter().map(|p| p.y).sum::<f64>() / np;
     let base: Vec<Pose> = config.pieces.clone();
+    // Expansion only moves centres apart (every distance grows by the factor), so the pairs that
+    // can touch at a factor >= 1 are among those within 2R at factor 1: listed once.
+    tester.pairs(&base, &mut pairs);
     let mut feasible = |ctx: &mut Ctx, config: &mut Config, factor: f64| -> bool {
         for (p, b) in config.pieces.iter_mut().zip(base.iter()) {
             p.x = cx + factor * (b.x - cx);
@@ -200,7 +367,17 @@ pub fn restore(
         if stopped(ctx) {
             return false;
         }
-        !tester.any_below(&config.pieces, 0.0) && !stopped(ctx)
+        let reach2 = reach * reach;
+        for &(i, j) in &pairs {
+            let (a, b) = (&config.pieces[i as usize], &config.pieces[j as usize]);
+            if (a.x - b.x).powi(2) + (a.y - b.y).powi(2) > reach2 {
+                continue;
+            }
+            if tester.overlap_ij(i as usize, j as usize, &config.pieces) {
+                return false;
+            }
+        }
+        !stopped(ctx)
     };
     if feasible(ctx, &mut config, 1.0) {
         return if accepted(&config) { Some(config) } else { None };
@@ -318,3 +495,31 @@ pub fn shuffle(values: &mut [usize], ctx: &mut Ctx) {
 }
 
 pub const COORD_LIMIT: f64 = MAX_COORD;
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::sep::regular_polygon_separation;
+
+    #[test]
+    fn cached_normals_agree_with_the_reference() {
+        let mut rng = crate::rng::Rng::new(5);
+        for n in [3u32, 4, 5, 7, 8, 12, 16, 17, 40] {
+            let mut tester = PairTester::new(n);
+            for _ in 0..300 {
+                let pieces: Vec<Pose> = (0..2).map(|_| Pose::new(rng.next() * 2.5, rng.next() * 2.5, rng.signed() * 20.0)).collect();
+                tester.refresh(&pieces);
+                let reference = regular_polygon_separation(n, &pieces[0], &pieces[1], 1.0);
+                assert!((tester.sep_ij(0, 1, &pieces) - reference.sep).abs() < 1e-12);
+                assert_eq!(tester.overlap_ij(0, 1, &pieces), reference.sep < 0.0, "n={n} sep={}", reference.sep);
+                let c = tester.contact_ij(0, 1, &pieces);
+                assert!((c.sep - reference.sep).abs() < 1e-12);
+                // moving A along the normal increases the separation
+                let mut moved = pieces.clone();
+                moved[0].x += 1e-4 * c.nx;
+                moved[0].y += 1e-4 * c.ny;
+                assert!(regular_polygon_separation(n, &moved[0], &moved[1], 1.0).sep > reference.sep);
+            }
+        }
+    }
+}
