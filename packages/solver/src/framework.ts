@@ -308,35 +308,6 @@ export class MethodRegistry {
       return time - begun - pausedMilliseconds - (pausedAt === undefined ? 0 : time - pausedAt);
     };
     if (paused()) pausedAt = begun;
-    // shouldStop sits in the methods' innermost loops, where reading the clock on every call cost
-    // a fifth of the run. The time test therefore reuses the last reading for up to `clockStride`
-    // calls; the stride doubles while readings arrive less than 20 us apart and halves when they
-    // are more than 200 us apart, so a time limit is noticed within a fraction of a millisecond of
-    // work. Checkpoints, remaining() and evaluations read the clock afresh; the abort flag and the
-    // evaluation count are tested on every call, so evaluation-limited runs are unaffected.
-    let clockActive = 0;
-    let clockReadAt = -Infinity;
-    let clockStride = 1;
-    let clockSkip = 0;
-    const freshActive = () => {
-      clockActive = activeMilliseconds();
-      clockReadAt = now();
-      clockSkip = 0;
-      return clockActive;
-    };
-    const throttledActive = () => {
-      if (clockSkip > 0) {
-        clockSkip--;
-        return clockActive;
-      }
-      const before = clockReadAt;
-      freshActive();
-      const gap = clockReadAt - before;
-      if (gap < 0.02) clockStride = Math.min(256, clockStride * 2);
-      else if (gap > 0.2) clockStride = Math.max(1, clockStride >> 1);
-      clockSkip = clockStride - 1;
-      return clockActive;
-    };
     const overallTimeLimit = (budget.time_s ?? Infinity) * 1000;
     const overallEvalLimit = budget.evals ?? Infinity;
     let innermost: Scope | undefined;
@@ -427,47 +398,45 @@ export class MethodRegistry {
         ? Math.min(remainingAfterStart, Math.ceil(overallEvalLimit / 10))
         : 0;
     const reserveTime = appendPolish && Number.isFinite(overallTimeLimit) ? overallTimeLimit / 10 : 0;
-    // shouldStop's answer can change only with the abort flag, the clock, the evaluation count, or
-    // a scope ending or failing (each of which bumps stopEpoch). While none has changed since it
-    // last answered false for the same scope and the clock reading is still being reused, it
-    // answers false again without walking the scope chain.
+    // shouldStop sits in the methods' innermost loops. Its answer can change only with the abort
+    // flag, the clock, the evaluation count, or a scope ending or failing (each of which bumps
+    // stopEpoch). While none of the others has changed since it last answered false for the same
+    // scope, it reads the clock once and compares the active time with the smallest time limit of
+    // the scope and its parents, instead of walking the chain. The clock is read on every call, so
+    // a time limit is noticed at the first call after it, however long the calls take.
     let stopEpoch = 0;
     let fastScope: Scope | undefined;
     let fastEpoch = -1;
     let fastEvaluations = -1;
-    let fastTimed = true;
+    let fastLimit = Infinity;
     const shouldStop = (scope: Scope): boolean => {
       if (
         fastScope === scope &&
         fastEpoch === stopEpoch &&
         fastEvaluations === evaluations &&
-        (clockSkip > 0 || !fastTimed) &&
-        !aborted()
-      ) {
-        if (fastTimed) clockSkip--;
+        !aborted() &&
+        (fastLimit === Infinity || (pausedAt === undefined && !paused() && now() - begun - pausedMilliseconds < fastLimit))
+      )
         return false;
-      }
-      const stop = scopeStop(scope, true);
+      const stop = scopeStop(scope);
       if (!stop) {
         fastScope = scope;
         fastEpoch = stopEpoch;
         fastEvaluations = evaluations;
-        fastTimed = false;
-        for (let s: Scope | undefined = scope; s; s = s.parent) if (s.timeLimit !== Infinity) fastTimed = true;
+        fastLimit = Infinity;
+        for (let s: Scope | undefined = scope; s; s = s.parent) fastLimit = Math.min(fastLimit, s.timeLimit);
       }
       return stop;
     };
     // One clock reading serves a whole scopeStop call, parents included.
     let stopTime = NaN;
-    let stopThrottled = false;
     const stopActive = () => {
-      if (stopTime !== stopTime) stopTime = stopThrottled ? throttledActive() : freshActive();
+      if (stopTime !== stopTime) stopTime = activeMilliseconds();
       return stopTime;
     };
-    /** Whether a scope must stop; `throttled` lets the time test reuse a recent clock reading. */
-    const scopeStop = (scope: Scope, throttled = false): boolean => {
+    /** Whether a scope must stop. */
+    const scopeStop = (scope: Scope): boolean => {
       stopTime = NaN;
-      stopThrottled = throttled;
       return scopeStopAt(scope);
     };
     const scopeStopAt = (scope: Scope): boolean => {
