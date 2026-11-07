@@ -1,7 +1,7 @@
 //! Compares the native validator with the TypeScript verdicts in a case file written by
 //! tools/xcheck-gen.ts (development tool).
 //!
-//!   cargo run --release --example xcheck -- CASES.jsonl
+//!   cargo run --release --example xcheck_curved -p polypack-curved -- CASES.jsonl
 //!
 //! For every case: the mirror verdict (the server's computation as reproduced here) and the safe
 //! verdict (the default, which errs strict) against the TypeScript verdict; for the loose rule the

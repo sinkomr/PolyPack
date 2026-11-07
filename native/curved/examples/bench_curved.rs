@@ -1,6 +1,6 @@
 //! Runs jobs on a panel of problems and prints one JSON line per job (development tool).
 //!
-//!   cargo run --release --example bench -- --ids curved/-1/3/6/8,curved/0.1/0/0/40 --seeds 1,2 \
+//!   cargo run --release --example bench_curved -p polypack-curved -- --ids curved/-1/3/6/8,curved/0.1/0/0/40 --seeds 1,2 \
 //!       --seconds 10 [--evals N] [--save DIR] [--loose] [--bound]
 //!
 //! --seconds: CPU seconds per job (thread CPU time). --evals: evaluation cap (restarts plus hops).

@@ -1,6 +1,6 @@
 [workspace]
 resolver = "2"
-members = ["flat", "client"]
+members = ["flat", "client", "curved"]
 
 [workspace.package]
 version = "0.1.0"
