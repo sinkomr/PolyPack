@@ -133,7 +133,7 @@ pub fn is_software_refusal(status: u16, body: &Value) -> bool {
 
 pub struct Api {
     pub base: String,
-    agent: ureq::Agent,
+    http: ureq::Agent,
     pacer: Arc<Mutex<Pacer>>,
     /// Set to stop: no new request starts and every wait ends.
     stop: Arc<AtomicBool>,
@@ -146,7 +146,7 @@ impl Clone for Api {
     fn clone(&self) -> Self {
         Api {
             base: self.base.clone(),
-            agent: self.agent.clone(),
+            http: self.http.clone(),
             pacer: self.pacer.clone(),
             stop: self.stop.clone(),
             log: self.log.clone(),
@@ -165,8 +165,8 @@ impl Api {
         log: Arc<dyn Fn(&str) + Send + Sync>,
         on_upgrade: Arc<dyn Fn(&str) + Send + Sync>,
     ) -> Self {
-        let agent = ureq::AgentBuilder::new().timeout(Duration::from_secs(TIMEOUT_S)).user_agent(user_agent).build();
-        Api { base: base.trim_end_matches('/').to_string(), agent, pacer, stop, log, upgrade: Arc::new(Mutex::new(None)), on_upgrade }
+        let http = ureq::AgentBuilder::new().timeout(Duration::from_secs(TIMEOUT_S)).user_agent(user_agent).build();
+        Api { base: base.trim_end_matches('/').to_string(), http, pacer, stop, log, upgrade: Arc::new(Mutex::new(None)), on_upgrade }
     }
 
     fn stopped(&self) -> bool {
@@ -193,7 +193,7 @@ impl Api {
             return Attempt::Failed { why: "the client is stopping".into(), sent: false };
         }
         let url = format!("{}{}", self.base, path);
-        let req = if method == "GET" { self.agent.get(&url) } else { self.agent.post(&url) };
+        let req = if method == "GET" { self.http.get(&url) } else { self.http.post(&url) };
         let req = req.set("accept", "application/json");
         let result = match body {
             Some(b) => req.set("content-type", "application/json").send_string(&b.to_string()),
