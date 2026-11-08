@@ -1,4 +1,5 @@
 import { DEFAULT_PATIENCE, ProblemState, evolvable } from "./game";
+import { isPolygon } from "./frontier";
 import type { UpgradeId } from "./upgrades";
 
 /**
@@ -20,6 +21,19 @@ export type AutoAction = "compact" | "evolve";
 export interface AutoTarget {
   key: string;
   action: AutoAction;
+}
+
+/**
+ * The queue's problems auto-eval leaves alone: a space problem on a page that cannot run space
+ * problems (not cross-origin isolated), and a problem whose last run failed to start (`reasons`,
+ * by key) until the player presses Evolve on it again.
+ */
+export function unrunnableKeys(
+  queue: readonly ProblemState[],
+  spacesRun: boolean,
+  reasons: ReadonlyMap<string, string>,
+): Set<string> {
+  return new Set(queue.filter((p) => reasons.has(p.key) || (!spacesRun && !isPolygon(p))).map((p) => p.key));
 }
 
 const workable = (p: ProblemState, busy: ReadonlySet<string>) => !p.leaving && !p.closed && !busy.has(p.key);

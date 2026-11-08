@@ -20,7 +20,7 @@ import {
   stallAfter,
 } from "../src/tighter/game";
 import { drawProblem, takeToken } from "../src/tighter/dealer";
-import { autoTarget } from "../src/tighter/scheduler";
+import { autoTarget, unrunnableKeys } from "../src/tighter/scheduler";
 import type { UpgradeId } from "../src/tighter/upgrades";
 
 // Auto-advance (2026-10-21): problems keep their best at the last progress and the evaluations since;
@@ -374,5 +374,37 @@ describe("Tighter lanes with Auto-advance", () => {
       old.find((p) => p.key === key)!.sinceGain += 10;
     }
     expect(oldMoves).toBeGreaterThan(500);
+  });
+});
+
+describe("Tighter auto-eval and problems that cannot run on the page", () => {
+  const owned = new Set<UpgradeId>(["auto1", "advance"]);
+  const polygon = newProblem({ family: "polygon", N: 24, M: 30, P: 60 }, "open", T0);
+  const space = newProblem({ family: "surface", id: "surface/cube/fold/33/70", P: 70 }, "open", T0);
+  const other = newProblem({ family: "polygon", N: 21, M: 21, P: 40 }, "open", T0);
+  const queue = [space, polygon, other];
+  const pick = (skip: Set<string>) =>
+    autoTarget({ lane: 0, queue, focus: space.key, busy: skip, owned, current: null, stall: 1000 })?.key;
+
+  it("skips a space problem when the page cannot run them, and a polygon problem is not skipped", () => {
+    expect(unrunnableKeys(queue, true, new Map())).toEqual(new Set());
+    expect(unrunnableKeys(queue, false, new Map())).toEqual(new Set([space.key]));
+    expect(pick(new Set())).toBe(space.key);
+    expect(pick(unrunnableKeys(queue, false, new Map()))).toBe(polygon.key);
+  });
+
+  it("skips a problem whose run could not start, until the reason is cleared", () => {
+    const reasons = new Map([[polygon.key, "the solver could not start"]]);
+    expect(unrunnableKeys(queue, true, reasons)).toEqual(new Set([polygon.key]));
+    expect(pick(unrunnableKeys(queue, true, reasons))).toBe(space.key);
+    reasons.delete(polygon.key);
+    expect(unrunnableKeys(queue, true, reasons).size).toBe(0);
+  });
+
+  it("goes on to the next workable problem, and to none when all are out", () => {
+    const reasons = new Map([[polygon.key, "x"]]);
+    expect(pick(unrunnableKeys(queue, false, reasons))).toBe(other.key);
+    reasons.set(other.key, "x");
+    expect(pick(unrunnableKeys(queue, false, reasons))).toBeUndefined();
   });
 });
