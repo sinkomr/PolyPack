@@ -5,7 +5,7 @@
  * changes. Used by the board's space mode, and meant for any page that shows such a packing.
  *
  * The 2D kinds and 3D in 3D (render/polyhedra.ts and render/balls.ts, three.js) draw with a SpaceRenderer (render/*.ts)
- * under the toolbar built here. 3D on 4D (boundary) draws with the three.js views of
+ * under the toolbar built here; the torus's 3D view (three.js too) adds its canvas beside the renderer's svg. 3D on 4D (boundary) draws with the three.js views of
  * packages/view3d, which bring their own toolbar and controls (render/boundary.ts).
  */
 import type { SpaceConfig } from "@polypack/spaces";
@@ -186,7 +186,8 @@ export function mountSpaceView(host: HTMLElement, p: SearchProblem, label = "Dra
     show(config) {
       shown = config !== null;
       if (config) renderer.draw(config);
-      renderer.element.style.visibility = shown ? "" : "hidden";
+      // the drawing, and the canvas a renderer may put beside it (the torus's 3D view)
+      for (const el of box.children) (el as HTMLElement).style.visibility = shown ? "" : "hidden";
       sync();
     },
     destroy() {

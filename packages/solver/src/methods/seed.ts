@@ -7,6 +7,7 @@ import {
   snapDistance,
   type PackingConfig,
   type Pose,
+  pieceSeparationBelow,
 } from "@polypack/geometry";
 import type { MethodContext, MethodDefinition } from "../framework";
 import type { ParameterSchema } from "../schema";
@@ -304,7 +305,7 @@ async function rowPitch(ctx: MethodContext, theta: number, shifted: boolean): Pr
       if (ctx.shouldStop()) return undefined;
       const mid = (lo + hi) / 2;
       const p = { x: horizontal ? mid : offset, y: horizontal ? 0 : mid, theta };
-      if (pieceSeparation(N, origin, p).sep < 0) lo = mid;
+      if (pieceSeparationBelow(N, origin, p, 0)) lo = mid;
       else hi = mid;
     }
     return hi;
@@ -459,14 +460,14 @@ async function* rings(ctx: MethodContext, trials: Trial[]): AsyncGenerator<Packi
             for (const b of band.pieces) {
               if (scanned++ % 256 === 0 && !(await ctx.checkpoint())) return undefined;
               if ((a.x - b.x) ** 2 + (a.y - b.y) ** 2 > reach2) continue;
-              if (pieceSeparation(N, a, b).sep < 0) return false;
+              if (pieceSeparationBelow(N, a, b, 0)) return false;
             }
           }
           for (let j = 0; j < i; j++) {
             if (scanned++ % 256 === 0 && !(await ctx.checkpoint())) return undefined;
             const b = added[j];
             if ((a.x - b.x) ** 2 + (a.y - b.y) ** 2 > reach2) continue;
-            if (pieceSeparation(N, a, b).sep < 0) return false;
+            if (pieceSeparationBelow(N, a, b, 0)) return false;
           }
         }
         return true;
@@ -521,7 +522,7 @@ async function* recordPlus(ctx: MethodContext, trials: Trial[]): AsyncGenerator<
       if (i % 64 === 0 && !(await ctx.checkpoint())) return false;
       const q = record.pieces[i];
       if ((p.x - q.x) ** 2 + (p.y - q.y) ** 2 > (reach + margin) ** 2) continue;
-      if (pieceSeparation(N, p, q).sep < 0) return false;
+      if (pieceSeparationBelow(N, p, q, 0)) return false;
     }
     return true;
   };

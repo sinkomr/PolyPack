@@ -43,11 +43,101 @@ export function unpackState(template: PackingConfig, x: readonly number[]): Pena
   };
 }
 
-/** A rebuilt grid is safe even for long line-search moves; no Verlet displacement assumption. */
+/** Hash tables of nearbyPairs: cells by (ix, iy), columns by ix; a slot is in use when its stamp is the call's. */
+interface PairGrid {
+  bits: number;
+  cellX: Float64Array;
+  cellY: Float64Array;
+  cellStamp: Uint32Array;
+  /** First and last piece of each cell, plus one; next[i + 1] is the piece after i in its cell, plus one (0: none). */
+  head: Int32Array;
+  tail: Int32Array;
+  columnKey: Float64Array;
+  columnStamp: Uint32Array;
+  next: Int32Array;
+  stamp: number;
+}
+
+function makeGrid(bits: number, pieces: number): PairGrid {
+  const size = 1 << bits;
+  return {
+    bits,
+    cellX: new Float64Array(size),
+    cellY: new Float64Array(size),
+    cellStamp: new Uint32Array(size),
+    head: new Int32Array(size),
+    tail: new Int32Array(size),
+    columnKey: new Float64Array(size),
+    columnStamp: new Uint32Array(size),
+    next: new Int32Array(pieces + 1),
+    stamp: 0,
+  };
+}
+
+/** Reused between calls; a call made while another runs (from its `stopped`) gets its own. */
+let sharedGrid: PairGrid | undefined;
+let sharedGridBusy = false;
+
+/**
+ * Pairs (j, i), j < i, whose centres are at most `reach` apart, from a grid of cells of side
+ * `reach`. A rebuilt grid is safe even for long line-search moves; no Verlet displacement
+ * assumption.
+ *
+ * The order of the pairs and of the calls to `stopped` is part of the contract, since callers sum
+ * in pair order and some count their `stopped` calls: piece i in turn calls `stopped` once, then
+ * once per column ix - 1, ix, ix + 1, and for a column that already holds a piece once per cell of
+ * it, listing each cell's pieces in the order they were added. The cells and columns live in
+ * open-addressing tables over typed arrays (keys compared with ===, so -0 is 0 as for a Map).
+ */
 export function nearbyPairs(poses: readonly Pose[], reach: number, stopped: () => boolean): [number, number][] {
-  const grid = new Map<number, Map<number, number[]>>();
+  const P = poses.length;
+  let bits = 4;
+  while (1 << bits < 4 * P) bits++;
+  let grid: PairGrid;
+  const shared = !sharedGridBusy;
+  if (shared) {
+    if (!sharedGrid || sharedGrid.bits < bits || sharedGrid.next.length < P + 1) sharedGrid = makeGrid(bits, P);
+    grid = sharedGrid;
+    sharedGridBusy = true;
+  } else grid = makeGrid(bits, P);
+  try {
+    if (grid.stamp === 0xffffffff) {
+      grid.stamp = 0;
+      grid.cellStamp.fill(0);
+      grid.columnStamp.fill(0);
+    }
+    grid.stamp++;
+    return scanPairs(poses, reach, stopped, grid);
+  } finally {
+    if (shared) sharedGridBusy = false;
+  }
+}
+
+function scanPairs(poses: readonly Pose[], reach: number, stopped: () => boolean, grid: PairGrid): [number, number][] {
   const pairs: [number, number][] = [];
-  for (let i = 0; i < poses.length; i++) {
+  const far2 = reach * reach * (1 + 1e-9);
+  const near2 = reach * reach * (1 - 1e-9);
+  const P = poses.length;
+  const { cellX, cellY, cellStamp, head, tail, columnKey, columnStamp, next, stamp } = grid;
+  const mask = (1 << grid.bits) - 1;
+  const shift = 32 - grid.bits;
+  const findCell = (x: number, y: number): number => {
+    let h = Math.imul((x | 0) ^ Math.imul(y | 0, 0x27d4eb2f), 0x9e3779b1) >>> shift;
+    while (cellStamp[h] === stamp) {
+      if (cellX[h] === x && cellY[h] === y) return h;
+      h = (h + 1) & mask;
+    }
+    return ~h;
+  };
+  const findColumn = (x: number): number => {
+    let h = Math.imul(x | 0, 0x9e3779b1) >>> shift;
+    while (columnStamp[h] === stamp) {
+      if (columnKey[h] === x) return h;
+      h = (h + 1) & mask;
+    }
+    return ~h;
+  };
+  for (let i = 0; i < P; i++) {
     if (stopped()) return pairs;
     const a = poses[i];
     const ix = Math.floor(a.x / reach);
@@ -56,8 +146,8 @@ export function nearbyPairs(poses: readonly Pose[], reach: number, stopped: () =
       // Outside the representable cell lattice, neighbouring integer offsets
       // can collapse to one number. A bounded fallback avoids duplicate pairs.
       const all: [number, number][] = [];
-      for (let j = 0; j < poses.length; j++) {
-        for (let k = j + 1; k < poses.length; k++) {
+      for (let j = 0; j < P; j++) {
+        for (let k = j + 1; k < P; k++) {
           if (stopped()) return all;
           if (Math.hypot(poses[j].x - poses[k].x, poses[j].y - poses[k].y) <= reach) all.push([j, k]);
         }
@@ -66,23 +156,37 @@ export function nearbyPairs(poses: readonly Pose[], reach: number, stopped: () =
     }
     for (let ox = -1; ox <= 1; ox++) {
       if (stopped()) return pairs;
-      const column = grid.get(ix + ox);
-      if (!column) continue;
+      if (findColumn(ix + ox) < 0) continue;
       for (let oy = -1; oy <= 1; oy++) {
         if (stopped()) return pairs;
-        for (const j of column.get(iy + oy) ?? []) {
-          if (Math.hypot(a.x - poses[j].x, a.y - poses[j].y) <= reach) pairs.push([j, i]);
+        const cell = findCell(ix + ox, iy + oy);
+        if (cell < 0) continue;
+        for (let link = head[cell]; link !== 0; link = next[link]) {
+          const j = link - 1;
+          const dx = a.x - poses[j].x;
+          const dy = a.y - poses[j].y;
+          const d2 = dx * dx + dy * dy;
+          // Clear cases are settled on the squared distance; near the reach, hypot decides as before
+          if (d2 > far2) continue;
+          if (d2 < near2 || Math.hypot(dx, dy) <= reach) pairs.push([j, i]);
         }
       }
     }
-    let column = grid.get(ix);
-    if (!column) {
-      column = new Map();
-      grid.set(ix, column);
+    const column = findColumn(ix);
+    if (column < 0) {
+      columnStamp[~column] = stamp;
+      columnKey[~column] = ix;
     }
-    const cell = column.get(iy);
-    if (cell) cell.push(i);
-    else column.set(iy, [i]);
+    let cell = findCell(ix, iy);
+    if (cell < 0) {
+      cell = ~cell;
+      cellStamp[cell] = stamp;
+      cellX[cell] = ix;
+      cellY[cell] = iy;
+      head[cell] = i + 1;
+    } else next[tail[cell]] = i + 1;
+    tail[cell] = i + 1;
+    next[i + 1] = 0;
   }
   return pairs;
 }

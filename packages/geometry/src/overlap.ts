@@ -76,6 +76,14 @@ function cosToNearestVertex(rel: number, step: number): number {
  * toward A, where delta is the angle between -u and B's nearest vertex direction
  * (the support function of a regular polygon). So the gap along u is
  *   (cB - cA) . u - inradius - R cos(delta).
+ *
+ * The axes are visited A0, B0, A1, B1, ... and the first largest gap wins. Since
+ * r <= R cos(delta) <= R, each gap lies in [lin - r - R, lin - 2r], lin = (cB - cA) . u (with the
+ * sign of the piece the axis belongs to). So an axis whose lin is below the largest lin by more
+ * than R - r (plus a margin of 1e-11 (|dx| + |dy| + R), far above the rounding of either bound)
+ * has a gap strictly below the largest gap, and its cosine is not needed: the axes that remain
+ * hold every one attaining the maximum, visited in the same order with the same expressions, so
+ * the result is the same double, normal included.
  */
 export function regularPolygonSeparation(N: number, a: Pose, b: Pose, scale = 1): Contact {
   const R = circumradius(N) * scale;
@@ -91,25 +99,39 @@ export function regularPolygonSeparation(N: number, a: Pose, b: Pose, scale = 1)
   const eb = pieceTrig(N, b.theta, ea);
   const axA = axesOf(ea);
   const axB = axesOf(eb);
+  let top = -Infinity;
+  for (let k = 0; k < N; k++) {
+    const linA = dx * axA[3 * k + 1] + dy * axA[3 * k + 2];
+    const linB = -(dx * axB[3 * k + 1] + dy * axB[3 * k + 2]);
+    if (linA > top) top = linA;
+    if (linB > top) top = linB;
+  }
+  let threshold = top - (R - r) - 1e-11 * (Math.abs(dx) + Math.abs(dy) + R);
+  // infinite or NaN inputs: every axis, as without the bound
+  if (!Number.isFinite(threshold)) threshold = -Infinity;
   for (let k = 0; k < N; k++) {
     // edge normals bisect consecutive vertex directions
-    const angA = axA[3 * k];
     let ux = axA[3 * k + 1];
     let uy = axA[3 * k + 2];
-    let sep = dx * ux + dy * uy - r - R * cosToNearestVertex(angA + Math.PI / 2 - b.theta, step);
-    if (sep > best) {
-      best = sep;
-      nx = -ux;
-      ny = -uy;
+    const linA = dx * ux + dy * uy;
+    if (!(linA < threshold)) {
+      const sep = linA - r - R * cosToNearestVertex(axA[3 * k] + Math.PI / 2 - b.theta, step);
+      if (sep > best) {
+        best = sep;
+        nx = -ux;
+        ny = -uy;
+      }
     }
-    const angB = axB[3 * k];
     ux = axB[3 * k + 1];
     uy = axB[3 * k + 2];
-    sep = -(dx * ux + dy * uy) - r - R * cosToNearestVertex(angB + Math.PI / 2 - a.theta, step);
-    if (sep > best) {
-      best = sep;
-      nx = ux;
-      ny = uy;
+    const linB = -(dx * ux + dy * uy);
+    if (!(linB < threshold)) {
+      const sep = linB - r - R * cosToNearestVertex(axB[3 * k] + Math.PI / 2 - a.theta, step);
+      if (sep > best) {
+        best = sep;
+        nx = ux;
+        ny = uy;
+      }
     }
   }
   return { sep: best, nx, ny };
@@ -228,6 +250,52 @@ export function pairSeparation(N: number, a: Pose, b: Pose, scale = 1): number {
   return best;
 }
 
+/**
+ * pairSeparation(N, a, b, scale) < threshold, without the separation itself. The separation is
+ * the largest of the SAT gaps (regularPolygonSeparation), so it is below the threshold exactly
+ * when every gap is: the gaps are computed with the same expressions and the test ends at the
+ * first one that reaches the threshold. A gap is at most lin - 2r (lin as in
+ * regularPolygonSeparation), so an axis whose lin is below threshold + 2r by more than the margin
+ * cannot reach it and needs no cosine. Many-sided pieces and non-finite thresholds or offsets
+ * go through pairSeparation itself.
+ */
+export function separationBelow(N: number, a: Pose, b: Pose, threshold: number, scale = 1): boolean {
+  if (N === 0) return circleSeparation(a, b, scale).sep < threshold;
+  const dx = b.x - a.x;
+  const dy = b.y - a.y;
+  const R = circumradius(N) * scale;
+  const r = inradius(N) * scale;
+  const need = threshold + 2 * r - 1e-11 * (Math.abs(dx) + Math.abs(dy) + R);
+  if (N >= PRUNE_FROM_N || !Number.isFinite(need) || !Number.isFinite(threshold))
+    return pairSeparation(N, a, b, scale) < threshold;
+  const step = (2 * Math.PI) / N;
+  const ea = pieceTrig(N, a.theta);
+  const eb = pieceTrig(N, b.theta, ea);
+  const axA = axesOf(ea);
+  const axB = axesOf(eb);
+  for (let k = 0; k < N; k++) {
+    const linA = dx * axA[3 * k + 1] + dy * axA[3 * k + 2];
+    if (linA >= need && linA - r - R * cosToNearestVertex(axA[3 * k] + Math.PI / 2 - b.theta, step) >= threshold)
+      return false;
+    const linB = -(dx * axB[3 * k + 1] + dy * axB[3 * k + 2]);
+    if (linB >= need && linB - r - R * cosToNearestVertex(axB[3 * k] + Math.PI / 2 - a.theta, step) >= threshold)
+      return false;
+  }
+  return true;
+}
+
+/**
+ * pieceSeparation(N, a, b, scale).sep < threshold, for the callers that compare pieceSeparation.
+ * It is separationBelow except for many-sided pieces with a non-finite centre offset, where
+ * pairSeparation (NaN) and pieceSeparation (the largest gap that is a number, -Infinity when
+ * none is) part ways: there the full kernel answers.
+ */
+export function pieceSeparationBelow(N: number, a: Pose, b: Pose, threshold: number, scale = 1): boolean {
+  if (N >= PRUNE_FROM_N && !(Number.isFinite(b.x - a.x) && Number.isFinite(b.y - a.y)))
+    return regularPolygonSeparation(N, a, b, scale).sep < threshold;
+  return separationBelow(N, a, b, threshold, scale);
+}
+
 /** Circle-circle separation from the centre distance. Exact in both signs. */
 export function circleSeparation(a: Pose, b: Pose, scale = 1): Contact {
   const dx = a.x - b.x;
@@ -312,30 +380,93 @@ export function findOverlaps(N: number, poses: readonly Pose[], tol = TOL, scale
   const reach2 = reach * reach;
   const OFFSET = 2 ** 25;
   const SPAN = 2 ** 26;
-  const grid = new Map<number, number[]>();
   const out: Overlap[] = [];
-  for (let i = 0; i < poses.length; i++) {
+  const P = poses.length;
+  const grid = cellTable(P);
+  const { keys, stamps, head, tail, next, mask, shift } = grid;
+  const stamp = grid.stamp;
+  // the cell with this key, or ~slot of the free slot where it would go
+  const find = (key: number): number => {
+    let h = Math.imul((key | 0) ^ Math.imul((key / 4294967296) | 0, 0x27d4eb2f), 0x9e3779b1) >>> shift;
+    while (stamps[h] === stamp) {
+      if (keys[h] === key || (key !== key && keys[h] !== keys[h])) return h;
+      h = (h + 1) & mask;
+    }
+    return ~h;
+  };
+  for (let i = 0; i < P; i++) {
     const a = poses[i];
     const ix = Math.floor(a.x / reach);
     const iy = Math.floor(a.y / reach);
     for (let gx = ix - 1; gx <= ix + 1; gx++) {
       for (let gy = iy - 1; gy <= iy + 1; gy++) {
-        const cell = grid.get((gx + OFFSET) * SPAN + (gy + OFFSET));
-        if (!cell) continue;
-        for (const j of cell) {
+        const cell = find((gx + OFFSET) * SPAN + (gy + OFFSET));
+        if (cell < 0) continue;
+        for (let link = head[cell]; link !== 0; link = next[link]) {
+          const j = link - 1;
           const b = poses[j];
           const dx = a.x - b.x;
           const dy = a.y - b.y;
           if (dx * dx + dy * dy > reach2) continue;
+          // most pairs within reach do not overlap: the cheaper test settles them
+          if (!separationBelow(N, a, b, -tol, scale)) continue;
           const sep = pairSeparation(N, a, b, scale);
           if (sep < -tol && out.push({ i: j, j: i, sep }) >= limit) return out;
         }
       }
     }
-    const key = (ix + OFFSET) * SPAN + (iy + OFFSET);
-    const cell = grid.get(key);
-    if (cell) cell.push(i);
-    else grid.set(key, [i]);
+    let cell = find((ix + OFFSET) * SPAN + (iy + OFFSET));
+    if (cell < 0) {
+      cell = ~cell;
+      stamps[cell] = stamp;
+      keys[cell] = (ix + OFFSET) * SPAN + (iy + OFFSET);
+      head[cell] = i + 1;
+    } else next[tail[cell]] = i + 1;
+    tail[cell] = i + 1;
+    next[i + 1] = 0;
   }
   return out;
+}
+
+/**
+ * The cells of findOverlaps: an open-addressing table from a cell's key, the double a Map was
+ * keyed by before, to the pieces in it as linked lists in insertion order. Keys match as Map keys
+ * do (SameValueZero: NaN matches NaN). A slot is in use when its stamp is the current call's.
+ * Reused between calls; findOverlaps runs no callbacks, so no second call can start while one
+ * uses it.
+ */
+interface CellTable {
+  keys: Float64Array;
+  stamps: Uint32Array;
+  head: Int32Array;
+  tail: Int32Array;
+  next: Int32Array;
+  mask: number;
+  shift: number;
+  stamp: number;
+}
+let cells: CellTable | undefined;
+
+function cellTable(pieces: number): CellTable {
+  let bits = 4;
+  while (1 << bits < 4 * pieces) bits++;
+  if (!cells || cells.mask + 1 < 1 << bits || cells.next.length < pieces + 1) {
+    const size = 1 << bits;
+    cells = {
+      keys: new Float64Array(size),
+      stamps: new Uint32Array(size),
+      head: new Int32Array(size),
+      tail: new Int32Array(size),
+      next: new Int32Array(pieces + 1),
+      mask: size - 1,
+      shift: 32 - bits,
+      stamp: 0,
+    };
+  }
+  if (cells.stamp === 0xffffffff) {
+    cells.stamp = 0;
+    cells.stamps.fill(0);
+  }
+  cells.stamp++;
+  return cells;
 }
