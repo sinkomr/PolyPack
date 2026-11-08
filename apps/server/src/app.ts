@@ -35,12 +35,15 @@ import {
   MAX_NOTE_LENGTH,
   MAX_REPORTED_OVERLAPS,
   OVERLOAD_DELAY_MS,
+  KEYED_SUBMISSIONS_PER_MINUTE,
+  KEYED_VERIFY_MS_PER_MINUTE,
   OVERLOAD_RETRY_S,
-  RateLimiter,
   SUBMISSIONS_PER_MINUTE,
-  TimeBudget,
+  SUBMIT_KEY_HEADER,
+  SubmitLimits,
   VERIFY_MS_PER_MINUTE,
   addressKey,
+  constantTimeEqual,
   readBodyWithin,
   sanitizeText,
 } from "./limits";
@@ -66,16 +69,29 @@ export interface AppOptions {
   records: LiteratureRecord[];
   /** Admin routes are disabled when this is empty. */
   adminToken?: string;
+  /**
+   * A submission that carries this key in the X-Submit-Key header counts against the key's limits
+   * (`perKey`, `keyVerifyMsPerMinute`) instead of its address's; one that carries another key, or any
+   * key while this is empty, is refused (401).
+   */
+  submitKey?: string;
   /** Address used for rate limiting; IPv6 addresses are limited by their /64 (see addressKey). */
   clientIp?: (c: Context) => string;
   /** Called for submissions that beat the literature. */
   log?: (msg: string) => void;
   /**
    * `perIp` submissions per `windowMs` from one address, and `verifyMsPerMinute` milliseconds of
-   * verification a minute; `overloadDelayMs` is the event-loop delay above which submissions are
-   * refused (0: never).
+   * verification a minute; `perKey` and `keyVerifyMsPerMinute` the same with the submit key;
+   * `overloadDelayMs` is the event-loop delay above which submissions are refused (0: never).
    */
-  limits?: { perIp?: number; windowMs?: number; verifyMsPerMinute?: number; overloadDelayMs?: number };
+  limits?: {
+    perIp?: number;
+    windowMs?: number;
+    verifyMsPerMinute?: number;
+    perKey?: number;
+    keyVerifyMsPerMinute?: number;
+    overloadDelayMs?: number;
+  };
   /** The current event-loop delay in ms (see LoopDelay); without it submissions are never refused as overload. */
   loopDelay?: () => number;
   /** Receives a line per submission and the counts for a line a minute (see LoadStats). */
@@ -206,13 +222,6 @@ function decimalInteger(text: string | undefined): number {
   return text !== undefined && /^\d{1,9}$/.test(text) ? Number(text) : NaN;
 }
 
-function constantTimeEqual(a: string, b: string): boolean {
-  if (a.length !== b.length) return false;
-  let diff = 0;
-  for (let i = 0; i < a.length; i++) diff |= a.charCodeAt(i) ^ b.charCodeAt(i);
-  return diff === 0;
-}
-
 /** The HTTP API. Host-neutral: everything it needs comes in through the options. */
 export function createApp(opts: AppOptions): Hono {
   const { store } = opts;
@@ -230,8 +239,13 @@ export function createApp(opts: AppOptions): Hono {
     await next();
   });
   const windowMs = opts.limits?.windowMs ?? 60_000;
-  const ipLimit = new RateLimiter(opts.limits?.perIp ?? SUBMISSIONS_PER_MINUTE, windowMs);
-  const verifyBudget = new TimeBudget(opts.limits?.verifyMsPerMinute ?? VERIFY_MS_PER_MINUTE);
+  const submitLimits = new SubmitLimits(opts.submitKey, {
+    perIp: opts.limits?.perIp ?? SUBMISSIONS_PER_MINUTE,
+    windowMs,
+    verifyMsPerMinute: opts.limits?.verifyMsPerMinute ?? VERIFY_MS_PER_MINUTE,
+    perKey: opts.limits?.perKey ?? KEYED_SUBMISSIONS_PER_MINUTE,
+    keyVerifyMsPerMinute: opts.limits?.keyVerifyMsPerMinute ?? KEYED_VERIFY_MS_PER_MINUTE,
+  });
   const overloadDelayMs = opts.limits?.overloadDelayMs ?? OVERLOAD_DELAY_MS;
   const loopDelay = opts.loopDelay ?? (() => 0);
   const clientIp = opts.clientIp ?? (() => "unknown");
@@ -892,13 +906,13 @@ export function createApp(opts: AppOptions): Hono {
     let verifyMs: number | null = null;
     const answer = (
       body: SubmitResponse,
-      status: 200 | 400 | 409 | 413 | 422 | 426 | 429 | 503,
+      status: 200 | 400 | 401 | 409 | 413 | 422 | 426 | 429 | 503,
       retryAfter?: number,
     ) => {
       opts.stats?.submission({ status, ms: performance.now() - started, verifyMs, problem });
       return c.json(body, status, retryAfter === undefined ? {} : { "retry-after": String(retryAfter) });
     };
-    const reject = (status: 400 | 409 | 413 | 422 | 426 | 429 | 503, reasons: string[], retryAfter?: number) =>
+    const reject = (status: 400 | 401 | 409 | 413 | 422 | 426 | 429 | 503, reasons: string[], retryAfter?: number) =>
       answer(
         {
           valid: false,
@@ -919,10 +933,12 @@ export function createApp(opts: AppOptions): Hono {
     // until it catches up.
     if (overloadDelayMs > 0 && loopDelay() > overloadDelayMs)
       return reject(503, ["the server is busy; try again in a few seconds"], OVERLOAD_RETRY_S);
-    const address = addressKey(clientIp(c));
-    if (!ipLimit.allow(address)) return reject(429, ["too many submissions from this address; wait a minute"]);
-    const wait = verifyBudget.wait(address);
-    if (wait > 0) return reject(429, [`too much verification work from this address; wait ${wait} s`], wait);
+    const submitter = submitLimits.of(addressKey(clientIp(c)), c.req.header(SUBMIT_KEY_HEADER));
+    if (!submitter) return reject(401, ["the submit key is not this server's"]);
+    if (!submitter.count.allow(submitter.key))
+      return reject(429, [`too many submissions ${submitter.from}; wait a minute`]);
+    const wait = submitter.budget.wait(submitter.key);
+    if (wait > 0) return reject(429, [`too much verification work ${submitter.from}; wait ${wait} s`], wait);
     if (Number(c.req.header("content-length") ?? 0) > MAX_BODY_BYTES) return reject(413, ["request body too large"]);
     // read no further than the limit: a chunked body has no Content-Length to check first
     const text = await readBodyWithin(c);
@@ -962,14 +978,14 @@ export function createApp(opts: AppOptions): Hono {
     // when none was). The server does not search for a better orientation; clients turn their
     // boards before sending (decided 2026-10-21, see CONVENTIONS.scoring). Any container or score
     // fields in the body were already dropped by parseConfig. The time it takes is charged to the
-    // address.
+    // address, or to the submit key.
     const verifyStart = performance.now();
     const result = evaluate(config, { maxOverlaps: MAX_REPORTED_OVERLAPS, stopWhenInvalid: true });
     const container = result.valid ? result.container : null;
     const beats = !!container && !!lit && beatsLiterature(container.size, lit);
     const strict = container && beats ? strictVerify(config.N, config.pieces, container) : null;
     verifyMs = performance.now() - verifyStart;
-    verifyBudget.charge(address, verifyMs);
+    submitter.budget.charge(submitter.key, verifyMs);
     if (!container) return reject(422, result.reasons);
     const score = container.size;
 
@@ -1246,12 +1262,12 @@ export function createApp(opts: AppOptions): Hono {
     return c.body(opened.stream, 200, { ...headers, "content-length": String(opened.bytes) });
   });
 
-  // The spaces share the submission limits of /api/submit: one count and one verification budget per address.
+  // The spaces share the submission limits of /api/submit: one count and one verification budget per address
+  // (or for the submit key).
   if (opts.spaces)
     registerSpaceRoutes(app, {
       spaces: opts.spaces,
-      ipLimit,
-      verifyBudget,
+      submitLimits,
       overloaded: () => overloadDelayMs > 0 && loopDelay() > overloadDelayMs,
       clientIp,
       log,

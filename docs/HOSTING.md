@@ -57,6 +57,7 @@ Settings are in `~/.polypack/env`:
 | `PORT`, `HOST` | Where the server listens. Leave `HOST=127.0.0.1`. |
 | `DATABASE_PATH` | The SQLite file. |
 | `ADMIN_TOKEN` | Password for the admin page. Generated at random by `install.sh`; never commit it or paste it anywhere public. Without one, the admin page is switched off. |
+| `SUBMIT_KEY` | Optional. A key of at least 32 characters that lifts the submission limits of whoever sends it in the `X-Submit-Key` header to 600 submissions and 20 s of verification a minute (see `docs/DEPLOY_FLY.md`). Never commit it. |
 | `CLIENT_IP_HEADER` | The header in which the tunnel reports the visitor's address, so that rate limits apply per visitor rather than to the tunnel. `cf-connecting-ip` for Cloudflare; remove the line for Tailscale Funnel. |
 | `OVERLOAD_DELAY_MS` | Optional. The event-loop delay in milliseconds above which submissions are answered 503 with `Retry-After` (250; `0` switches it off). See "Looking after it" in `docs/DEPLOY_FLY.md`. |
 | `SNAPSHOT_DIR`, `SNAPSHOT_HOUR` | Optional. A directory in which the server builds the nightly records snapshot, served at `/api/snapshot`, and the hour (UTC, 11 by default) at which it does. Without `SNAPSHOT_DIR` there is none. See "Records snapshot" in `docs/DEPLOY_FLY.md`. |

@@ -34,6 +34,7 @@ import {
   holderShare,
 } from "../src/app";
 import { SOLVER_METHODS } from "../src/docs";
+import { KEYED_SUBMISSIONS_PER_MINUTE, KEYED_VERIFY_MS_PER_MINUTE, VERIFY_MS_PER_MINUTE } from "../src/limits";
 import { SqliteStore } from "../src/sqlite-store";
 import { GET_MANY_LIMIT, NewSubmission, ProblemLeader } from "../src/store";
 import { withUnits } from "./units";
@@ -182,6 +183,82 @@ describe("POST /api/submit", () => {
     expect((await submit(squares(2, { name: "fresh" }))).status).toBe(429);
     ip = "2.2.2.2";
     expect((await submit(squares(2))).status).toBe(200);
+  });
+});
+
+describe("the submit key", () => {
+  const KEY = "k".repeat(32);
+  const keyedApp = (submitKey: string | undefined, limits: object = {}) =>
+    createApp({
+      store: new SqliteStore(":memory:"),
+      records: [fakeRecord],
+      clientIp: () => ip,
+      log: () => {},
+      submitKey,
+      limits: { perIp: 2, perKey: 4, ...limits },
+    });
+  const send = async (a: ReturnType<typeof createApp>, key?: string) => {
+    const r = await a.request("/api/submit", {
+      method: "POST",
+      headers: { "content-type": "application/json", ...(key === undefined ? {} : { "x-submit-key": key }) },
+      body: JSON.stringify(withUnits(squares(2))),
+    });
+    return { status: r.status, body: (await r.json()) as SubmitResponse };
+  };
+
+  it("has the address's limits five times over by default", () => {
+    expect(KEYED_SUBMISSIONS_PER_MINUTE).toBe(600);
+    expect(KEYED_VERIFY_MS_PER_MINUTE).toBe(5 * VERIFY_MS_PER_MINUTE);
+  });
+
+  it("counts against the key's limit instead of the address's", async () => {
+    const a = keyedApp(KEY);
+    for (let i = 0; i < 4; i++) expect((await send(a, KEY)).status).toBe(200);
+    const over = await send(a, KEY);
+    expect(over.status).toBe(429);
+    expect(over.body.reasons[0]).toMatch(/too many submissions with this submit key/);
+    // the address keeps its own two
+    expect((await send(a)).status).toBe(200);
+    expect((await send(a)).status).toBe(200);
+    expect((await send(a)).body.reasons[0]).toMatch(/too many submissions from this address/);
+  });
+
+  it("is one limit for every address that sends it", async () => {
+    const a = keyedApp(KEY);
+    for (let i = 0; i < 4; i++) {
+      ip = `3.3.3.${i}`;
+      expect((await send(a, KEY)).status).toBe(200);
+    }
+    ip = "4.4.4.4";
+    expect((await send(a, KEY)).status).toBe(429);
+  });
+
+  it("refuses a key that is not the server's and counts it against the address", async () => {
+    const a = keyedApp(KEY);
+    const wrong = await send(a, "x".repeat(32));
+    expect(wrong.status).toBe(401);
+    expect(wrong.body.valid).toBe(false);
+    expect(wrong.body.reasons[0]).toMatch(/submit key/);
+    expect((await send(a, "")).status).toBe(401);
+    expect((await send(a)).status).toBe(429);
+    const board = (await (await a.request("/api/leaderboard/4/4/2")).json()) as { entries: unknown[] };
+    expect(board.entries).toEqual([]);
+  });
+
+  it("refuses every key on a server that has none", async () => {
+    const a = keyedApp(undefined);
+    expect((await send(a, KEY)).status).toBe(401);
+    expect((await send(a)).status).toBe(200);
+  });
+
+  it("has its own verification budget", async () => {
+    // one check empties the address's budget; the key's is large
+    const a = keyedApp(KEY, { perIp: 100, perKey: 100, verifyMsPerMinute: 1e-6, keyVerifyMsPerMinute: 1e9 });
+    expect((await send(a)).status).toBe(200);
+    const spent = await send(a);
+    expect(spent.status).toBe(429);
+    expect(spent.body.reasons[0]).toMatch(/too much verification work from this address/);
+    for (let i = 0; i < 3; i++) expect((await send(a, KEY)).status).toBe(200);
   });
 });
 
