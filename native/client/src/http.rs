@@ -11,7 +11,8 @@
 //!   reads the problem first and sends again only when the packing is not there (at most three
 //!   POSTs in all).
 //! - Submissions are paced at the server's limit per address, 120 a minute, over a sliding window
-//!   one second longer than the server's.
+//!   one second longer than the server's; with the submit key (--key-file), at the key's limit,
+//!   600 a minute. The key goes with every POST in the X-Submit-Key header, and never with a GET.
 
 use serde_json::Value;
 use std::collections::VecDeque;
@@ -24,6 +25,11 @@ pub const RATE_LIMIT_WAIT_MS: u64 = 65_000;
 pub const RATE_LIMIT_RETRIES: u32 = 3;
 pub const MAX_BACKOFF_MS: u64 = 60_000;
 pub const SUBMISSIONS_PER_MINUTE: usize = 120;
+/// The server's limit for submissions that carry its submit key (all holders of the key together).
+pub const KEYED_SUBMISSIONS_PER_MINUTE: usize = 600;
+pub const SUBMIT_KEY_HEADER: &str = "x-submit-key";
+/// The server ignores a shorter SUBMIT_KEY, so a shorter key in the file cannot be the server's.
+pub const MIN_SUBMIT_KEY_LENGTH: usize = 32;
 pub const SUBMISSION_WINDOW_MS: u64 = 61_000;
 pub const MAX_ANSWER_BYTES: u64 = 16 * 1024 * 1024;
 pub const MAX_SUBMIT_ATTEMPTS: u32 = 3;
@@ -145,6 +151,20 @@ pub fn is_software_refusal(status: u16, body: &Value) -> bool {
     status == 400 && body.get("reasons").and_then(|r| r.as_array()).map_or(false, |r| r.iter().any(|x| x.as_str() == Some(SOFTWARE_REFUSAL)))
 }
 
+/// The submit key from `path`: the file's text without the whitespace around it, which must be at
+/// least MIN_SUBMIT_KEY_LENGTH characters with nothing but visible ASCII.
+pub fn read_submit_key(path: &std::path::Path) -> Result<String, String> {
+    let text = std::fs::read_to_string(path).map_err(|e| format!("cannot read the submit key file {}: {e}", path.display()))?;
+    let key = text.trim();
+    if key.len() < MIN_SUBMIT_KEY_LENGTH {
+        return Err(format!("the submit key in {} is shorter than {MIN_SUBMIT_KEY_LENGTH} characters", path.display()));
+    }
+    if !key.bytes().all(|b| b.is_ascii_graphic()) {
+        return Err(format!("the submit key in {} has characters other than visible ASCII", path.display()));
+    }
+    Ok(key.to_string())
+}
+
 pub struct Api {
     pub base: String,
     http: ureq::Agent,
@@ -154,6 +174,10 @@ pub struct Api {
     log: Arc<dyn Fn(&str) + Send + Sync>,
     upgrade: Arc<Mutex<Option<String>>>,
     on_upgrade: Arc<dyn Fn(&str) + Send + Sync>,
+    /// Sent with every POST (see SUBMIT_KEY_HEADER).
+    submit_key: Option<Arc<str>>,
+    /// Called when the server refuses the submit key (401 to a POST).
+    on_key_refused: Arc<dyn Fn(&str) + Send + Sync>,
 }
 
 impl Clone for Api {
@@ -166,6 +190,8 @@ impl Clone for Api {
             log: self.log.clone(),
             upgrade: self.upgrade.clone(),
             on_upgrade: self.on_upgrade.clone(),
+            submit_key: self.submit_key.clone(),
+            on_key_refused: self.on_key_refused.clone(),
         }
     }
 }
@@ -180,7 +206,24 @@ impl Api {
         on_upgrade: Arc<dyn Fn(&str) + Send + Sync>,
     ) -> Self {
         let http = ureq::AgentBuilder::new().timeout(Duration::from_secs(TIMEOUT_S)).user_agent(user_agent).build();
-        Api { base: base.trim_end_matches('/').to_string(), http, pacer, stop, log, upgrade: Arc::new(Mutex::new(None)), on_upgrade }
+        Api {
+            base: base.trim_end_matches('/').to_string(),
+            http,
+            pacer,
+            stop,
+            log,
+            upgrade: Arc::new(Mutex::new(None)),
+            on_upgrade,
+            submit_key: None,
+            on_key_refused: Arc::new(|_: &str| {}),
+        }
+    }
+
+    /// The same, sending `key` with every POST; `on_refused` is called when the server refuses it.
+    pub fn with_submit_key(mut self, key: Option<String>, on_refused: Arc<dyn Fn(&str) + Send + Sync>) -> Self {
+        self.submit_key = key.map(Arc::from);
+        self.on_key_refused = on_refused;
+        self
     }
 
     fn stopped(&self) -> bool {
@@ -209,6 +252,10 @@ impl Api {
         let url = format!("{}{}", self.base, path);
         let req = if method == "GET" { self.http.get(&url) } else { self.http.post(&url) };
         let req = req.set("accept", "application/json");
+        let req = match (&self.submit_key, method) {
+            (Some(key), "POST") => req.set(SUBMIT_KEY_HEADER, key),
+            _ => req,
+        };
         let result = match body {
             Some(b) => req.set("content-type", "application/json").send_string(&b.to_string()),
             None => req.call(),
@@ -241,6 +288,10 @@ impl Api {
                 drop(up);
                 (self.on_upgrade)(&said);
             }
+        }
+        if status == 401 && method == "POST" && self.submit_key.is_some() {
+            let said = parsed.get("reasons").and_then(|r| r.get(0)).and_then(|r| r.as_str()).unwrap_or("unauthorized").to_string();
+            (self.on_key_refused)(&said);
         }
         Attempt::Answer(Answer { status, body: parsed }, retry)
     }
@@ -408,6 +459,22 @@ impl Api {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn submit_keys() {
+        let dir = std::env::temp_dir().join(format!("polypack-key-test-{}", std::process::id()));
+        std::fs::create_dir_all(&dir).unwrap();
+        let file = dir.join("key");
+        std::fs::write(&file, format!("  {}\n", "a1".repeat(16))).unwrap();
+        assert_eq!(read_submit_key(&file).unwrap(), "a1".repeat(16));
+        std::fs::write(&file, "a".repeat(31)).unwrap();
+        assert!(read_submit_key(&file).unwrap_err().contains("shorter than 32"));
+        std::fs::write(&file, format!("{} {}", "a".repeat(20), "b".repeat(20))).unwrap();
+        assert!(read_submit_key(&file).unwrap_err().contains("visible ASCII"));
+        assert!(read_submit_key(&dir.join("missing")).unwrap_err().contains("cannot read"));
+        std::fs::remove_file(&file).unwrap();
+        std::fs::remove_dir(&dir).unwrap();
+    }
 
     #[test]
     fn pacer_limits() {

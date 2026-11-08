@@ -11,7 +11,7 @@
 use crate::answers::{clean_text, describe_answer, read_problem_info, read_stored_entry, read_submit_response, stored_name, ProblemInfo, SiteBest};
 use crate::engine::{search, Candidate, Known, SearchInput, ThreadRunner};
 use crate::format::{format_duration, format_score, iso_now, now_ms, relative_percent, timestamp};
-use crate::http::{sleep_unless, Answer, Api, Pacer, SubmitCheck, SubmitOutcome, SUBMISSIONS_PER_MINUTE, SUBMISSION_WINDOW_MS};
+use crate::http::{read_submit_key, sleep_unless, Answer, Api, Pacer, SubmitCheck, SubmitOutcome, KEYED_SUBMISSIONS_PER_MINUTE, SUBMISSIONS_PER_MINUTE, SUBMISSION_WINDOW_MS};
 use crate::memory::Memory;
 use crate::options::Options;
 use crate::pick::{draw_problem, note_search, prune_recent, FlatKind};
@@ -286,6 +286,17 @@ fn and_list(xs: &[String]) -> String {
 }
 
 pub fn run(o: Options) -> i32 {
+    // read before anything else, so that a wrong file stops the client at once
+    let submit_key = match &o.key_file {
+        Some(path) => match read_submit_key(path) {
+            Ok(k) => Some(k),
+            Err(e) => {
+                log(&format!("Cannot use --key-file: {e}"));
+                return 1;
+            }
+        },
+        None => None,
+    };
     let state = match StateDir::open(&o.state_dir) {
         Ok(s) => s,
         Err(crate::state::OpenError::LockHeld(path, holder)) => {
@@ -308,7 +319,8 @@ pub fn run(o: Options) -> i32 {
     }
     let stop = Arc::new(AtomicBool::new(false));
     let hard = Arc::new(AtomicBool::new(false));
-    let pacer = Arc::new(Mutex::new(Pacer::new(SUBMISSIONS_PER_MINUTE, SUBMISSION_WINDOW_MS)));
+    let per_minute = if submit_key.is_some() { KEYED_SUBMISSIONS_PER_MINUTE } else { SUBMISSIONS_PER_MINUTE };
+    let pacer = Arc::new(Mutex::new(Pacer::new(per_minute, SUBMISSION_WINDOW_MS)));
     let user_agent = format!("polypack-native/{} ({} {})", env!("CARGO_PKG_VERSION"), std::env::consts::OS, std::env::consts::ARCH);
     let shared_cell: Arc<Mutex<Option<std::sync::Weak<Shared>>>> = Arc::new(Mutex::new(None));
     let cell = shared_cell.clone();
@@ -318,9 +330,15 @@ pub fn run(o: Options) -> i32 {
             s.request_stop("The server answered 426 (upgrade required)");
         }
     });
+    let cell = shared_cell.clone();
+    let on_key_refused: Arc<dyn Fn(&str) + Send + Sync> = Arc::new(move |said: &str| {
+        if let Some(s) = cell.lock().unwrap().as_ref().and_then(|w| w.upgrade()) {
+            s.request_stop(&format!("The server refused the submit key (401: {said}); check the file given with --key-file"));
+        }
+    });
     let logger: Arc<dyn Fn(&str) + Send + Sync> = Arc::new(|m: &str| log(m));
     let reader = Api::new(&o.base, &user_agent, stop.clone(), pacer.clone(), logger.clone(), on_upgrade.clone());
-    let submitter = Api::new(&o.base, &user_agent, hard.clone(), pacer, logger, on_upgrade);
+    let submitter = Api::new(&o.base, &user_agent, hard.clone(), pacer, logger, on_upgrade).with_submit_key(submit_key.clone(), on_key_refused);
     let kind = FlatKind::new(o.n.as_ref(), o.m.as_ref(), o.p.as_ref());
     let shared = Arc::new(Shared {
         clock: ActiveClock::new(),
@@ -503,7 +521,16 @@ fn banner(s: &Shared) {
                 "dry run (--dry-run): nothing is submitted".to_string()
             }
         } else {
-            format!("submitting as \"{}\"{}", o.name.as_deref().unwrap_or(""), if o.note.is_empty() { String::new() } else { format!(" with the note \"{}\"", o.note) })
+            format!(
+                "submitting as \"{}\"{}; {}",
+                o.name.as_deref().unwrap_or(""),
+                if o.note.is_empty() { String::new() } else { format!(" with the note \"{}\"", o.note) },
+                // run() has read the key by now, or stopped
+                match &o.key_file {
+                    Some(path) => format!("with the submit key from {}, at most {KEYED_SUBMISSIONS_PER_MINUTE} a minute", path.display()),
+                    None => format!("at most {SUBMISSIONS_PER_MINUTE} a minute (the limit per address)"),
+                }
+            )
         }
     ));
     let methods: Vec<&str> = polypack_flat::methods::ALL.iter().filter(|m| m.available() && !matches!(m, Method::Identity | Method::Seed | Method::Polish)).map(|m| m.name()).collect();

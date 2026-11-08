@@ -30,6 +30,8 @@ pub struct Options {
     /// True when nothing is submitted: --dry-run, or no --name.
     pub dry_run: bool,
     pub state_dir: PathBuf,
+    /// A file holding the site's submit key (--key-file); read when the client starts.
+    pub key_file: Option<PathBuf>,
     pub note: String,
     pub battery_pause: bool,
     pub low_priority: bool,
@@ -98,6 +100,9 @@ Usage: polypack-native [options]
   --dry-run                search, but never submit
   --note TEXT              free text shown with your entries (at most {MAX_NOTE_LENGTH} characters)
   --state DIR              where the client keeps its state (default {state})
+  --key-file PATH          a file holding the site's submit key, given out by its operator: the
+                           submissions count against the key's limit of 600 a minute instead of this
+                           address's 120, and are paced at it
   --priority low|normal    CPU priority of the search threads (default low)
   --no-battery-pause       keep searching on battery power (by default it pauses)
   --once                   search one problem, then exit
@@ -234,6 +239,7 @@ const VALUE_OPTIONS: &[&str] = &[
     "P",
     "max-P",
     "state",
+    "key-file",
     "note",
     "priority",
     "target-holder",
@@ -398,6 +404,15 @@ pub fn parse_options(argv: &[String], machine: &Machine) -> Result<Parsed, Optio
         state_dir = std::env::current_dir().unwrap_or_default().join(state_dir);
     }
     let dry_run = flag("dry-run") || name.is_none();
+    let key_file = get("key-file").map(|f| {
+        let f = PathBuf::from(&f);
+        let text = f.to_string_lossy().to_string();
+        if text == "~" || text.starts_with("~/") {
+            machine.home.join(text.trim_start_matches('~').trim_start_matches('/'))
+        } else {
+            f
+        }
+    });
     Ok(Parsed::Run(Options {
         name,
         base,
@@ -419,6 +434,7 @@ pub fn parse_options(argv: &[String], machine: &Machine) -> Result<Parsed, Optio
         p,
         dry_run,
         state_dir,
+        key_file,
         note,
         battery_pause: !flag("no-battery-pause"),
         low_priority: priority == "low",
@@ -471,6 +487,9 @@ mod tests {
             Err(e) => Err(e.0),
         };
         assert_eq!(run(&["--P", "3,10-12"]).unwrap().p, Some(vec![3, 10, 11, 12]));
+        assert_eq!(run(&["--key-file", "~/k.txt"]).unwrap().key_file, Some(PathBuf::from("/home/u/k.txt")));
+        assert_eq!(run(&["--key-file=/etc/k"]).unwrap().key_file, Some(PathBuf::from("/etc/k")));
+        assert_eq!(run(&[]).unwrap().key_file, None);
         assert_eq!(run(&["--P", "3,10-12", "--max-P", "10"]).unwrap().p, Some(vec![3, 10]));
         assert_eq!(run(&["--max-P", "3"]).unwrap().p, Some(vec![1, 2, 3]));
         assert!(run(&["--P", "20-30", "--max-P", "10"]).is_err());
