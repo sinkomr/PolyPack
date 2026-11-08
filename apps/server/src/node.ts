@@ -7,7 +7,7 @@ import { compress } from "hono/compress";
 import { LiteratureRecord, closedToSubmissions } from "@polypack/geometry";
 import { loadSpacesIndex } from "@polypack/spaces/load";
 import { createApp } from "./app";
-import { OVERLOAD_DELAY_MS } from "./limits";
+import { MIN_SUBMIT_KEY_LENGTH, OVERLOAD_DELAY_MS } from "./limits";
 import { LoadStats, LoopDelay } from "./load";
 import { scheduleSnapshots, snapshotSource, snapshotSpaces } from "./snapshot";
 import { SqliteStore } from "./sqlite-store";
@@ -27,6 +27,11 @@ const clientIpHeader = process.env.CLIENT_IP_HEADER?.toLowerCase() || undefined;
 const adminToken = process.env.ADMIN_TOKEN === "change-me" ? undefined : process.env.ADMIN_TOKEN || undefined;
 if (process.env.ADMIN_TOKEN === "change-me")
   console.warn("ADMIN_TOKEN is still the placeholder; admin access is disabled");
+// The submit key (see SUBMIT_KEY_HEADER): a short one is not used, since a guess could find it.
+const submitKeyText = process.env.SUBMIT_KEY?.trim() || undefined;
+const submitKey = submitKeyText && submitKeyText.length >= MIN_SUBMIT_KEY_LENGTH ? submitKeyText : undefined;
+if (submitKeyText && !submitKey)
+  console.warn(`SUBMIT_KEY has fewer than ${MIN_SUBMIT_KEY_LENGTH} characters; submissions with a key are refused`);
 
 const records: LiteratureRecord[] = JSON.parse(readFileSync(resolve(root, "data/records.json"), "utf8")).records;
 // The research records of the spaces (data/<space>/records.json), each read once into a compact
@@ -83,6 +88,7 @@ const app = createApp({
   store,
   records,
   adminToken,
+  submitKey,
   // 0 never refuses submissions as overload; the end-to-end tests set it, since a test machine
   // under load delays the event loop without the server being overloaded
   limits: { overloadDelayMs: wholeNumber("OVERLOAD_DELAY_MS", OVERLOAD_DELAY_MS) },

@@ -29,6 +29,8 @@ import {
 } from "@polypack/spaces";
 import { LEADERS_MAX_KEYS, LEADERS_MAX_URL } from "./leaders";
 import {
+  KEYED_SUBMISSIONS_PER_MINUTE,
+  KEYED_VERIFY_MS_PER_MINUTE,
   MAX_BODY_BYTES,
   MAX_NAME_LENGTH,
   MAX_NOTE_LENGTH,
@@ -365,7 +367,7 @@ Response (this example only ties the research record, so it is valid and <a href
 </table>
 <p>The statuses are those of <a href="#submit"><code>/api/submit</code></a>: 200 valid; 400 a malformed body (an unknown space, an id that is not of the catalogue, a missing name, a configuration that is not of the space's format, numbers out of range); 409 a <a href="#spaces-closed">closed</a> problem, not examined;
 413 a body over ${MAX_BODY_BYTES / 1024} kB (also without a Content-Length: the body is read no further than the limit); 422 a well-formed configuration that is not a valid packing, whose size is below the problem's lower bound, or that beats the research record but fails the <a href="#spaces-strict">strict check</a> (with the reasons); 429 and 503 as for <code>/api/submit</code>, and also 429 while another entry from the same address is being checked (one check at a time per address), and 503 when ${SPACE_HEAVY_CHECKS_WAITING} heavy checks (polyhedra, surface, curved, sphere and torus from P = ${SPACE_HEAVY_CHECK_P}; also sphere with N ≥ 20, and balls on the 120-cell from P = 5 or on the 24-cell from P = 22) already wait their turn.
-<strong>The rate limit and the verification time budget are shared with <code>/api/submit</code></strong>: both routes count against the same 120 submissions and ${VERIFY_MS_PER_MINUTE / 1000} s of verification a minute per address.</p>
+<strong>The rate limit and the verification time budget are shared with <code>/api/submit</code></strong>: both routes count against the same 120 submissions and ${VERIFY_MS_PER_MINUTE / 1000} s of verification a minute per address, or against the submit key's limits (see 429 under <a href="#submit"><code>/api/submit</code></a>), and the one check at a time is per address or per key.</p>
 <p>Every check is bounded. P is at most the space's limit (${SPACE_NAMES.map((n) => `${n} ${SPACE_MAX_P[n]}`).join(", ")}); sizes are at most ${SPACE_MAX_SIZE}, every coordinate, angle and quaternion component is at most ${SPACE_MAX_COORD} in absolute value (each number on its own; a polyhedra quaternion's components, which only give a direction, at most ${POLYHEDRA_MAX_QUATERNION}), and a quaternion's norm is at least ${SPACE_MIN_QUATERNION_NORM.toExponential()};
 checks of surface, curved, sphere, torus and polyhedra run in short slices that yield to the event loop; the size must reach the problem's lower bound (less a relative ${SPACE_BOUND_SLACK}), which is checked before the packing; on a surface in fold mode one piece may cross at most ${SURFACE_MAX_CHAINS} chains of faces; on a free torus the basis must need at most ${TORUS_MAX_TRANSLATES} lattice translates per pair of pieces, which any reduced basis does;
 on a polytope boundary s is at most ${BOUNDARY_MAX_S}, one piece may cross at most ${BOUNDARY_MAX_CHAINS} chains of cells, and a solid's rotation q must be a unit quaternion to within 1e-9.</p>
@@ -493,12 +495,14 @@ When the published packing has coordinates they are in <code>literature.pieces</
 <tr><th scope="col">Status</th><th scope="col">Meaning</th></tr>
 <tr><td>200</td><td>Valid. <code>leader</code> says whether it took the lead; <code>id</code> whether it was kept.</td></tr>
 <tr><td>400</td><td>Malformed body. <code>reasons</code> lists what is wrong.</td></tr>
+<tr><td>401</td><td>The <code>X-Submit-Key</code> header carries a key that is not the server's (see 429). Nothing is examined or stored.</td></tr>
 <tr><td>409</td><td>The problem is <a href="#closed">closed</a>. The packing is not examined and nothing is stored.</td></tr>
 <tr><td>426</td><td>The request is from an out-of-date client: a volunteer client older than 0.3.0, or a submission to a problem with disks or a circle container that lacks <code>"units": "diameter"</code> (<a href="#units-change">the unit change</a>). Nothing was examined or stored.</td></tr>
 <tr><td>413</td><td>Body larger than ${MAX_BODY_BYTES / 1024} kB.</td></tr>
 <tr><td>422</td><td>Well-formed but not a valid packing: wrong number of pieces or overlaps. <code>reasons</code> names the deepest overlap.</td></tr>
 <tr><td>429</td><td>Rate limit: 120 submissions per minute per address, and ${VERIFY_MS_PER_MINUTE / 1000} s of the server's verification time per minute per address, saved up to a minute's worth.
-IPv6 addresses count by their /64 prefix. Wait and send again; when the limit is verification time, <code>Retry-After</code> says how many seconds. A script that submits many results should pace them.</td></tr>
+IPv6 addresses count by their /64 prefix. Wait and send again; when the limit is verification time, <code>Retry-After</code> says how many seconds. A script that submits many results should pace them.
+A submission that carries the server's submit key in the header <code>X-Submit-Key</code> counts against the key's limits instead of its address's: ${KEYED_SUBMISSIONS_PER_MINUTE} submissions and ${KEYED_VERIFY_MS_PER_MINUTE / 1000} s of verification time a minute, for all who send the key together. The site's operator gives the key out.</td></tr>
 <tr><td>503</td><td>The server is busy. Nothing was examined or stored; send again after the seconds in <code>Retry-After</code>.</td></tr>
 </table>
 <table id="submit-fields">

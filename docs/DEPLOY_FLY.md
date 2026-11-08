@@ -45,6 +45,7 @@ fly open
 | `fly.toml` | `SNAPSHOT_DIR = "/data/snapshot"` | Where the server keeps the records snapshot's manifest (see below); it stores no other file there. |
 | `fly.toml` | `[[vm]]` | Machine size. |
 | secret | `ADMIN_TOKEN` | Admin password. Without one the admin page is switched off. |
+| secret | `SUBMIT_KEY` | Optional. A key of at least 32 characters for a submitter who needs more than an address's limits: submissions that carry it in the `X-Submit-Key` header count against 600 a minute and 20 s of verification a minute, for all its holders together. Without one, every submission with that header is refused (401). Create it like the admin password, with `openssl rand -hex 32`. |
 
 Keep exactly one machine. The database is a single file on one volume, so a second machine would have its own, separate leaderboard:
 
