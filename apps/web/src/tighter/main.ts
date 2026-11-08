@@ -116,7 +116,7 @@ import {
   syncEconomy,
   tidyRent,
 } from "./economy";
-import { Lane, NOT_ISOLATED, isSpaceRunState, spaceRunsHere } from "./lanes";
+import { Lane, NOT_ISOLATED, isSpaceRunState, laneInterrupted, spaceRunsHere } from "./lanes";
 import { methodGame, methodLabel, runSetup, warmIn, warmupOf } from "./methods";
 import { latticeDue, latticeStep } from "./methods/lattice";
 import type { RunStage, RunView } from "./methods";
@@ -1208,6 +1208,8 @@ async function openRun(lv: LaneView, p: ProblemState, want: WantedRun, job: Job)
 
 /** Keeps why a run could not start: the problem's note shows it, and auto-eval leaves the problem until the player presses Evolve. */
 function runRefused(p: ProblemState, message: string): void {
+  // a lane busy or closed under the open says nothing about the problem: the next job opens again
+  if (laneInterrupted(message)) return;
   startFailures.set(p.key, message);
   event(`A run on ${problemTitle(p)} could not start (${message}).`, false);
 }

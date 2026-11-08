@@ -22,6 +22,9 @@ export type OpenSpaceAnswer =
 export type AnyRunState = RunState | SpaceRunState;
 /** What openSpace answers on a page that is not cross-origin isolated (a space run needs shared memory). */
 export const NOT_ISOLATED = "needs a cross-origin isolated page";
+/** Answers that only mean the lane was busy or closed under the open, not that the problem cannot run: the next job opens again. */
+const INTERRUPTED = new Set(["a run is being opened", "closed while opening", "the lane was closed"]);
+export const laneInterrupted = (message: string): boolean => INTERRUPTED.has(message);
 
 /** Whether this page can run space problems: they need a SharedArrayBuffer, hence a cross-origin isolated page. */
 export const spaceRunsHere = (): boolean =>
