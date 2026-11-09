@@ -2300,7 +2300,11 @@ function noticeChainedRuns(): void {
     },
     { once: true },
   );
-  if (!dialog.open) dialog.showModal();
+  try {
+    if (!dialog.open) dialog.showModal();
+  } catch {
+    // a notice that cannot open must not stop the run
+  }
 }
 
 /** Why a run on the problem could not start, by key, for this session (not saved): its note says so and auto-eval leaves it alone until the player presses Evolve. */
