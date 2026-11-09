@@ -116,7 +116,7 @@ import {
   syncEconomy,
   tidyRent,
 } from "./economy";
-import { Lane, NOT_ISOLATED, isSpaceRunState, laneInterrupted, spaceRunsHere } from "./lanes";
+import { Lane, NOT_ISOLATED, chainedRunsHere, isSpaceRunState, laneInterrupted, spaceRunsHere } from "./lanes";
 import { methodGame, methodLabel, runSetup, warmIn, warmupOf } from "./methods";
 import { latticeDue, latticeStep } from "./methods/lattice";
 import type { RunStage, RunView } from "./methods";
@@ -1249,6 +1249,7 @@ async function openSpaceRun(lv: LaneView, p: ProblemState & SpaceKey, want: Want
     else runRefused(p, a.message);
     return false;
   }
+  if (!spaceRunsHere()) noticeChainedRuns();
   openedRun(state, p, now());
   lv.run = {
     key: p.key,
@@ -2264,8 +2265,47 @@ async function spaceInfo(io: DealIo, k: SpaceKey): Promise<SpaceRead | null> {
   return read;
 }
 
-/** Set when the page is not cross-origin isolated (at load, or when a space run proves it): no space problems are dealt this session. */
-let spaceBlocked = !spaceRunsHere();
+/** Set when the page can run space problems neither with shared memory nor as a chain (no workers; at load, or when a space run proves it): no space problems are dealt this session. */
+let spaceBlocked = !(spaceRunsHere() || chainedRunsHere());
+
+/** Where the player asked not to see the chained-runs notice again. */
+const CHAIN_NOTICE_KEY = "tighter-chain-notice-hidden";
+
+/** Whether the chained-runs notice was shown in this page load (it comes once, with the first chained run). */
+let chainNoticeShown = false;
+
+/** Tells the player, once, that this page runs space problems as chains of shorter runs (unless they asked not to be told). */
+function noticeChainedRuns(): void {
+  if (chainNoticeShown) return;
+  chainNoticeShown = true;
+  try {
+    if (localStorage.getItem(CHAIN_NOTICE_KEY) === "1") return;
+  } catch {
+    // storage may be unavailable: the notice shows
+  }
+  const dialog = $<HTMLDialogElement>("t-chain-notice");
+  const hide = $<HTMLInputElement>("t-chain-hide");
+  $("t-chain-more").textContent = CHAIN_NOTICE_MORE;
+  hide.checked = false;
+  $("t-chain-ok").addEventListener("click", () => dialog.close(), { once: true });
+  dialog.addEventListener(
+    "close",
+    () => {
+      if (!hide.checked) return;
+      try {
+        localStorage.setItem(CHAIN_NOTICE_KEY, "1");
+      } catch {
+        // the notice will show again
+      }
+    },
+    { once: true },
+  );
+  try {
+    if (!dialog.open) dialog.showModal();
+  } catch {
+    // a notice that cannot open must not stop the run
+  }
+}
 
 /** Why a run on the problem could not start, by key, for this session (not saved): its note says so and auto-eval leaves it alone until the player presses Evolve. */
 const startFailures = new Map<string, string>();
@@ -2280,6 +2320,11 @@ const framed = window.self !== window.top;
 const CANNOT_RUN = framed
   ? "This problem can't run while the game is embedded in another site. To play it, Export your save in Settings, open polypack.fly.dev/tighter.html, and Import the save there. Or Drop it from the queue."
   : "This problem can't run on this page. Open polypack.fly.dev/tighter.html directly in Chrome, Edge, Firefox or Safari, not in an app's built-in browser, or Drop it from the queue.";
+
+/** The notice's second paragraph: how to get the full solver, which differs in a portal's frame (the save stays behind). */
+const CHAIN_NOTICE_MORE = framed
+  ? "For the full solver, Export your save in Settings, open polypack.fly.dev/tighter.html, and Import the save there."
+  : "For the full solver, open polypack.fly.dev/tighter.html directly in Chrome, Edge, Firefox or Safari, not in an app's built-in browser. Export and Import in Settings move your save.";
 
 /** The slices a space problem may be drawn from now: those open in the dimensions opened (the cycle's rules restrict polygon problems only), none on a page that cannot run space problems. */
 function dealableSlices(): SliceId[] {

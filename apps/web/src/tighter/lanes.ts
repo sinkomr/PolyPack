@@ -1,5 +1,6 @@
 import type { OpenRunRequest, RunState } from "./open-run";
 import type { HostReply, HostRequest } from "./run-host";
+import { type ChainEvent, type ChainLinkSpan, chainMsBetween, chainStateAt } from "./space-chain-core";
 import { SpaceRunControl } from "./space-control";
 import type { SpaceRunRequest, SpaceRunState, SpaceStartAnswer, SpaceStartRequest } from "./space-run-types";
 
@@ -11,8 +12,10 @@ import type { SpaceRunRequest, SpaceRunState, SpaceStartAnswer, SpaceStartReques
  *
  * A lane may instead hold a space run (space-run.ts), which blocks its worker while paused: its
  * steps, holds and close go through shared memory (space-control.ts), not messages, and the lane
- * answers each step when the worker reports that the run reached what was allowed. A space run
- * needs a cross-origin isolated page.
+ * answers each step when the worker reports that the run reached what was allowed. That needs a
+ * cross-origin isolated page. On a page that is not, a space run is a chain of shorter runs
+ * (space-chain.ts): the worker streams events, the lane keeps them and answers each step with the
+ * state as of what the step allowed, never with a find past it.
  */
 
 export type OpenAnswer =
@@ -20,7 +23,7 @@ export type OpenAnswer =
 export type OpenSpaceAnswer =
   { ok: true; params: Record<string, unknown>; state: SpaceRunState } | { ok: false; message: string };
 export type AnyRunState = RunState | SpaceRunState;
-/** What openSpace answers on a page that is not cross-origin isolated (a space run needs shared memory). */
+/** What openSpace answers on a page that is not cross-origin isolated and has no workers either (a space run needs shared memory or a chain). */
 export const NOT_ISOLATED = "needs a cross-origin isolated page";
 /** Answers that only mean the lane was busy or closed under the open, not that the problem cannot run: the next job opens again. */
 const INTERRUPTED = new Set(["a run is being opened", "closed while opening", "the lane was closed"]);
@@ -29,6 +32,8 @@ export const laneInterrupted = (message: string): boolean => INTERRUPTED.has(mes
 /** Whether this page can run space problems: they need a SharedArrayBuffer, hence a cross-origin isolated page. */
 export const spaceRunsHere = (): boolean =>
   !!globalThis.crossOriginIsolated && typeof SharedArrayBuffer !== "undefined";
+/** Whether this page can run space problems as a chain (space-chain.ts): without shared memory, but with workers. */
+export const chainedRunsHere = (): boolean => typeof Worker !== "undefined";
 export type StepAnswer = { ok: true; state: AnyRunState; ms: number } | { ok: false; message: string };
 
 /** True for a space run's state, false for a polygon run's. */
@@ -42,6 +47,21 @@ interface SpaceStepWaiter {
   target: number;
   sentAt: number;
   resolve: (a: StepAnswer) => void;
+}
+
+/** The events of a chained run as the page keeps them, and how far the chain has got. */
+interface ChainView {
+  /** The state before the events kept (they are folded into it once revealed). */
+  initial: SpaceRunState;
+  events: ChainEvent[];
+  links: ChainLinkSpan[];
+  /** Kernel evaluations at the end of the last link (or of the chain). */
+  computed: number;
+  /** Kernel evaluations of the latest event, a heartbeat included. */
+  known: number;
+  /** Kernel evaluations whose compute time steps have been paid so far. */
+  paid: number;
+  ended: boolean;
 }
 
 export class Lane {
@@ -59,6 +79,8 @@ export class Lane {
   private allowedEvals = 0;
   private spaceState: SpaceRunState | null = null;
   private spaceSteps: SpaceStepWaiter[] = [];
+  /** The open chained space run (null for any other). */
+  private chain: ChainView | null = null;
   private starts = new Map<number, (a: SpaceStartAnswer) => void>();
   /** Workers that make a start while the lane's own is blocked by a space run. */
   private extra = new Set<Worker>();
@@ -109,6 +131,64 @@ export class Lane {
   private release(): void {
     this.control?.abort();
     this.control = null;
+    this.endChain();
+  }
+
+  /** The open chained run's state as of what it was allowed (and no further than it has computed), which is all the page may know of it. */
+  private revealed(c: ChainView): SpaceRunState {
+    return chainStateAt(c.initial, c.events, this.allowedEvals * this.unit, this.unit, c.known);
+  }
+
+  /**
+   * Drops the open chained run, if any, and answers its steps as ended at what they were allowed. A
+   * worker in the middle of a link cannot read a message for as long as the link takes, so it is
+   * terminated (the lane makes a new one when it is next needed); an idle one is told to close.
+   */
+  private endChain(id = this.runId): SpaceRunState | null {
+    const c = this.chain;
+    if (!c) return null;
+    this.chain = null;
+    const state = { ...this.revealed(c), ended: true, closed: true };
+    const waiting = this.spaceSteps.filter((w) => w.id === id);
+    this.spaceSteps = this.spaceSteps.filter((w) => w.id !== id);
+    for (const w of waiting) w.resolve({ ok: true, state, ms: 0 });
+    const worker = this.worker;
+    if (!worker) return state;
+    if (!c.ended && this.allowedEvals * this.unit > c.computed) {
+      worker.terminate();
+      this.worker = null;
+    } else worker.postMessage({ type: "close", id } satisfies HostRequest);
+    return state;
+  }
+
+  /** Answers the steps the chain has computed far enough for, each with the state as of its allowance. */
+  private settleChain(): void {
+    const c = this.chain;
+    if (!c) return;
+    const unit = this.unit;
+    const ready = this.spaceSteps.filter((w) => w.id === this.runId && (c.ended || c.computed >= w.target * unit));
+    if (!ready.length) return;
+    this.spaceSteps = this.spaceSteps.filter((w) => !ready.includes(w));
+    let state = c.initial;
+    for (const w of ready) {
+      const allowed = w.target * unit;
+      state = chainStateAt(c.initial, c.events, allowed, unit, c.computed);
+      const to = Math.min(allowed, c.computed);
+      // the compute these evaluations cost, not the wait: the work may have been done ahead
+      const ms = chainMsBetween(c.links, c.paid, to);
+      c.paid = Math.max(c.paid, to);
+      this.spaceState = state;
+      w.resolve({ ok: true, state, ms });
+    }
+    if (state.ended) {
+      this.runId = 0;
+      this.chain = null;
+      return;
+    }
+    // what is revealed stays so: fold it into the start of the timeline
+    const last = ready[ready.length - 1]!.target * unit;
+    c.initial = state;
+    c.events = c.events.filter((e) => e.at > last);
   }
 
   /** Opens a run (closing the one open). */
@@ -132,7 +212,7 @@ export class Lane {
   /** Opens a space run (closing the one open); it needs a cross-origin isolated page. */
   openSpace(request: SpaceRunRequest): Promise<OpenSpaceAnswer> {
     if (this.opening) return Promise.resolve({ ok: false, message: "a run is being opened" });
-    if (!spaceRunsHere()) return Promise.resolve({ ok: false, message: NOT_ISOLATED });
+    if (!spaceRunsHere()) return this.openChain(request);
     const id = ++this.nextId;
     this.release();
     const control = new SpaceRunControl();
@@ -154,9 +234,53 @@ export class Lane {
     });
   }
 
+  /** Opens a chained space run (closing the one open), for a page that cannot share memory with a worker. */
+  private openChain(request: SpaceRunRequest): Promise<OpenSpaceAnswer> {
+    if (!chainedRunsHere()) return Promise.resolve({ ok: false, message: NOT_ISOLATED });
+    const id = ++this.nextId;
+    this.release();
+    this.runId = id;
+    this.unit = request.unit;
+    this.allowedEvals = 0;
+    this.spaceState = null;
+    const none: SpaceRunState = {
+      kind: "space",
+      evaluations: 0,
+      best: null,
+      score: null,
+      last: null,
+      found: null,
+      offers: 0,
+      ended: false,
+      closed: false,
+    };
+    this.chain = { initial: none, events: [], links: [], computed: 0, known: 0, paid: 0, ended: false };
+    return new Promise<OpenSpaceAnswer>((resolve) => {
+      this.opening = resolve as (a: OpenAnswer | OpenSpaceAnswer) => void;
+      try {
+        this.post({ type: "open-chain", id, request });
+      } catch (error) {
+        this.opening = null;
+        this.runId = 0;
+        this.chain = null;
+        resolve({ ok: false, message: `the solver could not start: ${String(error)}` });
+      }
+    });
+  }
+
   /** Allows `evals` more evaluations of the open run. */
   step(evals: number): Promise<StepAnswer> {
     if (!this.runId) return Promise.resolve({ ok: false, message: "no open run" });
+    if (this.chain) {
+      const c = this.chain;
+      if (!(evals >= 1)) return Promise.resolve({ ok: true, state: this.revealed(c), ms: 0 });
+      this.allowedEvals += Math.floor(evals);
+      return new Promise<StepAnswer>((resolve) => {
+        this.spaceSteps.push({ id: this.runId, target: this.allowedEvals, sentAt: performance.now(), resolve });
+        this.post({ type: "chain-allow", id: this.runId, total: this.allowedEvals });
+        this.settleChain();
+      });
+    }
     if (this.control) {
       const state = this.spaceState;
       if (!(evals >= 1))
@@ -176,7 +300,7 @@ export class Lane {
 
   /** Holds the open run (a hidden tab, battery power) or lets it go on, without changing what it allows. */
   hold(held: boolean): void {
-    if (!this.runId) return;
+    if (!this.runId || this.chain) return;
     if (this.control) this.control.hold(held);
     else this.post({ type: "hold", id: this.runId, held });
   }
@@ -190,6 +314,8 @@ export class Lane {
     this.opening = null;
     opening?.({ ok: false, message: "closed while opening" });
     this.runId = 0;
+    // a chained run answers at once with what was revealed
+    if (this.chain) return Promise.resolve(this.endChain(id));
     this.release();
     return new Promise((resolve) => {
       this.closing.set(id, resolve);
@@ -205,7 +331,7 @@ export class Lane {
     const id = ++this.nextId;
     return new Promise((resolve) => {
       try {
-        if (!this.control) {
+        if (!this.control && !this.chain) {
           this.starts.set(id, resolve);
           this.post({ type: "space-start", id, request: r });
           return;
@@ -243,6 +369,10 @@ export class Lane {
       this.starts.delete(m.id);
       return;
     }
+    if (m.type === "chain-events") {
+      this.receiveChain(m);
+      return;
+    }
     if (m.type === "space-stepped") {
       // a step is answered whatever happened to its run since (an abort answers it as ended)
       const now = performance.now();
@@ -273,6 +403,7 @@ export class Lane {
       const resolve = this.opening;
       this.opening = null;
       if (isSpaceRunState(m.state)) this.spaceState = m.state;
+      if (this.chain && isSpaceRunState(m.state)) this.chain.initial = m.state;
       resolve?.({ ok: true, params: m.params, state: m.state } as OpenAnswer | OpenSpaceAnswer);
     } else if (m.type === "progress") {
       try {
@@ -287,9 +418,40 @@ export class Lane {
     }
   }
 
+  /** Keeps a chained run's events and answers the steps they complete. */
+  private receiveChain(m: Extract<HostReply, { type: "chain-events" }>): void {
+    const c = this.chain;
+    if (!c || m.id !== this.runId) return;
+    let beat = false;
+    for (const e of m.events) {
+      c.known = Math.max(c.known, e.at);
+      if (e.k === "progress") {
+        beat = true;
+        continue;
+      }
+      if (e.k === "link") {
+        c.links.push({ from: c.computed, to: e.at, ms: e.ms });
+        c.computed = e.at;
+      } else if (e.k === "end") {
+        c.ended = true;
+        c.computed = Math.max(c.computed, e.at);
+      }
+      c.events.push(e);
+    }
+    this.settleChain();
+    if (beat && this.chain === c && !c.ended) {
+      try {
+        this.onProgress?.(this.revealed(c));
+      } catch {
+        // a failing observer must not stop the run
+      }
+    }
+  }
+
   private fail(message: string): void {
     this.runId = 0;
     this.control = null;
+    this.chain = null;
     const opening = this.opening;
     this.opening = null;
     opening?.({ ok: false, message });
