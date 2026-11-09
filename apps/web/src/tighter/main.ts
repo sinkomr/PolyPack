@@ -2273,6 +2273,14 @@ const startFailures = new Map<string, string>();
 /** A queued space problem that this page cannot run (one from the save, or dealt by a cheat). */
 const cannotRunHere = (p: ProblemState) => spaceBlocked && !isPolygon(p);
 
+/** The game runs in another site's frame (a game portal): never cross-origin isolated, and its save is kept apart from the game's own page. */
+const framed = window.self !== window.top;
+
+/** Why a space problem cannot run here, and what the player can do. In a frame the save stays behind, so it says how to move it. */
+const CANNOT_RUN = framed
+  ? "This problem can't run while the game is embedded in another site. To play it, Export your save in Settings, open polypack.fly.dev/tighter.html, and Import the save there. Or Drop it from the queue."
+  : "This problem can't run on this page. Open polypack.fly.dev/tighter.html directly in Chrome, Edge, Firefox or Safari, not in an app's built-in browser, or Drop it from the queue.";
+
 /** The slices a space problem may be drawn from now: those open in the dimensions opened (the cycle's rules restrict polygon problems only), none on a page that cannot run space problems. */
 function dealableSlices(): SliceId[] {
   return spaceBlocked ? [] : openSlices(owned(), state.standing);
@@ -3210,9 +3218,7 @@ function renderProblem(p: ProblemState | undefined): void {
   text("t-problem-count", countText(p));
   let note: string;
   if (p.closed) note = "This problem is closed. The server takes no more entries.";
-  else if (cannotRunHere(p))
-    note =
-      "This problem can't run on this page. Open polypack.fly.dev/tighter.html directly in Chrome, Edge, Firefox or Safari, not in an app's built-in browser, or Drop it from the queue.";
+  else if (cannotRunHere(p)) note = CANNOT_RUN;
   else if (startFailures.has(p.key))
     note = `A run on this problem could not start (${startFailures.get(p.key)}). Press Evolve to try again.`;
   else if (p.leaving) note = "This problem leaves the queue once your best board is sent.";
@@ -3270,7 +3276,7 @@ function renderToolbar(p: ProblemState | undefined, o: ReadonlySet<UpgradeId>): 
   $("t-evolve").title = !p
     ? "There is no problem on the board yet."
     : cannotRunHere(p)
-      ? "This problem can't run on this page. Open polypack.fly.dev/tighter.html directly in Chrome, Edge, Firefox or Safari, or Drop it from the queue."
+      ? CANNOT_RUN
       : p.phase === "bare"
         ? "The pieces are being placed."
         : first
@@ -3936,7 +3942,9 @@ function countText(p: ProblemState): string {
 function dealText(o: Owned): string {
   const line = dealLine(o);
   return spaceBlocked && state.standing.dimensions.length > 1
-    ? `${line} Only 2D in 2D problems are dealt on this page. To play the other Dimensions, open polypack.fly.dev/tighter.html directly in Chrome, Edge, Firefox or Safari.`
+    ? framed
+      ? `${line} Only 2D in 2D problems are dealt while the game is embedded in another site. To play the other Dimensions, Export your save in Settings, open polypack.fly.dev/tighter.html, and Import the save there.`
+      : `${line} Only 2D in 2D problems are dealt on this page. To play the other Dimensions, open polypack.fly.dev/tighter.html directly in Chrome, Edge, Firefox or Safari.`
     : line;
 }
 
