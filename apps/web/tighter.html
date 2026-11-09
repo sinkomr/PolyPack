@@ -363,6 +363,24 @@
       </div>
     </dialog>
 
+    <dialog id="t-chain-notice" class="t-dialog" aria-labelledby="t-chain-heading">
+      <div class="t-dialog-head">
+        <h2 id="t-chain-heading">Slower solver on this page</h2>
+      </div>
+      <div class="t-dialog-body">
+        <p>
+          This page can't share memory with the solver. Problems outside 2D in 2D still run, as a chain of shorter
+          runs. They improve a little more slowly, and the solver may work up to one run ahead of the evaluations you
+          pay for.
+        </p>
+        <p id="t-chain-more"></p>
+        <label class="row"><input id="t-chain-hide" type="checkbox" /> Don't show this again</label>
+        <div class="row wrap">
+          <button id="t-chain-ok" class="primary" type="button">OK</button>
+        </div>
+      </div>
+    </dialog>
+
     <dialog id="t-mechanics" class="t-dialog t-mechanics-dialog" aria-labelledby="t-mechanics-heading">
       <div class="t-dialog-head">
         <h2 id="t-mechanics-heading">Mechanics</h2>

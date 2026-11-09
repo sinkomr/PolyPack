@@ -48,7 +48,7 @@ describe("Tighter space board", () => {
   it("is not imported by the page's own modules, except as types", () => {
     const dir = new URL("../src/tighter/", import.meta.url);
     // the lane worker's own modules run the searches, in the worker's bundle, never the page's
-    const workerOnly = new Set(["space-run.ts", "run-host.ts", "run-worker.ts", "open-run.ts"]);
+    const workerOnly = new Set(["space-run.ts", "space-chain.ts", "run-host.ts", "run-worker.ts", "open-run.ts"]);
     for (const f of readdirSync(dir).filter((n) => n.endsWith(".ts") && !workerOnly.has(n))) {
       const src = readFileSync(new URL(f, dir), "utf8");
       for (const m of src.matchAll(/^import\s+(?!type\b)[^;]*?from\s+"([^"]+)"/gms)) {
