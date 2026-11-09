@@ -201,6 +201,29 @@
           <p id="leaderboard-note" class="note"></p>
         </section>
 
+        <section class="poly-only" aria-labelledby="checkpoints-heading">
+          <h2 id="checkpoints-heading">Checkpoints</h2>
+          <div class="row">
+            <label for="checkpoint-name">Name</label>
+            <input id="checkpoint-name" maxlength="80" placeholder="optional" />
+          </div>
+          <button id="checkpoint-save" class="wide" title="Save the board in this browser, to load it again later" disabled>Save checkpoint</button>
+          <ol id="checkpoint-list" class="leaderboard checkpoints" aria-label="Checkpoints of this problem"></ol>
+          <p id="checkpoint-note" class="note" role="status" aria-live="polite"></p>
+          <details id="checkpoint-all" hidden>
+            <summary id="checkpoint-all-summary">All checkpoints</summary>
+            <div class="table-wrap">
+              <table class="checkpoint-table">
+                <thead>
+                  <tr><th scope="col">Problem</th><th scope="col">Saved</th><th scope="col">Best</th><th scope="col">Size</th><th scope="col"><span class="visually-hidden">Actions</span></th></tr>
+                </thead>
+                <tbody id="checkpoint-table-body"></tbody>
+              </table>
+            </div>
+            <button id="checkpoint-delete-all" type="button">Delete every checkpoint</button>
+          </details>
+        </section>
+
         <section class="poly-only">
           <h2>Save and share</h2>
           <div class="row wrap">

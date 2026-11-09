@@ -381,6 +381,32 @@ input.invalid {
   padding: 0;
   min-height: 0;
 }
+/* the board's checkpoints (checkpoints-panel.ts): this problem's list, then the overview of every problem */
+.checkpoints {
+  margin-top: 8px;
+}
+.checkpoints .checkpoint-head {
+  overflow-wrap: anywhere;
+}
+.checkpoint-table {
+  font-size: 13px;
+  margin: 6px 0 8px;
+}
+.checkpoint-table th,
+.checkpoint-table td {
+  padding: 4px 5px;
+  white-space: nowrap;
+}
+/* the actions go under each other rather than widen the panel */
+.checkpoint-table td:last-child {
+  white-space: normal;
+}
+.checkpoint-table .num {
+  text-align: right;
+}
+.checkpoint-table tr.current td {
+  font-weight: 650;
+}
 .live::before {
   content: "○ offline";
   font-size: 11px;

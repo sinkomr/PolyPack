@@ -18,6 +18,7 @@ import { fillShapeSelect } from "./shapes-ui";
 import { BoardView } from "./view";
 import { SnapMode } from "./snapping";
 import { SolvePanel } from "./solve-panel";
+import { CheckpointsPanel } from "./checkpoints-panel";
 import { initDimensionSwitch } from "./dimension-switch";
 
 const $ = <T extends HTMLElement = HTMLElement>(id: string) => document.getElementById(id) as T;
@@ -655,7 +656,8 @@ window.addEventListener("hashchange", () => {
 });
 view.fit();
 const solve = new SolvePanel(board, view, say);
-Object.assign((window as unknown as { polypack: object }).polypack, { solve });
+const checkpoints = new CheckpointsPanel(board, view, say);
+Object.assign((window as unknown as { polypack: object }).polypack, { solve, checkpoints });
 // the Problem set menu: the other families load on demand, and Flat (2D in 2D) is this board as it
 // is; a run of the board's optimizer is paused while another family is shown, and goes on after
 initDimensionSwitch(() => view.fit(), say, {
