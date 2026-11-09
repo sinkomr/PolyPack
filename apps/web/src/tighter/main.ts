@@ -116,7 +116,7 @@ import {
   syncEconomy,
   tidyRent,
 } from "./economy";
-import { Lane, NOT_ISOLATED, isSpaceRunState } from "./lanes";
+import { Lane, NOT_ISOLATED, isSpaceRunState, laneInterrupted, spaceRunsHere } from "./lanes";
 import { methodGame, methodLabel, runSetup, warmIn, warmupOf } from "./methods";
 import { latticeDue, latticeStep } from "./methods/lattice";
 import type { RunStage, RunView } from "./methods";
@@ -161,6 +161,7 @@ import {
   autoTarget,
   laneSplit,
   meterShare,
+  unrunnableKeys,
 } from "./scheduler";
 import {
   RetiredRefund,
@@ -1008,7 +1009,8 @@ const compactsFirst = (p: ProblemState) =>
  */
 function press(): void {
   const p = focused();
-  if (!p || !ownsGame || p.leaving || p.closed) return;
+  if (!p || !ownsGame || p.leaving || p.closed || cannotRunHere(p)) return;
+  startFailures.delete(p.key);
   stopped = false;
   const o = owned();
   const compact = compactsFirst(p);
@@ -1171,7 +1173,7 @@ async function openRun(lv: LaneView, p: ProblemState, want: WantedRun, job: Job)
     return false;
   }
   if (!a.ok) {
-    say(`A run on ${problemTitle(p)} could not start (${a.message}).`);
+    runRefused(p, a.message);
     return false;
   }
   openedRun(state, p, now());
@@ -1204,6 +1206,14 @@ async function openRun(lv: LaneView, p: ProblemState, want: WantedRun, job: Job)
   return true;
 }
 
+/** Keeps why a run could not start: the problem's note shows it, and auto-eval leaves the problem until the player presses Evolve. */
+function runRefused(p: ProblemState, message: string): void {
+  // a lane busy or closed under the open says nothing about the problem: the next job opens again
+  if (laneInterrupted(message)) return;
+  startFailures.set(p.key, message);
+  event(`A run on ${problemTitle(p)} could not start (${message}).`, false);
+}
+
 /** Opens a run on a space problem: through the lane's space worker, with the family's unit of kernel evaluations. */
 async function openSpaceRun(lv: LaneView, p: ProblemState & SpaceKey, want: WantedRun, job: Job): Promise<boolean> {
   const { method } = want;
@@ -1234,11 +1244,9 @@ async function openSpaceRun(lv: LaneView, p: ProblemState & SpaceKey, want: Want
     return false;
   }
   if (!a.ok) {
-    if (a.message === NOT_ISOLATED) {
-      // latched: no more space problems are dealt this session, and the player is told once
-      if (!spaceBlocked) say("Space problems need an isolated browser page, so they are left out here.");
-      spaceBlocked = true;
-    } else say(`A run on ${problemTitle(p)} could not start (${a.message}).`);
+    // latched: no more space problems are dealt this session (the problem's note says why)
+    if (a.message === NOT_ISOLATED) spaceBlocked = true;
+    else runRefused(p, a.message);
     return false;
   }
   openedRun(state, p, now());
@@ -1605,7 +1613,10 @@ const autoMeter = new AutoMeter();
 
 /** The target a lane's next auto-eval job would take, or null (no work for it). */
 function laneAutoTarget(lv: LaneView, o: Owned) {
-  const busy = new Set(lanes.filter((l) => l !== lv).flatMap(laneKeys));
+  const busy = new Set([
+    ...lanes.filter((l) => l !== lv).flatMap(laneKeys),
+    ...unrunnableKeys(state.queue, !spaceBlocked, startFailures),
+  ]);
   return autoTarget({
     lane: lanes.indexOf(lv),
     queue: state.queue,
@@ -2253,10 +2264,24 @@ async function spaceInfo(io: DealIo, k: SpaceKey): Promise<SpaceRead | null> {
   return read;
 }
 
-/** Set once a space run could not open because the page is not cross-origin isolated: no space problems are dealt this session. */
-let spaceBlocked = false;
+/** Set when the page is not cross-origin isolated (at load, or when a space run proves it): no space problems are dealt this session. */
+let spaceBlocked = !spaceRunsHere();
 
-/** The slices a space problem may be drawn from now: those open in the dimensions opened (the cycle's rules restrict polygon problems only), none once the page proved unable to run space problems. */
+/** Why a run on the problem could not start, by key, for this session (not saved): its note says so and auto-eval leaves it alone until the player presses Evolve. */
+const startFailures = new Map<string, string>();
+
+/** A queued space problem that this page cannot run (one from the save, or dealt by a cheat). */
+const cannotRunHere = (p: ProblemState) => spaceBlocked && !isPolygon(p);
+
+/** The game runs in another site's frame (a game portal): never cross-origin isolated, and its save is kept apart from the game's own page. */
+const framed = window.self !== window.top;
+
+/** Why a space problem cannot run here, and what the player can do. In a frame the save stays behind, so it says how to move it. */
+const CANNOT_RUN = framed
+  ? "This problem can't run while the game is embedded in another site. To play it, Export your save in Settings, open polypack.fly.dev/tighter.html, and Import the save there. Or Drop it from the queue."
+  : "This problem can't run on this page. Open polypack.fly.dev/tighter.html directly in Chrome, Edge, Firefox or Safari, not in an app's built-in browser, or Drop it from the queue.";
+
+/** The slices a space problem may be drawn from now: those open in the dimensions opened (the cycle's rules restrict polygon problems only), none on a page that cannot run space problems. */
 function dealableSlices(): SliceId[] {
   return spaceBlocked ? [] : openSlices(owned(), state.standing);
 }
@@ -3193,6 +3218,9 @@ function renderProblem(p: ProblemState | undefined): void {
   text("t-problem-count", countText(p));
   let note: string;
   if (p.closed) note = "This problem is closed. The server takes no more entries.";
+  else if (cannotRunHere(p)) note = CANNOT_RUN;
+  else if (startFailures.has(p.key))
+    note = `A run on this problem could not start (${startFailures.get(p.key)}). Press Evolve to try again.`;
   else if (p.leaving) note = "This problem leaves the queue once your best board is sent.";
   else if (p.ourId !== null)
     note =
@@ -3239,16 +3267,23 @@ function renderToolbar(p: ProblemState | undefined, o: ReadonlySet<UpgradeId>): 
   const k = evalsPerClick(o);
   text("t-evolve", first ? "Evolve (compacts first)" : k === 1 ? "Evolve" : `Evolve ×${k}`);
   $<HTMLButtonElement>("t-evolve").disabled =
-    !p || p.phase === "bare" || p.leaving || p.closed || (!first && !canEvolve && !compacting(p.key));
+    !p ||
+    p.phase === "bare" ||
+    p.leaving ||
+    p.closed ||
+    cannotRunHere(p) ||
+    (!first && !canEvolve && !compacting(p.key));
   $("t-evolve").title = !p
     ? "There is no problem on the board yet."
-    : p.phase === "bare"
-      ? "The pieces are being placed."
-      : first
-        ? isPolygon(p)
-          ? `Your first click compacts the board with ${evals(COMPACT_EVALS)} of mc_compress. After that, each click runs ${evals(k)}.`
-          : `Your first click compacts the loosely placed board. It runs until mc_compress hands back its first finished packing, however long that takes, and counts as ${evals(COMPACT_EVALS)}. After that, each click runs ${evals(k)}.`
-        : `Each click runs ${evals(k)} on this board.`;
+    : cannotRunHere(p)
+      ? CANNOT_RUN
+      : p.phase === "bare"
+        ? "The pieces are being placed."
+        : first
+          ? isPolygon(p)
+            ? `Your first click compacts the board with ${evals(COMPACT_EVALS)} of mc_compress. After that, each click runs ${evals(k)}.`
+            : `Your first click compacts the loosely placed board. It runs until mc_compress hands back its first finished packing, however long that takes, and counts as ${evals(COMPACT_EVALS)}. After that, each click runs ${evals(k)}.`
+          : `Each click runs ${evals(k)} on this board.`;
   // the method select: the owned methods (those the cycle's rule refuses greyed), and "Auto" with Method match
   const ms = methods(o);
   const canAuto = o.has("methodMatch") || o.has("autoTune");
@@ -3903,8 +3938,18 @@ function countText(p: ProblemState): string {
   return `${evals(p.evaluations + going)} · ${fmtInt(p.sinceGain + going)} since progress${rate === null ? "" : ` · ${fmtInt(rate)} RP a minute`}`;
 }
 
-/** The queue's dealing line: when the next problem comes, and with Auto-advance which one leaves next. */
+/** The queue's dealing line, and on a page that cannot run space problems, why only 2D in 2D problems come once other Dimensions are open. */
 function dealText(o: Owned): string {
+  const line = dealLine(o);
+  return spaceBlocked && state.standing.dimensions.length > 1
+    ? framed
+      ? `${line} Only 2D in 2D problems are dealt while the game is embedded in another site. To play the other Dimensions, Export your save in Settings, open polypack.fly.dev/tighter.html, and Import the save there.`
+      : `${line} Only 2D in 2D problems are dealt on this page. To play the other Dimensions, open polypack.fly.dev/tighter.html directly in Chrome, Edge, Firefox or Safari.`
+    : line;
+}
+
+/** The queue's dealing line: when the next problem comes, and with Auto-advance which one leaves next. */
+function dealLine(o: Owned): string {
   const free = queueSize(o) - slotted(state).length;
   const left = clicksToDeal();
   const more = workText(left);

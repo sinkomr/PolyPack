@@ -22,6 +22,13 @@ export type OpenSpaceAnswer =
 export type AnyRunState = RunState | SpaceRunState;
 /** What openSpace answers on a page that is not cross-origin isolated (a space run needs shared memory). */
 export const NOT_ISOLATED = "needs a cross-origin isolated page";
+/** Answers that only mean the lane was busy or closed under the open, not that the problem cannot run: the next job opens again. */
+const INTERRUPTED = new Set(["a run is being opened", "closed while opening", "the lane was closed"]);
+export const laneInterrupted = (message: string): boolean => INTERRUPTED.has(message);
+
+/** Whether this page can run space problems: they need a SharedArrayBuffer, hence a cross-origin isolated page. */
+export const spaceRunsHere = (): boolean =>
+  !!globalThis.crossOriginIsolated && typeof SharedArrayBuffer !== "undefined";
 export type StepAnswer = { ok: true; state: AnyRunState; ms: number } | { ok: false; message: string };
 
 /** True for a space run's state, false for a polygon run's. */
@@ -125,8 +132,7 @@ export class Lane {
   /** Opens a space run (closing the one open); it needs a cross-origin isolated page. */
   openSpace(request: SpaceRunRequest): Promise<OpenSpaceAnswer> {
     if (this.opening) return Promise.resolve({ ok: false, message: "a run is being opened" });
-    if (!globalThis.crossOriginIsolated || typeof SharedArrayBuffer === "undefined")
-      return Promise.resolve({ ok: false, message: NOT_ISOLATED });
+    if (!spaceRunsHere()) return Promise.resolve({ ok: false, message: NOT_ISOLATED });
     const id = ++this.nextId;
     this.release();
     const control = new SpaceRunControl();
