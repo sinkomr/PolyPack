@@ -9,6 +9,8 @@ import {
   ROWS,
   UPGRADES,
   autoLevelPrice,
+  listPrice,
+  taperedPrice,
   levelOfRate,
   rateOfLevel,
   upgrade,
@@ -191,7 +193,7 @@ function autoStepTable(): MechanicTable {
       last === null
         ? `${int(rateOfLevel(first))}, ${int(rateOfLevel(first + 1))}, ...`
         : `${int(rateOfLevel(first))} to ${int(below)}`;
-    const row = [levels, `+${int(step)}`, rates, int(Math.round(autoLevelPrice(first - 1)))];
+    const row = [levels, `+${int(step)}`, rates, int(Math.round(taperedPrice(autoLevelPrice(first - 1))))];
     from = below;
     return row;
   });
@@ -221,7 +223,10 @@ export function mechanicsModel(): MechanicGroup[] {
           effect: f.effect,
           hows: [f.how],
           covers: f.ids,
-          table: { head: [...f.head, "Price (RP)"], rows: f.ids.map((i) => [...f.cells(i), int(upgrade(i).cost)]) },
+          table: {
+            head: [...f.head, "Price (RP)"],
+            rows: f.ids.map((i) => [...f.cells(i), int(Math.round(listPrice(i)))]),
+          },
         });
       }
     }

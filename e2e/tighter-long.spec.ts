@@ -164,7 +164,7 @@ test("long game: the whole tree in its pane, mysteries until their prerequisites
   await grant(page, 168_000);
   await buy(page, "lattice");
   await expect(page.locator('.t-card[data-id="harden"] h3')).toHaveText("harden");
-  await expect(page.locator('.t-card[data-id="harden"]')).toContainText("240,000 RP");
+  await expect(page.locator('.t-card[data-id="harden"]')).toContainText("219,089 RP");
 
   // a levelled upgrade bought twice: the price grows with the level
   await grant(page, 5000);
@@ -455,7 +455,7 @@ test("long game: records counted, rent paid on a check, a reset under a rule tha
   await openTree(page);
   const standingCard = page.locator('.t-card[data-id="standing"]');
   await expect(standingCard).toHaveAttribute("data-state", "buyable");
-  await expect(standingCard).toContainText("1,000,000,000 RP");
+  await expect(standingCard).toContainText("200,000,000 RP");
   await standingCard.locator(".t-node-act").click();
   // the in-page confirm opens first, and cancelling buys nothing
   await expect(page.locator("#t-reset")).toBeVisible();

@@ -65,10 +65,12 @@ export const G_MIN = 0.01;
 /**
  * Record points the first cycle must earn before it can be reset [SPEC, Michael's ladder of 2026-10-26];
  * each later cycle needs 5 times the one before (standing.ts resetThreshold). Michael raised the first
- * reset 5x on 2026-10-27: at about a day of active play it came too early, and 5x restores roughly a week. It lives here so the
+ * reset 5x on 2026-10-27: at about a day of active play it came too early, and 5x restores roughly a week.
+ * On 2026-11-09 Michael cut it back 5x: a bulk submitter took most of the records players held, so rent
+ * fell and the old threshold was out of reach. It lives here so the
  * tree's texts can read it without importing standing.ts, which imports the tree.
  */
-export const RESET_MIN = 1_000_000_000;
+export const RESET_MIN = 200_000_000;
 /** What each cycle's threshold is times the last one's. */
 export const RESET_GROWTH = 5;
 /** The weight of the step term, a tenth of what it was [SPEC, Michael 2026-11-01]. */
