@@ -313,6 +313,24 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "9b4f627cb1b25917193a259e49bdad08f671f8d9708acfd5fe0a8c1455d87220"
 
 [[package]]
+name = "polypack-balls"
+version = "0.1.0"
+dependencies = [
+ "polypack-js",
+ "serde",
+ "serde_json",
+]
+
+[[package]]
+name = "polypack-boundary"
+version = "0.1.0"
+dependencies = [
+ "polypack-js",
+ "serde",
+ "serde_json",
+]
+
+[[package]]
 name = "polypack-curved"
 version = "0.1.0"
 dependencies = [
@@ -331,6 +349,14 @@ dependencies = [
 ]
 
 [[package]]
+name = "polypack-js"
+version = "0.1.0"
+dependencies = [
+ "libm",
+ "serde_json",
+]
+
+[[package]]
 name = "polypack-native"
 version = "0.1.0"
 dependencies = [
@@ -341,6 +367,51 @@ dependencies = [
  "serde_json",
  "ureq",
  "windows-sys 0.59.0",
+]
+
+[[package]]
+name = "polypack-ndim"
+version = "0.1.0"
+dependencies = [
+ "polypack-js",
+ "serde",
+ "serde_json",
+]
+
+[[package]]
+name = "polypack-polyhedra"
+version = "0.1.0"
+dependencies = [
+ "polypack-js",
+ "serde",
+ "serde_json",
+]
+
+[[package]]
+name = "polypack-sphere"
+version = "0.1.0"
+dependencies = [
+ "polypack-js",
+ "serde",
+ "serde_json",
+]
+
+[[package]]
+name = "polypack-surface"
+version = "0.1.0"
+dependencies = [
+ "polypack-js",
+ "serde",
+ "serde_json",
+]
+
+[[package]]
+name = "polypack-torus"
+version = "0.1.0"
+dependencies = [
+ "polypack-js",
+ "serde",
+ "serde_json",
 ]
 
 [[package]]

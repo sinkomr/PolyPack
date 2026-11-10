@@ -1,0 +1,16 @@
+[package]
+name = "polypack-js"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+description = "JavaScript's Math functions and number formats in Rust, so that ports of PolyPack's TypeScript validators give the same numbers and the same messages"
+
+[lib]
+name = "polypack_js"
+
+[dependencies]
+# fdlibm-derived transcendental functions in pure Rust: the same results on every platform
+libm = "0.2"
+
+[dev-dependencies]
+serde_json = { version = "1", features = ["float_roundtrip"] }
