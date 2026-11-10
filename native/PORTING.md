@@ -51,6 +51,21 @@ reference until a port has passed the comparison.
    obvious keeps the source's explanation.
 8. **A defect in the source is ported as it is** and reported, not fixed: fixing it is a change of
    behaviour that needs its own review.
+9. **JSON**: an answer is written with `polypack_js::json::stringify` (JavaScript's number text:
+   `2`, not `2.0`), a request body is read with `polypack_js::json::parse` (which decodes and
+   parses as `await c.req.json()` does). A field that is `undefined` in the source is left out of
+   the answer, and keys come in the order the source builds them.
+
+## Differences that are meant
+
+These are the places where the Rust server does not do what the TypeScript does, each because the
+thing itself does not exist in Rust or is the reason for the port. Anything not listed here is a
+defect.
+
+- **Numbers computed with sine, cosine and the other transcendental functions** can differ in
+  their last digits (see above).
+- **Three kinds of request body** are read differently (`polypack_js::json::parse`): a number too
+  large for a double, a string with a lone surrogate escape, and nesting deeper than 128 levels.
 
 ## Comparing a port with its source
 
