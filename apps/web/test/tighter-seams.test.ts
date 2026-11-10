@@ -59,11 +59,11 @@ describe("Tighter seams", () => {
   it("give standing only for points the server has confirmed", () => {
     const { s, p } = withRecord();
     owning(s, ["collections", "rent", "ring120"]);
-    // a cycle of 2,000 M RP in hand, 1,800 M of them paid per click and still waiting for the server's answer
-    s.standing.cycleEarned = 2_000_000_000;
-    s.rp = 2_000_000_000;
-    p.unconfirmed = 1_800_000_000;
-    expect(resetPreview(s)).toMatchObject({ can: false, short: 800_000_000 });
+    // a cycle of 300 M RP in hand, 180 M of them paid per click and still waiting for the server's answer
+    s.standing.cycleEarned = 300_000_000;
+    s.rp = 300_000_000;
+    p.unconfirmed = 180_000_000;
+    expect(resetPreview(s)).toMatchObject({ can: false, short: 80_000_000 });
     expect(resetCycle(s, T0)).toBe(0);
     // once confirmed, they count
     p.unconfirmed = 0;

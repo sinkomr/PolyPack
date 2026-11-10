@@ -146,7 +146,7 @@ describe("Tighter standing across dimensions", () => {
   });
 
   it("ask 5 times the record points of the cycle before", () => {
-    expect([0, 1, 2, 3].map(resetThreshold)).toEqual([1e9, 5e9, 2.5e10, 1.25e11]);
+    expect([0, 1, 2, 3].map(resetThreshold)).toEqual([2e8, 1e9, 5e9, 2.5e10]);
     expect(resetThreshold(0)).toBe(RESET_MIN);
   });
 });

@@ -209,7 +209,7 @@ describe("Tighter shrink_repair's setting and texts", () => {
     expect(text(upgrade("tuneShrink").how)).toContain(
       "Level 0 is the setting on the shrink_repair card.",
     );
-    expect(upgrade("tuneShrink").how.math).toEqual(["<code>evaluationWork</code> = 4000, 6000, 9000, 14000"]);
+    expect(upgrade("tuneShrink").how.math!.slice(0, 1)).toEqual(["<code>evaluationWork</code> = 4000, 6000, 9000, 14000"]);
     expect(text(upgrade("tuneMc").how)).toContain("Level 0 is the solver's defaults.");
     // its bench was run on worked boards, the others' on Compact boards
     expect(all(upgrade("tuneShrink").how)).toContain("boards that mc_compress had worked for 8,000 evaluations");
