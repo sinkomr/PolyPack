@@ -128,7 +128,7 @@ pub fn evaluate(config: &Config, p: usize, auto_orient: bool, max_overlaps: usiz
             format!("{}", overlaps.len())
         };
         reasons.push(format!(
-            "{count} overlapping pair(s); deepest found is pieces {} and {}, penetration {:.3e} (tolerance {TOL})",
+            "{count} overlapping pair(s); deepest found is pieces {} and {}, penetration {:.3e} (tolerance {TOL:e})",
             worst.i, worst.j, -worst.sep
         ));
     }
