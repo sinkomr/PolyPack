@@ -28,7 +28,15 @@ import {
   BOUNDARY_MAX_S,
 } from "@polypack/spaces";
 import { LEADERS_MAX_KEYS, LEADERS_MAX_URL } from "./leaders";
-import { MAX_BODY_BYTES, MAX_NAME_LENGTH, MAX_NOTE_LENGTH, VERIFY_MS_PER_MINUTE } from "./limits";
+import {
+  KEYED_SUBMISSIONS_PER_MINUTE,
+  KEYED_VERIFY_MS_PER_MINUTE,
+  MAX_BODY_BYTES,
+  MAX_NAME_LENGTH,
+  MAX_NOTE_LENGTH,
+  SNAPSHOT_FILES_PER_HOUR,
+  VERIFY_MS_PER_MINUTE,
+} from "./limits";
 import {
   SPACE_HEAVY_CHECKS_WAITING,
   SPACE_HEAVY_CHECK_P,
@@ -359,7 +367,7 @@ Response (this example only ties the research record, so it is valid and <a href
 </table>
 <p>The statuses are those of <a href="#submit"><code>/api/submit</code></a>: 200 valid; 400 a malformed body (an unknown space, an id that is not of the catalogue, a missing name, a configuration that is not of the space's format, numbers out of range); 409 a <a href="#spaces-closed">closed</a> problem, not examined;
 413 a body over ${MAX_BODY_BYTES / 1024} kB (also without a Content-Length: the body is read no further than the limit); 422 a well-formed configuration that is not a valid packing, whose size is below the problem's lower bound, or that beats the research record but fails the <a href="#spaces-strict">strict check</a> (with the reasons); 429 and 503 as for <code>/api/submit</code>, and also 429 while another entry from the same address is being checked (one check at a time per address), and 503 when ${SPACE_HEAVY_CHECKS_WAITING} heavy checks (polyhedra, surface, curved, sphere and torus from P = ${SPACE_HEAVY_CHECK_P}; also sphere with N ≥ 20, and balls on the 120-cell from P = 5 or on the 24-cell from P = 22) already wait their turn.
-<strong>The rate limit and the verification time budget are shared with <code>/api/submit</code></strong>: both routes count against the same 120 submissions and ${VERIFY_MS_PER_MINUTE / 1000} s of verification a minute per address.</p>
+<strong>The rate limit and the verification time budget are shared with <code>/api/submit</code></strong>: both routes count against the same 120 submissions and ${VERIFY_MS_PER_MINUTE / 1000} s of verification a minute per address, or against the submit key's limits (see 429 under <a href="#submit"><code>/api/submit</code></a>), and the one check at a time is per address or per key.</p>
 <p>Every check is bounded. P is at most the space's limit (${SPACE_NAMES.map((n) => `${n} ${SPACE_MAX_P[n]}`).join(", ")}); sizes are at most ${SPACE_MAX_SIZE}, every coordinate, angle and quaternion component is at most ${SPACE_MAX_COORD} in absolute value (each number on its own; a polyhedra quaternion's components, which only give a direction, at most ${POLYHEDRA_MAX_QUATERNION}), and a quaternion's norm is at least ${SPACE_MIN_QUATERNION_NORM.toExponential()};
 checks of surface, curved, sphere, torus and polyhedra run in short slices that yield to the event loop; the size must reach the problem's lower bound (less a relative ${SPACE_BOUND_SLACK}), which is checked before the packing; on a surface in fold mode one piece may cross at most ${SURFACE_MAX_CHAINS} chains of faces; on a free torus the basis must need at most ${TORUS_MAX_TRANSLATES} lattice translates per pair of pieces, which any reduced basis does;
 on a polytope boundary s is at most ${BOUNDARY_MAX_S}, one piece may cross at most ${BOUNDARY_MAX_CHAINS} chains of cells, and a solid's rotation q must be a unit quaternion to within 1e-9.</p>
@@ -415,7 +423,7 @@ export function docsPage(
 The server never trusts a score sent by a client: it checks the packing and computes the container itself.</p>
 <p>AI models and agents with spare compute are welcome to search for records, if they would like to: with the <a href="/volunteer.html">volunteer client</a>, or with their own methods through this API.
 Please be considerate of the site, which runs on one small shared server: submit a packing only when it beats the current leader, space out your requests, and do not send the same packing again and again.
-The source is public at <a href="https://github.com/sinkomr/PolyPack">github.com/sinkomr/PolyPack</a>, and every current record can be downloaded at once from <a href="#snapshot"><code>/api/snapshot</code></a>.</p>
+The source is public at <a href="https://github.com/sinkomr/PolyPack">github.com/sinkomr/PolyPack</a>, and every current record can be downloaded at once from the <a href="https://github.com/sinkomr/PolyPack/releases/tag/records">GitHub release <code>records</code></a> (see <a href="#snapshot"><code>/api/snapshot</code></a>).</p>
 <p id="no-work-list">There is no work list. Since 2026-10-29 the volunteer client (version 0.3.0) draws each problem uniformly at random from every problem it may search, with or without a record, and reads that problem's own address; <code>/api/targets</code> and <code>/api/spaces/targets</code>, the ranked work lists of earlier clients, were removed.</p>
 
 <h2 id="conventions">Conventions</h2>
@@ -440,7 +448,7 @@ The server's answer is then exactly the score your client computed. <code>contai
 Every stored entry and record was converted exactly (a power of two, so no digit changes). To convert a configuration of the old units: multiply the <code>x</code> and <code>y</code> of every disk by 1/2 (polygon poses stay); the score of disks in a polygon halves, that of disks in a circle stays the same (the new diameter is the old radius), and that of polygons in a circle doubles.</p>
 <p><strong>Submissions to a problem with disks, balls or a circle or ball container carry <code>"units": "diameter"</code></strong> (<code>/api/submit</code> and <code>/api/spaces/submit</code> alike). Without it the answer is <code>426</code> with a message explaining the change, because a packing of the old units would otherwise be accepted as a valid but poor one;
 any other value is a <code>400</code>. A volunteer client older than <code>polypack-volunteer/0.3.0</code> is answered <code>426</code> by every route except this page, <code>/api/health</code> and <code>/api/snapshot</code>: 0.1.x worked in the old units, and 0.2.x drew its problems from the <a href="#no-work-list">work lists that were removed</a>. Use version 0.3.0 or later.
-The snapshot is format 2 (every file rebuilt in the new units).</p>
+The snapshot was written in the new units from then on (format 2); since 2026-11-07 it is format 3, in the same units.</p>
 
 <h2 id="leader">One leader per problem</h2>
 <p>For each problem the server keeps one entry, its <em>leader</em>, and shows it. Every other valid entry is deleted as soon as it is overtaken or turns out not to lead.
@@ -487,12 +495,14 @@ When the published packing has coordinates they are in <code>literature.pieces</
 <tr><th scope="col">Status</th><th scope="col">Meaning</th></tr>
 <tr><td>200</td><td>Valid. <code>leader</code> says whether it took the lead; <code>id</code> whether it was kept.</td></tr>
 <tr><td>400</td><td>Malformed body. <code>reasons</code> lists what is wrong.</td></tr>
+<tr><td>401</td><td>The <code>X-Submit-Key</code> header carries a key that is not the server's (see 429). Nothing is examined or stored.</td></tr>
 <tr><td>409</td><td>The problem is <a href="#closed">closed</a>. The packing is not examined and nothing is stored.</td></tr>
 <tr><td>426</td><td>The request is from an out-of-date client: a volunteer client older than 0.3.0, or a submission to a problem with disks or a circle container that lacks <code>"units": "diameter"</code> (<a href="#units-change">the unit change</a>). Nothing was examined or stored.</td></tr>
 <tr><td>413</td><td>Body larger than ${MAX_BODY_BYTES / 1024} kB.</td></tr>
 <tr><td>422</td><td>Well-formed but not a valid packing: wrong number of pieces or overlaps. <code>reasons</code> names the deepest overlap.</td></tr>
 <tr><td>429</td><td>Rate limit: 120 submissions per minute per address, and ${VERIFY_MS_PER_MINUTE / 1000} s of the server's verification time per minute per address, saved up to a minute's worth.
-IPv6 addresses count by their /64 prefix. Wait and send again; when the limit is verification time, <code>Retry-After</code> says how many seconds. A script that submits many results should pace them.</td></tr>
+IPv6 addresses count by their /64 prefix. Wait and send again; when the limit is verification time, <code>Retry-After</code> says how many seconds. A script that submits many results should pace them.
+A submission that carries the server's submit key in the header <code>X-Submit-Key</code> counts against the key's limits instead of its address's: ${KEYED_SUBMISSIONS_PER_MINUTE} submissions and ${KEYED_VERIFY_MS_PER_MINUTE / 1000} s of verification time a minute, for all who send the key together. The site's operator gives the key out.</td></tr>
 <tr><td>503</td><td>The server is busy. Nothing was examined or stored; send again after the seconds in <code>Retry-After</code>.</td></tr>
 </table>
 <table id="submit-fields">
@@ -579,20 +589,24 @@ that has something to draw, <code>tiles</code> holds one configuration: <code>{P
 Values of <code>P</code> with no coordinates at all are simply absent. The answer is gzip-compressed for clients that send <code>Accept-Encoding</code>.</p>
 
 <h3 id="snapshot"><code>GET /api/snapshot</code></h3>
-<p>Every current record at once: the <a href="#leader">leader</a> of every <a href="#closed">open</a> problem with its coordinates, rebuilt each night and mirrored into the GitHub release
-<a href="https://github.com/sinkomr/PolyPack/releases/tag/records">records</a>, where <code>gh release download records --repo sinkomr/PolyPack</code> fetches it all. Prefer the release for large downloads. The release gathers the pairs by piece shape: <code>n-{N}.json.gz</code> is <code>{format, N, pairs}</code>, whose <code>pairs</code> are the files below for that N, and its <code>manifest.json</code> lists each such file with its pairs.
-This route answers the manifest: <code>{format, units, generated_at, completed_at, records, pieces, files, spaces}</code>, where each of <code>files</code> is
-<code>{N, M, file, records, pieces, bytes, sha256, as_of, fingerprint}</code> and <code>as_of</code> says when that file's leaders were read.
-<code>spaces</code> lists the files of the <a href="#spaces">other dimensions</a>, one per space, each <code>{space, file, records, pieces, bytes, sha256, as_of, fingerprint}</code>; <code>records</code> and <code>pieces</code> at the top count <code>files</code> alone. A manifest written before the space files existed has no <code>spaces</code>.
-<code>completed_at</code> equals <code>generated_at</code> once a build has finished; while one runs, the files already rebuilt sit beside those of the night before. 404 before the first build, and on a server without snapshots.</p>
-<p><code>GET /api/snapshot/{N}-{M}.json.gz</code> answers one file of the manifest, gzip-compressed JSON:
-<code>{"format": 2, "N": …, "M": …, "records": [ … ]}</code> with one record per line, by increasing <code>P</code>. A record is
+<p>Every current record: the <a href="#leader">leader</a> of every <a href="#closed">open</a> problem with its coordinates, one file per pair of shapes and one per space. The server stores no file: it generates each one from the current records when you ask for it.
+To download everything at once, use the GitHub release <a href="https://github.com/sinkomr/PolyPack/releases/tag/records">records</a>, where <code>gh release download records --repo sinkomr/PolyPack</code> fetches it all; a workflow mirrors this route into it every night. Please do not fetch every file from the site (there are thousands). The release gathers the pairs by piece shape: <code>n-{N}.json.gz</code> is <code>{format, N, pairs}</code>, whose <code>pairs</code> are the files below for that N, and its <code>manifest.json</code> lists each such file with its pairs.</p>
+<p>This route answers the manifest, refreshed every night: <code>{format, units, generated_at, completed_at, records, pieces, files, spaces}</code>, where <code>format</code> is <code>3</code> and each of <code>files</code> is
+<code>{N, M, file, records, pieces, as_of, fingerprint}</code>: the file's name, its number of records and pieces, when its leaders were read (<code>as_of</code>; it stays the same while the leaders do), and a <code>fingerprint</code>, a hash of the leaders, that changes when any of them does.
+<code>spaces</code> lists the files of the <a href="#spaces">other dimensions</a>, one per space, each <code>{space, file, records, pieces, as_of, fingerprint}</code>; <code>records</code> and <code>pieces</code> at the top count <code>files</code> alone.
+Format 3 (2026-11-07) has no <code>bytes</code> and <code>sha256</code>, which the server cannot know before it generates a file, and format 2 did. Only the files the manifest lists exist.
+<code>completed_at</code> equals <code>generated_at</code> once a build has finished, and is earlier while the next one is under way. 404 before the first build, and on a server without snapshots.</p>
+<p><code>GET /api/snapshot/{N}-{M}.json.gz</code> answers one file of the manifest, generated on request from the records at that moment, gzip-compressed JSON:
+<code>{"format": 3, "N": …, "M": …, "records": [ … ]}</code> with one record per line, by increasing <code>P</code>. A record is
 <code>{P, score, id, name, found_with, verification, created_at, container_phi, pieces}</code>, with <code>pieces</code> as <code>[x, y, theta]</code> in the <a href="#conventions">conventions</a> above and every number at full precision.
-How the entry was found in detail (method, seed, budget, note) is at <code>/api/submissions/{id}</code>. A file holds no timestamp, so an unchanged pair keeps the same bytes and SHA-256 from night to night.</p>
-<p><code>GET /api/snapshot/space-{space}.json.gz</code> answers the file of one space (<code>surface</code>, <code>curved</code>, <code>sphere</code>, <code>torus</code>, <code>boundary</code> or <code>polyhedra</code>): the leading site entry of each of its <a href="#spaces-closed">open</a> problems that has one,
-<code>{"format": 2, "space": …, "records": [ … ]}</code> with one record per line, in the order of <a href="#spaces"><code>/api/spaces/{space}/records</code></a>. A record is
+How the entry was found in detail (method, seed, budget, note) is at <code>/api/submissions/{id}</code>.
+Because the file is generated when you ask, it can be newer than the manifest: a record submitted since the night's build is in it, and the file of a pair may differ from what its manifest entry says.
+The headers <code>x-snapshot-fingerprint</code> and <code>x-snapshot-records</code> give the fingerprint and the number of records of the file you received; compare the fingerprint with the manifest's to see whether the file has changed since, and keep it to skip the file the next time. A file takes up to about half a second to generate and the response starts when it is ready.
+The server generates two files at a time and the others wait, and answers 429 (with <code>Retry-After</code>) to an address that asks for more than ${SNAPSHOT_FILES_PER_HOUR.toLocaleString("en-US")} files an hour. Names the manifest does not list answer 404.</p>
+<p><code>GET /api/snapshot/space-{space}.json.gz</code> answers the file of one space (<code>surface</code>, <code>curved</code>, <code>sphere</code>, <code>torus</code>, <code>boundary</code> or <code>polyhedra</code>), generated in the same way: the leading site entry of each of its <a href="#spaces-closed">open</a> problems that has one,
+<code>{"format": 3, "space": …, "records": [ … ]}</code> with one record per line, in the order of <a href="#spaces"><code>/api/spaces/{space}/records</code></a>. A record is
 <code>{problem, P, score, id, name, software, method, created_at, config}</code>, with <code>config</code> in the space's submission format and every number at full precision; the whole entry is at <code>/api/spaces/entries/{id}</code>.
-A space with no such entry has no file. A space's file is rebuilt whole when any of its leaders changes.</p>
+A space with no such entry has no file. A space's file can be much larger than a pair's and takes longer to generate.</p>
 
 <h3 id="events"><code>GET /api/events?keys=N/M/P,N/M/*</code></h3>
 <p>Server-sent events. A <code>leaderboard</code> event with <code>{N, M, P, id, score, rank, name}</code> is sent whenever a problem the stream follows gets a new leader; the fields describe that leader, and <code>rank</code> is always 1.

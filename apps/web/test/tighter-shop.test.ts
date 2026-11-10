@@ -44,6 +44,7 @@ import {
   lanesMaxed,
   owning,
   rpCostFactor,
+  taperedPrice,
 } from "../src/tighter/upgrades";
 
 const broke = { rp: 0, standing: 0 };
@@ -99,11 +100,11 @@ describe("Tighter shop", () => {
     expect(harden.label).not.toMatch(/harden/i);
     expect(v.mysteries).toBe(inTheFirstDimension().filter((u) => u.mystery).length);
     // owning the prerequisite reveals it
-    const w = shopView(owning(["lattice"]), { rp: 240000, standing: 0 }, 8);
+    const w = shopView(owning(["lattice"]), { rp: 219089, standing: 0 }, 8);
     expect(card(w, "harden")).toMatchObject({
       state: "buyable",
       name: "Method: harden",
-      price: "240,000 RP",
+      price: "219,089 RP",
       needs: [],
     });
     expect(card(w, "harden")!.how).toBe(UPGRADES.find((u) => u.id === "harden")!.how);
@@ -187,7 +188,7 @@ describe("Tighter shop", () => {
     const funds = { rp: RESET_MIN, standing: 0, confirmed: RESET_MIN };
     expect(shopView(o, funds, 8).rows.flatMap((r) => r.cards).find((c) => c.id === "standing")).toMatchObject({
       state: "buyable",
-      price: "1,000,000,000 RP",
+      price: "200,000,000 RP",
     });
     expect(
       shopView(o, { ...funds, confirmed: RESET_MIN - 1 }, 8)
@@ -411,7 +412,7 @@ describe("Tighter upgrade texts", () => {
       for (const [k, v] of Object.entries(params)) expect(defaults[k], `${m}.${k}`).toBe(v);
     }
     const tune = UPGRADES.find((u) => u.id === "tuneMc")!;
-    expect(tune.how.math).toEqual([
+    expect(tune.how.math!.slice(0, 3)).toEqual([
       "<code>sweepsPerEvaluation</code> = 10, 15, 20, 30",
       "<code>stagnationEvals</code> = 500, 500, 1000, 2000",
       "<code>maxRestarts</code> = 0, 0, 0, 2",
@@ -525,10 +526,10 @@ describe("Tighter upgrade texts", () => {
     expect([6 * 33 <= GREEDY_BUDGET, 7 * 33 <= GREEDY_BUDGET]).toEqual([true, false]);
     expect(text("transfer")).toContain("6 or fewer");
     expect(WIDE).toMatchObject({ minSide: 21, maxSide: 100, minP: 40, maxP: 500 });
-    expect(RESET_MIN).toBe(1_000_000_000);
+    expect(RESET_MIN).toBe(200_000_000);
     expect(standingMultiplier({ resets: 3 } as Parameters<typeof standingMultiplier>[0])).toBe(8);
-    expect(text("standing")).toContain("costs 1,000,000,000 RP in the first cycle");
-    expect(text("standing")).toContain("1,000,000,000 × 5<sup>");
+    expect(text("standing")).toContain("costs 200,000,000 RP in the first cycle");
+    expect(text("standing")).toContain("200,000,000 × 5<sup>");
     expect(text("standing")).toContain("2<sup>");
     expect(rpCostFactor(owning(["study"], { study: 2 }))).toBeCloseTo(0.81, 12);
   });
@@ -585,9 +586,9 @@ describe("Tighter dimension cards", () => {
       expect(card(w, id)).toMatchObject({ state: "buyable", needs: [] });
   });
 
-  it("are priced from the cycle's threshold, Curved at 300,000,000 in the first cycle, under the Standing card", () => {
+  it("are priced from the cycle's threshold, Curved at 60,000,000 in the first cycle, under the Standing card", () => {
     const o = (resets: number) => rest([], resets, ["2-in-2", "2-on-3", "3-in-3"]);
-    expect(costOf(o(0), "curved")).toBe(300_000_000);
+    expect(costOf(o(0), "curved")).toBe(60_000_000);
     expect(costOf(o(0), "curved")).toBeLessThan(resetThreshold(0));
     expect(costOf(o(1), "curved")).toBe(0.3 * resetThreshold(1));
     expect(costOf(o(2), "curved")).toBe(0.3 * resetThreshold(2));
@@ -628,7 +629,7 @@ describe("Tighter dimension cards", () => {
     const order = SLICES.filter((s) => s.family === "polyhedra" && s.late).map((s) => costOf(o(2), s.id as never));
     expect(order).toEqual([...order].sort((a, b) => a! - b!));
     // Quick study takes its 10 % a level off these prices as off any price in record points
-    expect(costOf(o(1), "surf-prisms")).toBe(10_000_000);
+    expect(costOf(o(1), "surf-prisms")).toBe(2_000_000);
     const studied = owning(["study"], { study: 2 }, null, [], [], 1, ["2-in-2", "2-on-3"]);
     expect(costOf(studied, "surf-prisms")).toBe(Math.round(slicePrice("surf-prisms", 1) * 0.81));
     // the card is owned until the reset takes it away
@@ -641,7 +642,7 @@ describe("Tighter Higher rent", () => {
     const rentx = UPGRADES.find((u) => u.id === "rentx")!;
     expect(rentx.levels!.max).toBe(5);
     expect(costOf(owning(["rent", "rentx"], { rentx: 5 }), "rentx")).toBeNull();
-    expect(costOf(owning(["rent", "rentx"], { rentx: 4 }), "rentx")).toBe(Math.round(480_000 * 1.6 ** 4));
+    expect(costOf(owning(["rent", "rentx"], { rentx: 4 }), "rentx")).toBe(Math.round(taperedPrice(480_000 * 1.6 ** 4)));
   });
 });
 

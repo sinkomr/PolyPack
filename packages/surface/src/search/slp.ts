@@ -165,6 +165,7 @@ export function simplex(A: number[][], b: number[], c: number[], maxPivots = 500
   const obj = new Float64Array(W);
   for (let j = 0; j < n; j++) obj[j] = -c[j];
   const basis = Array.from({ length: m }, (_, r) => n + r);
+  const nzIdx = new Int32Array(W);
   for (let it = 0; it < maxPivots; it++) {
     if (shouldStop && (it & 7) === 7 && shouldStop()) return null;
     let col = -1;
@@ -189,14 +190,30 @@ export function simplex(A: number[][], b: number[], c: number[], maxPivots = 500
     if (row < 0) return null; // unbounded
     const pr = T[row];
     const pv = pr[col];
-    for (let j = 0; j < W; j++) pr[j] /= pv;
+    // the pivot row is mostly zeros (the bound rows hold one entry and their slack); the
+    // elimination below visits its nonzero entries only, which leaves every other entry as it was
+    // (subtracting f * 0 changes nothing but the sign of a zero)
+    let nz = 0;
+    for (let j = 0; j < W; j++) {
+      pr[j] /= pv;
+      if (pr[j] !== 0) nzIdx[nz++] = j;
+    }
     for (let r = 0; r < m; r++) {
       if (r === row) continue;
-      const f = T[r][col];
-      if (f !== 0) for (let j = 0; j < W; j++) T[r][j] -= f * pr[j];
+      const Tr = T[r];
+      const f = Tr[col];
+      if (f !== 0)
+        for (let q = 0; q < nz; q++) {
+          const j = nzIdx[q];
+          Tr[j] -= f * pr[j];
+        }
     }
     const f = obj[col];
-    if (f !== 0) for (let j = 0; j < W; j++) obj[j] -= f * pr[j];
+    if (f !== 0)
+      for (let q = 0; q < nz; q++) {
+        const j = nzIdx[q];
+        obj[j] -= f * pr[j];
+      }
     basis[row] = col;
   }
   const z = new Array(n).fill(0);

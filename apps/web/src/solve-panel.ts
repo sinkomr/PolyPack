@@ -6,6 +6,7 @@ import { BoardView } from "./view";
 import { POLYGON_METHOD_DESCRIPTIONS, POLYGON_METHOD_NAMES, POLYGON_METHOD_ORDER } from "./solve-methods";
 import { ParameterError, parameterForm, validityText } from "./solve-params";
 import type { SolveMethod, SolveRequest, SolveResponse } from "./solve-protocol";
+import { drawTraceSvg } from "./trace-text";
 
 const $ = <T extends HTMLElement = HTMLElement>(id: string) => document.getElementById(id) as T;
 const names = POLYGON_METHOD_NAMES;
@@ -60,6 +61,8 @@ export class SolvePanel {
   private savedCamera: BoardView["cam"] | null = null;
   private stopTimer = 0;
   private trace: [number, number][] = [];
+  /** The board's score when the run started, which the progress graph compares with; null for an incomplete board. */
+  private reference: number | null = null;
   private request?: Extract<SolveRequest, { type: "run" }>;
   private result: Result | null = null;
   private accepting = false;
@@ -280,6 +283,7 @@ export class SolvePanel {
       this.candidate = null;
       this.result = null;
       this.trace = [];
+      this.reference = complete && this.board.container ? this.board.container.size : null;
       this.drawTrace();
       this.activeId = this.request.id;
       this.state = "running";
@@ -670,28 +674,6 @@ export class SolvePanel {
   }
 
   private drawTrace(): void {
-    const svg = $("solve-trace") as unknown as SVGSVGElement;
-    svg.replaceChildren();
-    svg.toggleAttribute("hidden", !this.trace.length);
-    if (!this.trace.length) return;
-    const end = Math.max(0.01, this.trace[this.trace.length - 1][0]);
-    const low = Math.min(...this.trace.map((p) => p[1])),
-      high = Math.max(...this.trace.map((p) => p[1]));
-    const range = high - low || Math.max(0.001, high * 0.01);
-    const line = document.createElementNS("http://www.w3.org/2000/svg", "polyline");
-    line.setAttribute(
-      "points",
-      this.trace.map(([t, score]) => `${10 + (280 * t) / end},${10 + (65 * (high - score)) / range}`).join(" "),
-    );
-    svg.append(line);
-    const text = document.createElementNS("http://www.w3.org/2000/svg", "text");
-    text.setAttribute("x", "10");
-    text.setAttribute("y", "92");
-    text.textContent = `${high.toFixed(6)} → ${low.toFixed(6)} · ${end.toFixed(1)} s`;
-    svg.append(text);
-    svg.setAttribute(
-      "aria-label",
-      `Best solver score from ${high.toFixed(6)} to ${low.toFixed(6)} over ${end.toFixed(1)} seconds`,
-    );
+    drawTraceSvg($("solve-trace") as unknown as SVGSVGElement, this.trace, this.reference, "the board");
   }
 }

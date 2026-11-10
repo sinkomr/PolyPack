@@ -1,5 +1,7 @@
 import { OpenRun } from "./open-run";
 import type { OpenRunRequest, RunState } from "./open-run";
+import { ChainedSpaceRun } from "./space-chain";
+import type { ChainEvent } from "./space-chain-core";
 import { SpaceRunControl } from "./space-control";
 import { SpaceRun, spaceStart } from "./space-run";
 import type { SpaceRunRequest, SpaceRunState, SpaceStartAnswer, SpaceStartRequest } from "./space-run-types";
@@ -13,6 +15,10 @@ import type { SpaceRunRequest, SpaceRunState, SpaceStartAnswer, SpaceStartReques
  * ends it through shared memory and never expects a message to reach it: "open-space" runs it right
  * there, and the worker answers the next message only once the run has ended. Its steps are
  * answered by "space-stepped" as it reaches what the page allowed.
+ *
+ * On a page without shared memory a space run is a chain instead (space-chain.ts): "open-chain"
+ * starts it without blocking the worker, "chain-allow" gives it more evaluations, and it streams
+ * its events as "chain-events".
  */
 export type HostRequest =
   | { type: "open"; id: number; request: OpenRunRequest }
@@ -22,7 +28,11 @@ export type HostRequest =
   /** Holds or releases a polygon run (a space run is held through its control). */
   | { type: "hold"; id: number; held: boolean }
   | { type: "open-space"; id: number; request: SpaceRunRequest; control: SharedArrayBuffer }
-  | { type: "space-start"; id: number; request: SpaceStartRequest };
+  | { type: "space-start"; id: number; request: SpaceStartRequest }
+  /** Opens a chained space run (a page without shared memory). */
+  | { type: "open-chain"; id: number; request: SpaceRunRequest }
+  /** Allows the chain `total` game evaluations in all. */
+  | { type: "chain-allow"; id: number; total: number };
 
 export type HostReply =
   | { type: "opened"; id: number; params: Record<string, unknown>; state: RunState | SpaceRunState }
@@ -32,12 +42,16 @@ export type HostReply =
   | { type: "closed"; id: number; state: RunState | SpaceRunState }
   /** A space run reached what it was allowed (`target`: game evaluations in all) or ended (Infinity). */
   | { type: "space-stepped"; id: number; target: number; state: SpaceRunState }
+  /** Events of a chained run, in the order they happened. */
+  | { type: "chain-events"; id: number; events: ChainEvent[] }
   | { type: "started"; id: number; answer: SpaceStartAnswer }
   /** `step`: the step this answers, when it answers one. */
   | { type: "error"; id: number; message: string; step?: number };
 
 export function createRunHost(send: (reply: HostReply) => void): { handle(request: HostRequest): void } {
-  let current: { id: number; run: OpenRun } | { id: number; space: SpaceRun } | null = null;
+  let current:
+    { id: number; run: OpenRun } | { id: number; space: SpaceRun } | { id: number; chain: ChainedSpaceRun } | null =
+    null;
   const publish = (reply: HostReply) => {
     try {
       send(reply);
@@ -49,6 +63,25 @@ export function createRunHost(send: (reply: HostReply) => void): { handle(reques
     handle(m) {
       if (m.type === "space-start") {
         publish({ type: "started", id: m.id, answer: spaceStart(m.request) });
+        return;
+      }
+      if (m.type === "open-chain") {
+        const previous = current;
+        let chain: ChainedSpaceRun;
+        try {
+          chain = new ChainedSpaceRun(m.request, (event) =>
+            publish({ type: "chain-events", id: m.id, events: [event] }),
+          );
+        } catch (error) {
+          publish({ type: "error", id: m.id, message: error instanceof Error ? error.message : String(error) });
+          return;
+        }
+        current = { id: m.id, chain };
+        if (previous && "run" in previous) void previous.run.close();
+        if (previous && "chain" in previous) previous.chain.close();
+        publish({ type: "opened", id: m.id, params: chain.params, state: chain.state() });
+        // runs link by link as the page allows, without blocking the worker
+        void chain.run();
         return;
       }
       if (m.type === "open-space") {
@@ -65,6 +98,7 @@ export function createRunHost(send: (reply: HostReply) => void): { handle(reques
         }
         current = { id: m.id, space };
         if (previous && "run" in previous) void previous.run.close();
+        if (previous && "chain" in previous) previous.chain.close();
         publish({ type: "opened", id: m.id, params: space.params, state: space.state() });
         // blocks the worker until the run ends: the page ends it through its control
         space.run();
@@ -81,6 +115,7 @@ export function createRunHost(send: (reply: HostReply) => void): { handle(reques
         }
         current = { id: m.id, run };
         if (previous && "run" in previous) void previous.run.close();
+        if (previous && "chain" in previous) previous.chain.close();
         // step(0) settles once the start has been scored
         void run
           .step(0)
@@ -95,6 +130,16 @@ export function createRunHost(send: (reply: HostReply) => void): { handle(reques
       }
       if (!current || current.id !== m.id) {
         if (m.type === "step") publish({ type: "error", id: m.id, step: m.step, message: "no open run with this id" });
+        return;
+      }
+      if ("chain" in current) {
+        if (m.type === "chain-allow") current.chain.allow(m.total);
+        else if (m.type === "close") {
+          const { chain } = current;
+          current = null;
+          chain.close();
+          publish({ type: "closed", id: m.id, state: chain.state() });
+        }
         return;
       }
       if ("space" in current) {

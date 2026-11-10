@@ -38,8 +38,8 @@ import {
   MAX_NAME_LENGTH,
   MAX_NOTE_LENGTH,
   OVERLOAD_RETRY_S,
-  RateLimiter,
-  TimeBudget,
+  SUBMIT_KEY_HEADER,
+  SubmitLimits,
   addressKey,
   readBodyWithin,
   sanitizeText,
@@ -85,8 +85,8 @@ export interface SpaceRouteContext {
   spaces: SpacesOptions;
   /** Whether submissions to problems of the unit change must carry units (see AppOptions.unitsGate). */
   unitsGate?: boolean;
-  ipLimit: RateLimiter;
-  verifyBudget: TimeBudget;
+  /** The count and verification budget of an address, or of the submit key. */
+  submitLimits: SubmitLimits;
   /** True while the event loop lags (submissions are then refused with 503). */
   overloaded: () => boolean;
   clientIp: (c: Context) => string;
@@ -262,13 +262,13 @@ export function registerSpaceRoutes(app: Hono, ctx: SpaceRouteContext): void {
     let verifyMs: number | null = null;
     const answer = (
       body: SpaceSubmitResponse,
-      status: 200 | 400 | 409 | 413 | 422 | 426 | 429 | 503,
+      status: 200 | 400 | 401 | 409 | 413 | 422 | 426 | 429 | 503,
       retryAfter?: number,
     ) => {
       ctx.stats?.submission({ status, ms: performance.now() - started, verifyMs, problem });
       return c.json(body, status, retryAfter === undefined ? {} : { "retry-after": String(retryAfter) });
     };
-    const reject = (status: 400 | 409 | 413 | 422 | 426 | 429 | 503, reasons: string[], retryAfter?: number) =>
+    const reject = (status: 400 | 401 | 409 | 413 | 422 | 426 | 429 | 503, reasons: string[], retryAfter?: number) =>
       answer(
         { valid: false, reasons, score: null, leader: false, best_score: null, id: null, beats_certified: false },
         status,
@@ -276,10 +276,14 @@ export function registerSpaceRoutes(app: Hono, ctx: SpaceRouteContext): void {
       );
     // the same limits, counted together, as /api/submit
     if (ctx.overloaded()) return reject(503, ["the server is busy; try again in a few seconds"], OVERLOAD_RETRY_S);
-    const address = addressKey(ctx.clientIp(c));
-    if (!ctx.ipLimit.allow(address)) return reject(429, ["too many submissions from this address; wait a minute"]);
-    const wait = ctx.verifyBudget.wait(address);
-    if (wait > 0) return reject(429, [`too much verification work from this address; wait ${wait} s`], wait);
+    const submitter = ctx.submitLimits.of(addressKey(ctx.clientIp(c)), c.req.header(SUBMIT_KEY_HEADER));
+    if (!submitter) return reject(401, ["the submit key is not this server's"]);
+    // `address` below is what the count, the budget and the one check at a time are kept under:
+    // the address, or the submit key
+    const address = submitter.key;
+    if (!submitter.count.allow(address)) return reject(429, [`too many submissions ${submitter.from}; wait a minute`]);
+    const wait = submitter.budget.wait(address);
+    if (wait > 0) return reject(429, [`too much verification work ${submitter.from}; wait ${wait} s`], wait);
     // read no further than the limit, also for a chunked body without a Content-Length
     const text = await readBodyWithin(c);
     if (text === null) return reject(413, ["request body too large"]);
@@ -371,7 +375,7 @@ export function registerSpaceRoutes(app: Hono, ctx: SpaceRouteContext): void {
     if (checking.has(address))
       return reject(
         429,
-        ["an entry from this address is still being checked; send the next one when it is answered"],
+        [`an entry ${submitter.from} is still being checked; send the next one when it is answered`],
         1,
       );
     // A body that is not a configuration of this problem (types, ids, sizes, finite numbers, piece count)
@@ -412,7 +416,7 @@ export function registerSpaceRoutes(app: Hono, ctx: SpaceRouteContext): void {
                   Math.min(8000, 5 + 3e-6 * ndCheckOps(ndProblem(parsedId)))
                 : 5;
     checking.add(address);
-    ctx.verifyBudget.charge(address, estimate);
+    submitter.budget.charge(address, estimate);
     let verdict: Awaited<ReturnType<typeof validateSpaceSubmissionAsync>>;
     try {
       if (heavy) await heavyTurn();
@@ -451,7 +455,7 @@ export function registerSpaceRoutes(app: Hono, ctx: SpaceRouteContext): void {
       checking.delete(address);
     }
     verifyMs = verdict.workMs;
-    ctx.verifyBudget.charge(address, verifyMs - estimate);
+    submitter.budget.charge(address, verifyMs - estimate);
     ctx.spaces.onCheck?.(verdict);
     if (!verdict.valid || verdict.score === null || !verdict.config)
       return reject(verdict.malformed ? 400 : 422, verdict.reasons);

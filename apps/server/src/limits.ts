@@ -28,6 +28,30 @@ export class RateLimiter {
 }
 
 /**
+ * Runs at most `max` jobs at once; the others wait and start in order of arrival. A job that fails
+ * frees its place like any other.
+ */
+export class Gate {
+  private active = 0;
+  private waiting: (() => void)[] = [];
+
+  constructor(private max: number) {}
+
+  async run<T>(job: () => Promise<T>): Promise<T> {
+    if (this.active < this.max) this.active++;
+    // the place of the job that ends passes to the first waiting, so `active` does not drop in between
+    else await new Promise<void>((resolve) => this.waiting.push(resolve));
+    try {
+      return await job();
+    } finally {
+      const next = this.waiting.shift();
+      if (next) next();
+      else this.active--;
+    }
+  }
+}
+
+/**
  * Milliseconds of work each key may cause, refilled continuously at `perMinute` a minute, with at
  * most `perMinute` saved up. Work is charged after it is done, so one long piece of work can take a
  * key below zero; the key then waits until its balance is positive again.
@@ -122,6 +146,13 @@ export function sanitizeText(raw: string, maxLength: number): string {
     .slice(0, maxLength)
     .trim();
 }
+/**
+ * Snapshot files (GET /api/snapshot/{file}) one address may fetch an hour. The server generates each one from the
+ * database, and the mirror workflow fetches every file of the snapshot, sequentially, from one address: up to 9,801
+ * pairs and the spaces, in well under an hour. This leaves it room to be twice as fast, and stops a client that asks
+ * for the files again and again.
+ */
+export const SNAPSHOT_FILES_PER_HOUR = 20_000;
 /** Submissions per minute from one address. Cloud batch sessions may share one address. */
 export const SUBMISSIONS_PER_MINUTE = 120;
 /**
@@ -135,6 +166,81 @@ export const SUBMISSIONS_PER_MINUTE = 120;
 // [CALC] A strict P = 500 polyhedra entry needs two passes, about 1.4 s together.
 // Four seconds per minute allows a few such entries, at most 6.7% of a core.
 export const VERIFY_MS_PER_MINUTE = 4000;
+/**
+ * The header that carries the server's submit key (SUBMIT_KEY), which the operator gives to a
+ * submitter who needs more than an address's limits. A submission that carries it counts against
+ * the key's limits below, wherever it comes from, instead of its address's.
+ */
+export const SUBMIT_KEY_HEADER = "x-submit-key";
+/**
+ * Submissions per minute with the submit key, all its holders together. Measured 2026-11-08 on the
+ * live server: about 540 submissions a minute from everyone, the busiest hour at 7-11% CPU and the
+ * event loop delayed 84-220 ms at most (OVERLOAD_DELAY_MS is 250), so 600 more a minute still
+ * leaves the overload refusal (503) as the brake when it is too much.
+ */
+export const KEYED_SUBMISSIONS_PER_MINUTE = 600;
+/** Verification a minute with the submit key: the address's budget in the same ratio as the count (20 s). */
+export const KEYED_VERIFY_MS_PER_MINUTE =
+  (VERIFY_MS_PER_MINUTE * KEYED_SUBMISSIONS_PER_MINUTE) / SUBMISSIONS_PER_MINUTE;
+/** A shorter SUBMIT_KEY is not used: a key is a secret that a guess must not find. */
+export const MIN_SUBMIT_KEY_LENGTH = 32;
+
+/** The limits one submission counts against. */
+export interface Submitter {
+  /** What its count and its verification are kept under: the address, or the submit key. */
+  key: string;
+  count: RateLimiter;
+  budget: TimeBudget;
+  /** For the reasons of a refusal: "from this address" or "with this submit key". */
+  from: string;
+}
+
+/**
+ * Chooses the limits of a submission: the submit key's when it carries the server's key, its
+ * address's when it carries none, and none (null: the caller answers 401) when it carries a key
+ * that is not the server's. A wrong key still counts against the address, so that guessing keys
+ * is held to the address's limit.
+ */
+export class SubmitLimits {
+  readonly address: RateLimiter;
+  readonly addressBudget: TimeBudget;
+  private keyed: RateLimiter;
+  private keyedBudget: TimeBudget;
+
+  constructor(
+    private submitKey: string | undefined,
+    limits: {
+      perIp: number;
+      windowMs: number;
+      verifyMsPerMinute: number;
+      perKey: number;
+      keyVerifyMsPerMinute: number;
+    },
+  ) {
+    this.address = new RateLimiter(limits.perIp, limits.windowMs);
+    this.addressBudget = new TimeBudget(limits.verifyMsPerMinute);
+    this.keyed = new RateLimiter(limits.perKey, limits.windowMs);
+    this.keyedBudget = new TimeBudget(limits.keyVerifyMsPerMinute);
+  }
+
+  of(address: string, givenKey: string | undefined): Submitter | null {
+    if (givenKey === undefined)
+      return { key: address, count: this.address, budget: this.addressBudget, from: "from this address" };
+    if (!this.submitKey || !constantTimeEqual(givenKey, this.submitKey)) {
+      this.address.allow(address);
+      return null;
+    }
+    return { key: "submit-key", count: this.keyed, budget: this.keyedBudget, from: "with this submit key" };
+  }
+}
+
+/** String equality whose time does not depend on where the strings first differ. */
+export function constantTimeEqual(a: string, b: string): boolean {
+  if (a.length !== b.length) return false;
+  let diff = 0;
+  for (let i = 0; i < a.length; i++) diff |= a.charCodeAt(i) ^ b.charCodeAt(i);
+  return diff === 0;
+}
 /**
  * Event-loop delay (ms) above which new submissions are answered 503 with Retry-After. Ordinary
  * requests hold the loop for a few milliseconds at a time (a verification for 15 ms at most here,

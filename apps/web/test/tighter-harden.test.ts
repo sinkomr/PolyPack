@@ -140,7 +140,8 @@ describe("harden in Tighter", () => {
     expect(hardenGame.tuneDetail).toContain("every 32, 48, 64 or 96 steps");
     expect(hardenGame.tuneNote).toContain("361, 241, 181 or 121 evaluations");
     expect(hardenGame.tuneNote).toContain("up to 3 times as long");
-    expect(tune.math).toEqual(["<code>evaluationInterval</code> = 32, 48, 64, 96"]);
+    // the parameter line first, then the price rule: the level price and the cut
+    expect(tune.math!.slice(0, 1)).toEqual(["<code>evaluationInterval</code> = 32, 48, 64, 96"]);
     // the help on runs and on pipelines says when a harden run ends
     expect(hardenGame.runEnds).toBe(
       "A harden run ends after its 11,520 momentum steps, 361 evaluations without harden tuning.",

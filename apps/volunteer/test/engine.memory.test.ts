@@ -70,6 +70,21 @@ describe("engine memory", () => {
     for (const input of inputs) expect(parseMemory(input)).toEqual(emptyMemory());
   });
 
+  it("reads memory of version 1 (clients before 0.4.0) with its arms and without its rates", () => {
+    const memory = sample();
+    const old = parseMemory({ ...(json(memory) as object), version: 1 });
+    expect(old.version).toBe(MEMORY_VERSION);
+    expect(old.used).toBe(memory.used);
+    for (const key of Object.keys(memory.families)) {
+      expect(old.families[key].arms).toEqual(memory.families[key].arms);
+      expect(old.families[key].rates).toEqual({});
+    }
+    // the rates measured from then on are taken as they are, not averaged with the old ones
+    const next = remember(old, "4/4/10", { arms: [], rates: [{ method: "harden", rate: 20000 }] });
+    expect(next.families["4/4/10"].rates.harden).toBe(20000);
+    expect(parseMemory(json(next))).toEqual(next);
+  });
+
   it("drops malformed parts and keeps the rest", () => {
     const memory = json(sample()) as {
       families: Record<string, { arms: Record<string, unknown>; rates: Record<string, unknown> }>;
@@ -199,25 +214,25 @@ describe("engine memory in a search", () => {
   }
 
   it("starts the family's next problem from what this one taught", async () => {
-    const improves = (job: Job) => job.kind === "iterate" && job.method === "shrink_repair";
+    const improves = (job: Job) => job.kind === "iterate" && job.method === "harden";
     const first = await run({ N: 4, M: 4, P: 10 }, undefined, improves);
-    // Without memory, the catalogue's order: fresh harden, then fresh shrink_repair
+    // Without memory, the catalogue's order: shrink_repair from scratch, then from its result
     expect(first.jobs.slice(0, 2).map((job) => `${job.kind}:${job.method}`)).toEqual([
-      "fresh:harden",
       "fresh:shrink_repair",
+      "iterate:shrink_repair",
     ]);
     const memory = json(first.outcome.memory);
     const family = parseMemory(memory).families[familyKey({ N: 4, M: 4, P: 12 })];
-    expect(family.arms["iterate:shrink_repair"]).toEqual({ n: 1, r: 1 });
+    expect(family.arms["iterate:harden-refine"]).toEqual({ n: 1, r: 1 });
     // The rate measured on the first problem: 5000 evaluations per second for ten pieces
-    expect(family.rates.harden).toBe(50000);
+    expect(family.rates.shrink_repair).toBe(50000);
 
     const second = await run({ N: 4, M: 4, P: 12 }, memory, improves);
-    // The arm with the family's credit goes first once it has a start
-    expect(`${second.jobs[1].kind}:${second.jobs[1].method}`).toBe("iterate:shrink_repair");
-    // The first harden job's evaluation cap uses the remembered rate, 50000 / 12 per second
-    const harden = second.jobs[0];
-    expect(harden.budget.evals).toBe(Math.floor((50000 / 12) * harden.budget.time_s * 0.8));
+    // The arm with the family's credit goes first once it has a start; the catalogue's is forgotten
+    expect(`${second.jobs[1].kind}:${second.jobs[1].method}`).toBe("iterate:harden");
+    // The first job's evaluation cap uses the remembered rate of its method, 50000 / 12 per second
+    const opening = second.jobs[0];
+    expect(opening.budget.evals).toBe(Math.floor((50000 / 12) * opening.budget.time_s * 0.8));
     expect(parseMemory(json(second.outcome.memory)).used).toBe(2);
   });
 
@@ -250,8 +265,8 @@ describe("engine memory in a search", () => {
     for (const memory of [null, "garbage", { version: 0 }, { version: 1, used: 1, families: { "4/4/10": 5 } }]) {
       const { outcome, jobs } = await run({ N: 4, M: 4, P: 10 }, memory, () => true);
       expect(outcome.best).not.toBeNull();
-      expect(jobs[0].method).toBe("harden");
-      expect(parseMemory(json(outcome.memory)).families["4/4/10"].arms["fresh:harden"]).toBeDefined();
+      expect(jobs[0].method).toBe("shrink_repair");
+      expect(parseMemory(json(outcome.memory)).families["4/4/10"].arms["fresh:shrink_repair"]).toBeDefined();
     }
   });
 });

@@ -17,6 +17,7 @@ import type { How } from "./how";
 import { METHOD_GAMES, methodLabel } from "./methods";
 import type { MethodGame } from "./methods";
 import { MAX_NAME_LENGTH } from "./names";
+import { CHAIN_LINK_GAME_EVALS } from "./space-chain-core";
 import {
   OFFLINE_BACKOFF_MS,
   PLAYER_PER_MINUTE,
@@ -258,6 +259,7 @@ const COUNTS: How = {
     "A click is one press of Evolve, and it runs as many evaluations as you have per click.",
     `A new open problem starts with every piece on rings around the centre. Its side, or the side of a smaller known packing, is the starting score. Your first record must beat it. The starting board is never sent. Your first click on a problem is Compact, ${int(COMPACT_EVALS)} evaluations of mc_compress at once. In the other dimensions the pieces also start loose, and Compact runs until mc_compress hands back its first finished packing, however long that takes, and counts as ${int(COMPACT_EVALS)} evaluations.`,
     `A run is one session of a solver method on one problem, starting from the problem's best board. Each run uses a new random seed, so it searches in a different way. A run stays open between clicks, and it ends when its method stops improving or after ${int(RUN_BUDGET)} evaluations. The next click after that starts a new run. ${runRules()}${runRules() ? " " : ""}Changing the method or its settings also starts a new run.`,
+    `On a page that can't share memory with the solver, a run outside 2D in 2D is a chain of runs, each from the best board and each max(${int(CHAIN_LINK_GAME_EVALS)} evaluations, 3 × the finish cost) long.`,
     "Evaluations run counts every evaluation, yours and auto-eval's, while Clicks counts only your own presses of Evolve. Compute is the time the solver has spent, added up over all lanes, so with two busy lanes it grows twice as fast as the clock.",
     "Records held counts the problems where your entry is the current record on PolyPack, as far as the game knows. Earned counts all the record points you have earned, minus any that were taken back, and spending points does not lower it.",
     `New problems are earned by work, counted in clicks. Each Evolve click counts as one click, whatever its evaluations. Compact's ${int(COMPACT_EVALS)} evaluations count as ${int(COMPACT_EVALS)} divided by your evaluations per click. Auto-eval's evaluations count ${AUTO_CLICK_EVALS} to the click.`,

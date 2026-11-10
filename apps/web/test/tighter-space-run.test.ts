@@ -5,7 +5,7 @@ import { runMethod } from "@polypack/methods";
 import { stallEnds } from "../src/tighter/game";
 import { createRunHost } from "../src/tighter/run-host";
 import type { HostReply } from "../src/tighter/run-host";
-import { Lane } from "../src/tighter/lanes";
+import { Lane, laneInterrupted } from "../src/tighter/lanes";
 import type { OpenRunRequest } from "../src/tighter/open-run";
 import { SpaceRunControl } from "../src/tighter/space-control";
 import { SpaceRun, spaceStart } from "../src/tighter/space-run";
@@ -248,6 +248,10 @@ describe("Tighter lanes closed while opening", () => {
     const polygon = lane.openRun({} as OpenRunRequest);
     void lane.close();
     expect(await polygon).toEqual({ ok: false, message: "closed while opening" });
+    // an open cut short by the lane is not kept against the problem (main.ts runRefused)
+    expect(laneInterrupted("closed while opening")).toBe(true);
+    expect(laneInterrupted("a run is being opened")).toBe(true);
+    expect(laneInterrupted("the solver could not start: Error: x")).toBe(false);
     void lane.openRun({} as OpenRunRequest);
     expect(lane.pending).toBe(1);
     lane.terminate();

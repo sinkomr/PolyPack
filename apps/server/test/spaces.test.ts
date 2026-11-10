@@ -843,6 +843,38 @@ describe("POST /api/spaces/submit", () => {
     expect((await submit(torusEntry())).status).toBe(200);
   });
 
+  it("shares the submit key's limit with /api/submit", async () => {
+    const KEY = "k".repeat(32);
+    makeApp({ submitKey: KEY, limits: { perIp: 1, perKey: 3 } });
+    const polygon = {
+      N: 4,
+      M: 4,
+      P: 2,
+      pieces: [
+        { x: 0, y: 0, theta: Math.PI / 4 },
+        { x: 1, y: 0, theta: Math.PI / 4 },
+      ],
+      name: "ann",
+    };
+    const post = (path: string, body: unknown, key?: string) =>
+      app.request(path, {
+        method: "POST",
+        headers: { "content-type": "application/json", ...(key === undefined ? {} : { "x-submit-key": key }) },
+        body: JSON.stringify(withUnits(body)),
+      });
+    expect((await post("/api/submit", polygon, KEY)).status).toBe(200);
+    expect((await post("/api/spaces/submit", torusEntry(), KEY)).status).toBe(200);
+    expect((await post("/api/submit", polygon, KEY)).status).toBe(200);
+    const fourth = await post("/api/spaces/submit", torusEntry(), KEY);
+    expect(fourth.status).toBe(429);
+    expect(((await fourth.json()) as SpaceSubmitResponse).reasons[0]).toMatch(/with this submit key/);
+    // a wrong key is refused and uses the address's one
+    expect((await post("/api/spaces/submit", torusEntry(), "x".repeat(32))).status).toBe(401);
+    expect((await submit(torusEntry())).status).toBe(429);
+    ip = "2.2.2.2";
+    expect((await submit(torusEntry())).status).toBe(200);
+  });
+
   it("shares the verification time budget with /api/submit", async () => {
     // a budget so small that any one check uses it up
     makeApp({ limits: { verifyMsPerMinute: 1e-6 } });

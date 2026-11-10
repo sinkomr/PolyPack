@@ -199,17 +199,49 @@ describe("engine: lanes and time", () => {
 });
 
 describe("engine: exploration and budgets", () => {
-  it("runs each arm once at the base budget before the bandit repeats any", async () => {
+  it("runs each arm of the exploration round once at the base budget before the bandit repeats any", async () => {
     const known = { config: packing(SQUARES, "known"), score: 6, source: "site" as const };
     const sim = new Sim(improving);
-    await search(sim, { known, maxSeconds: 2000 });
+    // One lane: with more, the bandit fills the lanes while an iterate arm waits for a packing
+    await search(sim, { known, maxSeconds: 2000, lanes: 1 });
+    // Without memory, the catalogue's arms with a credit of at least exploreCredit of the best
     const arms = armsFor(SQUARES);
+    const top = Math.max(...arms.map((arm) => arm.credit));
+    const round = arms.filter((arm) => arm.credit >= POLICY.exploreCredit * top);
+    expect(round.length).toBeGreaterThan(1);
+    expect(round.length).toBeLessThan(arms.length);
     const keys = sim.jobs
-      .slice(0, arms.length)
+      .slice(0, round.length)
       .map((r) => `${r.job.kind}:${r.job.method}:${JSON.stringify(r.job.params ?? {})}`);
-    expect(new Set(keys).size).toBe(arms.length);
-    const base = sim.jobs[0].job.budget.time_s;
-    for (const r of sim.jobs.slice(0, arms.length)) expect(r.job.budget.time_s).toBe(base);
+    expect(new Set(keys).size).toBe(round.length);
+    for (const r of sim.jobs.slice(0, round.length)) {
+      expect(round.some((arm) => arm.start === r.job.kind && arm.method === r.job.method)).toBe(true);
+      expect(r.job.budget.time_s).toBe(sim.jobs[0].job.budget.time_s);
+    }
+  });
+
+  it("starts with the catalogue's best arm and still runs the others on a family without memory", async () => {
+    const sim = new Sim(improving);
+    await search(sim, { maxSeconds: 20000, lanes: 2 });
+    expect(`${sim.jobs[0].job.kind}:${sim.jobs[0].job.method}`).toBe("fresh:shrink_repair");
+    const ran = new Set(sim.jobs.map((r) => `${r.job.kind}:${r.job.method}:${JSON.stringify(r.job.params ?? {})}`));
+    // every arm runs at some point, the low-credit ones when the bandit draws them
+    expect(ran.size).toBeGreaterThanOrEqual(armsFor(SQUARES).filter((arm) => arm.start !== "warm").length);
+  });
+
+  it("keeps the base budget of a short search and explores fewer arms instead", () => {
+    const rate = 1 / (POLICY.secondsPerEvaluationPerPiece * 20);
+    const long = makePlan(600, 7, 6, rate);
+    const short = makePlan(60, 1, 6, rate);
+    // [CALC] 1500 evaluations at 0.15 ms per piece for 20 pieces: 4.5 s
+    expect(long.base).toBeCloseTo(4.5, 9);
+    expect(short.base).toBeCloseTo(4.5, 9);
+    expect(long.explore).toBe(6);
+    expect(short.explore).toBe(3);
+    // A search too short for that gets a third of its time per job, and explores one arm
+    const tiny = makePlan(10, 1, 6, rate);
+    expect(tiny.base).toBeCloseTo((10 - tiny.polishReserve) / 3, 9);
+    expect(tiny.explore).toBe(1);
   });
 
   it("doubles the budget of an arm that keeps improving, up to the cap", async () => {
@@ -248,15 +280,17 @@ describe("engine: exploration and budgets", () => {
   });
 
   it("charges arms for the time their jobs use, so early stoppers are not penalised", async () => {
-    // asc returns after a tenth of its budget and improves as often as the others
-    let score = 5;
-    const sim = new Sim((job, index) => {
-      score *= 1 - 1e-7 * ((index % 3) + 1);
-      return { score, seconds: job.method === "asc" ? job.budget.time_s * 0.1 : undefined };
-    });
-    await search(sim, { maxSeconds: 3000, lanes: 2 });
-    const share = (method: string) => sim.jobs.filter((r) => r.job.method === method).length / sim.jobs.length;
-    expect(share("asc")).toBeGreaterThan(share("morph"));
+    // Every job improves as often; asc returns after a tenth of its budget, or uses all of it
+    const ascShare = async (fraction: number) => {
+      let score = 5;
+      const sim = new Sim((job, index) => {
+        score *= 1 - 1e-7 * ((index % 3) + 1);
+        return { score, seconds: job.budget.time_s * (job.method === "asc" ? fraction : 0.8) };
+      });
+      await search(sim, { maxSeconds: 3000, lanes: 2 });
+      return sim.jobs.filter((r) => r.job.method === "asc").length / sim.jobs.length;
+    };
+    expect(await ascShare(0.1)).toBeGreaterThan(await ascShare(0.8));
   });
 });
 
@@ -493,25 +527,31 @@ describe("engine: stopping", () => {
 
 describe("engine: robustness and determinism", () => {
   it("keeps going when jobs throw, reject, crash or error, and drops arms that keep failing", async () => {
+    const rigid = (job: Job) => (job.params as { path?: string } | undefined)?.path === "rigid";
     const sim = new Sim((job) => {
       if (job.method === "asc") return { throws: new Error("worker gone") };
-      if (job.method === "morph") return { rejects: "no reason" };
-      if (job.method === "basin_hopping") return { score: null, termination: "crashed" };
-      if (job.method === "ls_growth") return { score: null, termination: "error" };
+      if (job.method === "harden" && job.kind === "iterate") return { rejects: "no reason" };
+      if (job.method === "harden" && rigid(job)) return { score: null, termination: "crashed" };
+      if (job.method === "harden") return { score: null, termination: "error" };
       return { score: 5 };
     });
     const lanes = 4;
     const outcome = await search(sim, { maxSeconds: 3600, lanes });
     expect(outcome.best?.score).toBe(5);
     expect(outcome.stopped).toBe("stagnation");
-    for (const method of ["asc", "morph", "basin_hopping"])
-      for (const kind of ["fresh", "iterate"]) {
-        const failed = sim.jobs.filter((r) => r.job.method === method && r.job.kind === kind);
-        expect(failed.length).toBeGreaterThan(0);
-        // Jobs already in flight when the arm is dropped still finish
-        expect(failed.length).toBeLessThanOrEqual(POLICY.errorLimit + lanes - 1);
-      }
-    expect(sim.jobs.filter((r) => r.job.method === "harden").length).toBeGreaterThan(10);
+    const arms: [string, string, boolean][] = [
+      ["asc", "iterate", false],
+      ["harden", "iterate", true],
+      ["harden", "fresh", true],
+      ["harden", "fresh", false],
+    ];
+    for (const [method, kind, path] of arms) {
+      const failed = sim.jobs.filter((r) => r.job.method === method && r.job.kind === kind && rigid(r.job) === path);
+      expect(failed.length).toBeGreaterThan(0);
+      // Jobs already in flight when the arm is dropped still finish
+      expect(failed.length).toBeLessThanOrEqual(POLICY.errorLimit + lanes - 1);
+    }
+    expect(sim.jobs.filter((r) => r.job.method === "shrink_repair").length).toBeGreaterThan(10);
   });
 
   it("survives a host whose onResult throws and malformed results", async () => {
@@ -559,7 +599,7 @@ describe("engine: robustness and determinism", () => {
     const sim = new Sim(improving);
     const outcome = await search(sim, { maxSeconds: 600 });
     const memory = outcome.memory as { version: number; families: Record<string, unknown> };
-    expect(memory.version).toBe(1);
+    expect(memory.version).toBe(2);
     expect(Object.keys(memory.families)).toEqual([familyKey(SQUARES)]);
   });
 });

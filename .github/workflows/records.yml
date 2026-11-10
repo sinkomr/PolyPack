@@ -1,8 +1,11 @@
 name: Records snapshot
-# Every night: mirrors the site's records snapshot (GET /api/snapshot), which the server builds at
-# 11:00 UTC, into the release "records" (scripts/mirror-snapshot.ts): one gzipped JSON file per
-# piece shape (n-{N}.json.gz, every pair N-M with each open problem's leader and its coordinates), and
-# one per space with its site entries' configurations. Only changed files are fetched and uploaded.
+# Every night: mirrors the site's records snapshot (GET /api/snapshot) into the release "records"
+# (scripts/mirror-snapshot.ts): one gzipped JSON file per piece shape (n-{N}.json.gz, every pair N-M
+# with each open problem's leader and its coordinates), and one per space with its site entries'
+# configurations. At 11:00 UTC the server builds only the snapshot's manifest, with a fingerprint of
+# each file's leaders; it generates every file from its database when it is downloaded. The mirror
+# fetches the files one at a time, and only those of the piece shapes and spaces whose fingerprint
+# differs from the one it recorded in the release's manifest the last time.
 on:
   schedule:
     - cron: "30 12 * * *"
@@ -13,8 +16,11 @@ concurrency: records-snapshot
 jobs:
   mirror:
     runs-on: ubuntu-latest
-    # a full mirror (every file changed) moves about 1 GB; a stuck run stops long before 6 hours
-    timeout-minutes: 60
+    # A full mirror (every file changed) moves about 3 GB, and the site generates each file when it is
+    # fetched, one at a time, so it takes a good part of an hour: the first run after the site switched to
+    # generating files (format 3) fetches all of them, since the release records no fingerprints yet.
+    # Estimated at 25 to 45 minutes then [CALC]; a stuck run stops long before 6 hours.
+    timeout-minutes: 90
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4

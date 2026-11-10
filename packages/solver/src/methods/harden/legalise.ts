@@ -3,7 +3,7 @@
 // https://github.com/yoheinakajima/soft-to-rigid). This is the same homothety as morph's shared
 // `rescale`, searched with the shared cell grid instead of an all-pairs scan so that one
 // assessment stays cheap at P = 500, and with a checkpoint after every scan.
-import { boundingRadius, pieceSeparation, type PackingConfig } from "@polypack/geometry";
+import { boundingRadius, type PackingConfig, pieceSeparationBelow } from "@polypack/geometry";
 import { dilate } from "../morph/shapes";
 import { nearbyPairs } from "../penalty/objective";
 
@@ -34,7 +34,7 @@ export async function legalise(
     const pairs = nearbyPairs(candidate.pieces, reach, stopped);
     scanned = 12 * config.P + pairs.length * Math.max(1, 2 * config.N);
     for (const [i, j] of pairs) {
-      if (pieceSeparation(config.N, candidate.pieces[i], candidate.pieces[j]).sep < 0) return false;
+      if (pieceSeparationBelow(config.N, candidate.pieces[i], candidate.pieces[j], 0)) return false;
     }
     return !stopped();
   };

@@ -1,60 +1,63 @@
 import { createHash } from "node:crypto";
-import {
-  closeSync,
-  createReadStream,
-  createWriteStream,
-  fstatSync,
-  mkdirSync,
-  openSync,
-  readFileSync,
-  readdirSync,
-  renameSync,
-  rmSync,
-  statSync,
-  writeFileSync,
-} from "node:fs";
+import { mkdirSync, readFileSync, renameSync, statSync, writeFileSync } from "node:fs";
+import { readdir, rm, stat } from "node:fs/promises";
 import { join } from "node:path";
-import { Readable, Transform } from "node:stream";
-import { pipeline } from "node:stream/promises";
+import { once } from "node:events";
 import { createGzip } from "node:zlib";
 import type { LeaderboardEntry } from "@polypack/geometry";
-import { SPACE_NAMES, type SpacesIndex, acceptsSubmissions, isSpaceName, parseSpaceId, problemOf } from "@polypack/spaces";
+import {
+  SPACE_NAMES,
+  type SpacesIndex,
+  acceptsSubmissions,
+  isSpaceName,
+  parseSpaceId,
+  problemOf,
+} from "@polypack/spaces";
+import { Gate } from "./limits";
 import { SpaceStore, Store, StoredSpaceEntry, StoredSubmission } from "./store";
 
 /**
  * The records snapshot: every open problem's leader with its coordinates, as one gzipped JSON file
- * per shape pair (N, M), built by the server itself once a night into a directory on its disk and
- * served at /api/snapshot. A GitHub workflow mirrors it into a release (scripts/mirror-snapshot.ts).
+ * per shape pair (N, M) and one per space, served at /api/snapshot. A GitHub workflow mirrors it into
+ * a release (scripts/mirror-snapshot.ts).
  *
- * A pair's file depends only on its leaders' (P, id, name, found_with, verification): every other
- * field it holds never changes. So a pair whose leaders are unchanged keeps its file, which makes
- * most nights cheap, and its bytes stay the same (no timestamps inside), which lets the mirror
- * skip it too. The build reads the leaders one pair at a time and their entries 25 at a time, and
- * pauses after each pair it writes, so that requests keep being answered while it runs.
+ * Since format 3 (2026-11-07) the server stores no file but a small manifest, because the files, a second
+ * copy of every record's coordinates, filled the volume. Once a night it reads the leaders of every
+ * pair and space (no entry, no pieces) and writes the manifest: for each file its name, counts and
+ * fingerprint. A file is generated from the database when it is asked for, from the leaders at that
+ * moment, which may be newer than the manifest's; the response says which in `x-snapshot-fingerprint`.
  *
- * The site entries of the spaces (every kind of problem but flat polygons; see @polypack/spaces) follow
- * in one file per space, "space-{space}.json.gz", listed apart under the manifest's `spaces`, so
- * that `files` keeps one shape pair per entry. They follow the same rules: the leader of every
- * open problem with an entry, rebuilt only when its leaders' (problem, P, id, name) changed. A
- * space's file is rebuilt whole; the build pauses inside it as it does between pairs.
+ * A file depends only on its leaders' (P, id, name, found_with, verification) (a space's, on its
+ * (problem, P, id, name)): every other field it holds never changes. So the fingerprint of the
+ * leaders tells whether a file has changed, which lets the mirror skip it, and the manifest keeps the
+ * `as_of` of a file whose fingerprint is unchanged.
+ *
+ * Generating reads the entries a few thousand pieces at a time and lets the event loop in between, so that
+ * requests keep being answered; at most `maxConcurrent` files are generated at once, the others wait.
  */
 /**
+ * Format 3 (2026-11-07): the files are generated on request and the manifest has no `bytes` and `sha256`.
  * Format 2 (2026-10-27, the unit change): disk and ball pieces have diameter 1 and circle and ball containers are scored by
- * their diameter. A pair's file used to depend on its leaders alone, because "every other field never changes"; a unit
- * change breaks that, so the format number is part of every fingerprint and a manifest of another format is not read: the
- * first build after the change writes every file again.
+ * their diameter. The format number is part of every fingerprint and a manifest of another format is not read: the
+ * first build after a change describes every file again.
  */
-export const SNAPSHOT_FORMAT = 2;
+export const SNAPSHOT_FORMAT = 3;
 /** The length units of the snapshot's coordinates and scores (the manifest's `units`). */
 export const SNAPSHOT_UNITS = "diameter";
 const MANIFEST = "manifest.json";
-/** Entries read at once: at most 25 × 500 pieces, a few milliseconds of work. */
+/** Entries read at once, at most. */
 const CHUNK = 25;
-/** Pieces of a space's file between two pauses: a fifth of the largest pair's, about 60 ms of work [CALC]. */
-export const SPACE_PAUSE_PIECES = 25_000;
+/**
+ * Pieces read at once, at most: the entries of a chunk are read and written in one step of the event loop, so
+ * that this bounds the step. Reading, formatting and handing 1,000 pieces to the compressor take a few milliseconds
+ * (a full pair of 125,250 pieces is generated in about 0.45 s with a longest event-loop gap of 10 to 15 ms, measured
+ * 2026-11-07 on a Linux sandbox); the compression itself runs in zlib's own threads.
+ */
+export const CHUNK_PIECES = 1000;
+/** Files generated at once by default. */
+export const MAX_CONCURRENT = 2;
 const FILE_NAME = /^(0|[1-9]\d{0,2})-(0|[1-9]\d{0,2})\.json\.gz$/;
 const SPACE_FILE_NAME = /^space-[a-z][a-z0-9]{0,31}\.json\.gz$/;
-const isFileName = (name: string) => FILE_NAME.test(name) || SPACE_FILE_NAME.test(name);
 
 export interface SnapshotFile {
   N: number;
@@ -63,9 +66,7 @@ export interface SnapshotFile {
   file: string;
   records: number;
   pieces: number;
-  bytes: number;
-  sha256: string;
-  /** When the leaders in the file were read. */
+  /** When the leaders of the file were read. */
   as_of: string;
   /** Hash of the records the file holds (see fingerprint); an unchanged one means an unchanged file. */
   fingerprint: string;
@@ -78,8 +79,6 @@ export interface SpaceSnapshotFile {
   file: string;
   records: number;
   pieces: number;
-  bytes: number;
-  sha256: string;
   as_of: string;
   fingerprint: string;
 }
@@ -99,22 +98,26 @@ export interface SnapshotManifest {
   records: number;
   pieces: number;
   files: SnapshotFile[];
-  /** One file per space with site entries; missing in manifests written before the spaces were added. */
+  /** One file per space with site entries. */
   spaces?: SpaceSnapshotFile[];
 }
 
-/** One listed file, ready to be served; `open` opens it only when its bytes are wanted. */
-export interface SnapshotFileSource {
-  bytes: number;
-  sha256: string;
-  open(): { stream: ReadableStream<Uint8Array>; bytes: number } | null;
+/** A file generated from the database, gzipped. */
+export interface GeneratedFile {
+  body: Buffer;
+  /** The fingerprint of the records written, which can differ from the manifest's if they changed since. */
+  fingerprint: string;
+  records: number;
+  pieces: number;
 }
 
 /** What /api/snapshot serves; the routes are in app.ts, which stays free of file system code. */
 export interface SnapshotSource {
   manifest(): SnapshotManifest | null;
-  /** A file the manifest lists; null for any other name. */
-  file(name: string): SnapshotFileSource | null;
+  /** Whether the current manifest lists the file. */
+  has(name: string): boolean;
+  /** The file as the database holds its records now; null for a name the manifest does not list. */
+  generate(name: string): Promise<GeneratedFile | null>;
 }
 
 export const fileName = (N: number, M: number) => `${N}-${M}.json.gz`;
@@ -123,7 +126,10 @@ export const spaceFileName = (space: string) => `space-${space}.json.gz`;
 export function readManifest(dir: string): SnapshotManifest | null {
   try {
     const m = JSON.parse(readFileSync(join(dir, MANIFEST), "utf8")) as SnapshotManifest;
-    return m.format === SNAPSHOT_FORMAT && m.units === SNAPSHOT_UNITS && Array.isArray(m.files) && (m.spaces === undefined || Array.isArray(m.spaces))
+    return m.format === SNAPSHOT_FORMAT &&
+      m.units === SNAPSHOT_UNITS &&
+      Array.isArray(m.files) &&
+      (m.spaces === undefined || Array.isArray(m.spaces))
       ? m
       : null;
   } catch {
@@ -140,42 +146,7 @@ function writeManifest(dir: string, m: SnapshotManifest): void {
   renameSync(tmp, join(dir, MANIFEST));
 }
 
-export function snapshotSource(dir: string): SnapshotSource {
-  return {
-    manifest: () => readManifest(dir),
-    file(name) {
-      if (!isFileName(name)) return null;
-      const m = readManifest(dir);
-      const entry = [...(m?.files ?? []), ...(m?.spaces ?? [])].find((f) => f.file === name);
-      if (!entry) return null;
-      return {
-        bytes: entry.bytes,
-        sha256: entry.sha256,
-        // Opened in the same synchronous step as the manifest was read, so the open file is the
-        // one listed: the build renames a new file into place and writes the manifest without
-        // anything in between. A file renamed over later keeps being served whole from this one.
-        open() {
-          let fd: number;
-          try {
-            fd = openSync(join(dir, name), "r");
-          } catch {
-            return null;
-          }
-          try {
-            const bytes = fstatSync(fd).size;
-            if (bytes !== entry.bytes) throw new Error("not the listed file");
-            // closes the descriptor at the end, and when the client goes away early
-            const stream = Readable.toWeb(createReadStream("", { fd })) as ReadableStream<Uint8Array>;
-            return { stream, bytes };
-          } catch {
-            closeSync(fd);
-            return null;
-          }
-        },
-      };
-    },
-  };
-}
+const yieldNow = () => new Promise<void>((r) => setImmediate(r));
 
 /** The line of one record in a pair's file: pieces as [x, y, theta], every number at full precision. */
 function recordLine(s: StoredSubmission): string {
@@ -203,7 +174,7 @@ function fingerprint(records: readonly Leader[]): string {
 
 /**
  * The fields of a record in a space's file, in their order. They are part of the files'
- * fingerprint, so that a change of them rebuilds every space's file.
+ * fingerprint, so that a change of them describes every space's file anew.
  */
 export const SPACE_RECORD_FIELDS = [
   "problem",
@@ -276,263 +247,320 @@ export function snapshotSpaces(index: SpacesIndex, store: SpaceStore): SnapshotS
   };
 }
 
-export interface BuildOptions {
-  store: Store;
-  dir: string;
-  /** Problems whose published optimum is proven: their site entries are left out, as on the records page. */
-  closed: (N: number, M: number, P: number) => boolean;
-  /** The spaces' site entries, one file per space after the pairs; without it the snapshot holds the pairs only. */
-  spaces?: SnapshotSpaces;
-  log?: (msg: string) => void;
-  /** Waits after a pair (or a space) was built, given how long building it took; by default 3 times as long, at least 1 s. */
-  pause?: (busyMs: number) => Promise<void>;
-  /**
-   * Pieces of a space's file written between two pauses (by default SPACE_PAUSE_PIECES). A space
-   * file can be far larger than a pair's: every polyhedra problem with an entry would make about
-   * 28 MB and 6 s of work on an Apple Silicon Mac [CALC], against 0.37 s for the largest pair.
-   */
-  pauseEveryPieces?: number;
-  now?: () => Date;
+/** The current leaders of a pair's open problems, by P (closed problems left out). */
+async function pairLeaders(store: Store, N: number, M: number, closed: ClosedFn): Promise<Leader[]> {
+  return (await store.bestPerP(N, M)).filter((e) => !closed(N, M, e.P));
 }
 
-const sleep = (ms: number) => new Promise<void>((r) => setTimeout(r, ms));
-const yieldNow = () => new Promise<void>((r) => setImmediate(r));
+/** The current leaders of a space's open problems with an entry, in catalogue order. */
+async function spaceLeaders(spaces: SnapshotSpaces, space: string): Promise<SpaceSnapshotLeader[]> {
+  const { store, place } = spaces;
+  return (await store.spaceBest(space))
+    .flatMap((l) => {
+      const at = place(space, l.problem);
+      return at ? [{ id: l.id, problem: l.problem, name: l.name, ...at }] : [];
+    })
+    .sort((a, b) => a.order - b.order);
+}
+
+const sumPieces = (leaders: readonly { P: number }[]) => leaders.reduce((n, l) => n + l.P, 0);
+
+/** Problems whose published optimum is proven: their site entries are left out, as on the records page. */
+type ClosedFn = (N: number, M: number, P: number) => boolean;
+
+/** The leaders in runs of at most CHUNK entries and about CHUNK_PIECES pieces, each read and written in one step. */
+function* chunked<T extends { P: number }>(leaders: readonly T[]): Generator<T[]> {
+  for (let i = 0; i < leaders.length;) {
+    let j = i;
+    let pieces = 0;
+    while (j < leaders.length && j - i < CHUNK && pieces < CHUNK_PIECES) pieces += leaders[j++].P;
+    yield leaders.slice(i, j);
+    i = j;
+  }
+}
+
+/** The text gzipped (zlib works off the event loop), in memory, so that the answer can say what it holds before its body. */
+async function gzipText(text: AsyncIterable<string>): Promise<Buffer> {
+  const gz = createGzip({ level: 6 });
+  const parts: Buffer[] = [];
+  gz.on("data", (c: Buffer) => parts.push(c));
+  const ended = new Promise<void>((resolve, reject) => {
+    gz.on("end", resolve);
+    gz.on("error", reject);
+  });
+  ended.catch(() => {});
+  try {
+    for await (const t of text) if (!gz.write(t)) await once(gz, "drain");
+    gz.end();
+    await ended;
+  } catch (e) {
+    gz.destroy();
+    throw e;
+  }
+  return Buffer.concat(parts);
+}
 
 /**
- * Builds or refreshes the snapshot in `dir`. The manifest is rewritten after every pair, so that
- * it always describes files on disk; it is marked complete at the end, and only then are the
- * files of pairs without leaders removed (with any other file it does not list). The spaces'
- * files follow the pairs, by the same rules. `built`, `kept` and `removed` count files of both.
+ * The file of a pair as the database holds its records now. The leaders are read first and their entries a chunk at a
+ * time, with the event loop let in after each; the fingerprint is of what is written, which may differ from the
+ * leaders read if entries changed meanwhile.
  */
-export async function buildSnapshot(opts: BuildOptions): Promise<{ built: number; kept: number; removed: number }> {
-  const { store, dir, closed } = opts;
-  const log = opts.log ?? (() => {});
-  const pause = opts.pause ?? ((busy) => sleep(Math.max(1000, 3 * busy)));
-  const now = opts.now ?? (() => new Date());
-  mkdirSync(dir, { recursive: true });
-  for (const name of readdirSync(dir)) if (name.endsWith(".tmp")) rmSync(join(dir, name), { force: true });
-
-  const before = readManifest(dir);
-  const previous = new Map((before?.files ?? []).map((f) => [f.file, f]));
-  // until a pair is reached, the manifest keeps its previous entry, whose file is still on disk
-  const files = new Map(previous);
-  const previousSpaces = new Map((before?.spaces ?? []).map((f) => [f.file, f]));
-  const spaceFiles = new Map(previousSpaces);
-  const names = opts.spaces?.names ?? [];
-  const spaceRank = (space: string) => (names.includes(space) ? names.indexOf(space) : names.length);
-  const manifest = (completed: boolean): SnapshotManifest => {
-    const list = [...files.values()].sort((a, b) => a.N - b.N || a.M - b.M);
-    const spaces = [...spaceFiles.values()].sort(
-      (a, b) => spaceRank(a.space) - spaceRank(b.space) || (a.space < b.space ? -1 : a.space > b.space ? 1 : 0),
-    );
-    const at = now().toISOString();
-    return {
-      format: SNAPSHOT_FORMAT,
-      units: SNAPSHOT_UNITS,
-      generated_at: at,
-      completed_at: completed ? at : (before?.completed_at ?? null),
-      records: list.reduce((n, f) => n + f.records, 0),
-      pieces: list.reduce((n, f) => n + f.pieces, 0),
-      files: list,
-      spaces,
-    };
-  };
-
-  const listed = new Set<string>();
-  let built = 0;
-  let kept = 0;
-  for (const { N, M } of await store.pairs()) {
-    await yieldNow();
-    const leaders = (await store.bestPerP(N, M)).filter((e) => !closed(N, M, e.P));
-    if (!leaders.length) continue;
-    const name = fileName(N, M);
-    listed.add(name);
-    const old = previous.get(name);
-    if (old && old.fingerprint === fingerprint(leaders) && sizeOf(join(dir, name)) === old.bytes) {
-      kept++;
-      continue;
-    }
-    const started = performance.now();
-    files.set(name, await writePair(store, dir, name, N, M, leaders, now().toISOString()));
-    writeManifest(dir, manifest(false));
-    built++;
-    await pause(performance.now() - started);
-  }
-
-  if (opts.spaces) {
-    const { store: spaceStore, place } = opts.spaces;
-    for (const space of names) {
-      await yieldNow();
-      const leaders: SpaceSnapshotLeader[] = (await spaceStore.spaceBest(space))
-        .flatMap((l) => {
-          const at = place(space, l.problem);
-          return at ? [{ id: l.id, problem: l.problem, name: l.name, ...at }] : [];
-        })
-        .sort((a, b) => a.order - b.order);
-      if (!leaders.length) continue;
-      const name = spaceFileName(space);
-      listed.add(name);
-      const old = previousSpaces.get(name);
-      if (old && old.fingerprint === spaceFingerprint(leaders) && sizeOf(join(dir, name)) === old.bytes) {
-        kept++;
-        continue;
-      }
-      // writeSpace pauses as it goes, and after its last part
-      spaceFiles.set(
-        name,
-        await writeSpace(spaceStore, dir, name, space, leaders, now().toISOString(), pause, opts.pauseEveryPieces),
-      );
-      writeManifest(dir, manifest(false));
-      built++;
-    }
-  }
-
-  for (const name of previous.keys()) if (!listed.has(name)) files.delete(name);
-  for (const name of previousSpaces.keys()) if (!listed.has(name)) spaceFiles.delete(name);
-  writeManifest(dir, manifest(true));
-  let removed = 0;
-  for (const name of readdirSync(dir))
-    if (isFileName(name) && !files.has(name) && !spaceFiles.has(name)) {
-      rmSync(join(dir, name), { force: true });
-      removed++;
-    }
-  log(`[snapshot] ${built} file(s) built, ${kept} unchanged, ${removed} removed`);
-  return { built, kept, removed };
-}
-
-function sizeOf(path: string): number | null {
-  try {
-    return statSync(path).size;
-  } catch {
-    return null;
-  }
-}
-
-async function writePair(
-  store: Store,
-  dir: string,
-  name: string,
-  N: number,
-  M: number,
-  leaders: readonly Leader[],
-  asOf: string,
-): Promise<SnapshotFile> {
-  // the fingerprint is of what is written, which may differ from `leaders` if entries changed meanwhile
+export async function generatePair(store: Store, N: number, M: number, closed: ClosedFn): Promise<GeneratedFile> {
+  const leaders = await pairLeaders(store, N, M, closed);
   const written: Leader[] = [];
-  let pieces = 0;
   async function* text(): AsyncGenerator<string> {
     yield `{"format":${SNAPSHOT_FORMAT},"N":${N},"M":${M},"records":[`;
-    for (let i = 0; i < leaders.length; i += CHUNK) {
-      const part = leaders.slice(i, i + CHUNK);
+    for (const part of chunked(leaders)) {
       const byId = new Map((await store.getMany(part.map((l) => l.id))).map((s) => [s.id, s]));
-      const lines: string[] = [];
+      let lines = "";
       for (const l of part) {
-        // an entry overtaken since the leaders were read has been deleted: its problem's new
-        // leader is taken instead
+        // an entry overtaken since the leaders were read has been deleted: its problem's new leader is taken instead
         let s = byId.get(l.id);
         if (!s) {
           const current = await store.leader(N, M, l.P);
           s = (current && (await store.get(current.id))) || undefined;
         }
         if (!s) continue;
-        lines.push((written.length ? ",\n" : "\n") + recordLine(s));
+        lines += (written.length ? ",\n" : "\n") + recordLine(s);
         written.push(s);
-        pieces += s.P;
       }
-      if (lines.length) yield lines.join("");
+      if (lines) yield lines;
       await yieldNow();
     }
     yield "\n]}\n";
   }
-  const { bytes, sha256 } = await writeGzipped(dir, name, text());
-  return {
-    N,
-    M,
-    file: name,
-    records: written.length,
-    pieces,
-    bytes,
-    sha256,
-    as_of: asOf,
-    fingerprint: fingerprint(written),
-  };
+  const body = await gzipText(text());
+  return { body, fingerprint: fingerprint(written), records: written.length, pieces: sumPieces(written) };
 }
 
-async function writeSpace(
-  store: SpaceStore,
-  dir: string,
-  name: string,
-  space: string,
-  leaders: readonly SpaceSnapshotLeader[],
-  asOf: string,
-  pause: (busyMs: number) => Promise<void>,
-  pauseEveryPieces = SPACE_PAUSE_PIECES,
-): Promise<SpaceSnapshotFile> {
-  // as in writePair, the fingerprint is of what is written
+/** The file of a space as the database holds its entries now, by the same rules as generatePair. */
+export async function generateSpace(spaces: SnapshotSpaces, space: string): Promise<GeneratedFile> {
+  const { store } = spaces;
+  const leaders = await spaceLeaders(spaces, space);
   const written: SpaceSnapshotLeader[] = [];
-  let pieces = 0;
-  let sincePause = 0;
-  let busySince = performance.now();
   async function* text(): AsyncGenerator<string> {
     yield `{"format":${SNAPSHOT_FORMAT},"space":${JSON.stringify(space)},"records":[`;
-    for (let i = 0; i < leaders.length; i += CHUNK) {
-      const lines: string[] = [];
-      for (const l of leaders.slice(i, i + CHUNK)) {
-        // an entry overtaken since the leaders were read has been deleted: its problem's new
-        // leader is taken instead
+    for (const part of chunked(leaders)) {
+      let lines = "";
+      for (const l of part) {
         let e = await store.spaceGet(l.id);
         if (!e) {
           const current = await store.spaceLeader(space, l.problem);
           e = current && (await store.spaceGet(current.id));
         }
         if (!e) continue;
-        lines.push((written.length ? ",\n" : "\n") + spaceRecordLine(e, l.P));
+        lines += (written.length ? ",\n" : "\n") + spaceRecordLine(e, l.P);
         written.push({ ...l, id: e.id, name: e.name });
-        pieces += l.P;
-        sincePause += l.P;
       }
-      if (lines.length) yield lines.join("");
-      if (sincePause >= pauseEveryPieces && i + CHUNK < leaders.length) {
-        await pause(performance.now() - busySince);
-        sincePause = 0;
-        busySince = performance.now();
-      } else await yieldNow();
+      if (lines) yield lines;
+      await yieldNow();
     }
     yield "\n]}\n";
   }
-  const { bytes, sha256 } = await writeGzipped(dir, name, text());
-  await pause(performance.now() - busySince);
+  const body = await gzipText(text());
+  return { body, fingerprint: spaceFingerprint(written), records: written.length, pieces: sumPieces(written) };
+}
+
+export interface SourceOptions {
+  /** Where the build writes the manifest. */
+  dir: string;
+  store: Store;
+  closed: ClosedFn;
+  /** The spaces' site entries; without them the space files of the manifest are not served. */
+  spaces?: SnapshotSpaces;
+  /** Files generated at once, the others waiting in order of arrival; MAX_CONCURRENT by default. */
+  maxConcurrent?: number;
+}
+
+/** Serves the manifest in `dir`, and generates the files it lists from the database. */
+export function snapshotSource(opts: SourceOptions): SnapshotSource {
+  const { dir, store, closed, spaces } = opts;
+  const gate = new Gate(opts.maxConcurrent ?? MAX_CONCURRENT);
+  // The manifest is read again only when its file was replaced: it can list thousands of files.
+  let cache: {
+    key: string;
+    manifest: SnapshotManifest | null;
+    byName: Map<string, SnapshotFile | SpaceSnapshotFile>;
+  } | null = null;
+  function current() {
+    let key: string;
+    try {
+      const st = statSync(join(dir, MANIFEST));
+      key = `${st.ino}:${st.size}:${st.mtimeMs}`;
+    } catch {
+      return (cache = null);
+    }
+    if (cache?.key === key) return cache;
+    const manifest = readManifest(dir);
+    const byName = new Map<string, SnapshotFile | SpaceSnapshotFile>(
+      [...(manifest?.files ?? []), ...(manifest?.spaces ?? [])].map((f) => [f.file, f]),
+    );
+    return (cache = { key, manifest, byName });
+  }
   return {
-    space,
-    file: name,
-    records: written.length,
-    pieces,
-    bytes,
-    sha256,
-    as_of: asOf,
-    fingerprint: spaceFingerprint(written),
+    manifest: () => current()?.manifest ?? null,
+    has: (name) => current()?.byName.has(name) ?? false,
+    async generate(name) {
+      const entry = current()?.byName.get(name);
+      if (!entry) return null;
+      if ("space" in entry) {
+        if (!spaces) return null;
+        return gate.run(() => generateSpace(spaces, entry.space));
+      }
+      return gate.run(() => generatePair(store, entry.N, entry.M, closed));
+    },
   };
 }
 
-/** Writes the text gzipped into a temporary file renamed into place as `name`; its size and SHA-256. */
-async function writeGzipped(
+export interface CleanResult {
+  files: number;
+  bytes: number;
+}
+
+/**
+ * Deletes every data file in `dir` (`*.json.gz` and `*.tmp`), keeping the manifest: since format 3 the server
+ * stores no file but that. A batch of files at a time, the event loop let in between.
+ */
+export async function cleanSnapshotDir(
   dir: string,
-  name: string,
-  text: AsyncIterable<string>,
-): Promise<{ bytes: number; sha256: string }> {
-  const hash = createHash("sha256");
-  let bytes = 0;
-  const tap = new Transform({
-    transform(chunk: Buffer, _enc, done) {
-      hash.update(chunk);
-      bytes += chunk.length;
-      done(null, chunk);
-    },
+  log: (msg: string) => void = () => {},
+  batch = 100,
+): Promise<CleanResult> {
+  const done: CleanResult = { files: 0, bytes: 0 };
+  let names: string[] = [];
+  try {
+    names = (await readdir(dir)).filter((n) => n.endsWith(".json.gz") || n.endsWith(".tmp"));
+  } catch {
+    // no directory yet: nothing to clean
+  }
+  for (let i = 0; i < names.length; i += batch) {
+    await Promise.all(
+      names.slice(i, i + batch).map(async (name) => {
+        const path = join(dir, name);
+        try {
+          const st = await stat(path);
+          if (!st.isFile()) return;
+          await rm(path, { force: true });
+          done.files++;
+          done.bytes += st.size;
+        } catch {
+          // gone already, or not removable: the next clean-up tries again
+        }
+      }),
+    );
+    await yieldNow();
+  }
+  log(`[snapshot] ${done.files} stored file(s) removed, ${done.bytes} bytes freed`);
+  return done;
+}
+
+export interface BuildOptions {
+  store: Store;
+  dir: string;
+  closed: ClosedFn;
+  /** The spaces' site entries, one file per space after the pairs; without it the snapshot holds the pairs only. */
+  spaces?: SnapshotSpaces;
+  log?: (msg: string) => void;
+  now?: () => Date;
+}
+
+export interface BuildResult {
+  /** Files new or whose fingerprint changed (their `as_of` is now). */
+  changed: number;
+  /** Files whose fingerprint is unchanged: their entry, `as_of` included, is kept. */
+  kept: number;
+  /** Files of the previous manifest that have no leaders any more. */
+  dropped: number;
+  /** The stored files deleted at the end. */
+  cleaned: CleanResult;
+}
+
+/**
+ * Builds or refreshes the manifest in `dir`: for each pair and space with open leaders, its counts and the fingerprint
+ * of its leaders, read from the leaders alone (no entry, no pieces). The manifest is marked complete at the end, when
+ * its `generated_at` is made equal to `completed_at`; until then it carries the previous `completed_at`, so that the
+ * mirror waits. Stored files are deleted afterwards.
+ */
+export async function buildSnapshot(opts: BuildOptions): Promise<BuildResult> {
+  const { store, dir, closed } = opts;
+  const log = opts.log ?? (() => {});
+  const now = opts.now ?? (() => new Date());
+  mkdirSync(dir, { recursive: true });
+
+  const before = readManifest(dir);
+  // from here until the end the manifest says that a build is under way
+  if (before) writeManifest(dir, { ...before, generated_at: now().toISOString() });
+  const previous = new Map([...(before?.files ?? []), ...(before?.spaces ?? [])].map((f) => [f.file, f]));
+
+  const files: SnapshotFile[] = [];
+  const spaceFiles: SpaceSnapshotFile[] = [];
+  const listed = new Set<string>();
+  let changed = 0;
+  let kept = 0;
+  for (const { N, M } of await store.pairs()) {
+    await yieldNow();
+    const leaders = await pairLeaders(store, N, M, closed);
+    if (!leaders.length) continue;
+    const file = fileName(N, M);
+    listed.add(file);
+    const print = fingerprint(leaders);
+    const old = previous.get(file) as SnapshotFile | undefined;
+    if (old && old.fingerprint === print) {
+      files.push(old);
+      kept++;
+    } else {
+      files.push({
+        N,
+        M,
+        file,
+        records: leaders.length,
+        pieces: sumPieces(leaders),
+        as_of: now().toISOString(),
+        fingerprint: print,
+      });
+      changed++;
+    }
+  }
+  const names = opts.spaces?.names ?? [];
+  for (const space of names) {
+    await yieldNow();
+    const leaders = await spaceLeaders(opts.spaces!, space);
+    if (!leaders.length) continue;
+    const file = spaceFileName(space);
+    listed.add(file);
+    const print = spaceFingerprint(leaders);
+    const old = previous.get(file) as SpaceSnapshotFile | undefined;
+    if (old && old.fingerprint === print) {
+      spaceFiles.push(old);
+      kept++;
+    } else {
+      spaceFiles.push({
+        space,
+        file,
+        records: leaders.length,
+        pieces: sumPieces(leaders),
+        as_of: now().toISOString(),
+        fingerprint: print,
+      });
+      changed++;
+    }
+  }
+
+  const at = now().toISOString();
+  writeManifest(dir, {
+    format: SNAPSHOT_FORMAT,
+    units: SNAPSHOT_UNITS,
+    generated_at: at,
+    completed_at: at,
+    records: files.reduce((n, f) => n + f.records, 0),
+    pieces: files.reduce((n, f) => n + f.pieces, 0),
+    files,
+    spaces: spaceFiles,
   });
-  const tmp = join(dir, `.${name}.tmp`);
-  await pipeline(Readable.from(text), createGzip({ level: 6 }), tap, createWriteStream(tmp));
-  renameSync(tmp, join(dir, name));
-  return { bytes, sha256: hash.digest("hex") };
+  const dropped = [...previous.keys()].filter((f) => !listed.has(f)).length;
+  const cleaned = await cleanSnapshotDir(dir, log);
+  log(`[snapshot] ${changed} file(s) changed, ${kept} unchanged, ${dropped} dropped`);
+  return { changed, kept, dropped, cleaned };
 }
 
 export interface ScheduleOptions extends BuildOptions {
@@ -546,18 +574,24 @@ export interface ScheduleOptions extends BuildOptions {
   startDelayMs?: number;
 }
 
-/** Builds once a day at `hourUtc`, and soon after startup when the snapshot needs it. */
-export function scheduleSnapshots(opts: ScheduleOptions): { stop: () => void } {
+/** Deletes the stored files at once, then builds once a day at `hourUtc`, and soon after startup when the snapshot needs it. */
+export function scheduleSnapshots(opts: ScheduleOptions): { stop: () => void; cleaned: Promise<CleanResult> } {
   const log = opts.log ?? (() => {});
   const now = opts.now ?? (() => new Date());
   let timer: NodeJS.Timeout | null = null;
   let stopped = false;
   let running = false;
+  // frees the volume now; a build waits for it, so that it does not meet files being deleted
+  const cleaned = cleanSnapshotDir(opts.dir, log).catch((e) => {
+    log(`[snapshot] clean-up failed: ${e instanceof Error ? e.message : String(e)}`);
+    return { files: 0, bytes: 0 };
+  });
 
   const run = async () => {
     if (stopped || running) return;
     running = true;
     try {
+      await cleaned;
       await buildSnapshot(opts);
     } catch (e) {
       log(`[snapshot] build failed: ${e instanceof Error ? e.message : String(e)}`);
@@ -576,11 +610,7 @@ export function scheduleSnapshots(opts: ScheduleOptions): { stop: () => void } {
   };
 
   const m = readManifest(opts.dir);
-  // a manifest from before the space files existed lacks them: it is rebuilt soon, not the next night
-  const fresh =
-    isComplete(m) &&
-    now().getTime() - Date.parse(m!.completed_at!) < 25 * 3600_000 &&
-    (!opts.spaces || m!.spaces !== undefined);
+  const fresh = isComplete(m) && now().getTime() - Date.parse(m!.completed_at!) < 25 * 3600_000;
   if (!fresh) {
     timer = setTimeout(run, opts.startDelayMs ?? 5 * 60_000);
     timer.unref();
@@ -590,5 +620,6 @@ export function scheduleSnapshots(opts: ScheduleOptions): { stop: () => void } {
       stopped = true;
       if (timer) clearTimeout(timer);
     },
+    cleaned,
   };
 }

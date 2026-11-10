@@ -389,11 +389,11 @@ class Volunteer {
       `Up to ${formatDuration(o.minutesPerProblem * 60)} per problem; state in ${o.stateDir}; ` +
         (o.batteryPause ? "pauses on battery power" : "keeps running on battery power") +
         (Number.isFinite(o.hours) ? `; stops after ${o.hours} h` : "") +
-        (o.N || o.M || o.maxP
+        (o.N || o.M || o.P
           ? `; problems with ${[
               o.N ? `N in ${compactList(o.N)}` : "",
               o.M ? `M in ${compactList(o.M)}` : "",
-              o.maxP ? `P <= ${o.maxP}` : "",
+              o.P ? `P in ${compactList(o.P)}` : "",
             ]
               .filter(Boolean)
               .join(", ")}`
@@ -521,7 +521,7 @@ class Volunteer {
    */
   private async loop(): Promise<number> {
     if (!this.kinds.length) {
-      this.log("No problem passes --N, --M, --max-P and --dimensions together: there is nothing to search.");
+      this.log("No problem passes --N, --M, --P, --max-P and --dimensions together: there is nothing to search.");
       return 1;
     }
     const shares = laneShares(this.o.cores, this.o.parallelProblems);

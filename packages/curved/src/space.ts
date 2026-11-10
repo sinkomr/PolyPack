@@ -43,26 +43,39 @@ export const ORIGIN: LPoint = { e: 0, x: 0, y: 0 };
 export function transvection(K: number, x: number, y: number): Motion {
   const D2 = x * x + y * y;
   const t = K * D2;
-  const S = Sfun(t);
-  const V = Vfun(t);
-  const L = new Float64Array([
-    1 - K * D2 * V,
-    S * x,
-    S * y,
-    -K * S * x,
-    1 - K * V * x * x,
-    -K * V * x * y,
-    -K * S * y,
-    -K * V * x * y,
-    1 - K * V * y * y,
-  ]);
-  return { K, L, b: new Float64Array([D2 * V, S * x, S * y]) };
+  return transvectionOf(K, x, y, D2, Sfun(t), Vfun(t));
+}
+
+/** transvection(K, x, y) from D^2 = x^2 + y^2 and S, V at K D^2. */
+function transvectionOf(K: number, x: number, y: number, D2: number, S: number, V: number): Motion {
+  // filled entry by entry: a typed array built from an array literal costs more than the arithmetic
+  const L = new Float64Array(9);
+  L[0] = 1 - K * D2 * V;
+  L[1] = S * x;
+  L[2] = S * y;
+  L[3] = -K * S * x;
+  L[4] = 1 - K * V * x * x;
+  L[5] = -K * V * x * y;
+  L[6] = -K * S * y;
+  L[7] = -K * V * x * y;
+  L[8] = 1 - K * V * y * y;
+  const b = new Float64Array(3);
+  b[0] = D2 * V;
+  b[1] = S * x;
+  b[2] = S * y;
+  return { K, L, b };
 }
 
 export function rotation(K: number, theta: number): Motion {
   const c = Math.cos(theta);
   const s = Math.sin(theta);
-  return { K, L: new Float64Array([1, 0, 0, 0, c, -s, 0, s, c]), b: new Float64Array(3) };
+  const L = new Float64Array(9);
+  L[0] = 1;
+  L[4] = c;
+  L[5] = -s;
+  L[7] = s;
+  L[8] = c;
+  return { K, L, b: new Float64Array(3) };
 }
 
 /** a o b (apply b first). */
@@ -77,9 +90,51 @@ export function compose(a: Motion, b: Motion): Motion {
   return { K: a.K, L, b: v };
 }
 
-/** Pose motion G = T(x, y) R(theta): the piece frame of a pose. */
+/**
+ * Pose motion G = T(x, y) R(theta): the piece frame of a pose. The product is written out with
+ * R's entries as scalars, each entry the same sum, in the same order, as compose(T, R) forms it,
+ * so the result is the same to the bit without building R.
+ */
 export function poseMotion(K: number, x: number, y: number, theta: number): Motion {
-  return compose(transvection(K, x, y), rotation(K, theta));
+  return poseFrame(K, x, y, theta).G;
+}
+
+/**
+ * The pose motion G with the scalars it was built from: t = K (x^2 + y^2), S(t), V(t), cos theta and
+ * sin theta, which bodyJacobianOf takes, so that a piece's state computes each of them once.
+ */
+export interface PoseFrame {
+  G: Motion;
+  t: number;
+  S: number;
+  V: number;
+  c: number;
+  s: number;
+}
+
+export function poseFrame(K: number, x: number, y: number, theta: number): PoseFrame {
+  const D2 = x * x + y * y;
+  const t = K * D2;
+  const S = Sfun(t);
+  const V = Vfun(t);
+  const T = transvectionOf(K, x, y, D2, S, V);
+  const A = T.L;
+  const c = Math.cos(theta);
+  const s = Math.sin(theta);
+  const ms = -s;
+  const L = new Float64Array(9);
+  const v = new Float64Array(3);
+  for (let i = 0; i < 3; i++) {
+    const a0 = A[3 * i];
+    const a1 = A[3 * i + 1];
+    const a2 = A[3 * i + 2];
+    // R = [[1, 0, 0], [0, c, -s], [0, s, c]], R.b = 0
+    L[3 * i] = a0 * 1 + a1 * 0 + a2 * 0;
+    L[3 * i + 1] = a0 * 0 + a1 * c + a2 * s;
+    L[3 * i + 2] = a0 * 0 + a1 * ms + a2 * c;
+    v[i] = a0 * 0 + a1 * 0 + a2 * 0 + T.b[i];
+  }
+  return { G: { K, L, b: v }, t, S, V, c, s };
 }
 
 /** G^{-1} = R(-theta) T(-x, -y). */
@@ -216,24 +271,32 @@ export function generator(K: number, a: 0 | 1 | 2, p: LPoint): LPoint {
  */
 export function bodyJacobian(K: number, x: number, y: number, theta: number): Float64Array {
   const t = K * (x * x + y * y);
-  const S = Sfun(t);
+  return bodyJacobianOf(K, x, y, t, Sfun(t), Vfun(t), Math.cos(theta), Math.sin(theta));
+}
+
+/** bodyJacobian from the scalars of the pose's frame (poseFrame): t, S(t), V(t), cos and sin of theta. */
+export function bodyJacobianOf(
+  K: number,
+  x: number,
+  y: number,
+  t: number,
+  S: number,
+  V: number,
+  c: number,
+  s: number,
+): Float64Array {
   const U = Ufun(t);
-  const V = Vfun(t);
   const a00 = S + K * U * x * x;
   const a01 = K * U * x * y;
   const a11 = S + K * U * y * y;
-  const c = Math.cos(theta);
-  const s = Math.sin(theta);
   // R(-theta) = [[c, s], [-s, c]]
-  return new Float64Array([
-    c * a00 + s * a01,
-    c * a01 + s * a11,
-    0,
-    -s * a00 + c * a01,
-    -s * a01 + c * a11,
-    0,
-    K * V * y,
-    -K * V * x,
-    1,
-  ]);
+  const J = new Float64Array(9);
+  J[0] = c * a00 + s * a01;
+  J[1] = c * a01 + s * a11;
+  J[3] = -s * a00 + c * a01;
+  J[4] = -s * a01 + c * a11;
+  J[6] = K * V * y;
+  J[7] = -K * V * x;
+  J[8] = 1;
+  return J;
 }

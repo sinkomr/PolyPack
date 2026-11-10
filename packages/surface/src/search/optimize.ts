@@ -43,11 +43,37 @@ export class Packing {
     this.poly = N === 0 ? null : new PolygonEnergy(solid, 1, N, lam, this.poses, mode);
   }
 
+  /**
+   * The last disk energy computed, with its gradient, for the poses array and scale it was
+   * computed at. relax evaluates the energy at each trial step and then the gradient at the step
+   * it accepts, the same poses: the gradient is then read from here instead of developing every
+   * disk's chains again. The energy does not depend on whether the gradient is asked for, so the
+   * values are those of a fresh evaluation. (Poses are never changed in place: every move
+   * replaces the array.)
+   */
+  private diskMemo: { poses: SurfacePose[]; lam: number; e: number; g: Float64Array } | null = null;
+
   /** The disk energy of the mode at scale lam (and its gradient). */
   private disks(lam: number, grad?: Float64Array): number {
-    return this.mode === "nofold"
-      ? diskEnergyNofold(this.solid, 1, lam, this.poses, grad)
-      : diskEnergy(this.solid, 1, lam, this.poses, grad);
+    const m = this.diskMemo;
+    if (m && m.poses === this.poses && m.lam === lam) {
+      if (grad) {
+        grad.fill(0);
+        grad.set(m.g);
+      }
+      return m.e;
+    }
+    const g = new Float64Array(2 * this.poses.length);
+    const e =
+      this.mode === "nofold"
+        ? diskEnergyNofold(this.solid, 1, lam, this.poses, g)
+        : diskEnergy(this.solid, 1, lam, this.poses, g);
+    this.diskMemo = { poses: this.poses, lam, e, g };
+    if (grad) {
+      grad.fill(0);
+      grad.set(g);
+    }
+    return e;
   }
 
   setScale(lam: number): void {

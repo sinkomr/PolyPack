@@ -127,21 +127,47 @@ export function pairPenetration(
   let bestUy = 0;
   let bestDx = 0;
   let bestDy = 0;
+  // Each gap lies in [lin - r - R, lin - 2r], lin = (q - p) . u. An axis whose lin is below the
+  // largest by more than R - r (plus a margin far above the rounding of either bound) has a gap
+  // strictly below the largest, so it is never selected and its cosine is skipped; the axes left
+  // hold every one attaining the maximum, in the same order, so every result is the same double.
+  // That needs every gap to be a number: the loop below lets a NaN gap replace the best (NaN <=
+  // best is false) and any later gap replace a NaN best, so with a non-finite pose or a NaN in the
+  // axes every axis is visited, as without the bound.
+  let top = -Infinity;
+  let numeric =
+    Number.isFinite(a.x) &&
+    Number.isFinite(a.y) &&
+    Number.isFinite(a.theta) &&
+    Number.isFinite(b.x) &&
+    Number.isFinite(b.y) &&
+    Number.isFinite(b.theta);
+  for (let edge = 0; numeric && edge < N; edge++) {
+    const linA = (b.x - a.x) * cacheA[3 * edge + 1] + (b.y - a.y) * cacheA[3 * edge + 2];
+    const linB = (a.x - b.x) * cacheB[3 * edge + 1] + (a.y - b.y) * cacheB[3 * edge + 2];
+    if (linA !== linA || linB !== linB) numeric = false;
+    if (linA > top) top = linA;
+    if (linB > top) top = linB;
+  }
+  let threshold = top - (R - r) - 1e-11 * (Math.abs(b.x - a.x) + Math.abs(b.y - a.y) + R);
+  if (!numeric || !Number.isFinite(threshold)) threshold = -Infinity;
   for (let edge = 0; edge < N; edge++) {
     for (let pass = 0; pass < 2; pass++) {
       const p = pass === 0 ? a : b;
       const q = pass === 0 ? b : a;
       const axes = pass === 0 ? cacheA : cacheB;
-      const angle = axes ? axes[3 * edge] : p.theta + Math.PI / 2 + Math.PI / N + edge * step;
-      const ux = axes ? axes[3 * edge + 1] : Math.cos(angle);
-      const uy = axes ? axes[3 * edge + 2] : Math.sin(angle);
+      const angle = axes[3 * edge];
+      const ux = axes[3 * edge + 1];
+      const uy = axes[3 * edge + 2];
+      const dx = q.x - p.x;
+      const dy = q.y - p.y;
+      const lin = dx * ux + dy * uy;
+      if (lin < threshold) continue;
       const rel = angle + Math.PI / 2 - q.theta;
       let delta = rel % step;
       if (delta < 0) delta += step;
       if (delta > step / 2) delta = step - delta;
-      const dx = q.x - p.x;
-      const dy = q.y - p.y;
-      const separation = dx * ux + dy * uy - r - R * Math.cos(delta);
+      const separation = lin - r - R * Math.cos(delta);
       if (separation <= best) continue;
       best = separation;
       bestEdge = edge;
@@ -177,11 +203,19 @@ export function pairPenetration(
   };
 }
 
+/** Vertex scratch of paddedClosestPair (no callbacks run while it is in use); only the first 2N entries are read. */
+let paddedA = new Float64Array(0);
+let paddedB = new Float64Array(0);
+
 /** Closest vertex/segment pair; envelope derivatives include the selected lever arms. */
 function paddedClosestPair(N: number, a: Pose, b: Pose, scale: number, padding: number): PairPenetration | undefined {
   // Keep offsets local: tiny cores must not collapse at large absolute centres.
-  const A = pieceVertices(N, { x: 0, y: 0, theta: a.theta }, scale);
-  const B = pieceVertices(N, { x: 0, y: 0, theta: b.theta }, scale);
+  if (paddedA.length < 2 * N) {
+    paddedA = new Float64Array(2 * N);
+    paddedB = new Float64Array(2 * N);
+  }
+  const A = pieceVertices(N, { x: 0, y: 0, theta: a.theta }, scale, paddedA);
+  const B = pieceVertices(N, { x: 0, y: 0, theta: b.theta }, scale, paddedB);
   const dx = b.x - a.x;
   const dy = b.y - a.y;
   let distance = Infinity;
@@ -191,6 +225,7 @@ function paddedClosestPair(N: number, a: Pose, b: Pose, scale: number, padding: 
   let by = 0;
   let ux = 1;
   let uy = 0;
+  let distance2 = Infinity;
   for (let pass = 0; pass < 2; pass++) {
     const vertices = pass === 0 ? A : B;
     const edges = pass === 0 ? B : A;
@@ -212,12 +247,17 @@ function paddedClosestPair(N: number, a: Pose, b: Pose, scale: number, padding: 
         const qy = edges[2 * j + 1] + t * ey;
         const vx = x - cx - qx;
         const vy = y - cy - qy;
+        // A clearly farther pair (squared distance beyond the best's by a relative 1e-9, far
+        // above the rounding of either) is neither zero nor closer: hypot is not needed for it
+        if (vx * vx + vy * vy > distance2) continue;
         const d = Math.hypot(vx, vy);
         // SAT may report +ulp at exact core contact. Reuse its bounded branch
         // derivative when the closest features coincide.
         if (d === 0) return undefined;
         if (d >= distance) continue;
         distance = d;
+        // squares of tiny distances lose their relative accuracy: no shortcut below 1e-140
+        distance2 = d > 1e-140 ? d * d * (1 + 1e-9) : Infinity;
         ax = pass === 0 ? x : qx;
         ay = pass === 0 ? y : qy;
         bx = pass === 0 ? qx : x;

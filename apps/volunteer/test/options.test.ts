@@ -14,6 +14,7 @@ import {
 } from "../src/options";
 import { VERSION } from "../src/version";
 
+const upTo = (k: number) => Array.from({ length: k }, (_, i) => i + 1);
 const machine = { availableParallelism: 8, homedir: "/home/vol" };
 
 function run(...argv: string[]): Options {
@@ -34,7 +35,7 @@ describe("options", () => {
       minutesPerProblem: DEFAULT_MINUTES_PER_PROBLEM,
       N: null,
       M: null,
-      maxP: null,
+      P: null,
       dryRun: true,
       stateDir: "/home/vol/.polypack-volunteer",
       note: "",
@@ -91,7 +92,7 @@ describe("options", () => {
       minutesPerProblem: 0.5,
       N: [0, 3, 4, 5, 6],
       M: [4],
-      maxP: 50,
+      P: upTo(50),
       dryRun: false,
       stateDir: "/home/vol/vol-state",
       note: "spare laptop",
@@ -125,6 +126,36 @@ describe("options", () => {
     expect(helpText(machine)).toMatch(/--parallel-problems K +problems searched at once/);
   });
 
+  it("reads --P as a list of ranges, and --max-P as P <= K", () => {
+    expect(run().P).toBeNull();
+    expect(run("--P", "37").P).toEqual([37]);
+    expect(run("--P", "10-12").P).toEqual([10, 11, 12]);
+    expect(run("--P", "100-101,1-2,2").P).toEqual([1, 2, 100, 101]);
+    expect(run("--P", "1-500").P).toHaveLength(500);
+    expect(run("--max-P", "4").P).toEqual([1, 2, 3, 4]);
+    // both: the intersection
+    expect(run("--P", "3-10,100", "--max-P", "5").P).toEqual([3, 4, 5]);
+    expect(run("--P", "1-3", "--max-P", "500").P).toEqual([1, 2, 3]);
+    expect(helpText(machine)).toMatch(
+      /--P LIST +only problems with these numbers of pieces, e\.g\. 10-50 or 1-10,100-150/,
+    );
+  });
+
+  it("refuses a bad --P, and an empty intersection with --max-P", () => {
+    const bad =
+      (...argv: string[]) =>
+      () =>
+        parseOptions(argv, machine);
+    expect(bad("--P", "0")).toThrow(/--P: "0" is outside 1..500/);
+    expect(bad("--P", "501")).toThrow(/--P/);
+    expect(bad("--P", "5-3")).toThrow(/reversed/);
+    expect(bad("--P", "a")).toThrow(/--P/);
+    expect(bad("--P", "1,,2")).toThrow(/empty item/);
+    const e = bad("--P", "10-20", "--max-P", "5");
+    expect(e).toThrow(OptionError);
+    expect(e).toThrow(/--P.*--max-P/);
+  });
+
   it("runs dry with --dry-run even with a name", () => {
     expect(run("--name", "Ada", "--dry-run")).toMatchObject({ name: "Ada", dryRun: true });
   });
@@ -154,7 +185,17 @@ describe("options", () => {
     expect(parseOptions(["--help", "--cores", "0"], machine)).toEqual({ kind: "help" });
     expect(parseOptions(["--version"], machine)).toEqual({ kind: "version" });
     const help = helpText(machine);
-    for (const flag of ["--name", "--base", "--cores", "--hours", "--minutes-per-problem", "--N", "--M", "--max-P"])
+    for (const flag of [
+      "--name",
+      "--base",
+      "--cores",
+      "--hours",
+      "--minutes-per-problem",
+      "--N",
+      "--M",
+      "--P",
+      "--max-P",
+    ])
       expect(help).toContain(flag);
     for (const flag of ["--dry-run", "--state", "--note", "--no-battery-pause", "--priority", "--once", "--version"])
       expect(help).toContain(flag);

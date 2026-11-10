@@ -33,7 +33,8 @@ export interface Options {
   /** Shape filters; null for all shapes. */
   N: number[] | null;
   M: number[] | null;
-  maxP: number | null;
+  /** The allowed numbers of pieces, sorted (--P and --max-P together); null for all. */
+  P: number[] | null;
   /** True when nothing is submitted: --dry-run was given, or there is no --name. */
   dryRun: boolean;
   stateDir: string;
@@ -103,7 +104,9 @@ Usage: node polypack-volunteer.mjs [options]
   --minutes-per-problem T  most minutes of search per problem, pauses excluded (default ${DEFAULT_MINUTES_PER_PROBLEM})
   --N LIST                 piece shapes, e.g. 0,3-6 (0 = circle; default: all)
   --M LIST                 container shapes, same syntax (default: all)
-  --max-P K                only problems of at most K pieces (in the other kinds too)
+  --P LIST                 only problems with these numbers of pieces, e.g. 10-50 or 1-10,100-150 (default: all)
+  --max-P K                shorthand for --P 1-K; with both, the numbers in both
+                           (--P and --max-P apply to the other kinds too)
   --dry-run                search, but never submit
   --note TEXT              free text shown with your entries (at most ${MAX_NOTE_LENGTH} characters)
   --state DIR              where the client keeps its state (default ${join(m.homedir, ".polypack-volunteer")})
@@ -135,7 +138,7 @@ Without these options the client never asks for them.
 ${spaceMethodLines()}
   --space-params JSON      that method's parameters, a JSON object (default: its defaults)
 
---max-P applies to these kinds too; --N and --M filter only the flat problems.
+--P and --max-P apply to these kinds too; --N and --M filter only the flat problems.
 
 Stop it with Ctrl-C: it submits the current problem's best if that beats the leader, saves its
 state and exits within about 30 s. A second Ctrl-C exits at once.
@@ -251,6 +254,17 @@ function positiveInteger(name: string, text: string, max: number): number {
   return Number(text);
 }
 
+/** --P LIST and --max-P K into the sorted allowed numbers of pieces; null when neither is given. */
+export function parsePieces(list: string | undefined, max: string | undefined): number[] | null {
+  const listed = list === undefined ? null : parseIntList(list, "P", 1, MAX_PIECES);
+  if (max === undefined) return listed;
+  const cap = positiveInteger("max-P", max, MAX_PIECES);
+  if (listed === null) return Array.from({ length: cap }, (_, i) => i + 1);
+  const both = listed.filter((p) => p <= cap);
+  if (both.length === 0) throw new OptionError(`--P ${list} and --max-P ${cap} together allow no number of pieces`);
+  return both;
+}
+
 function positiveNumber(name: string, text: string): number {
   const v = Number(text);
   if (text.trim() === "" || !Number.isFinite(v) || v <= 0) throw new OptionError(`--${name} must be a positive number`);
@@ -271,6 +285,7 @@ export function parseOptions(argv: readonly string[], machine: Machine): Parsed 
         "minutes-per-problem": { type: "string" },
         N: { type: "string" },
         M: { type: "string" },
+        P: { type: "string" },
         "max-P": { type: "string" },
         "dry-run": { type: "boolean", default: false },
         state: { type: "string" },
@@ -326,6 +341,8 @@ export function parseOptions(argv: readonly string[], machine: Machine): Parsed 
       "--space-method applies to the other kinds: give --dimensions LIST too, for example --dimensions all",
     );
 
+  const P = parsePieces(values.P, values["max-P"]);
+
   const cores = values.cores === undefined ? defaultCores(machine) : positiveInteger("cores", values.cores, 1024);
   const asked =
     values["parallel-problems"] === undefined
@@ -358,7 +375,7 @@ export function parseOptions(argv: readonly string[], machine: Machine): Parsed 
           : positiveNumber("minutes-per-problem", values["minutes-per-problem"]),
       N: values.N === undefined ? null : parseIntList(values.N, "N", 0, MAX_SIDES, isShape),
       M: values.M === undefined ? null : parseIntList(values.M, "M", 0, MAX_SIDES, isShape),
-      maxP: values["max-P"] === undefined ? null : positiveInteger("max-P", values["max-P"], MAX_PIECES),
+      P,
       dryRun: values["dry-run"] || name === null,
       stateDir,
       note,

@@ -5,9 +5,10 @@ import {
   type PackingConfig,
   type Pose,
 } from "@polypack/geometry";
-import { acceptSize, CellGrid, feasible } from "../mc_compress/state";
+import { acceptSize, CellGrid, clearlyInside, feasible } from "../mc_compress/state";
 
 export function fullyContained(N: number, pose: Pose, container: Container): boolean {
+  if (clearlyInside(N, pose, container)) return true;
   let valid = Number.isFinite(container.size) && container.size > 0;
   // The support shortcut can select a different vertex for enormous finite
   // angles. Check actual shared vertices, as the enclosing solver does.

@@ -324,10 +324,46 @@ export function autoLevelPrice(level: number): number {
   // Infinity less Infinity is NaN: a level nobody can pay for is Infinity
   return Number.isFinite(price) ? price : Infinity;
 }
+/**
+ * The price cut of 2026-11-09 [SPEC, Michael]: a bulk submitter took most of the records players held,
+ * so rent fell and the late game drifted out of reach. Every record-point price (except Standing and
+ * the slice cards, which follow the cheaper threshold) is cut by `taperedPrice`: unchanged up to
+ * TAPER_FROM, the geometric mean sqrt(TAPER_FROM x price) from there to TAPER_TO, and a fifth of the
+ * price from TAPER_TO up. The pieces meet: sqrt(200,000 x 5,000,000) = 1,000,000 = 5,000,000 / 5. The
+ * function is increasing, so no card becomes cheaper than one that cost less before [CALC].
+ */
+export const TAPER_FROM = 200_000;
+export const TAPER_TO = 5_000_000;
+export const TAPER_CUT = 5;
+export function taperedPrice(p: number): number {
+  if (p <= TAPER_FROM) return p;
+  if (p < TAPER_TO) return Math.sqrt(TAPER_FROM * p);
+  return p / TAPER_CUT;
+}
+
+const fmt = (n: number) => n.toLocaleString("en-US");
+/** The price cut as plain sentences, for the notes of levelled cards. */
+const TAPER_NOTE = `Prices above ${fmt(TAPER_FROM)} RP are cut. From ${fmt(TAPER_FROM)} to ${fmt(TAPER_TO)} RP you pay the square root of ${fmt(TAPER_FROM)} times the list price, and from ${fmt(TAPER_TO)} RP up you pay a fifth of it.`;
+/** The price cut as formulas: c is a level's list price (the card's table price times its growth for each level bought). */
+const TAPER_MATH: readonly string[] = [
+  `${sym("p")} = ${sym("c")} for ${sym("c")} ≤ ${fmt(TAPER_FROM)}`,
+  `${sym("p")} = √(${fmt(TAPER_FROM)} × ${sym("c")}) for ${fmt(TAPER_FROM)} < ${sym("c")} < ${fmt(TAPER_TO)}`,
+  `${sym("p")} = ${sym("c")} / ${TAPER_CUT} for ${sym("c")} ≥ ${fmt(TAPER_TO)}`,
+];
+const TAPER_VARS: readonly Var[] = [
+  [sym("c"), "the list price of the level in record points, before the cut"],
+  [sym("p"), "the price in record points, before Quick study"],
+];
+
 /** Levels of Faster auto-eval that Head start gives each cycle at most: 9, so 10 evaluations a second (Keep auto-eval keeps more). */
 export const HEAD2_AUTO_LEVELS = 9;
-/** What each level of Head start gives back: the upgrades whose own price is at most this (in RP, without Quick study). */
-export const HEAD_START_PRICES: readonly number[] = [10_000, 1_000_000, 100_000_000];
+/**
+ * What each level of Head start gives back: the upgrades whose own price is at most this (in RP, after the
+ * price cut, without Quick study). The limits were 1,000,000 and 100,000,000 before the cut of 2026-11-09;
+ * 450,000 and 5,000,000 give exactly the same cards at the cut prices (between 438,178 and 489,898, and
+ * above 4,800,000, there is no price), so Head start gives what it gave before [CALC].
+ */
+export const HEAD_START_PRICES: readonly number[] = [10_000, 450_000, 5_000_000];
 /** Faster auto-eval's first level costs this (the card's list price): the 2nd evaluation a second. */
 const AUTOX_COST = AUTO_RATE_PRICE * 1.0025 ** 2;
 /** Reference growth of the price an evaluation a second, shown in the data; costOf prices levels by autoLevelPrice. */
@@ -550,9 +586,16 @@ function tuneRung(id: UpgradeId, method: EvolveMethod, cost: number, requires: U
         g.tuneNote ??
           `In tests, each level cut the side at least as much per evaluation as the level below.${time ? ` An evaluation takes ${time} at the top level, which matters only when your computer limits auto-eval.` : ""}`,
       ],
-      math: keys.map((k) => `<code>${k}</code> = ${levels.map((l) => String(l[k as keyof typeof l])).join(", ")}`),
-      vars: keys.map((k) => [`<code>${k}</code>`, `${g.tunedMeaning?.[k]}, at levels 0 to ${n}`]),
-      note: `${g.tuneDetail ?? "A level was kept only where it cut the side at least as much per evaluation as the level below (within 0.05 percentage points) on three test problems (40 21-gons in a 24-gon, 80 36-gons in a 33-gon and 30 heptagons in a heptagon)."} ${n > 1 ? "Each level costs 3 times the one before. " : ""}With Auto-tune and Auto chosen, a run may also use a lower level when that paid more.`,
+      math: [
+        ...keys.map((k) => `<code>${k}</code> = ${levels.map((l) => String(l[k as keyof typeof l])).join(", ")}`),
+        ...(n > 1 ? [`${sym("c")} = ${fmt(cost)} × 3<sup>${sym("a")}</sup>`, ...TAPER_MATH] : TAPER_MATH),
+      ],
+      vars: [
+        ...keys.map((k): Var => [`<code>${k}</code>`, `${g.tunedMeaning?.[k]}, at levels 0 to ${n}`]),
+        ...(n > 1 ? [[sym("a"), "the levels of this card you already own"] as Var] : []),
+        ...TAPER_VARS,
+      ],
+      note: `${g.tuneDetail ?? "A level was kept only where it cut the side at least as much per evaluation as the level below (within 0.05 percentage points) on three test problems (40 21-gons in a 24-gon, 80 36-gons in a 33-gon and 30 heptagons in a heptagon)."} ${n > 1 ? "Each level costs 3 times the one before. " : ""}${TAPER_NOTE} With Auto-tune and Auto chosen, a run may also use a lower level when that paid more.`,
     },
     row: "runs",
     mystery,
@@ -635,7 +678,10 @@ function dealerRung(id: UpgradeId, cost: number, requires: UpgradeId[]): Upgrade
           "the room left, 1 for an open problem, min(1, 0.3 + 25 × its weakness) for a loose record (see Reach), 0.1 for another site record and 0.004 for a published value",
         ],
         [sym("θ"), "1, or with the Learning dealer its correction for this kind of problem"],
-        [sym("t"), "milliseconds of one evaluation of this problem, from a measured table (mc_compress at its N + M + P in 2D in 2D)"],
+        [
+          sym("t"),
+          "milliseconds of one evaluation of this problem, from a measured table (mc_compress at its N + M + P in 2D in 2D)",
+        ],
         [sym("t", "85"), "the same at N + M + P = 85, 1.77 ms"],
       ],
     },
@@ -773,7 +819,7 @@ export function advanceHow(warm: readonly Warmup[] = warmups()): How {
  * What a slice card costs, as a share of the cycle's reset threshold T [SPEC]: the ladder of each
  * dimension is priced against the cycle it opens in, so that it is bought in that cycle's first
  * hours (2D on 3D) or its middle (3D in 3D), and the late cards near its end. One table, to tune.
- * Curved costs 300,000,000 in the first cycle, less than the Standing card (1,000,000,000).
+ * Curved costs 60,000,000 in the first cycle, less than the Standing card (200,000,000).
  */
 export const SLICE_SHARE: Readonly<Record<CardSliceId, number>> = {
   curved: 0.3,
@@ -1258,9 +1304,9 @@ export const UPGRADES: readonly Upgrade[] = [
         "Levels past your cores less one add nothing, so the shop stops offering them.",
         "Each lane also adds a slot to the queue when you own more lanes than the Problem queue card has slots.",
       ],
-      math: LANE_MATH,
-      vars: LANE_VARS,
-      note: `Each level costs 2.2 times the one before. ${LANE_NOTE}`,
+      math: [...LANE_MATH, `${sym("c")} = 480,000 × 2.2<sup>${sym("a")}</sup>`, ...TAPER_MATH],
+      vars: [...LANE_VARS, ...TAPER_VARS],
+      note: `Each level costs 2.2 times the one before. ${TAPER_NOTE} ${LANE_NOTE}`,
     },
     row: "queue",
     levels: { max: 31, growth: 2.2 },
@@ -1275,9 +1321,9 @@ export const UPGRADES: readonly Upgrade[] = [
       text: [
         "Each level multiplies every record's rent by 1.5. Level 1 pays 1.5 times the rent, level 2 pays 2.25 times, and level 5, the last, pays about 7.6 times.",
       ],
-      math: RENT_MATH,
-      vars: RENT_VARS,
-      note: "Each level costs 1.6 times the one before. There are 5 levels, because more would make rent outgrow everything else.",
+      math: [...RENT_MATH, `${sym("c")} = 480,000 × 1.6<sup>${sym("a")}</sup>`, ...TAPER_MATH],
+      vars: [...RENT_VARS, ...TAPER_VARS],
+      note: `Each level costs 1.6 times the one before. ${TAPER_NOTE} There are 5 levels, because more would make rent outgrow everything else.`,
     },
     row: "records",
     levels: { max: 5, growth: 1.6 },
@@ -1358,7 +1404,8 @@ export const UPGRADES: readonly Upgrade[] = [
         `${sym("r")} = ${AUTO_BASE} + ${sym("a")} for ${sym("a")} up to 49, then +5 a level up to ${sym("r")} = 200, +10 up to 500, +50 up to 1,000, and +100 after that`,
         `${sym("C")}(${sym("r")}) = ${AUTO_COST} + Σ 120 × 1.0025<sup>${sym("x")}</sup>, for ${sym("x")} = 2 to ${sym("r")}`,
         `${sym("C")}(${sym("r")}) = ${AUTO_COST} + 120 × 1.0025<sup>2</sup> × (1.0025<sup>${sym("r")} − 1</sup> − 1) / 0.0025`,
-        `price of a level = ${sym("C")}(${sym("r")}<sub>new</sub>) − ${sym("C")}(${sym("r")}<sub>old</sub>)`,
+        `${sym("c")} = ${sym("C")}(${sym("r")}<sub>new</sub>) − ${sym("C")}(${sym("r")}<sub>old</sub>)`,
+        ...TAPER_MATH,
         SHARE_MATH,
       ],
       vars: [
@@ -1366,12 +1413,14 @@ export const UPGRADES: readonly Upgrade[] = [
         [sym("a"), "levels of Faster auto-eval, 0 without it"],
         [
           sym("C"),
-          "what reaching the rate costs in all, in RP before Quick study (Auto-eval's own price is the first part)",
+          "what reaching the rate costs in all, in RP before the cut and Quick study (Auto-eval's own price is the first part)",
         ],
         [sym("x"), "each evaluation a second above the first, whose price grows 0.25 % an evaluation"],
+        [sym("c"), "the price of a level before the cut, in RP"],
+        [sym("p"), "the price of a level, in RP before Quick study"],
         ...AUTO_VARS.slice(1),
       ],
-      note: `${AUTO_NOTE} The price grows fast: far past 3,000 evaluations a second, no player can pay it.`,
+      note: `${AUTO_NOTE} ${TAPER_NOTE} The price grows fast: far past 3,000 evaluations a second, no player can pay it.`,
     },
     row: "auto",
     levels: { max: Infinity, growth: AUTOX_GROWTH },
@@ -1477,7 +1526,7 @@ export const UPGRADES: readonly Upgrade[] = [
       text: [
         `When you buy a level of Head start and at each reset, it gives you, for nothing, the upgrades that cost ${HEAD_START_PRICES.map((p) => p.toLocaleString("en-US")).join(", ")} RP or less at levels 1, 2 and 3. Each level of an upgrade with levels counts as its own upgrade, and every upgrade comes with the ones it needs.`,
         `Faster auto-eval comes up to level ${HEAD2_AUTO_LEVELS} (${autoRateText(rateOfLevel(HEAD2_AUTO_LEVELS))}). Keep auto-eval keeps more. Another lane, the Dimensions row and Standing itself never come back this way.`,
-        "Level 2 also brings back Records pay rent, Higher rent (the first 2 levels) and Collections, and level 3 the rest of Higher rent. Prices are the ones without Quick study.",
+        "Level 2 also brings back Records pay rent, Higher rent (the first 2 levels) and Collections, and level 3 the rest of Higher rent. Prices are the ones after the price cut and without Quick study.",
       ],
     },
     { max: 3, growth: 1 },
@@ -1591,10 +1640,11 @@ export function costOf(o: Owned, id: UpgradeId): number | null {
   if (u.levels ? l >= u.levels.max : l > 0) return null;
   // Standing's price is the cycle's reset threshold, and Quick study does not discount it
   if (id === "standing") return Math.round(thresholdAfter(o.resets ?? 0));
+  // Slice cards follow the threshold (already 5x cheaper); the other record-point prices are tapered
   const base = isCardSlice(id)
     ? slicePrice(id, o.resets ?? 0)
-    : id === "autox"
-      ? autoLevelPrice(l)
+    : currencyOf(u) === "rp"
+      ? listPrice(id, l)
       : u.levels
         ? u.cost * Math.pow(u.levels.growth, l)
         : u.cost;
@@ -1860,10 +1910,15 @@ export function lanesMaxed(o: Owned, coreCount = cores()): boolean {
 
 // ---------- Head start ----------
 
-/** The list price of level `l` + 1 of an upgrade in record points (level 0 is the first), without Quick study. */
+/**
+ * The list price of level `l` + 1 of an upgrade in record points (level 0 is the first), tapered, without
+ * Quick study. For Standing and the slice cards (priced from the threshold, never tapered) it is the
+ * table's cost; callers skip them.
+ */
 export function listPrice(id: UpgradeId, l = 0): number {
   const u = upgrade(id);
-  return id === "autox" ? autoLevelPrice(l) : u.levels ? u.cost * Math.pow(u.levels.growth, l) : u.cost;
+  const raw = id === "autox" ? autoLevelPrice(l) : u.levels ? u.cost * Math.pow(u.levels.growth, l) : u.cost;
+  return id === "standing" || isCardSlice(id) ? raw : taperedPrice(raw);
 }
 
 /**

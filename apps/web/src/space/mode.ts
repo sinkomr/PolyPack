@@ -21,6 +21,7 @@ import type { SpaceConfig, SpaceDomainInfo, SpaceName, SpaceProblemSummary } fro
 import { SPACE_DOMAINS, SPACE_INFO, impossibleReason, parseSpaceId } from "@polypack/spaces";
 import { AUTO, type SpaceCheck, type SpaceMethodInfo, checkSpaceMethod, hasLatticeStart, spaceLatticeStart } from "@polypack/spaces/search";
 import { ParameterError, parameterForm, validityText } from "../solve-params";
+import { drawTraceSvg } from "../trace-text";
 import { certifiedBy, downloadName } from "../spaces-model";
 import { renderNofoldNote } from "@polypack/surface/nofold-note";
 import { type FamilyScope, familyFilters, scopeHasId, whereIs } from "../dimension-table";
@@ -1103,13 +1104,14 @@ class SpaceMode {
             ? { kind: "site", id: p.site_best.id }
             : { kind: "certified" };
     const trace: [number, number][] = [];
+    const reference = shown?.score ?? null;
     this.runInfo = { settings, start, from, trace };
     this.preview = null;
     this.finished = null;
     $("space-solve-score").textContent = "—";
     $("space-solve-progress").textContent = "Starting…";
     $("space-submit-result").textContent = "";
-    this.renderTrace(trace);
+    this.renderTrace(trace, reference);
     const problemId = handle.problem.id;
     const run = handle.search(start, {
       ...settings,
@@ -1123,7 +1125,7 @@ class SpaceMode {
           this.preview = q.best;
           $("space-solve-score").textContent = q.best.score.toFixed(6);
           trace.push([q.seconds, q.best.score]);
-          this.renderTrace(trace);
+          this.renderTrace(trace, reference);
           this.view?.show(q.best.config);
         }
         this.solveStatus(q.state === "paused" ? "Paused. Resume, or stop to keep the best result." : running);
@@ -1238,32 +1240,9 @@ class SpaceMode {
     this.ticker = null;
   }
 
-  private renderTrace(trace: [number, number][]): void {
-    const svg = $("space-solve-trace") as unknown as SVGSVGElement;
-    svg.replaceChildren();
-    svg.toggleAttribute("hidden", trace.length < 1);
-    if (!trace.length) return;
-    const NS = "http://www.w3.org/2000/svg";
-    const end = Math.max(0.01, trace[trace.length - 1][0]);
-    const low = Math.min(...trace.map((p) => p[1]));
-    const high = Math.max(...trace.map((p) => p[1]));
-    const range = high - low || Math.max(1e-6, high * 1e-6);
-    const line = document.createElementNS(NS, "polyline");
-    line.setAttribute(
-      "points",
-      trace
-        .map(([t, s]) => `${(10 + (280 * t) / end).toFixed(2)},${(10 + (65 * (high - s)) / range).toFixed(2)}`)
-        .join(" "),
-    );
-    const label = document.createElementNS(NS, "text");
-    label.setAttribute("x", "10");
-    label.setAttribute("y", "92");
-    label.textContent = `${high.toFixed(6)} → ${low.toFixed(6)} · ${end.toFixed(1)} s`;
-    svg.append(line, label);
-    svg.setAttribute(
-      "aria-label",
-      `Best result from ${high.toFixed(6)} to ${low.toFixed(6)} over ${end.toFixed(1)} seconds`,
-    );
+  /** `reference` is the score of the packing shown when the run started, which the graph compares with. */
+  private renderTrace(trace: [number, number][], reference: number | null = null): void {
+    drawTraceSvg($("space-solve-trace") as unknown as SVGSVGElement, trace, reference, "the shown packing");
   }
 
   private downloadRun(): void {

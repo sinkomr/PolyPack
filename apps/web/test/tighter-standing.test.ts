@@ -70,7 +70,7 @@ function lateGame(extra: UpgradeId[] = []): GameState {
 
 describe("Tighter standing", () => {
   it("gives 1 standing point a reset and doubles all points each time", () => {
-    expect(RESET_MIN).toBe(1_000_000_000);
+    expect(RESET_MIN).toBe(200_000_000);
     expect(RESET_GAIN).toBe(1);
     const st = newGame(T0, 1).standing;
     expect([0, 1, 2, 5].map((resets) => standingMultiplier({ ...st, resets }))).toEqual([1, 2, 4, 32]);
@@ -200,7 +200,7 @@ describe("Tighter standing", () => {
   });
 
   it("gives the cards Head start's levels name, prerequisites and all, and nothing past their price", () => {
-    expect(HEAD_START_PRICES).toEqual([10_000, 1_000_000, 100_000_000]);
+    expect(HEAD_START_PRICES).toEqual([10_000, 450_000, 5_000_000]);
     const at = (level: number) => headStartGives(level);
     expect(at(0)).toEqual({ ids: [], levels: {} });
     for (const level of [1, 2, 3]) {

@@ -19,6 +19,9 @@ import {
   applyPoint,
   applyTangent,
   bodyJacobian,
+  bodyJacobianOf,
+  poseFrame,
+  type PoseFrame,
   covectorNorm2,
   generator,
   lineCovector,
@@ -44,10 +47,57 @@ export interface PieceState {
 }
 
 export function pieceState(space: Space, pose: CurvedPose): PieceState {
-  const { K } = space;
-  const { G, centre, verts } = pieceWorld(space, pose);
-  const Ginv = poseMotionInverse(K, pose.x, pose.y, pose.theta);
-  return pieceStateOf(space, G, Ginv, centre, verts, bodyJacobian(K, pose.x, pose.y, pose.theta));
+  // pieceWorld's motion, centre and vertices, from a frame that keeps its scalars for Jb
+  const frame = poseFrame(space.K, pose.x, pose.y, pose.theta);
+  const G = frame.G;
+  const centre: LPoint = { e: G.b[0], x: G.b[1], y: G.b[2] };
+  const verts = space.vertices.map((v) => applyPoint(G, v));
+  return new PoseState(space.K, pose.x, pose.y, pose.theta, frame, centre, verts, edgeCovectors(space, verts));
+}
+
+/**
+ * The state of a piece at a pose, whose inverse motion and body Jacobian are built when first read:
+ * only the rows of constraints near contact read them, and most pieces of an evaluation have none.
+ * They are the values pieceState always had (poseMotionInverse and bodyJacobian of the pose).
+ */
+class PoseState implements PieceState {
+  private ginv: Motion | null = null;
+  private jb: Float64Array | null = null;
+  readonly G: Motion;
+  constructor(
+    private readonly K: number,
+    private readonly x: number,
+    private readonly y: number,
+    private readonly theta: number,
+    private readonly frame: PoseFrame,
+    readonly centre: LPoint,
+    readonly verts: LPoint[],
+    readonly edges: [number, number, number][],
+  ) {
+    this.G = frame.G;
+  }
+  get Ginv(): Motion {
+    return (this.ginv ??= poseMotionInverse(this.K, this.x, this.y, this.theta));
+  }
+  get Jb(): Float64Array {
+    const f = this.frame;
+    // bodyJacobian(K, x, y, theta), from the frame's scalars
+    return (this.jb ??= bodyJacobianOf(this.K, this.x, this.y, f.t, f.S, f.V, f.c, f.s));
+  }
+}
+
+/** Outward world covectors of the edges of placed vertices, normalised to Qd = 1. */
+function edgeCovectors(space: Space, verts: LPoint[]): [number, number, number][] {
+  const { K, N } = space;
+  const edges: [number, number, number][] = [];
+  for (let e = 0; e < N; e++) {
+    const a = verts[e];
+    const b = verts[(e + 1) % N];
+    const n = lineThrough(K, b, a); // b x a: outward for a counter-clockwise edge a -> b
+    const q = Math.sqrt(covectorNorm2(K, n));
+    edges.push([n[0] / q, n[1] / q, n[2] / q]);
+  }
+  return edges;
 }
 
 /**
@@ -64,17 +114,7 @@ export function pieceStateOf(
   verts: LPoint[],
   Jb: Float64Array,
 ): PieceState {
-  const { K } = space;
-  const edges: [number, number, number][] = [];
-  const N = space.N;
-  for (let e = 0; e < N; e++) {
-    const a = verts[e];
-    const b = verts[(e + 1) % N];
-    const n = lineThrough(K, b, a); // b x a: outward for a counter-clockwise edge a -> b
-    const q = Math.sqrt(covectorNorm2(K, n));
-    edges.push([n[0] / q, n[1] / q, n[2] / q]);
-  }
-  return { G, Ginv, centre, verts, edges, Jb };
+  return { G, Ginv, centre, verts, edges: edgeCovectors(space, verts), Jb };
 }
 
 export function allStates(space: Space, poses: readonly CurvedPose[]): PieceState[] {

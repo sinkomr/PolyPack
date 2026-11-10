@@ -7,7 +7,7 @@ import { compress } from "hono/compress";
 import { LiteratureRecord, closedToSubmissions } from "@polypack/geometry";
 import { loadSpacesIndex } from "@polypack/spaces/load";
 import { createApp } from "./app";
-import { OVERLOAD_DELAY_MS } from "./limits";
+import { MIN_SUBMIT_KEY_LENGTH, OVERLOAD_DELAY_MS } from "./limits";
 import { LoadStats, LoopDelay } from "./load";
 import { scheduleSnapshots, snapshotSource, snapshotSpaces } from "./snapshot";
 import { SqliteStore } from "./sqlite-store";
@@ -27,6 +27,11 @@ const clientIpHeader = process.env.CLIENT_IP_HEADER?.toLowerCase() || undefined;
 const adminToken = process.env.ADMIN_TOKEN === "change-me" ? undefined : process.env.ADMIN_TOKEN || undefined;
 if (process.env.ADMIN_TOKEN === "change-me")
   console.warn("ADMIN_TOKEN is still the placeholder; admin access is disabled");
+// The submit key (see SUBMIT_KEY_HEADER): a short one is not used, since a guess could find it.
+const submitKeyText = process.env.SUBMIT_KEY?.trim() || undefined;
+const submitKey = submitKeyText && submitKeyText.length >= MIN_SUBMIT_KEY_LENGTH ? submitKeyText : undefined;
+if (submitKeyText && !submitKey)
+  console.warn(`SUBMIT_KEY has fewer than ${MIN_SUBMIT_KEY_LENGTH} characters; submissions with a key are refused`);
 
 const records: LiteratureRecord[] = JSON.parse(readFileSync(resolve(root, "data/records.json"), "utf8")).records;
 // The research records of the spaces (data/<space>/records.json), each read once into a compact
@@ -53,22 +58,25 @@ store.startPiecesMigration({
   log: (msg) => console.log(msg),
 });
 
-// The nightly records snapshot (snapshot.ts), built into SNAPSHOT_DIR at SNAPSHOT_HOUR (UTC, 11 by
-// default: after the nightly trim-down job) and served at /api/snapshot. Off without SNAPSHOT_DIR.
+// The records snapshot (snapshot.ts): a manifest built into SNAPSHOT_DIR at SNAPSHOT_HOUR (UTC, 11 by
+// default: after the nightly trim-down job) and served at /api/snapshot; each file of it is generated
+// from the database when it is asked for, and none is stored (files an older server stored in
+// SNAPSHOT_DIR are deleted at startup). Off without SNAPSHOT_DIR.
 const snapshotDir = process.env.SNAPSHOT_DIR || undefined;
-if (snapshotDir) {
-  const literature = new Map(records.map((r) => [`${r.N}/${r.M}/${r.P}`, r]));
-  const hourUtc = wholeNumber("SNAPSHOT_HOUR", 11);
+const literature = new Map(records.map((r) => [`${r.N}/${r.M}/${r.P}`, r]));
+const snapshotClosed = (N: number, M: number, P: number) => closedToSubmissions(literature.get(`${N}/${M}/${P}`));
+// the spaces' site entries, one file per space, for their open problems
+const snapshotSpaceEntries = snapshotSpaces(spaces, store);
+const snapshotHour = wholeNumber("SNAPSHOT_HOUR", 11);
+if (snapshotDir)
   scheduleSnapshots({
     store,
     dir: snapshotDir,
-    closed: (N, M, P) => closedToSubmissions(literature.get(`${N}/${M}/${P}`)),
-    // the spaces' site entries, one file per space, for their open problems
-    spaces: snapshotSpaces(spaces, store),
-    hourUtc: hourUtc < 24 ? hourUtc : 11,
+    closed: snapshotClosed,
+    spaces: snapshotSpaceEntries,
+    hourUtc: snapshotHour < 24 ? snapshotHour : 11,
     log: (msg) => console.log(msg),
   });
-}
 
 // One log line per submission and one a minute with the counts and verification times, so that
 // the load in production can be read from the log.
@@ -80,12 +88,15 @@ const app = createApp({
   store,
   records,
   adminToken,
+  submitKey,
   // 0 never refuses submissions as overload; the end-to-end tests set it, since a test machine
   // under load delays the event loop without the server being overloaded
   limits: { overloadDelayMs: wholeNumber("OVERLOAD_DELAY_MS", OVERLOAD_DELAY_MS) },
   loopDelay: () => delay.ms(),
   stats,
-  snapshots: snapshotDir ? snapshotSource(snapshotDir) : undefined,
+  snapshots: snapshotDir
+    ? snapshotSource({ dir: snapshotDir, store, closed: snapshotClosed, spaces: snapshotSpaceEntries })
+    : undefined,
   spaces: { index: spaces, store },
   // Behind a proxy the socket address is the proxy's, so a header set by the proxy is used instead.
   // Only set CLIENT_IP_HEADER or TRUST_PROXY when a proxy that sets the header is really in front.

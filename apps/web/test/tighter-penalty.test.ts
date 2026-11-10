@@ -295,12 +295,12 @@ describe("Tighter's penalty settings and texts", () => {
   it("word the tuning card for longer solves, from level 0 at the card's settings", () => {
     const tune = UPGRADES.find((u) => u.id === "tunePenalty")!;
     expect(tune.effect).toBe(methodGame("penalty").tuneEffect);
-    expect(tune.how.math).toEqual(["<code>innerIterations</code> = 200, 300, 400, 600"]);
+    expect(tune.how.math!.slice(0, 1)).toEqual(["<code>innerIterations</code> = 200, 300, 400, 600"]);
     const text = (tune.how.text as string[]).join(" ");
     expect(text).toContain("Level 0 is the settings on penalty's card.");
     expect(text).toContain("up to 1.5 times as long");
     expect(text).not.toMatch(/at least as much per evaluation/);
-    expect(tune.how.vars).toEqual([
+    expect(tune.how.vars!.slice(0, 1)).toEqual([
       ["<code>innerIterations</code>", "L-BFGS steps at most per solve (a squeeze makes 10 solves), at levels 0 to 3"],
     ]);
   });

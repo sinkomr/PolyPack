@@ -1,0 +1,242 @@
+[
+ {
+  "N": 0,
+  "M": 0,
+  "P": 10,
+  "literature": 3.8130256313981246,
+  "status": "proven",
+  "source": "Erich Friedman, Packing Center: Circles ",
+  "site_best": null,
+  "area_bound": 3.1622776601683795
+ },
+ {
+  "N": 0,
+  "M": 0,
+  "P": 30,
+  "literature": 6.197741070879227,
+  "status": "best_known",
+  "source": "Eckard Specht, Packomania: The best know",
+  "site_best": 6.197741070880262,
+  "area_bound": 5.477225575051661
+ },
+ {
+  "N": 0,
+  "M": 0,
+  "P": 60,
+  "literature": 8.646219845457919,
+  "status": "best_known",
+  "source": "Eckard Specht, Packomania: The best know",
+  "site_best": 8.646253458109928,
+  "area_bound": 7.745966692414833
+ },
+ {
+  "N": 0,
+  "M": 0,
+  "P": 120,
+  "literature": 12.085212459928467,
+  "status": "best_known",
+  "source": "Eckard Specht, Packomania: The best know",
+  "site_best": 12.112068295613357,
+  "area_bound": 10.954451150103322
+ },
+ {
+  "N": 0,
+  "M": 4,
+  "P": 20,
+  "literature": 4.489041676430204,
+  "status": "proven",
+  "source": "Erich Friedman, Packing Center: Circles ",
+  "site_best": null,
+  "area_bound": 3.9633272976060105
+ },
+ {
+  "N": 0,
+  "M": 4,
+  "P": 50,
+  "literature": 7.005047458155229,
+  "status": "best_known",
+  "source": "Eckard Specht, Packomania: The best know",
+  "site_best": 7.005047458203443,
+  "area_bound": 6.2665706865775
+ },
+ {
+  "N": 0,
+  "M": 4,
+  "P": 100,
+  "literature": 9.7274236264644,
+  "status": "best_known",
+  "source": "Eckard Specht, Packomania: The best know",
+  "site_best": 9.729623685544743,
+  "area_bound": 8.862269254527579
+ },
+ {
+  "N": 0,
+  "M": 6,
+  "P": 20,
+  "literature": 2.838,
+  "status": "best_known",
+  "source": "Erich Friedman, Packing Center: Circles ",
+  "site_best": 2.838443658304023,
+  "area_bound": 2.4588610942427644
+ },
+ {
+  "N": 4,
+  "M": 4,
+  "P": 10,
+  "literature": 3.70710678118654,
+  "status": "proven",
+  "source": "David Ellsworth, Squares in Squares (con",
+  "site_best": null,
+  "area_bound": 3.1622776601683795
+ },
+ {
+  "N": 4,
+  "M": 4,
+  "P": 17,
+  "literature": 4.67553009360455,
+  "status": "best_known",
+  "source": "David Ellsworth, Squares in Squares (con",
+  "site_best": 4.675530093604551,
+  "area_bound": 4.123105625617661
+ },
+ {
+  "N": 4,
+  "M": 4,
+  "P": 37,
+  "literature": 6.59861960924436,
+  "status": "best_known",
+  "source": "David Ellsworth, Squares in Squares (con",
+  "site_best": 6.59861960924436,
+  "area_bound": 6.082762530298219
+ },
+ {
+  "N": 4,
+  "M": 4,
+  "P": 80,
+  "literature": 9,
+  "status": "proven",
+  "source": "David Ellsworth, Squares in Squares (con",
+  "site_best": null,
+  "area_bound": 8.94427190999916
+ },
+ {
+  "N": 4,
+  "M": 4,
+  "P": 150,
+  "literature": 12.77817459305202,
+  "status": "best_known",
+  "source": "David Ellsworth, Squares in Squares (con",
+  "site_best": 12.778174593052023,
+  "area_bound": 12.24744871391589
+ },
+ {
+  "N": 3,
+  "M": 3,
+  "P": 20,
+  "literature": 4.861,
+  "status": "best_known",
+  "source": "Erich Friedman, Packing Center: Triangle",
+  "site_best": 4.861538873175585,
+  "area_bound": 4.47213595499958
+ },
+ {
+  "N": 3,
+  "M": 0,
+  "P": 30,
+  "literature": 4.50248,
+  "status": "best_known",
+  "source": "Erich Friedman, Packing Center: Triangle",
+  "site_best": 4.502689779905593,
+  "area_bound": 4.066923513253448
+ },
+ {
+  "N": 3,
+  "M": 4,
+  "P": 20,
+  "literature": 3.2305,
+  "status": "best_known",
+  "source": "Erich Friedman, Packing Center: Triangle",
+  "site_best": 3.2305885833066013,
+  "area_bound": 2.942830956382712
+ },
+ {
+  "N": 5,
+  "M": 5,
+  "P": 20,
+  "literature": 5.03404,
+  "status": "best_known",
+  "source": "Erich Friedman, Packing Center: Pentagon",
+  "site_best": 5.042565593124774,
+  "area_bound": 4.47213595499958
+ },
+ {
+  "N": 5,
+  "M": 0,
+  "P": 30,
+  "literature": 9.18486,
+  "status": "best_known",
+  "source": "Erich Friedman, Packing Center: Pentagon",
+  "site_best": 9.19712742116569,
+  "area_bound": 8.10662666388375
+ },
+ {
+  "N": 5,
+  "M": 4,
+  "P": 40,
+  "literature": 9.27375,
+  "status": "best_known",
+  "source": "Erich Friedman, Packing Center: Pentagon",
+  "site_best": 9.315672282841541,
+  "area_bound": 8.295727576503381
+ },
+ {
+  "N": 6,
+  "M": 6,
+  "P": 30,
+  "literature": 6,
+  "status": "proven",
+  "source": "Erich Friedman, Packing Center: Hexagons",
+  "site_best": null,
+  "area_bound": 5.477225575051661
+ },
+ {
+  "N": 6,
+  "M": 0,
+  "P": 40,
+  "literature": 12.78644,
+  "status": "best_known",
+  "source": "Erich Friedman, Packing Center: Hexagons",
+  "site_best": 12.798789330754294,
+  "area_bound": 11.502996779154122
+ },
+ {
+  "N": 7,
+  "M": 4,
+  "P": 20,
+  "literature": 9.727586247372374,
+  "status": "best_known",
+  "source": "Berthold, Kamp, Mexi, Pokutta and Polik,",
+  "site_best": 9.722313994163526,
+  "area_bound": 8.52515389186798
+ },
+ {
+  "N": 8,
+  "M": 8,
+  "P": 30,
+  "literature": 6.15301,
+  "status": "best_known",
+  "source": "Erich Friedman, Packing Center: Octagons",
+  "site_best": 6.155030326125015,
+  "area_bound": 5.477225575051661
+ },
+ {
+  "N": 8,
+  "M": 4,
+  "P": 50,
+  "literature": 17.29046,
+  "status": "best_known",
+  "source": "Erich Friedman, Packing Center: Octagons",
+  "site_best": 17.38650413562932,
+  "area_bound": 15.53773974030037
+ }
+]

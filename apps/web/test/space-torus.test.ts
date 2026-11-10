@@ -8,7 +8,7 @@ import { loadSpacesIndex } from "@polypack/spaces/load";
 import { parseSearchProblem, readSpaceConfig, torusPackingOf } from "@polypack/spaces/search";
 import { resolve } from "node:path";
 import { describe, expect, it } from "vitest";
-import { MAX_TORUS_PIECES, type TorusLayout, torusLayout } from "../src/space/render/torus-layout";
+import { MAX_TORUS_PIECES, type TorusLayout, torusLayout, torusTexture } from "../src/space/render/torus-layout";
 
 const index = loadSpacesIndex(resolve(__dirname, "../../.."));
 
@@ -73,5 +73,47 @@ describe("the torus drawing's layout", () => {
     // every free record of the catalogue is read
     for (const r of index.torus!.problems.filter((x) => x.fields.family === "free" && x.config))
       expect(readSpaceConfig(parseSearchProblem(r.id)!, JSON.parse(r.config!)), r.id).not.toBeNull();
+  });
+});
+
+describe("the 3D torus's texture map", () => {
+  const at = (m: readonly number[], p: readonly number[]) => [
+    m[0] * p[0] + m[2] * p[1] + m[4],
+    m[1] * p[0] + m[3] * p[1] + m[5],
+  ];
+  const bases: [[number, number], [number, number]][] = [
+    [
+      [1, 0],
+      [0.5, Math.sqrt(3) / 2],
+    ],
+    [
+      [1, 0],
+      [0.3, 2],
+    ],
+    [
+      [2, 0.1],
+      [0.4, -1],
+    ],
+  ];
+  it("sends the longer vector round the ring, the other round the tube, and the cell onto the whole texture", () => {
+    for (const B of bases) {
+      const { ring, tube, m } = torusTexture(B, 2048, 1024);
+      expect(Math.hypot(...ring)).toBeGreaterThanOrEqual(Math.hypot(...tube));
+      // the same lattice, the same way round
+      expect(ring[0] * tube[1] - ring[1] * tube[0]).toBeGreaterThan(0);
+      expect(B.some((b) => b[0] === ring[0] && b[1] === ring[1])).toBe(true);
+      expect(B.some((b) => Math.abs(b[0]) === Math.abs(tube[0]) && Math.abs(b[1]) === Math.abs(tube[1]))).toBe(true);
+      const corners = [[0, 0], ring, tube, [ring[0] + tube[0], ring[1] + tube[1]]].map((p) => at(m, p));
+      const want = [
+        [0, 1024],
+        [2048, 1024],
+        [0, 0],
+        [2048, 0],
+      ];
+      corners.forEach((c, k) => {
+        expect(c[0]).toBeCloseTo(want[k][0], 9);
+        expect(c[1]).toBeCloseTo(want[k][1], 9);
+      });
+    }
   });
 });

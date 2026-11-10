@@ -16,8 +16,8 @@ import {
   wallCovectors,
   containerGap,
 } from "./evaluate";
-import { asnK, distFromVs } from "./kfun";
-import { lineValue } from "./space";
+import { Vfun, asnK, distFromVs } from "./kfun";
+import { lineValue, pairVs } from "./space";
 
 export function posesFromVector(z: ArrayLike<number>): CurvedPose[] {
   const P = z.length / 3;
@@ -49,8 +49,16 @@ export function collectRows(space: Space, states: PieceState[], t: number, opt: 
   const P = states.length;
   const rows: Row[] = [];
   const reach = 2 * space.piece.R + Math.max(0, opt.below);
+  // pairs whose centres are certainly farther apart than reach are left out before the distance
+  // is taken: the half squared chord vs = pairVs grows with the distance (as vs_K(d) = d^2 V(K d^2),
+  // below the antipodal distance), and vs above vs_K(reach) by a margin far beyond rounding means
+  // centreDistance > reach. Pairs near the threshold are decided by centreDistance as before.
+  const { K } = space;
+  const vsFar =
+    K > 0 && Math.sqrt(K) * reach > 0.99 * Math.PI ? Infinity : reach * reach * Vfun(K * reach * reach) * (1 + 1e-9) + 1e-300;
   for (let i = 0; i < P; i++) {
     for (let j = i + 1; j < P; j++) {
+      if (pairVs(K, states[i].centre, states[j].centre) > vsFar) continue;
       const cd = centreDistance(space, states[i], states[j]);
       if (cd > reach) continue;
       if (N === 0) {

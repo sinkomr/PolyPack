@@ -34,8 +34,8 @@
  * thresholds below are tuned in those working units, so a seed gives the same trajectory as
  * before the change. Polygons are not scaled.
  */
-import { type Pose } from "@polypack/geometry";
-import { WORKING_DISK_RADIUS, areaOf, reachOf, separationOf } from "./disk";
+import { type Pose, regularPolygonOverlap } from "@polypack/geometry";
+import { WORKING_DISK_RADIUS, areaOf, reachOf } from "./disk";
 import {
   type Lattice,
   type TorusFamily,
@@ -233,7 +233,8 @@ export function tightScale(
   const validAt = (k: number): boolean => {
     tick();
     try {
-      const v = validateTorusPacking(packingAt(k), { tol: 0, diskRadius: rd });
+      // the first overlap decides (maxErrors 1): the answer is the full check's
+      const v = validateTorusPacking(packingAt(k), { tol: 0, diskRadius: rd, maxErrors: 1 });
       return v.errors.length === 0 && v.valid && v.minSep >= 0;
     } catch {
       return false;
@@ -392,17 +393,45 @@ function searchWorking(problem: TorusProblem, o: TorusSearchOptions, up: number)
           xj: number,
           yj: number,
           tj: number,
+          enough = 0,
         ): number => {
           const p = pairs[idx];
           const vx = xj + p.m * lat.b1[0] + p.n * lat.b2[0];
           const vy = yj + p.m * lat.b1[1] + p.n * lat.b2[1];
-          const sep = separationOf(N, { x: xi, y: yi, theta: ti }, { x: vx, y: vy, theta: tj }, 1, rd);
+          // separationOf's value where it is below `enough` (only overlaps count), with no pose objects
+          let sep: number;
+          if (N === 0) {
+            const d = Math.hypot(xi - vx, yi - vy);
+            sep = d === 0 ? -2 * rd : d - 2 * rd;
+          } else sep = regularPolygonOverlap(N, xi, yi, ti, vx, vy, tj, 1, enough);
+          lastSep = sep;
+          lastDx = vx - xi;
+          lastDy = vy - yi;
           return sep < 0 ? sep * sep : 0;
         };
-        const totalEnergy = (): number => {
+        let lastSep = 0;
+        let lastDx = 0;
+        let lastDy = 0;
+        /**
+         * Per image pair, set by totalEnergy(slack): 0 when the pair is separated by at least
+         * `slack`, which exceeds what a gradient step can move a piece's points (see f). Such a
+         * pair adds exactly 0 to every local energy of the gradient, which skips it.
+         */
+        const live = new Uint8Array(pairs.length);
+        /** Per image pair, the length of its centre-to-image vector when totalEnergy(slack) marked it. */
+        const span = new Float64Array(pairs.length);
+        let liveSlack = 0;
+        /**
+         * The energy; with `slack` > 0 it marks the live pairs. With `stretch` >= 0 it skips the
+         * pairs that were not live and whose centre-to-image vector the change of the cell since the
+         * marking moves by less than half the slack (by at most stretch times its length): they are
+         * still separated and add exactly 0.
+         */
+        const totalEnergy = (slack = 0, stretch = -1): number => {
           let E = 0;
           for (let idx = 0; idx < pairs.length; idx++) {
             const p = pairs[idx];
+            if (stretch >= 0 && !live[idx] && stretch * span[idx] < 0.5 * liveSlack) continue;
             E += pairEnergy(
               idx,
               centres[2 * p.i],
@@ -411,14 +440,21 @@ function searchWorking(problem: TorusProblem, o: TorusSearchOptions, up: number)
               centres[2 * p.j],
               centres[2 * p.j + 1],
               thetas[p.j],
+              slack,
             );
+            if (slack > 0) {
+              live[idx] = lastSep < slack ? 1 : 0;
+              span[idx] = Math.sqrt(lastDx * lastDx + lastDy * lastDy) * (1 + 1e-12);
+            }
           }
+          if (slack > 0) liveSlack = slack;
           return E;
         };
-        /** Energy of piece i's image pairs with piece i at (x, y, theta) in world coordinates. */
+        /** Energy of piece i's live image pairs with piece i at (x, y, theta) in world coordinates. */
         const localEnergy = (i: number, x: number, y: number, t: number): number => {
           let E = 0;
           for (const idx of touching[i]) {
+            if (!live[idx]) continue;
             const p = pairs[idx];
             if (p.i === p.j) E += pairEnergy(idx, x, y, t, x, y, t);
             else if (p.i === i) E += pairEnergy(idx, x, y, t, centres[2 * p.j], centres[2 * p.j + 1], thetas[p.j]);
@@ -432,11 +468,24 @@ function searchWorking(problem: TorusProblem, o: TorusSearchOptions, up: number)
             return Infinity;
           }
           setup(z);
-          const E = totalEnergy();
           const k = z[iK];
           const e = free ? Math.exp(z[iK + 1]) : 1;
           const t2 = free ? z[iK + 2] : 0;
+          // a step moves a centre by at most h max(k e, |(k t2, k / e)|) and a vertex by h through
+          // the angle (an axis by |d| h / R, |d| < reach); ten times that bounds every change of a
+          // separation, so pairs separated by more stay separated in every step
+          const slack = 10 * h * Math.max(1, k * e, Math.hypot(k * t2, k / e), (2 * R * 1.3 + 0.1) / thetaScale);
+          const E = totalEnergy(slack);
           for (let i = 0; i < P; i++) {
+            let any = false;
+            for (const idx of touching[i]) if (live[idx]) any = true;
+            if (!any) {
+              // every local energy below is 0, and so is this piece's gradient
+              g[3 * i] = 0;
+              g[3 * i + 1] = 0;
+              g[3 * i + 2] = 0;
+              continue;
+            }
             const cx = centres[2 * i];
             const cy = centres[2 * i + 1];
             const ti = thetas[i];
@@ -456,14 +505,32 @@ function searchWorking(problem: TorusProblem, o: TorusSearchOptions, up: number)
             }
           }
           const zz = Float64Array.from(z);
+          // the cell map k F at z, upper triangular [[f11, f12], [0, f22]]
+          const f11 = k * e;
+          const f12 = k * t2;
+          const f22 = k / e;
+          /**
+           * A bound on |dv| / |v| for the centre-to-image vectors v = k F delta when the cell map
+           * becomes that of zz: the Frobenius norm of (F' - F) F^-1, with room for rounding.
+           */
+          const stretchTo = (): number => {
+            const ez = free ? Math.exp(zz[iK + 1]) : 1;
+            const d11 = zz[iK] * ez - f11;
+            const d12 = zz[iK] * (free ? zz[iK + 2] : 0) - f12;
+            const d22 = zz[iK] / ez - f22;
+            const a = d11 / f11;
+            const b = -(d11 * f12) / (f11 * f22) + d12 / f22;
+            const c = d22 / f22;
+            return Math.sqrt(a * a + b * b + c * c) * 1.01 + 1e-14;
+          };
           for (let c = iK; c < nv; c++) {
             const hc = c === iK ? 1e-9 * z[iK] : 1e-8;
             zz[c] = z[c] + hc;
             setup(zz);
-            const Ep = totalEnergy();
+            const Ep = totalEnergy(0, stretchTo());
             zz[c] = z[c] - hc;
             setup(zz);
-            const Em = totalEnergy();
+            const Em = totalEnergy(0, stretchTo());
             zz[c] = z[c];
             g[c] = (mu * (Ep - Em)) / (2 * hc) + (c === iK ? 1 : 0);
           }
