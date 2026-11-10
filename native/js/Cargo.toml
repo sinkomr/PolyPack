@@ -11,6 +11,6 @@ name = "polypack_js"
 [dependencies]
 # fdlibm-derived transcendental functions in pure Rust: the same results on every platform
 libm = "0.2"
-
-[dev-dependencies]
-serde_json = { version = "1", features = ["float_roundtrip"] }
+serde = "1"
+# preserve_order: an object keeps the order its keys were inserted in, as in JavaScript
+serde_json = { version = "1", features = ["float_roundtrip", "preserve_order"] }

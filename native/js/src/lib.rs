@@ -7,6 +7,8 @@
 //! 1e21). This crate holds both, checked against Node by `examples/vectors.rs` with the vectors of
 //! `native/tools/jsmath-vectors.mts`.
 //!
+//! `json` writes JSON as `JSON.stringify` does.
+//!
 //! Use `math::sin(x)` wherever the TypeScript says `Math.sin(x)`, and `fmt::num(x)` wherever a
 //! number is put into a template string.
 //!
@@ -23,4 +25,5 @@
 //! messages can differ from the TypeScript's in the last digits of a number.
 
 pub mod fmt;
+pub mod json;
 pub mod math;
