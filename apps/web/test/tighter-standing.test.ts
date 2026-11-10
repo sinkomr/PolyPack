@@ -200,7 +200,7 @@ describe("Tighter standing", () => {
   });
 
   it("gives the cards Head start's levels name, prerequisites and all, and nothing past their price", () => {
-    expect(HEAD_START_PRICES).toEqual([10_000, 1_000_000, 100_000_000]);
+    expect(HEAD_START_PRICES).toEqual([10_000, 450_000, 5_000_000]);
     const at = (level: number) => headStartGives(level);
     expect(at(0)).toEqual({ ids: [], levels: {} });
     for (const level of [1, 2, 3]) {
@@ -228,8 +228,7 @@ describe("Tighter standing", () => {
     expect(at(1).ids).not.toContain("rent");
     expect(at(1).ids).not.toContain("collections");
     expect(at(2).ids).toEqual(expect.arrayContaining(["rent", "collections", "rentx"]));
-    // the price cut brings Higher rent's later levels under 1,000,000 RP (the 5th costs 793,187 after it)
-    expect(at(2).levels.rentx).toBe(5);
+    expect(at(2).levels.rentx).toBe(2);
     expect(at(3).levels.rentx).toBe(5);
     // level 1 gives the first cards and Auto-eval's first levels
     expect(at(1).ids).toEqual(
@@ -254,7 +253,7 @@ describe("Tighter standing", () => {
     expect(owned.has("lanesx")).toBe(false);
     expect(owned.has("standing")).toBe(false);
     // Keep auto-eval keeps all 12 levels of Faster auto-eval, more than Head start's 9
-    expect(tree.levels).toMatchObject({ study: 2, head: 2, autox: 12, rentx: gives.levels.rentx });
+    expect(tree.levels).toMatchObject({ study: 2, head: 2, autox: 12, rentx: 2 });
     expect(tree.owned).toEqual(UPGRADES.filter((u) => owned.has(u.id)).map((u) => u.id));
     // with Keep auto-eval, it stays on, due nothing yet
     resetCycle(s, T0);

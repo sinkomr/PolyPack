@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
+  HEAD2_AUTO_LEVELS,
   TAPER_FROM,
   TAPER_TO,
   UPGRADES,
@@ -109,12 +110,29 @@ describe("Tighter costOf after the price cut", () => {
 });
 
 describe("Tighter Head start after the price cut", () => {
-  it("counts the tapered prices, so level 2 also gives Ring 50 and Published", () => {
-    const ids = headStartGives(2).ids;
-    expect(ids).toContain("ring50");
-    expect(ids).toContain("published");
-    expect(headStartGives(1).ids).not.toContain("ring50");
-    expect(listPrice("ring50")).toBeLessThanOrEqual(1_000_000);
-    expect(upgrade("ring50").cost).toBeGreaterThan(1_000_000);
+  it("gives the same cards and levels as before the cut, from limits in the cut prices", () => {
+    // the lists before the cut: list prices against 10,000 / 1,000,000 / 100,000,000
+    const OLD_LIMITS = [10_000, 1_000_000, 100_000_000];
+    const raw = (id: UpgradeId, l: number) => {
+      const u = upgrade(id);
+      return id === "autox" ? autoLevelPrice(l) : u.levels ? u.cost * Math.pow(u.levels.growth, l) : u.cost;
+    };
+    for (const level of [1, 2, 3]) {
+      const g = headStartGives(level);
+      const want: Partial<Record<UpgradeId, number>> = {};
+      for (const u of UPGRADES) {
+        if (u.currency === "standing" || u.id === "standing" || u.id === "lanesx" || isCardSlice(u.id)) continue;
+        const most = u.id === "autox" ? HEAD2_AUTO_LEVELS : (u.levels?.max ?? 1);
+        let n = 0;
+        while (n < most && raw(u.id, n) <= OLD_LIMITS[level - 1]) n++;
+        if (n) want[u.id] = n;
+      }
+      const got: Partial<Record<UpgradeId, number>> = {};
+      for (const id of g.ids) got[id] = upgrade(id).levels ? (g.levels[id] ?? 0) : 1;
+      expect(got, `level ${level}`).toEqual(want);
+    }
+    expect(headStartGives(2).ids).not.toContain("ring50");
+    expect(headStartGives(2).levels.rentx).toBe(2);
+    expect(headStartGives(3).ids).toContain("ringAll");
   });
 });

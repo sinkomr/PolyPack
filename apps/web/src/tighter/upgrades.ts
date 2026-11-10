@@ -357,8 +357,13 @@ const TAPER_VARS: readonly Var[] = [
 
 /** Levels of Faster auto-eval that Head start gives each cycle at most: 9, so 10 evaluations a second (Keep auto-eval keeps more). */
 export const HEAD2_AUTO_LEVELS = 9;
-/** What each level of Head start gives back: the upgrades whose own price is at most this (in RP, without Quick study). */
-export const HEAD_START_PRICES: readonly number[] = [10_000, 1_000_000, 100_000_000];
+/**
+ * What each level of Head start gives back: the upgrades whose own price is at most this (in RP, after the
+ * price cut, without Quick study). The limits were 1,000,000 and 100,000,000 before the cut of 2026-11-09;
+ * 450,000 and 5,000,000 give exactly the same cards at the cut prices (between 438,178 and 489,898, and
+ * above 4,800,000, there is no price), so Head start gives what it gave before [CALC].
+ */
+export const HEAD_START_PRICES: readonly number[] = [10_000, 450_000, 5_000_000];
 /** Faster auto-eval's first level costs this (the card's list price): the 2nd evaluation a second. */
 const AUTOX_COST = AUTO_RATE_PRICE * 1.0025 ** 2;
 /** Reference growth of the price an evaluation a second, shown in the data; costOf prices levels by autoLevelPrice. */
