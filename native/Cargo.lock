@@ -388,6 +388,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "polypack-spaces"
+version = "0.1.0"
+dependencies = [
+ "polypack-js",
+ "serde",
+ "serde_json",
+]
+
+[[package]]
 name = "polypack-sphere"
 version = "0.1.0"
 dependencies = [

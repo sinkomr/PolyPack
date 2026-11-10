@@ -1,6 +1,6 @@
 [workspace]
 resolver = "2"
-members = ["js", "flat", "client", "curved", "surface", "sphere", "torus", "boundary", "polyhedra", "balls", "ndim"]
+members = ["js", "flat", "client", "curved", "surface", "sphere", "torus", "boundary", "polyhedra", "balls", "ndim", "spaces"]
 
 [workspace.package]
 version = "0.1.0"
