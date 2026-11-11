@@ -185,13 +185,19 @@ export function portFree(port: number): Promise<boolean> {
 const RESERVED = new Set([8787, 8788, 5174]);
 let nextPort = 0;
 
-/** A free port above 20000, from a range that depends on the process so that parallel runs do not meet. */
+/**
+ * A free port from 21000 to 31999, from a range that depends on the process so that parallel runs do not meet.
+ *
+ * Below 32768, where Linux begins to hand out the ports of outgoing connections (macOS: 49152). A port from that range is
+ * free when it is tried here and can be the source port of one of the runner's own requests a moment later: a server that
+ * takes a second to start (the TypeScript one, under tsx) then finds it in use and exits. That happened once on CI.
+ */
 export async function freePort(base?: number): Promise<number> {
-  if (!nextPort) nextPort = base ?? 21000 + (process.pid % 400) * 100;
+  if (!nextPort) nextPort = base ?? 21000 + (process.pid % 100) * 100;
   for (let tries = 0; tries < 2000; tries++) {
     const port = nextPort++;
-    if (nextPort > 64000) nextPort = 21000;
-    if (port <= 20000 || RESERVED.has(port)) continue;
+    if (nextPort >= 32000) nextPort = 21000;
+    if (port <= 20000 || port >= 32000 || RESERVED.has(port)) continue;
     if (await portFree(port)) return port;
   }
   throw new Error("no free port found");
