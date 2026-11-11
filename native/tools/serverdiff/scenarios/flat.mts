@@ -525,14 +525,16 @@ function holders(): Scenario {
 function closed(): Scenario {
   const s = new Scenario("flat-closed", "flat: leaders and listings", {
     about: "entries stored before their problem was closed are listed nowhere and keep their share links",
-    options: { limits: NOLIMIT, recordsFile: "{tmp}/records-open.json", snapshotStartDelayMs: 300 },
+    // the snapshot of a start is built a second after it, in the middle of the wait that follows: its times are labelled
+    // by the step they fall in, and 300 ms was once less than a busy runner took to see that the server had started
+    options: { limits: NOLIMIT, recordsFile: "{tmp}/records-open.json", snapshotStartDelayMs: 1000 },
     env: { SNAPSHOT_DIR: "{tmp}/snap" },
     autostart: false,
   });
   const record = (P: number, status: string, value: number) => ({ N: 4, M: 4, P, value, display: String(value), display_precision: 0, status, source_name: "later proof", source_url: "https://example.invalid/z", accessed: "2026-11-01", conversion_note: "none" });
   s.add({ op: "file", path: "records-open.json", text: JSON.stringify({ records: [record(9, "best_known", 3)] }) });
   s.add({ op: "file", path: "records-closed.json", text: JSON.stringify({ records: [record(9, "proven", 3), record(10, "trivial_tiling", 4), record(11, "proven_unrefereed", 4), { ...record(6, "proven", 1), N: 3, M: 6 }] }) });
-  s.add({ op: "start" }).wait(1200);
+  s.add({ op: "start" }).wait(2500);
   const all = () => {
     for (const P of [9, 10, 11]) s.get(`/api/leaderboard/4/4/${P}`).get(`/api/problems/4/4/${P}`);
     s.get("/api/records?N=4&M=4").get("/api/atlas?N=4&M=4&from=1&to=20").get("/api/holders").get("/api/holder?name=ann").get("/api/records/pairs");
@@ -544,7 +546,7 @@ function closed(): Scenario {
   s.submit({ N: 3, M: 6, P: 6, pieces: row(6, 3), name: "ann" }, 200);
   all();
   // a day later, with the problems closed: the snapshot built at startup leaves their entries out, and the pair that has no other
-  s.add({ op: "restart", options: { recordsFile: "{tmp}/records-closed.json" }, clockAdvanceMs: 26 * 3_600_000 }).wait(1500);
+  s.add({ op: "restart", options: { recordsFile: "{tmp}/records-closed.json" }, clockAdvanceMs: 26 * 3_600_000 }).wait(2500);
   s.get("/api/snapshot", 200).get("/api/snapshot/4-4.json.gz").get("/api/snapshot/3-6.json.gz").get("/api/snapshot/5-5.json.gz");
   all();
   s.submit(squares(9, {}, grid(9, 3)), 409).submit(squares(10, {}, grid(10, 4)), 409).submit(squares(11, {}, grid(11, 4)), 200);
