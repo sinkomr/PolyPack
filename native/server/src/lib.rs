@@ -10,7 +10,8 @@
 //! | docs.ts                    | `docs` (its texts: data/docs.json)                  |
 //! | units-gate.ts              | `units_gate`                                        |
 //! | node.ts                    | `node`, and `main.rs`                               |
-//! | spaces.ts, packages/spaces | `spaces`: the seam; not ported yet                  |
+//! | spaces.ts                  | `spaces`                                            |
+//! | packages/spaces            | the crate `polypack-spaces`; `spaces_port` is what the other modules read of it |
 //! | store.ts, sqlite-store.ts, pieces.ts, units-migration.ts | `store`               |
 //!
 //! And what the source has from its libraries and its language:
@@ -39,6 +40,7 @@ pub mod pool;
 pub mod serve_static;
 pub mod snapshot;
 pub mod spaces;
+pub mod spaces_port;
 pub mod store;
 pub mod units_gate;
 pub mod url;

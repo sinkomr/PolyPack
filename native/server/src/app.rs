@@ -45,7 +45,7 @@ use crate::limits::{
 use crate::load::{LoadStats, SubmissionLine};
 use crate::pool::Pool;
 use crate::snapshot::SnapshotSource;
-use crate::spaces::{space_routes, SpaceRoute, SpaceRouteContext, SpacesPort};
+use crate::spaces::{space_routes, SpaceRoute, SpaceRouteContext, SpaceRoutes, SpacesDocs, SpacesPort};
 use crate::store::{
     BestOfP, Decision, EntryEdit, HolderPeak, LeaderboardEntry, NewSubmission, Pose, ProblemKey, ProblemLeader, Provenance, SqliteStore, StoredSubmission, GET_MANY_LIMIT,
 };
@@ -435,6 +435,8 @@ pub struct App {
     units_gate: bool,
     snapshots: Option<Arc<SnapshotSource>>,
     spaces: Option<Arc<dyn SpacesPort>>,
+    /// The routes of the spaces and what they keep between requests; with `spaces`.
+    space_routes: Option<Arc<SpaceRoutes>>,
     pool: Pool,
     state: Mutex<State>,
     follow: Mutex<Follow>,
@@ -497,8 +499,9 @@ impl App {
         ));
         let docs = match &opts.spaces {
             Some(s) => docs_page(Self::docs_limits(), s.docs()),
-            None => docs_page(Self::docs_limits(), crate::spaces::StandInSpaces::new().docs()),
+            None => docs_page(Self::docs_limits(), &SpacesDocs::of_the_package()),
         };
+        let space_routes = opts.spaces.as_ref().map(|s| SpaceRoutes::new(&**s, opts.clock.clone()));
         Ok(Arc::new(App {
             store: opts.store,
             literature,
@@ -517,6 +520,7 @@ impl App {
             units_gate: opts.units_gate != Some(false),
             snapshots: opts.snapshots,
             spaces: opts.spaces,
+            space_routes,
             pool: opts.pool,
             state: Mutex::new(State {
                 records_cache: RecordsCache::default(),
@@ -575,7 +579,7 @@ impl App {
         }
         let segments: Vec<&str> = path.split('/').collect();
         // app.use(path, compress()): the routes whose answers are compressed
-        let mut compressed = matches!(path.as_str(), "/api/records/pairs" | "/api/holder" | "/api/atlas" | "/api/leaders");
+        let compressed = matches!(path.as_str(), "/api/records/pairs" | "/api/holder" | "/api/atlas" | "/api/leaders");
         let handled: Handled = match (method, &segments[1..]) {
             ("GET", ["api"]) => Ok(hono::html(self.docs.clone())),
             ("GET", ["api", "health"]) => Ok(hono::json_text("{\"ok\":true}", 200)),
@@ -599,18 +603,19 @@ impl App {
             _ => {
                 // The spaces share the submission limits of /api/submit: one count and one
                 // verification budget per address (or for the submit key).
-                let routed = match &self.spaces {
-                    Some(spaces) => {
+                let routed = match (&self.spaces, &self.space_routes) {
+                    (Some(spaces), Some(routes)) => {
                         let overloaded = || self.overloaded();
                         let admin = |r: &Req| self.admin(r);
                         let ctx = SpaceRouteContext {
+                            routes,
                             spaces,
                             store: &self.store,
                             units_gate: self.units_gate,
                             submit_limits: &self.submit_limits,
                             overloaded: &overloaded,
                             client_ip: &*self.client_ip,
-                            log: &*self.log,
+                            log: &self.log,
                             stats: self.stats.as_ref(),
                             admin: &admin,
                             pool: &self.pool,
@@ -618,12 +623,11 @@ impl App {
                         };
                         space_routes(&ctx, method, &path, req).await
                     }
-                    None => SpaceRoute::Pass { compress: false },
+                    _ => SpaceRoute::Pass,
                 };
                 match routed {
                     SpaceRoute::Answer(res) => return Some(res),
-                    SpaceRoute::Pass { compress } => {
-                        compressed |= compress;
+                    SpaceRoute::Pass => {
                         // Who leads, for many problems at once (Tighter's rent checks); after the
                         // spaces, whose catalogues it reads.
                         if method == "GET" && path == "/api/leaders" {

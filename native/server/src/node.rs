@@ -23,16 +23,15 @@ use crate::load::LoadStats;
 use crate::pool::Pool;
 use crate::serve_static::serve_static;
 use crate::snapshot::{schedule_snapshots, BuildOptions, ClosedFn, ScheduleOptions, SnapshotSource, SnapshotSpaces, SourceOptions};
-use crate::spaces::{SpacesPort, StandInSpaces};
-use crate::store::{MigrationOptions, OpenOptions, SpaceIds, SqliteStore, EPOCH_DIAMETER};
+use crate::spaces::{LoadedSpaces, SpacesPort};
+use crate::store::{MigrationOptions, OpenOptions, SpaceIds, SqliteStore};
 use crate::url;
 
 /// The options file of the differential harness; every field is optional.
 #[derive(Default)]
 struct TestOptions {
     records_file: Option<String>,
-    /// The directory under which data/<space>/records.json is read; for the port of the spaces.
-    #[allow(dead_code)]
+    /// The directory under which data/<space>/records.json is read; the repository root by default.
     spaces_root: Option<String>,
     /// None: the default (apps/web/dist when it exists); Some(None): no static site.
     static_dir: Option<Option<String>>,
@@ -253,24 +252,6 @@ fn fail(message: &str) -> ! {
     std::process::exit(1)
 }
 
-/// Refuses what the stand-in for the spaces cannot do: converting a database in the old units that
-/// holds entries of the spaces (their problems' ids decide the factors).
-fn check_convertible(path: &str) {
-    if path == ":memory:" || !Path::new(path).exists() {
-        return;
-    }
-    let Ok(db) = rusqlite::Connection::open_with_flags(path, rusqlite::OpenFlags::SQLITE_OPEN_READ_ONLY) else {
-        return;
-    };
-    let one = |sql: &str| db.query_row(sql, [], |r| r.get::<_, f64>(0)).ok();
-    let entries = one("SELECT COUNT(*) FROM space_entries").unwrap_or(0.0);
-    let has_submissions = one("SELECT COUNT(*) FROM sqlite_master WHERE type = 'table' AND name = 'submissions'").unwrap_or(0.0) > 0.0;
-    let epoch = one("SELECT value FROM meta WHERE key = 'units_epoch'").unwrap_or(0.0);
-    if has_submissions && entries > 0.0 && epoch < EPOCH_DIAMETER {
-        fail("this build of the server has no port of the spaces yet, and the database holds entries of the spaces in the units before 2026-10-27: it cannot convert them. Start the TypeScript server on this database once, or a build with the spaces.");
-    }
-}
-
 /// node.ts, from its first line to the last. Never returns: the process ends on SIGINT or SIGTERM.
 pub async fn main() {
     let options_path = env_nonempty("POLYPACK_TEST_OPTIONS");
@@ -325,13 +306,11 @@ pub async fn main() {
             _ => None,
         })
         .unwrap_or_else(|| fail(&format!("the published records could not be read from {records_path}")));
-    // The research records of the spaces (data/<space>/records.json). Their port is to come: until
-    // then the server knows the spaces' names and the texts of the API page, and no problem.
-    let spaces: Arc<dyn SpacesPort> = Arc::new(StandInSpaces::new());
+    // The research records of the spaces (data/<space>/records.json), each read once into a compact
+    // catalogue; a missing file leaves its space out (or, for a space with a domain, without records).
+    let spaces_root = test.spaces_root.as_ref().map_or_else(|| root.clone(), PathBuf::from);
+    let spaces: Arc<dyn SpacesPort> = Arc::new(LoadedSpaces::load(&spaces_root, out.clone()));
 
-    if !spaces.complete() {
-        check_convertible(&database_path);
-    }
     let store = {
         let mut log = |msg: &str| println!("{msg}");
         let ids: &dyn SpaceIds = &*spaces;

@@ -15,7 +15,7 @@ use polypack_server::hono::{Req, Res, ResBody};
 use polypack_server::load::LoadStats;
 use polypack_server::pool::Pool;
 use polypack_server::snapshot::{build_snapshot, read_manifest, BuildOptions, SnapshotSource, SourceOptions};
-use polypack_server::spaces::{SpacesPort, StandInSpaces};
+use polypack_server::spaces::{LoadedSpaces, SpacesPort};
 use polypack_server::store::{OpenOptions, ProblemLeader, SpaceIds, SqliteStore};
 use polypack_server::url;
 use serde_json::{json, Value};
@@ -30,6 +30,17 @@ fn records() -> Vec<Value> {
                 "source_name": "test", "source_url": "https://example.invalid/", "accessed": "2026-10-07", "conversion_note": "none" })
     };
     vec![rec(2, 2.0, "proven"), rec(3, 5.0, "best_known"), rec(5, 3.0, "best_known")]
+}
+
+/// The spaces as the server loads them from the repository's data, read once for all the tests.
+fn the_spaces() -> Arc<dyn SpacesPort> {
+    static SPACES: std::sync::OnceLock<Arc<LoadedSpaces>> = std::sync::OnceLock::new();
+    SPACES
+        .get_or_init(|| {
+            let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../..");
+            Arc::new(LoadedSpaces::load(&root, polypack_spaces::no_log()))
+        })
+        .clone()
 }
 
 struct Server {
@@ -58,7 +69,7 @@ impl Default for Setup {
 
 fn server(setup: Setup) -> Server {
     let clock = Clock::new();
-    let spaces: Arc<dyn SpacesPort> = Arc::new(StandInSpaces::new());
+    let spaces: Arc<dyn SpacesPort> = the_spaces();
     let ids: &dyn SpaceIds = &*spaces;
     let store = SqliteStore::open(":memory:", OpenOptions { migrate_units: true, log: None, spaces: ids, clock: Box::new(clock.clone()), tracer: None }).expect("a store in memory");
     let store = Arc::new(Mutex::new(store));

@@ -250,6 +250,70 @@ pub fn query_param(url: &str, key: &str) -> Option<String> {
     result
 }
 
+/// hono/utils/url: getQueryParams(url), as `c.req.queries()` calls it: every key of the query with
+/// all its values, in the order `Object.entries` gives the keys of the object they are collected
+/// in: those that are array indices first, by their number, then the others as they first came.
+pub fn query_params(url: &str) -> Vec<(String, Vec<String>)> {
+    let url = match index_of(url, "#", 8) {
+        Some(h) => &url[..h],
+        None => url,
+    };
+    let encoded = url.contains('%') || url.contains('+');
+    let mut results: Vec<(String, Vec<String>)> = Vec::new();
+    let mut key_index = index_of(url, "?", 8);
+    while let Some(k) = key_index {
+        let next_key_index = index_of(url, "&", k + 1);
+        let mut value_index = index_of(url, "=", k);
+        if let (Some(v), Some(n)) = (value_index, next_key_index) {
+            if v > n {
+                value_index = None;
+            }
+        }
+        let name_end = value_index.or(next_key_index).unwrap_or(url.len());
+        let mut name = url[k + 1..name_end].to_string();
+        if encoded {
+            name = decode_query_value(&name);
+        }
+        key_index = next_key_index;
+        if name.is_empty() {
+            continue;
+        }
+        let value = match value_index {
+            None => String::new(),
+            Some(v) => {
+                let raw = &url[v + 1..next_key_index.unwrap_or(url.len())];
+                if encoded {
+                    decode_query_value(raw)
+                } else {
+                    raw.to_string()
+                }
+            }
+        };
+        match results.iter_mut().find(|(n, _)| *n == name) {
+            Some((_, values)) => values.push(value),
+            None => results.push((name, vec![value])),
+        }
+    }
+    // an array index: the decimal text of an integer below 2^32 - 1, as JavaScript writes it
+    let index = |name: &str| -> Option<u32> {
+        let canonical = name == "0" || (!name.starts_with('0') && !name.is_empty() && name.len() <= 10 && name.bytes().all(|b| b.is_ascii_digit()));
+        if !canonical {
+            return None;
+        }
+        name.parse::<u32>().ok().filter(|n| *n < u32::MAX)
+    };
+    let mut indices: Vec<(u32, (String, Vec<String>))> = Vec::new();
+    let mut others: Vec<(String, Vec<String>)> = Vec::new();
+    for entry in results {
+        match index(&entry.0) {
+            Some(n) => indices.push((n, entry)),
+            None => others.push(entry),
+        }
+    }
+    indices.sort_by_key(|(n, _)| *n);
+    indices.into_iter().map(|(_, entry)| entry).chain(others).collect()
+}
+
 /// `[...new URL(url).searchParams]`: the pairs of the query as the URL standard reads a form:
 /// split at `&`, each part at its first `=`, `+` read as a space, escapes decoded as bytes, the
 /// bytes read as UTF-8 with U+FFFD for what is not.
@@ -341,6 +405,16 @@ mod tests {
         assert_eq!(q("/r?N=%zz", "N"), Some("%zz".into()));
         assert_eq!(q("/r?=1&N=2", "N"), Some("2".into()));
         assert_eq!(q("/r?keys=", "keys"), Some("".into()));
+    }
+
+    #[test]
+    fn queries_as_hono_reads_them() {
+        let q = |u: &str| query_params(&format!("http://h{u}"));
+        let e = |k: &str, v: &[&str]| (k.to_string(), v.iter().map(|s| s.to_string()).collect::<Vec<String>>());
+        assert_eq!(q("/r"), vec![]);
+        assert_eq!(q("/r?limit=2&after=a%2Fb&limit=3"), vec![e("limit", &["2", "3"]), e("after", &["a/b"])]);
+        assert_eq!(q("/r?b=1&10=x&2=y&a&=z&01=w#c=1"), vec![e("2", &["y"]), e("10", &["x"]), e("b", &["1"]), e("a", &[""]), e("01", &["w"])]);
+        assert_eq!(q("/r?a+b=c+d"), vec![e("a b", &["c d"])]);
     }
 
     #[test]

@@ -11,6 +11,7 @@
 //! | piece-domains.ts | [`piece_domains`]: the curved, sphere and torus domains |
 //! | records.ts | [`records`]: the catalogue of a space from its research records |
 //! | load.ts | [`load`]: reading data/<space>/records.json, and the configurations kept apart |
+//! | (V8's `JSON.parse`) | [`json_error`]: the message of a syntax error, as load.ts logs it |
 //! | validate.ts | [`validate`]: parsing untrusted configurations, and the server's check of a submission |
 //! | index.ts | the re-exports below |
 //!
@@ -26,6 +27,7 @@
 pub mod domain;
 pub mod ids;
 pub mod info;
+pub mod json_error;
 pub mod load;
 pub mod piece_domains;
 pub mod records;

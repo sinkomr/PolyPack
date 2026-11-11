@@ -21,6 +21,7 @@
 
 use crate::domain::space_domain;
 use crate::ids::parse_space_id;
+use crate::json_error::v8_json_error;
 use crate::records::{build_space_catalogue, config_location, SpaceCatalogue, SpaceProblemEntry, SpacesIndex};
 use crate::types::{SpaceName, SPACE_NAMES};
 use crate::validate::{parse_space_config, Parsed};
@@ -85,14 +86,15 @@ fn read_file(path: &Path) -> Result<Vec<u8>, String> {
     Ok(bytes)
 }
 
-/// `JSON.parse(text)` of a file's text: the value, or the message of the syntax error (serde_json's
-/// words, not V8's). A byte order mark is not white space to `JSON.parse`, so a text that starts
-/// with one is refused.
+/// `JSON.parse(text)` of a file's text: the value, or the message of the syntax error in V8's
+/// words (json_error.rs), since load.ts logs it. A byte order mark is not white space to
+/// `JSON.parse`, so a text that starts with one is refused.
 fn parse_json(text: &str) -> Result<Value, String> {
     if text.starts_with('\u{feff}') {
-        return Err("Unexpected token '\u{feff}' at the start of the text".to_string());
+        return Err(v8_json_error(text).unwrap_or_else(|| "Unexpected token '\u{feff}' at the start of the text".to_string()));
     }
-    json::parse(text.as_bytes())
+    // a text that only this reader refuses (nesting deeper than 128 levels) keeps this reader's words
+    json::parse(text.as_bytes()).map_err(|message| v8_json_error(text).unwrap_or(message))
 }
 
 /// load.ts: `readLine`. A configuration's line as read from its file, checked: the line is

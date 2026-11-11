@@ -14,6 +14,11 @@
 //! are boards) ties it and is not kept. Every request carries its own address in `x-load-ip`
 //! (start the server with CLIENT_IP_HEADER=x-load-ip), so the limits of one address do not decide
 //! the result. Sends nothing anywhere but to 127.0.0.1.
+//!
+//! With `--space-file SPACESNAP/space-polyhedra.json.gz --space-rate 3 --space-min-p 100` the run
+//! is mixed: leading entries of a space (each of another problem, so each is checked and kept) are
+//! posted to /api/spaces/submit at their own rate on connections of their own, among the boards,
+//! and counted apart.
 
 use std::collections::HashMap;
 use std::io::{BufRead, BufReader};
@@ -37,10 +42,14 @@ struct Args {
     max_p: u64,
     pid: Option<u32>,
     files: Vec<String>,
+    space_file: Option<String>,
+    space_rate: f64,
+    space_min_p: u64,
+    space_max_p: u64,
 }
 
 fn args() -> Args {
-    let mut a = Args { port: 0, rate: 100.0, seconds: 10.0, connections: 32, streams: 0, boards: 2000, min_p: 1, max_p: 500, pid: None, files: Vec::new() };
+    let mut a = Args { port: 0, rate: 100.0, seconds: 10.0, connections: 32, streams: 0, boards: 2000, min_p: 1, max_p: 500, pid: None, files: Vec::new(), space_file: None, space_rate: 0.0, space_min_p: 30, space_max_p: 500 };
     let mut it = std::env::args().skip(1);
     while let Some(arg) = it.next() {
         let mut value = || it.next().unwrap_or_else(|| panic!("{arg} needs a value"));
@@ -54,6 +63,10 @@ fn args() -> Args {
             "--min-p" => a.min_p = value().parse().expect("a count"),
             "--max-p" => a.max_p = value().parse().expect("a count"),
             "--pid" => a.pid = Some(value().parse().expect("a process id")),
+            "--space-file" => a.space_file = Some(value()),
+            "--space-rate" => a.space_rate = value().parse().expect("requests per second"),
+            "--space-min-p" => a.space_min_p = value().parse().expect("a count"),
+            "--space-max-p" => a.space_max_p = value().parse().expect("a count"),
             _ => a.files.push(arg),
         }
     }
@@ -108,6 +121,37 @@ fn load_boards(files: &[String], want: usize, min_p: u64, max_p: u64) -> Vec<Vec
             }
         }
         out.extend(kept);
+    }
+    out
+}
+
+/// The bodies of POST /api/spaces/submit for up to `want` entries of a space's snapshot file with
+/// `min_p` to `max_p` pieces, each of another problem.
+fn load_space_entries(file: &str, want: usize, min_p: u64, max_p: u64) -> Vec<Vec<u8>> {
+    let reader = BufReader::new(flate2::read::MultiGzDecoder::new(std::fs::File::open(file).unwrap_or_else(|e| panic!("{file}: {e}"))));
+    let mut out = Vec::new();
+    for line in reader.lines() {
+        let line = line.expect("a line of the file");
+        let text = line.trim_end_matches(',');
+        if !text.starts_with("{\"problem\"") {
+            continue;
+        }
+        let Ok(record) = serde_json::from_str::<Value>(text) else {
+            continue;
+        };
+        let p = record["P"].as_u64().unwrap_or(0);
+        let Some(problem) = record["problem"].as_str() else {
+            continue;
+        };
+        if p < min_p || p > max_p {
+            continue;
+        }
+        let space = problem.split('/').next().unwrap_or("");
+        let body = json!({ "space": space, "id": problem, "config": record["config"], "name": "load test", "units": "diameter" });
+        out.push(serde_json::to_vec(&body).expect("JSON"));
+        if out.len() >= want {
+            break;
+        }
     }
     out
 }
@@ -171,50 +215,15 @@ fn percentile(sorted: &[f64], q: f64) -> f64 {
     sorted[((q * sorted.len() as f64).ceil() as usize).clamp(1, sorted.len()) - 1]
 }
 
-#[tokio::main(flavor = "multi_thread")]
-async fn main() {
-    let a = args();
-    let boards = Arc::new(load_boards(&a.files, a.boards, a.min_p, a.max_p));
-    assert!(!boards.is_empty(), "no board in the files fits");
-    let bytes: usize = boards.iter().map(Vec::len).sum();
-    println!("{} boards, {:.1} kB each on average", boards.len(), bytes as f64 / boards.len() as f64 / 1000.0);
-
-    // the live streams: opened first, each on its own connection; what they receive is counted
-    let events = Arc::new(AtomicU64::new(0));
-    let mut stream_tasks = Vec::new();
-    for k in 0..a.streams {
-        let events = events.clone();
-        let port = a.port;
-        stream_tasks.push(tokio::spawn(async move {
-            let Ok(mut s) = TcpStream::connect(("127.0.0.1", port)).await else {
-                return;
-            };
-            // a third of the streams follow every problem, the others one pair of shapes each
-            let path = if k % 3 == 0 { "/api/events".to_string() } else { format!("/api/events?keys={}/{}/*", [4, 6, 3, 0][k % 4], [0, 3, 4, 5, 6][k % 5]) };
-            if s.write_all(format!("GET {path} HTTP/1.1\r\nhost: 127.0.0.1:{port}\r\n\r\n").as_bytes()).await.is_err() {
-                return;
-            }
-            let mut chunk = [0u8; 8192];
-            while let Ok(n) = s.read(&mut chunk).await {
-                if n == 0 {
-                    break;
-                }
-                events.fetch_add(chunk[..n].windows(18).filter(|w| *w == b"event: leaderboard").count() as u64, Ordering::Relaxed);
-            }
-        }));
-    }
-    tokio::time::sleep(Duration::from_millis(300)).await;
-
-    let total = (a.rate * a.seconds).round() as u64;
+/// Offers `total` requests to `path` at `rate` a second over `connections` connections, request k
+/// with the body `bodies[k % len]` and an address of its own under `net`; the answers.
+#[allow(clippy::too_many_arguments)]
+async fn offer(port: u16, path: &'static str, rate: f64, total: u64, connections: usize, bodies: Arc<Vec<Vec<u8>>>, net: u8, began: Instant, errors: Arc<AtomicU64>) -> Vec<Answer> {
     let next = Arc::new(AtomicU64::new(0));
     let answers: Arc<Mutex<Vec<Answer>>> = Arc::new(Mutex::new(Vec::with_capacity(total as usize)));
-    let errors = Arc::new(AtomicU64::new(0));
-    let cpu_before = a.pid.and_then(cpu_seconds);
-    let began = Instant::now();
     let mut workers = Vec::new();
-    for _ in 0..a.connections {
-        let (boards, next, answers, errors) = (boards.clone(), next.clone(), answers.clone(), errors.clone());
-        let (port, rate) = (a.port, a.rate);
+    for _ in 0..connections {
+        let (bodies, next, answers, errors) = (bodies.clone(), next.clone(), answers.clone(), errors.clone());
         workers.push(tokio::spawn(async move {
             let mut stream: Option<TcpStream> = None;
             let mut buf = Vec::with_capacity(4096);
@@ -226,9 +235,9 @@ async fn main() {
                 }
                 let due = began + Duration::from_secs_f64(k as f64 / rate);
                 tokio::time::sleep_until(due.into()).await;
-                let body = &boards[k as usize % boards.len()];
+                let body = &bodies[k as usize % bodies.len()];
                 let request = format!(
-                    "POST /api/submit HTTP/1.1\r\nhost: 127.0.0.1:{port}\r\ncontent-type: application/json\r\nx-load-ip: 10.{}.{}.{}\r\ncontent-length: {}\r\n\r\n",
+                    "POST {path} HTTP/1.1\r\nhost: 127.0.0.1:{port}\r\ncontent-type: application/json\r\nx-load-ip: {net}.{}.{}.{}\r\ncontent-length: {}\r\n\r\n",
                     (k >> 16) & 255,
                     (k >> 8) & 255,
                     k & 255,
@@ -267,6 +276,68 @@ async fn main() {
     for w in workers {
         let _ = w.await;
     }
+    let mut answers = answers.lock().await;
+    std::mem::take(&mut *answers)
+}
+
+#[tokio::main(flavor = "multi_thread")]
+async fn main() {
+    let a = args();
+    let boards = Arc::new(load_boards(&a.files, a.boards, a.min_p, a.max_p));
+    assert!(!boards.is_empty(), "no board in the files fits");
+    let bytes: usize = boards.iter().map(Vec::len).sum();
+    println!("{} boards, {:.1} kB each on average", boards.len(), bytes as f64 / boards.len() as f64 / 1000.0);
+
+    // the live streams: opened first, each on its own connection; what they receive is counted
+    let events = Arc::new(AtomicU64::new(0));
+    let mut stream_tasks = Vec::new();
+    for k in 0..a.streams {
+        let events = events.clone();
+        let port = a.port;
+        stream_tasks.push(tokio::spawn(async move {
+            let Ok(mut s) = TcpStream::connect(("127.0.0.1", port)).await else {
+                return;
+            };
+            // a third of the streams follow every problem, the others one pair of shapes each
+            let path = if k % 3 == 0 { "/api/events".to_string() } else { format!("/api/events?keys={}/{}/*", [4, 6, 3, 0][k % 4], [0, 3, 4, 5, 6][k % 5]) };
+            if s.write_all(format!("GET {path} HTTP/1.1\r\nhost: 127.0.0.1:{port}\r\n\r\n").as_bytes()).await.is_err() {
+                return;
+            }
+            let mut chunk = [0u8; 8192];
+            while let Ok(n) = s.read(&mut chunk).await {
+                if n == 0 {
+                    break;
+                }
+                events.fetch_add(chunk[..n].windows(18).filter(|w| *w == b"event: leaderboard").count() as u64, Ordering::Relaxed);
+            }
+        }));
+    }
+    tokio::time::sleep(Duration::from_millis(300)).await;
+
+    let total = (a.rate * a.seconds).round() as u64;
+    let errors = Arc::new(AtomicU64::new(0));
+    // the entries of a space, read before the clock of the run starts
+    let entries = match &a.space_file {
+        Some(file) if a.space_rate > 0.0 => {
+            let wanted = (a.space_rate * a.seconds).round() as usize;
+            let entries = Arc::new(load_space_entries(file, wanted, a.space_min_p, a.space_max_p));
+            assert!(!entries.is_empty(), "no entry in {file} fits");
+            let bytes: usize = entries.iter().map(Vec::len).sum();
+            println!("{} space entries, {:.1} kB each on average", entries.len(), bytes as f64 / entries.len() as f64 / 1000.0);
+            Some(entries)
+        }
+        _ => None,
+    };
+    let cpu_before = a.pid.and_then(cpu_seconds);
+    let began = Instant::now();
+    let flat = tokio::spawn(offer(a.port, "/api/submit", a.rate, total, a.connections, boards.clone(), 10, began, errors.clone()));
+    // among the boards
+    let space = entries.map(|entries| tokio::spawn(offer(a.port, "/api/spaces/submit", a.space_rate, entries.len() as u64, 16, entries, 11, began, errors.clone())));
+    let answers = flat.await.expect("the boards' task");
+    let space_answers = match space {
+        Some(task) => Some(task.await.expect("the entries' task")),
+        None => None,
+    };
     let wall = began.elapsed().as_secs_f64();
     let cpu_after = a.pid.and_then(cpu_seconds);
     tokio::time::sleep(Duration::from_millis(300)).await;
@@ -274,7 +345,6 @@ async fn main() {
         t.abort();
     }
 
-    let answers = answers.lock().await;
     let mut by_status: HashMap<u16, u64> = HashMap::new();
     for r in answers.iter() {
         *by_status.entry(r.status).or_default() += 1;
@@ -294,6 +364,24 @@ async fn main() {
     println!("latency of all answers, ms: p50 {:.1}, p90 {:.1}, p99 {:.1}, max {:.1}", percentile(&all, 0.5), percentile(&all, 0.9), percentile(&all, 0.99), all.last().copied().unwrap_or(f64::NAN));
     println!("latency of accepted,    ms: p50 {:.1}, p90 {:.1}, p99 {:.1}, max {:.1}", percentile(&ok, 0.5), percentile(&ok, 0.9), percentile(&ok, 0.99), ok.last().copied().unwrap_or(f64::NAN));
     println!("leaderboard events received by the streams: {}", events.load(Ordering::Relaxed));
+    if let Some(space) = &space_answers {
+        let mut by: HashMap<u16, u64> = HashMap::new();
+        for r in space.iter() {
+            *by.entry(r.status).or_default() += 1;
+        }
+        let mut by: Vec<(u16, u64)> = by.into_iter().collect();
+        by.sort();
+        let mut ms: Vec<f64> = space.iter().map(|r| r.ms).collect();
+        ms.sort_by(f64::total_cmp);
+        println!(
+            "space entries: offered {:.1}/s, answered {} (statuses: {}), of them leaders {}",
+            a.space_rate,
+            space.len(),
+            by.iter().map(|(s, n)| format!("{s}: {n}")).collect::<Vec<_>>().join(", "),
+            space.iter().filter(|r| r.leader).count()
+        );
+        println!("latency of space entries, ms: p50 {:.1}, p90 {:.1}, p99 {:.1}, max {:.1}", percentile(&ms, 0.5), percentile(&ms, 0.9), percentile(&ms, 0.99), ms.last().copied().unwrap_or(f64::NAN));
+    }
     if let (Some(b), Some(e)) = (cpu_before, cpu_after) {
         println!("server CPU: {:.1} s over {:.1} s of wall time ({:.0}% of one core)", e - b, wall, 100.0 * (e - b) / wall);
     }

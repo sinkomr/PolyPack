@@ -1,0 +1,2345 @@
+{
+ "source": "native/tools/routes-jsonerr.mts (the same under Node 24 and 26)",
+ "cases": [
+  {
+   "text": "{ not json",
+   "message": "Expected property name or '}' in JSON at position 2 (line 1 column 3)"
+  },
+  {
+   "text": "",
+   "message": "Unexpected end of JSON input"
+  },
+  {
+   "text": " ",
+   "message": "Unexpected end of JSON input"
+  },
+  {
+   "text": "{",
+   "message": "Expected property name or '}' in JSON at position 1 (line 1 column 2)"
+  },
+  {
+   "text": "[",
+   "message": "Unexpected end of JSON input"
+  },
+  {
+   "text": "[1,",
+   "message": "Unexpected end of JSON input"
+  },
+  {
+   "text": "[1",
+   "message": "Expected ',' or ']' after array element in JSON at position 2 (line 1 column 3)"
+  },
+  {
+   "text": "{\"a\":1",
+   "message": "Expected ',' or '}' after property value in JSON at position 6 (line 1 column 7)"
+  },
+  {
+   "text": "{\"a\"",
+   "message": "Expected ':' after property name in JSON at position 4 (line 1 column 5)"
+  },
+  {
+   "text": "{\"a\":",
+   "message": "Unexpected end of JSON input"
+  },
+  {
+   "text": "{\"a\":1,",
+   "message": "Expected double-quoted property name in JSON at position 7 (line 1 column 8)"
+  },
+  {
+   "text": "{\"a\":1,}",
+   "message": "Expected double-quoted property name in JSON at position 7 (line 1 column 8)"
+  },
+  {
+   "text": "[1,]",
+   "message": "Unexpected token ']', \"[1,]\" is not valid JSON"
+  },
+  {
+   "text": "nul",
+   "message": "Unexpected end of JSON input"
+  },
+  {
+   "text": "nulll",
+   "message": "Unexpected non-whitespace character after JSON at position 4 (line 1 column 5)"
+  },
+  {
+   "text": "tru",
+   "message": "Unexpected end of JSON input"
+  },
+  {
+   "text": "-",
+   "message": "No number after minus sign in JSON at position 1 (line 1 column 2)"
+  },
+  {
+   "text": "-x",
+   "message": "No number after minus sign in JSON at position 1 (line 1 column 2)"
+  },
+  {
+   "text": "01",
+   "message": "Unexpected number in JSON at position 1 (line 1 column 2)"
+  },
+  {
+   "text": "-01",
+   "message": "Unexpected number in JSON at position 2 (line 1 column 3)"
+  },
+  {
+   "text": "1.",
+   "message": "Unterminated fractional number in JSON at position 2 (line 1 column 3)"
+  },
+  {
+   "text": "1.x",
+   "message": "Unterminated fractional number in JSON at position 2 (line 1 column 3)"
+  },
+  {
+   "text": "1e",
+   "message": "Exponent part is missing a number in JSON at position 2 (line 1 column 3)"
+  },
+  {
+   "text": "1e+",
+   "message": "Exponent part is missing a number in JSON at position 3 (line 1 column 4)"
+  },
+  {
+   "text": "\"abc",
+   "message": "Unterminated string in JSON at position 4 (line 1 column 5)"
+  },
+  {
+   "text": "\"a\\x\"",
+   "message": "Bad escaped character in JSON at position 3 (line 1 column 4)"
+  },
+  {
+   "text": "\"a\\u12g4\"",
+   "message": "Bad Unicode escape in JSON at position 6 (line 1 column 7)"
+  },
+  {
+   "text": "\"a\nb\"",
+   "message": "Bad control character in string literal in JSON at position 2 (line 1 column 3)"
+  },
+  {
+   "text": "1 2",
+   "message": "Unexpected non-whitespace character after JSON at position 2 (line 1 column 3)"
+  },
+  {
+   "text": "{} x",
+   "message": "Unexpected non-whitespace character after JSON at position 3 (line 1 column 4)"
+  },
+  {
+   "text": "undefined",
+   "message": "\"undefined\" is not valid JSON"
+  },
+  {
+   "text": "NaN",
+   "message": "\"NaN\" is not valid JSON"
+  },
+  {
+   "text": "Infinity",
+   "message": "\"Infinity\" is not valid JSON"
+  },
+  {
+   "text": "[object Object]",
+   "message": "\"[object Object]\" is not valid JSON"
+  },
+  {
+   "text": "abcdefghijklmnopqrstuvwxyz",
+   "message": "Unexpected token 'a', \"abcdefghij\"... is not valid JSON"
+  },
+  {
+   "text": "[1,2,3,4,5,6,7,8,9,10,11,x,13,14,15,16,17,18,19,20]",
+   "message": "Unexpected token 'x', ...\"8,9,10,11,x,13,14,15\"... is not valid JSON"
+  },
+  {
+   "text": "[1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,x]",
+   "message": "Unexpected token 'x', ...\",17,18,19,x]\" is not valid JSON"
+  },
+  {
+   "text": "{\"records\": [\n  {\"a\": 1},\n  {\"b\": }\n]}",
+   "message": "Unexpected token '}', ...\",\n  {\"b\": }\n]}\" is not valid JSON"
+  },
+  {
+   "text": "﻿{}",
+   "message": "Unexpected token '﻿', \"﻿{}\" is not valid JSON"
+  },
+  {
+   "text": "é",
+   "message": "Unexpected token 'é', \"é\" is not valid JSON"
+  },
+  {
+   "text": "[\"\\ud800\", é]",
+   "message": "Unexpected token 'é', \"[\"\\ud800\", é]\" is not valid JSON"
+  },
+  {
+   "text": "{\"a\" 1}",
+   "message": "Expected ':' after property name in JSON at position 5 (line 1 column 6)"
+  },
+  {
+   "text": "{1:2}",
+   "message": "Expected property name or '}' in JSON at position 1 (line 1 column 2)"
+  },
+  {
+   "text": "[1 2]",
+   "message": "Expected ',' or ']' after array element in JSON at position 3 (line 1 column 4)"
+  },
+  {
+   "text": "\"\\",
+   "message": "Unexpected end of JSON input"
+  },
+  {
+   "text": "\"\\u12",
+   "message": "Bad Unicode escape in JSON at position 5 (line 1 column 6)"
+  },
+  {
+   "text": "-0x",
+   "message": "Unexpected non-whitespace character after JSON at position 2 (line 1 column 3)"
+  },
+  {
+   "text": "0x",
+   "message": "Unexpected non-whitespace character after JSON at position 1 (line 1 column 2)"
+  },
+  {
+   "text": "1e5x",
+   "message": "Unexpected non-whitespace character after JSON at position 3 (line 1 column 4)"
+  },
+  {
+   "text": ".5",
+   "message": "Unexpected token '.', \".5\" is not valid JSON"
+  },
+  {
+   "text": "+1",
+   "message": "Unexpected token '+', \"+1\" is not valid JSON"
+  },
+  {
+   "text": "[1}",
+   "message": "Expected ',' or ']' after array element in JSON at position 2 (line 1 column 3)"
+  },
+  {
+   "text": "{\"a\":1]",
+   "message": "Expected ',' or '}' after property value in JSON at position 6 (line 1 column 7)"
+  },
+  {
+   "text": "tx",
+   "message": "Unexpected token 'x', \"tx\" is not valid JSON"
+  },
+  {
+   "text": "fals",
+   "message": "Unexpected end of JSON input"
+  },
+  {
+   "text": "n",
+   "message": "Unexpected end of JSON input"
+  },
+  {
+   "text": "t",
+   "message": "Unexpected end of JSON input"
+  },
+  {
+   "text": "[,]",
+   "message": "Unexpected token ',', \"[,]\" is not valid JSON"
+  },
+  {
+   "text": ":",
+   "message": "Unexpected token ':', \":\" is not valid JSON"
+  },
+  {
+   "text": "}",
+   "message": "Unexpected token '}', \"}\" is not valid JSON"
+  },
+  {
+   "text": "]",
+   "message": "Unexpected token ']', \"]\" is not valid JSON"
+  },
+  {
+   "text": ",",
+   "message": "Unexpected token ',', \",\" is not valid JSON"
+  },
+  {
+   "text": "t1",
+   "message": "Unexpected number in JSON at position 1 (line 1 column 2)"
+  },
+  {
+   "text": "t\"",
+   "message": "Unexpected string in JSON at position 1 (line 1 column 2)"
+  },
+  {
+   "text": "n ",
+   "message": "Unexpected token ' ', \"n \" is not valid JSON"
+  },
+  {
+   "text": "f[",
+   "message": "Unexpected token '[', \"f[\" is not valid JSON"
+  },
+  {
+   "text": "nulx",
+   "message": "Unexpected token 'x', \"nulx\" is not valid JSON"
+  },
+  {
+   "text": "truE",
+   "message": "Unexpected token 'E', \"truE\" is not valid JSON"
+  },
+  {
+   "text": "\"\\€\"",
+   "message": "Unexpected token '€', \"\"\\€\"\" is not valid JSON"
+  },
+  {
+   "text": "\"\\é\"",
+   "message": "Bad escaped character in JSON at position 2 (line 1 column 3)"
+  },
+  {
+   "text": "{\"a\\q\":1}",
+   "message": "Bad escaped character in JSON at position 4 (line 1 column 5)"
+  },
+  {
+   "text": "{\"a\nb\":1}",
+   "message": "Bad control character in string literal in JSON at position 3 (line 1 column 4)"
+  },
+  {
+   "text": "{\"a",
+   "message": "Unterminated string in JSON at position 3 (line 1 column 4)"
+  },
+  {
+   "text": "{\"\\u00zz\":1}",
+   "message": "Bad Unicode escape in JSON at position 6 (line 1 column 7)"
+  },
+  {
+   "text": "[\r\n1,\r\n2,\r\nx]",
+   "message": "Unexpected token 'x', \"[\r\n1,\r\n2,\r\nx]\" is not valid JSON"
+  },
+  {
+   "text": "[\r1,\n\rx]",
+   "message": "Unexpected token 'x', \"[\r1,\n\rx]\" is not valid JSON"
+  },
+  {
+   "text": "{\n\n  \"a\": 1,\n  b\n}",
+   "message": "Expected double-quoted property name in JSON at position 15 (line 4 column 3)"
+  },
+  {
+   "text": "12345678901234567890x",
+   "message": "Unexpected non-whitespace character after JSON at position 20 (line 1 column 21)"
+  },
+  {
+   "text": "[1e400]",
+   "message": null
+  },
+  {
+   "text": "1e-",
+   "message": "Exponent part is missing a number in JSON at position 3 (line 1 column 4)"
+  },
+  {
+   "text": "0.",
+   "message": "Unterminated fractional number in JSON at position 2 (line 1 column 3)"
+  },
+  {
+   "text": "0e",
+   "message": "Exponent part is missing a number in JSON at position 2 (line 1 column 3)"
+  },
+  {
+   "text": "0.5e",
+   "message": "Exponent part is missing a number in JSON at position 4 (line 1 column 5)"
+  },
+  {
+   "text": "--1",
+   "message": "No number after minus sign in JSON at position 1 (line 1 column 2)"
+  },
+  {
+   "text": "- 1",
+   "message": "No number after minus sign in JSON at position 1 (line 1 column 2)"
+  },
+  {
+   "text": "1..2",
+   "message": "Unterminated fractional number in JSON at position 2 (line 1 column 3)"
+  },
+  {
+   "text": "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxx",
+   "message": "Unexpected token 'x', \"xxxxxxxxxx\"... is not valid JSON"
+  },
+  {
+   "text": "                         x",
+   "message": "Unexpected token 'x', ...\"          x\" is not valid JSON"
+  },
+  {
+   "text": "[                              ]x",
+   "message": "Unexpected non-whitespace character after JSON at position 32 (line 1 column 33)"
+  },
+  {
+   "text": "{\"a\":{\"b\":[1,2,{\"c\":null}]}}",
+   "message": null
+  },
+  {
+   "text": "[[[[",
+   "message": "Unexpected end of JSON input"
+  },
+  {
+   "text": "]]]]",
+   "message": "Unexpected token ']', \"]]]]\" is not valid JSON"
+  },
+  {
+   "text": "{\"a\":1}}",
+   "message": "Unexpected non-whitespace character after JSON at position 7 (line 1 column 8)"
+  },
+  {
+   "text": "[1,2,3]]",
+   "message": "Unexpected non-whitespace character after JSON at position 7 (line 1 column 8)"
+  },
+  {
+   "text": "true false",
+   "message": "Unexpected non-whitespace character after JSON at position 5 (line 1 column 6)"
+  },
+  {
+   "text": "nullnull",
+   "message": "Unexpected non-whitespace character after JSON at position 4 (line 1 column 5)"
+  },
+  {
+   "text": "\"\"x",
+   "message": "Unexpected non-whitespace character after JSON at position 2 (line 1 column 3)"
+  },
+  {
+   "text": "\"a\" \"b\"",
+   "message": "Unexpected non-whitespace character after JSON at position 4 (line 1 column 5)"
+  },
+  {
+   "text": "{,}",
+   "message": "Expected property name or '}' in JSON at position 1 (line 1 column 2)"
+  },
+  {
+   "text": "{\"a\":}",
+   "message": "Unexpected token '}', \"{\"a\":}\" is not valid JSON"
+  },
+  {
+   "text": "{\"a\":1 \"b\":2}",
+   "message": "Expected ',' or '}' after property value in JSON at position 7 (line 1 column 8)"
+  },
+  {
+   "text": "{\"a\":1,,}",
+   "message": "Expected double-quoted property name in JSON at position 7 (line 1 column 8)"
+  },
+  {
+   "text": "[1,,2]",
+   "message": "Unexpected token ',', \"[1,,2]\" is not valid JSON"
+  },
+  {
+   "text": " []",
+   "message": "Unexpected token ' ', \" []\" is not valid JSON"
+  },
+  {
+   "text": "[] ",
+   "message": "Unexpected non-whitespace character after JSON at position 2 (line 1 column 3)"
+  },
+  {
+   "text": "/* c */ 1",
+   "message": "Unexpected token '/', \"/* c */ 1\" is not valid JSON"
+  },
+  {
+   "text": "// c\n1",
+   "message": "Unexpected token '/', \"// c\n1\" is not valid JSON"
+  },
+  {
+   "text": "'a'",
+   "message": "Unexpected token ''', \"'a'\" is not valid JSON"
+  },
+  {
+   "text": "{'a':1}",
+   "message": "Expected property name or '}' in JSON at position 1 (line 1 column 2)"
+  },
+  {
+   "text": "[0x10]",
+   "message": "Expected ',' or ']' after array element in JSON at position 2 (line 1 column 3)"
+  },
+  {
+   "text": "[1.e3]",
+   "message": "Unterminated fractional number in JSON at position 3 (line 1 column 4)"
+  },
+  {
+   "text": "[1e3.5]",
+   "message": "Expected ',' or ']' after array element in JSON at position 4 (line 1 column 5)"
+  },
+  {
+   "text": "[+1]",
+   "message": "Unexpected token '+', \"[+1]\" is not valid JSON"
+  },
+  {
+   "text": "[-]",
+   "message": "No number after minus sign in JSON at position 2 (line 1 column 3)"
+  },
+  {
+   "text": "[-a]",
+   "message": "No number after minus sign in JSON at position 2 (line 1 column 3)"
+  },
+  {
+   "text": "[.5]",
+   "message": "Unexpected token '.', \"[.5]\" is not valid JSON"
+  },
+  {
+   "text": "[1.]",
+   "message": "Unterminated fractional number in JSON at position 3 (line 1 column 4)"
+  },
+  {
+   "text": "[1e]",
+   "message": "Exponent part is missing a number in JSON at position 3 (line 1 column 4)"
+  },
+  {
+   "text": "[01]",
+   "message": "Unexpected number in JSON at position 2 (line 1 column 3)"
+  },
+  {
+   "text": "[-01]",
+   "message": "Unexpected number in JSON at position 3 (line 1 column 4)"
+  },
+  {
+   "text": "[00]",
+   "message": "Unexpected number in JSON at position 2 (line 1 column 3)"
+  },
+  {
+   "text": "[-0]",
+   "message": null
+  },
+  {
+   "text": "[-0.0e+0]",
+   "message": null
+  },
+  {
+   "text": "0",
+   "message": null
+  },
+  {
+   "text": "-0",
+   "message": null
+  },
+  {
+   "text": "\"\\u0000\"",
+   "message": null
+  },
+  {
+   "text": "\"\u0000\"",
+   "message": "Bad control character in string literal in JSON at position 1 (line 1 column 2)"
+  },
+  {
+   "text": "\"\t\"",
+   "message": "Bad control character in string literal in JSON at position 1 (line 1 column 2)"
+  },
+  {
+   "text": "\"\u001f\"",
+   "message": "Bad control character in string literal in JSON at position 1 (line 1 column 2)"
+  },
+  {
+   "text": "\"\"",
+   "message": null
+  },
+  {
+   "text": "[\n  {\n    \"a\": \"x\\ny\\\"z\\\\wé€\",\n    \"b\": [\n      true,\n      false,\n      null,\n      -0.0015,\n      0,\n    12\n    ]\n  },\n  \"s\",\n  3\n]",
+   "message": null
+  },
+  {
+   "text": "{\"generatet\":\"2026-10-24\",\"records\":[{\"id\":\"sphere/3/6\",\"N\":3,\"P\":6,\"score_cert\":1.2345678901234567,\"config\":{\"rho\":1.2345678901234567,\"pieces\":[{\"q\":[1,0,-0.5,2e-7]}]},\"status\":\"best_known\",\"bound\":null,\"ok\":true,\"no\":false}]}",
+   "message": null
+  },
+  {
+   "text": "{\"generated\":\"2026-10-24\",\"records\":[{\"id\":\"sphere/3/6\",\"N\":3,\"P\":6,\"score_cert\":1.234567890€123456,\"config\":{\"rho\":1.2345678901234567,\"pieces\":[{\"q\":[1,0,-0.5,2e-7]}]},\"status\":\"best_known\",\"bound\":null,\"ok\":true,\"no\":false}]}",
+   "message": "Expected ',' or '}' after property value in JSON at position 92 (line 1 column 93)"
+  },
+  {
+   "text": "{\"a\" : [  , 2 , { \"b\" : \"c\" } ] , \"d\" : -0.0 \"e\" : 1E+2 }",
+   "message": "Unexpected token ',', ...\"{\"a\" : [  , 2 , { \"b\"... is not valid JSON"
+  },
+  {
+   "text": "[\n  {\n    \"a\": \"x\\ny",
+   "message": "Unterminated string in JSON at position 20 (line 3 column 15)"
+  },
+  {
+   "text": "{\"a\" : [ 1 , 2 , { \"b\" : \"c\" } ]0 , ",
+   "message": "Expected ',' or '}' after property value in JSON at position 32 (line 1 column 33)"
+  },
+  {
+   "text": "{\"P\":2,\"config\":{\"s\":1.5,\"pieces\":[[0,,0,1,0,0,0],[0.25,-0.75,1e-9,0.5,0.5,0.5,0.5]]}}",
+   "message": "Unexpected token ',', ...\"eces\":[[0,,0,1,0,0,0\"... is not valid JSON"
+  },
+  {
+   "text": "{\"a\" : [ 1 , 2 , { \"b\" : \"c\" } ] , \"d\" : -0.0 , \"e\"/ : 1E+2 }",
+   "message": "Expected ':' after property name in JSON at position 51 (line 1 column 52)"
+  },
+  {
+   "text": "1\\u122n5e-3",
+   "message": "Unexpected non-whitespace character after JSON at position 1 (line 1 column 2)"
+  },
+  {
+   "text": "{\"a\"  1 , 2 , { \"b\" : \"c\"+ } ] , \"d\" : -0.0 , \"e\" : 1E+2 }",
+   "message": "Expected ':' after property name in JSON at position 6 (line 1 column 7)"
+  },
+  {
+   "text": "[\n  {\n    \"a\": \"x\\ny\\\"z\\\\wé€\",\n    \"b\": [\n      true,\n      false,\n      null,\n   1   -0.0015,\n      0,\n      12\n    ]\n  },\n  \"s\",\n  3\n]",
+   "message": "Expected ',' or ']' after array element in JSON at position 86 (line 8 column 8)"
+  },
+  {
+   "text": "{\"generated\":\"2026-10-24\",\"records\":[{\"id\":\"sphere/3,\"N\":3,\"P\":6,\"score_cert\":1.2345678901234567,\"config\":{\"rhéo\":1.2345678901234567,\"pieces\":[{\"q\":[1,0,-0.5,2e-7]}]},\"status\":\"best_known\",\"bound\":null,\"ok\":true,\"no\":false}]}",
+   "message": "Expected ',' or '}' after property value in JSON at position 54 (line 1 column 55)"
+  },
+  {
+   "text": "{\"P\":2,\"config\":{\"s\":1.5,npieces\":[[0,0,0,1,0,0,0],[0.25,-0.75,1e-9,0.5,0.5,0.5,0.5[]]}}",
+   "message": "Expected double-quoted property name in JSON at position 25 (line 1 column 26)"
+  },
+  {
+   "text": "{\"P\":2,\"config\":{\"s\":1.5,\"pieces\":[[0,0,0,1,0,0,0],[0.,-0.75,1e-9,0.5,0.5,0.5,0.5]]}}",
+   "message": "Unterminated fractional number in JSON at position 54 (line 1 column 55)"
+  },
+  {
+   "text": "t{\"a\" : [ 1 , 2 , { \"b\" : \"c\" } ] , \"d\" : -0.0 , \"e\" : 1E+2 }",
+   "message": "Unexpected token '{', \"t{\"a\" : [ 1\"... is not valid JSON"
+  },
+  {
+   "text": "{\"P\"null:2,\"config\":{\"s\":1.5,\"pieces\":[[0,0,0,1,0,0,0],[0.25,-0.75,1eu9,0.5,0.5,0.5,0.5]]}}",
+   "message": "Expected ':' after property name in JSON at position 4 (line 1 column 5)"
+  },
+  {
+   "text": "\"ua string with \\\\ and \\\" and\\u\\u0001 and 😀\"",
+   "message": "Bad Unicode escape in JSON at position 31 (line 1 column 32)"
+  },
+  {
+   "text": "{\"generated\":\"2026-10-24\",\"recor\u0001ds\":[{\"id\":\"sphere/3/6\",\"N\":3,\"P\":6,\"score_cert\":1.2345678901234567,\"config\":{\"rho\":1.2345678901234567,\"pieces\":[{\"q\":[1,0,-0.5,2e-7]}]},\"status\":\"best_known\",\"bound\":null,\"ok\":true,\"no\":false}]}",
+   "message": "Bad control character in string literal in JSON at position 32 (line 1 column 33)"
+  },
+  {
+   "text": "{\"a\" : 1 , 2 , { \"b\" : \"c\" } ] , \"d\" : -0.0 , \"e\" : 1E+2 }",
+   "message": "Expected double-quoted property name in JSON at position 11 (line 1 column 12)"
+  },
+  {
+   "text": "{\"generated\":\"2026-10-24\",\"records\":[{\"id\":\"sphere/3/6\"",
+   "message": "Expected ',' or '}' after property value in JSON at position 55 (line 1 column 56)"
+  },
+  {
+   "text": "\"a string with \\\\ and \\\"and \\u0001 and 😀\"",
+   "message": null
+  },
+  {
+   "text": "{\"P\":2,\"config\":{\"s\":1.5,\"pieces\":[[0,0,0,1,0,0,0],[0.2-0.75,1e-9,0.5,0.5,0.5,0.5]]}}",
+   "message": "Expected ',' or ']' after array element in JSON at position 55 (line 1 column 56)"
+  },
+  {
+   "text": "[\n  {\n    \"a\": \"x\\ny\\\"z\\\\wé€\",\n    \"b\": [\n      true,\n      false,\n      null,\n      -0.0015,\n      0,\n      12\n    ]\n  }],\n  \"s\",\n  3\n]",
+   "message": "Unexpected non-whitespace character after JSON at position 122 (line 12 column 5)"
+  },
+  {
+   "text": "{\"a\" : [ 1 , 2 , { \"b\" : \" } ] , \"d\" : -0.0 , \"e\" : 1E+2 }",
+   "message": "Expected ',' or '}' after property value in JSON at position 34 (line 1 column 35)"
+  },
+  {
+   "text": "\"a string witfh \\\\ and \\\" and \\u0001 and 😀\"",
+   "message": null
+  },
+  {
+   "text": "\"a string with \\\\ and \\\" and \\u0001 and 😀",
+   "message": "Unterminated string in JSON at position 42 (line 1 column 43)"
+  },
+  {
+   "text": "{\"generated\":\"2026-10-24\",\"records\":[{\"id\":\"sphere/3/6\",\"N\":3,\"P\":6,\"score_cert\":1.2345678901234567,\"config\":{\"rho\":1[.2345678901234567,\"pieces\":[{\"q\":[1,0,-0.5,2e-7]}]},\"status\":\"best_known\",\"bound\":null,\"ok\":true,\"no\":false}]}",
+   "message": "Expected ',' or '}' after property value in JSON at position 117 (line 1 column 118)"
+  },
+  {
+   "text": "\"a ring with \\\\ and \\\" and \\u0001 and 😀\"",
+   "message": null
+  },
+  {
+   "text": "[  {\n    \"a\": \"x\\ny\\\"z\\\\wé€\",\n    \"b\": [\n      true,\n      false,\n      null,\n      -0.0015,\n      0,\n      12\n    ]\n  },\n  \"s\",\n  3\n]",
+   "message": null
+  },
+  {
+   "text": "{\"gerated\":\"2026-10-24\",\"records\":[{\"id\":\"sphere/3/6\",\"N\":3,\"P\":6,\"score_cert\":1.2345678901234567,\"config\":{\"rho\":1.2345678901234567,\"pieces\":[{\"q\":[1,0,-0.5,2e-7]}]},\"status\":\"best_known\",\"bo",
+   "message": "Unterminated string in JSON at position 192 (line 1 column 193)"
+  },
+  {
+   "text": "12.5e3",
+   "message": null
+  },
+  {
+   "text": "{\"generated\":\"2026-10-24\",\"records\":[{\"id\":\"sphere/3,/6\",\"N\":3,\"P\":6,\"score_cert\":1.2345678901234567,\"config\":{\"rho\":1.2345678901234567,\"pieces\":[{\"q\":[1,0,-0.5,2e-7]}]},\"status\":\"best_k",
+   "message": "Unterminated string in JSON at position 186 (line 1 column 187)"
+  },
+  {
+   "text": "{\"generated\":\"2026-10-24\",\"records\":[{\"id\":phere/3/6\",\"N\":3,\"P\":6,\"score_cert\":1.2345678901234567,\"config\":{\"rho\":1.2345678901234567,\"pieces\":[{\"q\":[1,0,-0.5,2e-7]}]},\"status\":\"best_known\",\"bound\":null,\"ok\":true,\"no\":false}]}",
+   "message": "Unexpected token 'p', ...\"s\":[{\"id\":phere/3/6\"\"... is not valid JSON"
+  },
+  {
+   "text": "{\"generated\":\"2026-10-24true\",\"records\":[{\"id\":\"sphere/3/6\",\"N\":3,\"P\":6,\"score_cert\":1.2345678901234567,\"config\":{\"rho\":1.2345678901234567,\"pieces\":[{\"q\":[1,0,-0.5,2e-7]}]},\"status\":\"best_known\",\"bound\":null,\"ok\":true,\"no\":false}]}",
+   "message": null
+  },
+  {
+   "text": "{\"P\":2,\"config\":{\"s\":1.5,\"pieces\":[[0,",
+   "message": "Unexpected end of JSON input"
+  },
+  {
+   "text": "e12.5e-3",
+   "message": "Unexpected token 'e', \"e12.5e-3\" is not valid JSON"
+  },
+  {
+   "text": "[\n  {\n    \"a\": \"x\\ny\\\"z\\\\wé€\",\n    \"b\": [\n      true,\n      false,\n      nul\n      -0.0015,\n      0,\n      12\n    ]\n  },\n  \"s\",\n  3\n]",
+   "message": "Unexpected token '\n', ...\"\n      nul\n      -0.\"... is not valid JSON"
+  },
+  {
+   "text": "{\"generated\":\"2026-10-24\",\"records\":[{\"id\":\"sphere/3/6\",\"N\":3,\"P\":6,\"score_cert\\u12:1.2345678901234567,\"config\":{\"rho\":1.2345678901234567,\"pieces\":[{\"q\":[1,0,-0.5,2e-7]}]},\"status\":\"best_known\",\"bound\":null,\"ok\":true,\"n\":false}]}",
+   "message": "Bad Unicode escape in JSON at position 83 (line 1 column 84)"
+  },
+  {
+   "text": "{\"generated\":\"2026-10-24\",\"records\":[{\"id\":\"sphere/3/6\",\"N\":3u,\"P\":6,\"score_cert\":1.2345678901234567,\"config\":{\"rho\":1.2345678901234567,\"pieces\":[{\"q\":[1,0,-0.5,2e-7]}]},\"status\":\"best_known\",\"bound\":null,\"ok\":true,\"no\":false}]}",
+   "message": "Expected ',' or '}' after property value in JSON at position 61 (line 1 column 62)"
+  },
+  {
+   "text": "{\"P\":2,\"config\":{\"s\":1.5,\"pieces\":[[0,0,0,1,0,0,0],[0.{25,-0.75,1e-9,0.5,0.5,0.5,0.5]]}}",
+   "message": "Unterminated fractional number in JSON at position 54 (line 1 column 55)"
+  },
+  {
+   "text": "{\"a\" : [ 1 , 2 , { \",b\" : \"c\" } ] , \"d\" : -0.0 , \"e\" : 1E+2 }",
+   "message": null
+  },
+  {
+   "text": "\"a string w{ith and \\\" and \\u0001 and 😀\"",
+   "message": null
+  },
+  {
+   "text": "\"a string with \\\\ and \\. and \\u0001 and 😀\"",
+   "message": "Bad escaped character in JSON at position 23 (line 1 column 24)"
+  },
+  {
+   "text": "{\"P\":2,\"\"onfig\":{\"s\":1.5,\"pieces\":[[0,0,0,1,0,0,0],[0.25,-0.75,1e-9,0.5,0.5,0.5,0.5]]}}",
+   "message": "Expected ':' after property name in JSON at position 9 (line 1 column 10)"
+  },
+  {
+   "text": "[\n  {\n    \"a\": \"x\\ny\\\"z\\\\wé€\",\n    \"b\": [\n      true,\n      false,\n      null,\n      -015,\n      0,\n      12\n    ]\n  },\n  \"s\",\n  3\n]",
+   "message": "Unexpected number in JSON at position 87 (line 8 column 9)"
+  },
+  {
+   "text": "[\n  {\n    \"a\": \"x\\ny\\\"z\\\\wé€\",\n    \"b\": [\n      true00,\n      false,\n      null,\n      -0.0015,\n      0,\n      12\n    ]\n  },\n  \"s\",\n  3\n]",
+   "message": "Expected ',' or ']' after array element in JSON at position 52 (line 5 column 11)"
+  },
+  {
+   "text": "\"a string with \\\\ \nnd \\\" and \\u0001 and 😀\"",
+   "message": "Bad control character in string literal in JSON at position 18 (line 1 column 19)"
+  },
+  {
+   "text": "[\n  {\n    \"a\": \"x}\\ny\\\"z\\\\wé€\",\n    \"b\": [\n      true,\n      false,\n      null,\n      -0.0015,\n      0,\n      12\n    ]\n   },\n  \"s\",\n  3\n]",
+   "message": null
+  },
+  {
+   "text": "1..5e-3",
+   "message": "Unterminated fractional number in JSON at position 2 (line 1 column 3)"
+  },
+  {
+   "text": "{\"a\" : [ 1 , 2\t ,\n { \"b\" : \"c\" } ] , \"d\" : -0.0 , \"e\" : 1E+2 }",
+   "message": null
+  },
+  {
+   "text": "{\"egenerated\":\"2026-10-24\",\"records\":[{\"id\":\"sphere/3/6\",\"N\":3,\"P\":6,\"sco\\u12re_cert\":1.2345678901234567,\"config\":{\"rho\":1.2345678901234567,\"pieces\":[{\"q\":[1,0,-0.5,2e-7]}]},\"status\":\"best_known\",\"bound\":null,\"ok\":true,\"no\":false}]}",
+   "message": "Bad Unicode escape in JSON at position 77 (line 1 column 78)"
+  },
+  {
+   "text": "{\"P\":2,\"config\":{\"s\":1.5,\"pieces\":[[0,0,0,1,0,0,0],[0.25,-0.75,1e-9,0.5,0.5,0.5,0.5]]",
+   "message": "Expected ',' or '}' after property value in JSON at position 85 (line 1 column 86)"
+  },
+  {
+   "text": "\"atri",
+   "message": "Unterminated string in JSON at position 5 (line 1 column 6)"
+  },
+  {
+   "text": "12]5e/-3",
+   "message": "Unexpected non-whitespace character after JSON at position 2 (line 1 column 3)"
+  },
+  {
+   "text": "\"a string\r\n with \\\\ and \\\" and \\u0001 and 😀\"",
+   "message": "Bad control character in string literal in JSON at position 9 (line 1 column 10)"
+  },
+  {
+   "text": "{\"a\" : [ 1 , 2 ",
+   "message": "Expected ',' or ']' after array element in JSON at position 15 (line 1 column 16)"
+  },
+  {
+   "text": "{\"P\":2,\"config\":{\"s\":1.5,\"pieces\":[[\"0,0,0,1,0,0,0],[0.25,-0.75,1e-9,0.5,0.5,0.5,0.5]]}}",
+   "message": "Unterminated string in JSON at position 88 (line 1 column 89)"
+  },
+  {
+   "text": "12.5😀3",
+   "message": "Unexpected non-whitespace character after JSON at position 4 (line 1 column 5)"
+  },
+  {
+   "text": "[\n  {\n    \"a\": \"x\\ny\\\"z\\\\wé€\",\n    \"b\": [[\n      true,\n      false,\n      null,\n      -0.0015,\n      0,\n      12\n    ]\n  },\n  \"s\",\n  3\n]",
+   "message": "Expected ',' or ']' after array element in JSON at position 121 (line 12 column 3)"
+  },
+  {
+   "text": "{\"a\" : [ 1 , 2 , { \"b\" : \"c\" } ] , \"d\" : -0.0 , \"e\" : 1E0+2 }",
+   "message": "Expected ',' or '}' after property value in JSON at position 57 (line 1 column 58)"
+  },
+  {
+   "text": "{\"a\" : [ 1 , 2 , { \"b\" : \"c\" } ] , \"d} : -0.0 , \"e\" : \u00011E+2 }",
+   "message": "Expected ':' after property name in JSON at position 49 (line 1 column 50)"
+  },
+  {
+   "text": "12.5e-",
+   "message": "Exponent part is missing a number in JSON at position 6 (line 1 column 7)"
+  },
+  {
+   "text": "\"a string with \\\\ and \\\" and \\u000",
+   "message": "Bad Unicode escape in JSON at position 34 (line 1 column 35)"
+  },
+  {
+   "text": "{\"P\":2,\"config\":{\"s\":1.5,\"piec-es\":[[0,0,0,1,0,0,0],[0.25,-0.75,1e-9,0.5",
+   "message": "Expected ',' or ']' after array element in JSON at position 72 (line 1 column 73)"
+  },
+  {
+   "text": "\"a string }wit \\\\ and \\\" and \\u0001 and 😀\"",
+   "message": null
+  },
+  {
+   "text": "12.",
+   "message": "Unterminated fractional number in JSON at position 3 (line 1 column 4)"
+  },
+  {
+   "text": "{\"generated\":[\"2026-10-24\",\"records\":[{\"id\":\"sphere/3/6\",\"N\":3,\"P\":6,\"score_cert\":1.2345678901234567,\"config\":{\"rho\":1.2345678901234567,\"piees\":[{\"q\":[1,0,-0.5,2e-7]}]},\"status\":\"best_known\",\"bound\":null,\"ok\":true,\"no\":false}]}",
+   "message": "Expected ',' or ']' after array element in JSON at position 36 (line 1 column 37)"
+  },
+  {
+   "text": "12.5etrue-",
+   "message": "Exponent part is missing a number in JSON at position 5 (line 1 column 6)"
+  },
+  {
+   "text": "{\": [ 1 , 2 , { \"b\" : \"c\" } ] , \"d\" : -0.0 , \"e\" : 1E+2 }",
+   "message": "Expected ':' after property name in JSON at position 17 (line 1 column 18)"
+  },
+  {
+   "text": "{\"a,\" : [ 1 , 2 , { \" : \"c\" } ] , \"d\" : -0.0 , \"e\" : 1E+2 }",
+   "message": "Expected ':' after property name in JSON at position 25 (line 1 column 26)"
+  },
+  {
+   "text": "{\"a\" : [ 1 , 2 , { \"b\" :e\"c\" } ] , \"d\" : -0.0 , \"e\" : 1E+2 }",
+   "message": "Unexpected token 'e', ...\" , { \"b\" :e\"c\" } ] ,\"... is not valid JSON"
+  },
+  {
+   "text": "{\"generated\":\"2026-10-24\",\"records\":[{\"id\":\"sphere/3/6\",\"N\":3,\"P\":6,\"score_cert\":1.2345678901234567,\"config\":{\"rho\":1.234578901234567,\"pieces\":[{\"q\":[1,0,-0.5,2e-7]}]},\"status\":\"best_known\",\"bound\":nu ll,\"ok\":true,\"no\":false}]}",
+   "message": "Unexpected token ' ', ...\"\"bound\":nu ll,\"ok\":t\"... is not valid JSON"
+  },
+  {
+   "text": "{\"P\":2,/\"config\":{\"s\":1.5,\"pieces\":[[0,0,0,1,0,0,0],[0.25,-0.75,1e-9,0.5,0.5,0.5,",
+   "message": "Expected double-quoted property name in JSON at position 7 (line 1 column 8)"
+  },
+  {
+   "text": "[\n  {\n    \"a\": \"x\\ny\\\"z\\\\wé€\",\n    \"b\": [\n      true,\n{  \r   false,\n      null,\n      -0.0015,\n      0,\n      12\n    ]\n  },\n  \"s\",\n  3\n]",
+   "message": "Expected property name or '}' in JSON at position 61 (line 7 column 4)"
+  },
+  {
+   "text": "{\"gener{ated\":\"2026-10-24\",\"records\":[{\"id\":phere/3/6\",\"N\":3,\"P\":6,\"score_cert\":1.2345678901234567,\"config\":{\"rho\":1.2345678901234567,\"pieces\":[{\"q\":[1,0,-0.5,2e-7]}]},\"status\":\"best_known\",\"bound\":null,\"ok\":true,\"no\":false}]}",
+   "message": "Unexpected token 'p', ...\"s\":[{\"id\":phere/3/6\"\"... is not valid JSON"
+  },
+  {
+   "text": "{\"generated\":\"2026-10-24\",\"recor\":[{\"id\":\"sphere/3/6\",\"N\":3,\"P\":6,\"score_cert\":1.235678901234567,\"config\":{\"rho\":1.2345678901234567,\"pieces\":[{\"q\":[1,0,-0.5,2e-7]}]},\"status\":\"best_known\",\"bound\":null,\"ok\":true,\"no\":false}]}",
+   "message": null
+  },
+  {
+   "text": "[\n  {\n    \"a\": \"x\\ny\\\"z\\\\wé€\",\n    \"b\": [\n      true,\n      false,\n      null,\n/      -0.0015,\n      0,\n     ",
+   "message": "Unexpected token '/', ...\"    null,\n/      -0.\"... is not valid JSON"
+  },
+  {
+   "text": "{\"generated\":\"2026-10-24\",\"records\":[{\\id\":\"sphere/3/6\",\"N\":3,\"P\":6,\"score_cert\":1.2345678901234567,\"config\":{\"rho\":1.2345678901234567,\"pieces\":[{\"q\":[1,0,-0.5,2e-7]}]},\"status\":\"best_known\",\"bound\":null,\"ok\":true,\"no\":false}]}",
+   "message": "Expected property name or '}' in JSON at position 38 (line 1 column 39)"
+  },
+  {
+   "text": "{\"a\" : [ 1 , 2 , { \"b\" : \"c\" } ] , \"d\" : -0.0 , \"e\" : 1E",
+   "message": "Exponent part is missing a number in JSON at position 56 (line 1 column 57)"
+  },
+  {
+   "text": "{\"P\":2,\"config\":{\"s\":1.5,\"pieces\":[[0,0,0,1,0,0,0],[0.25,-0.75,1e-9,0.5,0.5,0.5,]0.5]]}}",
+   "message": "Unexpected token ']', ...\"5,0.5,0.5,]0.5]]}}\" is not valid JSON"
+  },
+  {
+   "text": "[\n  {\n    \"a\": \"x\\ny\\\"z\\\\wé€",
+   "message": "Unterminated string in JSON at position 28 (line 3 column 23)"
+  },
+  {
+   "text": "{\"P\":2,\"config\":{\"s\":1.5\r\n,\"pieces\":[[0,0,0,1,0,0,0],[0.25,-0.75,1e-9,0.5,0.5,0.5,0.5]]}}",
+   "message": null
+  },
+  {
+   "text": "{\"P\":2,\"config\":{\"s\":1.5,\"pieces[[0,0,0,1€,0,0,0],[0.25,-0.75,1e-9,0.5,0.5,0.5,0.5]]}}",
+   "message": "Unterminated string in JSON at position 86 (line 1 column 87)"
+  },
+  {
+   "text": "{\"generated\"",
+   "message": "Expected ':' after property name in JSON at position 12 (line 1 column 13)"
+  },
+  {
+   "text": "12.5e",
+   "message": "Exponent part is missing a number in JSON at position 5 (line 1 column 6)"
+  },
+  {
+   "text": "{\"generated\":\"2026-10-24\",\"records\":[{\"id\":\"sphere/3/6\",\"N\":3,\"P\":6,\"score_cert\":1.2345678901234567,\"c.onfig\":{\"rho\":1.2345678901234567,\"pieces\":[{\"q\":[1,0,-0.5,2e-7]}]},\"status\":\"best_known\",\"bound\":null,\"ok\":true,\"no\":false}]}",
+   "message": null
+  },
+  {
+   "text": "12.5e-\n",
+   "message": "Exponent part is missing a number in JSON at position 6 (line 1 column 7)"
+  },
+  {
+   "text": "2.5e-3n",
+   "message": "Unexpected non-whitespace character after JSON at position 6 (line 1 column 7)"
+  },
+  {
+   "text": "{\"g\u0001enerated\":\"2u26-10-24\",\"records\":[{\"id\":\"sphere/3/6\",\"N\":3,\"P\":6,\"score_cert\":1.2345678901234567,\"config\":{\"rho\":1.2345678901234567,\"pieces\":[{\"q\":[1,0,-0.5,2e-7]}]},\"status\":\"best_known\",\"bound\":null,\"ok\":true,\"no\":false}]}",
+   "message": "Bad control character in string literal in JSON at position 3 (line 1 column 4)"
+  },
+  {
+   "text": "12.5e-3\r",
+   "message": null
+  },
+  {
+   "text": "1\\u2.,e-3",
+   "message": "Unexpected non-whitespace character after JSON at position 1 (line 1 column 2)"
+  },
+  {
+   "text": "{\"a\" : [ 1 , 2 , { \"b\" : \"c\" } ] , \"d\" : -0.0 , \"+\" : 1E+2 }",
+   "message": null
+  },
+  {
+   "text": "{\"generated\":\"2026-10-24\",\"records.:[{\"id\":\"sphere/3/6\",\"N\":3,\"P\":6,\"score_cert\":1.2345678901234567,\"config\":{\"rho\":1.2345678901234567,\"pieces\":[{\"q\":[1,0,-0.5,2e-7]}]},\"status\":\"best_known\",\"bound\":null,\"ok\":true,\"no\"alse}]}",
+   "message": "Expected ':' after property name in JSON at position 39 (line 1 column 40)"
+  },
+  {
+   "text": "1\\u122.:5e-3",
+   "message": "Unexpected non-whitespace character after JSON at position 1 (line 1 column 2)"
+  },
+  {
+   "text": "{\"P\":2,\"config\":{\"s\":1.5,\"pieces\":[[0,0,0,1,0,0,0].25,-0.75,1e-9,0.5,0.5,05,0.5]]}}",
+   "message": "Expected ',' or ']' after array element in JSON at position 50 (line 1 column 51)"
+  },
+  {
+   "text": "{\"generated\":\"2026-10-24\",\"records\":[{\"id\":\"sphere/3/6\",\"N\":3,\"P\":6,\"score_cert\":1.2345678901234567,\"config\":{\"rho\":1.2345678901234567,\"pieces\":[{\"q\":[1,0,-0.5,2e-7]}]},\"status\":\"best_known\",\"bound\"0null,\"ok\":true,\"no\":false}]}",
+   "message": "Expected ':' after property name in JSON at position 198 (line 1 column 199)"
+  },
+  {
+   "text": "\"a string with \\\\ and \\\" and \\u0001 an",
+   "message": "Unterminated string in JSON at position 38 (line 1 column 39)"
+  },
+  {
+   "text": "{\"generated\":\"2026-10-24\",\"records\":[{\"id\":\"sphere/3/6\",\"N\":3,\"P\":6,\"score_cert\":1.2345678901234567,\"config\":{\"rho\":1.2345678901234567,\"pieces\":[{\"q\":[1,0,-0.5,2e-7]}]},\"status\":\"best_,nown\",\"bound",
+   "message": "Unterminated string in JSON at position 197 (line 1 column 198)"
+  },
+  {
+   "text": "10.5e-3",
+   "message": null
+  },
+  {
+   "text": "\"fa string with \\\\ and \\and \\u0001 and 😀\"",
+   "message": "Bad escaped character in JSON at position 24 (line 1 column 25)"
+  },
+  {
+   "text": "[\n  {\n    \"a\": \"x\\ny\\\"z\\\\w\u0001é€\",\n    \"b\": [\n      true,\n      false,\n      null,\n      -0.0015,\n      0,\n      12\n    ]\n  },\n  \"s\",\n  3\n]",
+   "message": "Bad control character in string literal in JSON at position 26 (line 3 column 21)"
+  },
+  {
+   "text": "{\"generated\":\"2026-10-24\",\"records\":[{\"id\":\"sphere/3/6\",\"N\":3,\"P\":6,\"score_cert\":1.2345678901234567,\"config\":{\"rho\":1.234567890123x4567,\"pieces\":[{\"q\":[1,0,-0.5,2e-7]}]},\"status\":\"best_kown\",\"bound\":null,\"ok\":true,\"no\":false}]}",
+   "message": "Expected ',' or '}' after property value in JSON at position 130 (line 1 column 131)"
+  },
+  {
+   "text": "12.5-",
+   "message": "Unexpected non-whitespace character after JSON at position 4 (line 1 column 5)"
+  },
+  {
+   "text": "[\n  {\n    \"a\": \"x\\ny\\\"z\\\\wé€\",\n    \"b\": [\n      true,\n      false,\n      null,\n      -0.0015,\n      0,\n      12\n    ]\n  },\n  \"\ns\",\n  3\n]",
+   "message": "Bad control character in string literal in JSON at position 126 (line 13 column 4)"
+  },
+  {
+   "text": "12true.5e-3",
+   "message": "Unexpected non-whitespace character after JSON at position 2 (line 1 column 3)"
+  },
+  {
+   "text": "[\n  {\n    \"a\": \"x\\ny\\\"z\\\\wé€\",\n    \"b\": [\n      true,\n      false,\n    ",
+   "message": "Unexpected end of JSON input"
+  },
+  {
+   "text": "n12\u0001.5e-3",
+   "message": "Unexpected number in JSON at position 1 (line 1 column 2)"
+  },
+  {
+   "text": "{\"a\" : [ 1 ,2 , { \"b\" : \"c\" } ] , \"d\" : -0.0 , \"e\" : 1E+2 }",
+   "message": null
+  },
+  {
+   "text": "\"aEstring with \\\\ and \\\" a.d \\u0001 and 😀\"",
+   "message": null
+  },
+  {
+   "text": "{\"a\" : [ 1 , 2 , { \"b\" : \"c\" } ] , \"d\" : -0.0  , \"e\" : 1E+2 }",
+   "message": null
+  },
+  {
+   "text": "{\"generated\":\"2026-10-24\",\"records\":[{\"id\":\"sphere/3/6\",\"N\":3,u\"P\":6,\"score_cert\":1.2345678901234567,\"config\":{\"rho\":1.2345678901234567,\"pieces\":[{\"q\":[1,0,-0.5,2e-7]}]},\"status\":\"best_known\",\"bound\":null,\"ok\":true,\"no\":false}]}",
+   "message": "Expected double-quoted property name in JSON at position 62 (line 1 column 63)"
+  },
+  {
+   "text": "\"a string wi\\\\ and \\\" and \\u0001 and 😀\"",
+   "message": null
+  },
+  {
+   "text": "\"a",
+   "message": "Unterminated string in JSON at position 2 (line 1 column 3)"
+  },
+  {
+   "text": "{\"P\":2,\"config\":{\"s\":1.5,\"pieces\":[[0,0,0,100,0,0,0],[0.2005,-0.75,1e-9,0.5,0.5,0.5,0.5]]}}",
+   "message": null
+  },
+  {
+   "text": "{\"P\":2,\"config\":{\"s\":1.5,\"pieces\":[[0,0,0,1,0,\r\n0,0],[0.25,-0.75,1e-9,0.5,0.\\u12,0.5,0.5]]}}",
+   "message": "Unterminated fractional number in JSON at position 76 (line 2 column 29)"
+  },
+  {
+   "text": "\"a string withn \\\\ and \\\" and \\u0001 and 😀\"",
+   "message": null
+  },
+  {
+   "text": "\"a string with \\\\ and \\\" and \\",
+   "message": "Unexpected end of JSON input"
+  },
+  {
+   "text": "{\"generated\":\"2026-10-24\",\"records\":[{\"id\":\"sphere/3/6\",\"N\":3,\"P\":6,\"score_cert\":1.2\\u1245678901234567,\"config\":{\"rho\":1.234567890123456t,\"pieces\":[{\"q\":[1,0,-0.5,2e-7]}]},\"status\":\"best_known\",\"bound\":null,\"ok\":true,\"no\":false}]}",
+   "message": "Expected ',' or '}' after property value in JSON at position 84 (line 1 column 85)"
+  },
+  {
+   "text": "{\"a\" : [ 1 ,",
+   "message": "Unexpected end of JSON input"
+  },
+  {
+   "text": "\"a str with \\\\ and \\\" and \\u0001 and 😀\"",
+   "message": null
+  },
+  {
+   "text": "{\"a\" : [ 1 , 2 , { \"b\" : \"c\" } ] , \"d\" :\\u12 -0.0 , \"e\" : 1E+2 }",
+   "message": "Unexpected token '\\', ...\" ] , \"d\" :\\u12 -0.0 \"... is not valid JSON"
+  },
+  {
+   "text": "[  {\n    \"",
+   "message": "Unterminated string in JSON at position 10 (line 2 column 6)"
+  },
+  {
+   "text": "[\n  {\n    \"a\": \"x\\ny\\\"z\\wé€\",\n    \"b\": [\n      true,\n      false,\n      null,\n      -0.0015,\n      0,\n      12\n    ]\n  },\n  \"s\",\n  3\n]",
+   "message": "Bad escaped character in JSON at position 24 (line 3 column 19)"
+  },
+  {
+   "text": "{\"a\" :\\u[ 1 ",
+   "message": "Unexpected token '\\', \"{\"a\" :\\u[ 1 \" is not valid JSON"
+  },
+  {
+   "text": "{\"P\":2,\"config\":{\"s\":1.5,\"pieces\":[[0,0,0,1,0,0,0],[0.25,-0.75,1e-9,0.\t5,0.5,0.5,0t5]]}}",
+   "message": "Unterminated fractional number in JSON at position 70 (line 1 column 71)"
+  },
+  {
+   "text": "{\"generated\":E\"2026-1",
+   "message": "Unexpected token 'E', ...\"enerated\":E\"2026-1\" is not valid JSON"
+  },
+  {
+   "text": "{\"generated\":\"2026-10-24\",\"",
+   "message": "Unterminated string in JSON at position 27 (line 1 column 28)"
+  },
+  {
+   "text": "{\"a\" : \r[ 1E , 2 , { \"b\" : \"c\" } ] , \"d\" : -0.0 , \"e\" : 1E+2 }",
+   "message": "Exponent part is missing a number in JSON at position 12 (line 2 column 5)"
+  },
+  {
+   "text": "{\":P\":2,\"config\":{\"s\":1.5,\"pieces\":[[0,0,0,1,00],[0.25,-0.75,1e-9,0.5,0.5,0.5,0.5]]}}",
+   "message": "Unexpected number in JSON at position 46 (line 1 column 47)"
+  },
+  {
+   "text": "12.5.e-3",
+   "message": "Unexpected non-whitespace character after JSON at position 4 (line 1 column 5)"
+  },
+  {
+   "text": "\"a string wi,h \\\\ and \\\" an",
+   "message": "Unterminated string in JSON at position 27 (line 1 column 28)"
+  },
+  {
+   "text": "{\"generated\":\"2026-10-24\",\"records\":[{\"id\":\"sphere/3/6\",\"N\":3,\"P\":6,\"score_cert\":1.234567890",
+   "message": "Expected ',' or '}' after property value in JSON at position 92 (line 1 column 93)"
+  },
+  {
+   "text": "{\"P\":2,\"config\":{\"s\":1.5,\"p0eces\":[[0,0,0,1,0,0,0],[0.25,-0.75,1e-9,0.5,0.5,0.5,0.5]]}}",
+   "message": null
+  },
+  {
+   "text": "{\"a\" : [ 1 , 2 , { \"b\" : \"c\" } ] , \"d\" : -0.0 , \"e\" : 1E+2 ,}",
+   "message": "Expected double-quoted property name in JSON at position 60 (line 1 column 61)"
+  },
+  {
+   "text": "\"a éstring: with \\\\ and \\\" and \\u0001 and 😀\"",
+   "message": null
+  },
+  {
+   "text": "{\"a\" : [ 1 , ",
+   "message": "Unexpected end of JSON input"
+  },
+  {
+   "text": "[\n  {\n    \"a\": \"x\\ny\\\"z\\\\wé€\",\n   ,\"b\": [\n      true,\n      false,\n      null,\n      -0.0015,\n      0,\n      12\n    ]\n  },\n  \"s\",\n  3\n]",
+   "message": "Expected double-quoted property name in JSON at position 34 (line 4 column 4)"
+  },
+  {
+   "text": "[\n  {\n    \"a\": \"x\\ny\\\"z\\\\wé€\",\n    \"b\": [\n      true,\n      fals,\n      null,\n      -0.0015,\n      0,\n      12\n    ]\n  },\n  \"s\",\n  3\n]",
+   "message": "Unexpected token ',', ...\"      fals,\n      nu\"... is not valid JSON"
+  },
+  {
+   "text": "{\"a\" : [ 1 , 2 , { \"b\" : \"c\" }é ] , \"d\" : -0.0 , \"e\" : 1E+2 }",
+   "message": "Expected ',' or ']' after array element in JSON at position 30 (line 1 column 31)"
+  },
+  {
+   "text": "{\"generated\":\"2026-10-24\",\"record",
+   "message": "Unterminated string in JSON at position 33 (line 1 column 34)"
+  },
+  {
+   "text": "12.5",
+   "message": null
+  },
+  {
+   "text": "{\"P\":2,\"config\":{\"s\":1.5,\"pieces\":[[0,0,0,1,0,0,0],[0.\\u25,-0.75,1e-9,0.5,0.5,0.5,0.5]]}}",
+   "message": "Unterminated fractional number in JSON at position 54 (line 1 column 55)"
+  },
+  {
+   "text": "\"a stri",
+   "message": "Unterminated string in JSON at position 7 (line 1 column 8)"
+  },
+  {
+   "text": "[\n  {\n    \"a\": \"x\\ny\\\"z\\\\wé€\",\n    \"b\": [\n      true,\n      false,\n      null,\n      -0.0015,\n      0,\n ",
+   "message": "Unexpected end of JSON input"
+  },
+  {
+   "text": "[\n  {\n    \"a\": \"x\\ny\\\"z\\\\wé€\",\n  €  \"b\": [\n      true,\n      false,\n      null,\n      -0.0015,\n      0,\n      12\n    ]\n  },\n  \"s\",\n  3\n]",
+   "message": "Expected double-quoted property name in JSON at position 33 (line 4 column 3)"
+  },
+  {
+   "text": "{\"P\":2,\"cotnfig\":{\"s\":1.5,\"pieces\":[[0,0,0,1,0,0,0],[0.25,-0.75,1e-9,0.5,0.5,0.5,0.5]]",
+   "message": "Expected ',' or '}' after property value in JSON at position 86 (line 1 column 87)"
+  },
+  {
+   "text": "1",
+   "message": null
+  },
+  {
+   "text": "[\n  \n    \"a\": \"x\\ny\\\"z\\\\wé€\",\n    \"b\": [\n      true,\n      false,\n      null,\n      -0.0015,\n      0,\n      12\n    ]\n  },\n  \"s\",\n  3\n]",
+   "message": "Expected ',' or ']' after array element in JSON at position 12 (line 3 column 8)"
+  },
+  {
+   "text": "\"a strin\r with \\\\ d \\\" and \\u0001 and 😀\"",
+   "message": "Bad control character in string literal in JSON at position 8 (line 1 column 9)"
+  },
+  {
+   "text": "\"a string with \\\\ and \\\" and \\u01 and 😀\"",
+   "message": "Bad Unicode escape in JSON at position 33 (line 1 column 34)"
+  },
+  {
+   "text": "\"a string with \\\\ an",
+   "message": "Unterminated string in JSON at position 20 (line 1 column 21)"
+  },
+  {
+   "text": "\"a string with \\\\ an\" an\\u0001 and 😀\"",
+   "message": "Unexpected non-whitespace character after JSON at position 22 (line 1 column 23)"
+  },
+  {
+   "text": "[\n  {\n    \"a\": \"x\\ny\\\"z\\\\wé€\",   \"b\": [\n      true,\n      false,\n      null,\n      -0.0\u0001015,\n      0,\n      12\n    ]\n  },\n  \"s\",\n  3\n]",
+   "message": "Expected ',' or ']' after array element in JSON at position 87 (line 7 column 11)"
+  },
+  {
+   "text": "{\"generated\":\"2026-10-24\",\"records\":[{\"id\":\"sphere/3/6\",\"N\":3,\"P\":6,\"scor\te_cert\":1.2345678901234567,\"config\":{\"rho\":1.2345678901234567,\"pieces\":[{\"q\":[1,0,-0.5,2e-7]}]},\"status\":\"best_known\",\"bound\":null,\"ok\":true,\"no\":false}]}",
+   "message": "Bad control character in string literal in JSON at position 73 (line 1 column 74)"
+  },
+  {
+   "text": "\t12.5e-u",
+   "message": "Exponent part is missing a number in JSON at position 7 (line 1 column 8)"
+  },
+  {
+   "text": "{\"P\":2,\"config\":{\"s\":1.5,\"pices\":[[0,0,0,1,0,0,0],[0.25,-0.75,1e-95,0.5,0.5,0.5]]}}",
+   "message": null
+  },
+  {
+   "text": "{\"generated\":\"2026-10-24\",\"records\":[{\"id\":\"sphere/3/6\",\"N\":3,\"P\":6,\"score_cert\":1.2345678901234567,\"config\":{\"rho\":1.2345678901234567,\"pieces\":[{\"q\":[1,0,-0.5,2e-7]}]},\"status\":\"best_known\",\"bound\":null,",
+   "message": "Expected double-quoted property name in JSON at position 204 (line 1 column 205)"
+  },
+  {
+   "text": "12.5\\",
+   "message": "Unexpected non-whitespace character after JSON at position 4 (line 1 column 5)"
+  },
+  {
+   "text": "{\"generated\":\"2026-10-24\",\"ords\":[{\"id\":\"sph",
+   "message": "Unterminated string in JSON at position 44 (line 1 column 45)"
+  },
+  {
+   "text": "{\"generated\":\"2026-10-24\",\"rec\\u12ords\":[{\"id\":\"sphere/3/6\",\"N\":3,\"P\":6,\"score_cert\":1.2345678901234567,\"config\":{\"rho\":1[2345678901234567,\"pieces\":[{\"q\":[1,0,-0.5,2e-7]}]},\"status\":\"best_known\",\"bound\":null,\"ok\":true,\"no\":false}]}",
+   "message": "Bad Unicode escape in JSON at position 34 (line 1 column 35)"
+  },
+  {
+   "text": "12.5null3",
+   "message": "Unexpected non-whitespace character after JSON at position 4 (line 1 column 5)"
+  },
+  {
+   "text": "[\n  {\n    \"a\": \"x\\ny\\\"z\\\\wé€\",\n    \"b\": [\n      true,\n      false,\n      n ull,\n      -0.0015,\n      0,\n      12\n    ]\n  },\n  \"s\",\n  3\n]",
+   "message": "Unexpected token ' ', ...\"e,\n      n ull,\n    \"... is not valid JSON"
+  },
+  {
+   "text": "{\"generated\":\"2026-10-24\",\"records\":[{\"id\":\"here/3/6\",\"N\":3,\"P\":6,\"score_cert\":1.2345678901234567,\"config\":{\"rho\":1.2345678901234567,\"pieces\":[{\"q\"\n:[1,0,-0.5,2e-7]}]},\"status\":\"best_known\",\"bound\":null,\"ok\":true,\"no\":false}]}",
+   "message": null
+  },
+  {
+   "text": "\"a string ith \\\\ and \\\" and \\u0001 ad 😀\"",
+   "message": null
+  },
+  {
+   "text": "\"a string with \\ and \\\" and \\u0null001 and 😀\"",
+   "message": "Bad escaped character in JSON at position 16 (line 1 column 17)"
+  },
+  {
+   "text": "{\"a\" : [ 1 , 2 , { \"b\" : \"c\" } ] , \"d\" : -0.0 , \"e\" : 1E+2 }",
+   "message": null
+  },
+  {
+   "text": "{\"a\" : [ 1 , 2 , { \"b\" : \"c\" } ] , \"d\" : -0.0 , \"e\" : EE+2 }",
+   "message": "Unexpected token 'E', ...\"0 , \"e\" : EE+2 }\" is not valid JSON"
+  },
+  {
+   "text": "\"a ing with \\\\ and \\\" and \\u0001 and 😀\"",
+   "message": null
+  },
+  {
+   "text": "{\"a\" : [ 1 , 2 , { \"b\"\"c\" } ] , \"d\" : -0.0 , \"e\" :",
+   "message": "Expected ':' after property name in JSON at position 22 (line 1 column 23)"
+  },
+  {
+   "text": "{\"P\":2,\"config\":{\"s\":1.5,\"pieces\":[[0,0,0,1,0,0,0],[0.25,-0.75,1e:-9,0.5,0.5,0.5,0.5]]}}",
+   "message": "Exponent part is missing a number in JSON at position 65 (line 1 column 66)"
+  },
+  {
+   "text": "{\"P\":2,\"config\":{\"s\":1.5,\"piecs\":[[0,0\",0,1,0,0,0],[0.25,-0.75,1e-9,0.5,0.5,0.5,0.5]]}}",
+   "message": "Expected ',' or ']' after array element in JSON at position 38 (line 1 column 39)"
+  },
+  {
+   "text": "{\"generated\":\"2026-10-24\",\"records\":[{\"id\":\"sphere/3/6\",\"N\":3,\"P\":6,\"score_cert\":1.2345678901234567,\"config\":{\"rho\":1.2345678901234567,\"pieces\":[{\"q\":[1,0,u-0.5,2e-7]}]},\"status\":\"best_known\",\"bound\":null,\"ok\":tr\\u12ue,\"no\":false}]}",
+   "message": "Unexpected token 'u', ...\"{\"q\":[1,0,u-0.5,2e-7\"... is not valid JSON"
+  },
+  {
+   "text": "15e-3",
+   "message": null
+  },
+  {
+   "text": "{\"generated\":\"2026-10-24\",\"records\":[{\"id\":\"sphere/3/6\",\"N\":3,\"P\":6,\"score_cert\":1.2345678901234567,\"config\":{\"rho\":1.2345678901234567,\"pieces\":[{\"q\":[1,0,-0.5,2e-7]}]},\"status\"]:\"best_known\",\"bound\":null,\"ok\":true,\"no\":false}]}",
+   "message": "Expected ':' after property name in JSON at position 177 (line 1 column 178)"
+  },
+  {
+   "text": "[\n",
+   "message": "Unexpected end of JSON input"
+  },
+  {
+   "text": "{\"geneted\":\"2026-10-24\",\"records\":[{\"id\":\"sphere/3/6\",\"N\":3,\"P\":6,\"score_cert\":1.2345678901234567,\"config\":{\"rho\":1.2345678901234567,\"pieces\":[{\"q\":[1,0,-0.5,2e-7]}]},\"status\":\"ébest_known\",\"bound\":null,\"ok\":true,\"no\":false}]}",
+   "message": null
+  },
+  {
+   "text": "{\"generated\":\"2026-10-2+4\",\"records\":[{\"id\":\"sphere/3/6\",\"N\":3,\"P\":6,\"score_cert\":1.2345678901234567,\"config\":{\"rho\":1.2345678901234567,",
+   "message": "Expected double-quoted property name in JSON at position 136 (line 1 column 137)"
+  },
+  {
+   "text": "{\"gen\\u12rated\":\"2026-10-24\",\"records\":[{\"id\":\"sphere/3/6\",\"N\":3,\"P\":6,\"score_cert\":1.2345678901234567,\"config\":{\"rho\":1.2345678901234567,\"pieces\":[{\"q\":[1,0,-0.5,2e-7]}]},\"status\":\"best_known\",\"bound\":null,\"ok\":true,\"no\":false}]}",
+   "message": "Bad Unicode escape in JSON at position 9 (line 1 column 10)"
+  },
+  {
+   "text": "[\n  {\n    \"a\": \"x\\ny\\\"z\\\\wé€\",\n    \"b\": [\n      true,    false,\n      null,\n     ",
+   "message": "Unexpected end of JSON input"
+  },
+  {
+   "text": "\"a string with \\\\ d \\\" and \\u0001 and 😀\"",
+   "message": null
+  },
+  {
+   "text": "{\"a\" : [ 1 , 2 ,",
+   "message": "Unexpected end of JSON input"
+  },
+  {
+   "text": "\"a string with \\\\ and \\\" and \\u0001 and😀\"",
+   "message": null
+  },
+  {
+   "text": "\"a string with \\\\\\u12and \\\" and ",
+   "message": "Bad Unicode escape in JSON at position 22 (line 1 column 23)"
+  },
+  {
+   "text": "[\n  {true    \"a\": \"x\\ny\\\"z\\\\wé€\",\n    \"b\": [\n      true,\n      false,\n      null,\n      -0.0015,\n      0,\n      12\n    ]\n  },\n  \"s\",\n  3\n]",
+   "message": "Expected property name or '}' in JSON at position 5 (line 2 column 4)"
+  },
+  {
+   "text": "12.:e-3",
+   "message": "Unterminated fractional number in JSON at position 3 (line 1 column 4)"
+  },
+  {
+   "text": "12.5\re-3",
+   "message": "Unexpected non-whitespace character after JSON at position 5 (line 2 column 1)"
+  },
+  {
+   "text": "[\n  {\n    \"a\": \"x\\ny\\\"z\\\\wé€\",\n    \"b\": [",
+   "message": "Unexpected end of JSON input"
+  },
+  {
+   "text": "string \\uith \\\\ and \\\" and \\u0001 and 😀\"",
+   "message": "Unexpected token 's', \"string \\ui\"... is not valid JSON"
+  },
+  {
+   "text": "{\"generated\":\"2026-10-24\",\"records\":[{\"id\":\"sphere/3/6\",\"N\":3,\"P\":6,\"score_cert\":1.2345678901234567,\"con",
+   "message": "Unterminated string in JSON at position 104 (line 1 column 105)"
+  },
+  {
+   "text": "{\"P\":2,\"config\":{\"s\":1.5,\"pieceE\":[[0,0,0,1,0,0,0],[0.é5,-0.75,1e-9,0.5,0.5,0.5,0.5]]}}",
+   "message": "Unterminated fractional number in JSON at position 54 (line 1 column 55)"
+  },
+  {
+   "text": "[\n  {\n    \"a\": \"x\\ny\\\"z\\\\wé€\",\n    -\"b\": [\n      true,\n      false,\n      null,\n      -0.0015,\n      0,\n      12\n    ]\n },\n  \"s\",\n  3\n]",
+   "message": "Expected double-quoted property name in JSON at position 35 (line 4 column 5)"
+  },
+  {
+   "text": "{\"P\":2,\"config\":{\"s\":1.5,\"pieces\":[[0,0,1,0,0,0],[0.25,-0.75,1e-9,0.5,0.5,0.5,0.5]]}}",
+   "message": null
+  },
+  {
+   "text": "[\n  {\n    \"a\": \"x\\ny\\\"z\\\\wé€\",\n    \"b\": [\n      true,\n      false,\n      null,\n      -0.0015,\n    [ 0,\n      12\n    ]\n  },\n  \"s\",\n  3\n]",
+   "message": "Expected ',' or ']' after array element in JSON at position 120 (line 12 column 3)"
+  },
+  {
+   "text": "12\n.5e-3",
+   "message": "Unexpected non-whitespace character after JSON at position 3 (line 2 column 1)"
+  },
+  {
+   "text": "\"a string with \\ \\ and \\nd \\u0001 and 😀\"",
+   "message": "Bad escaped character in JSON at position 16 (line 1 column 17)"
+  },
+  {
+   "text": "12.5fe-3",
+   "message": "Unexpected non-whitespace character after JSON at position 4 (line 1 column 5)"
+  },
+  {
+   "text": "12.5e-3",
+   "message": null
+  },
+  {
+   "text": "\t12.5e-3",
+   "message": null
+  },
+  {
+   "text": "{\"P\":2,\"config\":{\"s\":1.5,\"pieces\":E[]0,0,0,1,0,0,0],[0.25,-0.75,1e-9,0.5,0.5,0.5,0.5]]}}",
+   "message": "Unexpected token 'E', ...\",\"pieces\":E[]0,0,0,1\"... is not valid JSON"
+  },
+  {
+   "text": "\\u12.5e-",
+   "message": "Unexpected token '\\', \"\\u12.5e-\" is not valid JSON"
+  },
+  {
+   "text": "[\n  {",
+   "message": "Expected property name or '}' in JSON at position 5 (line 2 column 4)"
+  },
+  {
+   "text": "{\"P\":2,\"config\":{\"s\":1.5,\"pieces\":[[0,0,0,1,0,0,0],[0.25,-0.75😀,1e-9,0.5,0.5,0.\u0001,0.5]]}}",
+   "message": "Expected ',' or ']' after array element in JSON at position 62 (line 1 column 63)"
+  },
+  {
+   "text": "{\"generated\":\"2026-10-24\",\"records\":[{\"id\":\"sphere/3/6\",\"N\":3,\"P\":6,\"score_cert\"\t1.2345678901234567,\"config\":{\"rho\":1.2345678901234567,\"pieces\":[{\"q\":[1,0,-0.5,2e-7]}]},\"status\":\"best_known\",\"bound\":null,\"ok\":true,\"no\":false}]}",
+   "message": "Expected ':' after property name in JSON at position 81 (line 1 column 82)"
+  },
+  {
+   "text": "[\n  {\n    \"a\": \"x\\n\"z\\\\wé€\",\n    \"b\": [\n      true,\n      false,\n      null,\n      -0.0015,\n      0,\n      12\n    ]\n  },\n  \"s\",\n  3\n]",
+   "message": "Expected ',' or '}' after property value in JSON at position 20 (line 3 column 15)"
+  },
+  {
+   "text": "\"a string with \\\\ and \\\" a \\u0",
+   "message": "Bad Unicode escape in JSON at position 30 (line 1 column 31)"
+  },
+  {
+   "text": "{\"a\" : [ 1 , 2 , { \"b\" : \"c\" } ] , \"d\" : -+0.0n , \"e\" : 1E+2 }",
+   "message": "No number after minus sign in JSON at position 42 (line 1 column 43)"
+  },
+  {
+   "text": "{\"generated\":\"2026-10-24\",\"records\":[{\"id\":\"sphere/3/6\",\"tN\":3,\"P\":6,\"score_cert\":1.2345678901234567,\"config\":{\"rh\\o\":1.2345678901234567,\"pieces\":[{\"q\":[1,0,-0.5,2e-7]}]},\"status\":\"best_known\",\"bound\":null,\"ok\":true,\"no\":false}]}",
+   "message": "Bad escaped character in JSON at position 115 (line 1 column 116)"
+  },
+  {
+   "text": "\"a string with \\\\ and \\\" ad \\u0001 nd 😀\"",
+   "message": null
+  },
+  {
+   "text": "ge",
+   "message": "Unexpected token 'g', \"ge\" is not valid JSON"
+  },
+  {
+   "text": "[\n  {\n    \"a\": \"x\\ny\\\"z\\\\wé€\",\n  null  \"b\"\n      true,\n      false,\n      null,\n      -0.0015,\n      0,\n      12\n    ]\n  },\n  \"s\",\n  3\n]",
+   "message": "Expected double-quoted property name in JSON at position 33 (line 4 column 3)"
+  },
+  {
+   "text": "{\"generd\":\"2026-10-24\",\"records\":[{\"id\":\"sphere/3/6\",\"N\":3,\"P\":6,\"score_cert\":1.2345678901234567,\"config\":{\"rho\":1.5678901234567,\"pieces\":[{\"q\":[1,0,-0.5,2e-7]}]},\"status\":\"best_known\",\"bound\":null,\"ok\":true,\"no\":false}]}",
+   "message": null
+  },
+  {
+   "text": "[\n  {\n    \"a\": \"x\\ny\\\"z\\\\wé€\",\n    \"b\": [\n      true,\n      false,\n      null,\n      -0.0015,\n      0,\n  \\u12    12\n    ]\n  },\n  \"s\",\n  3\n]",
+   "message": "Unexpected token '\\', ...\"     0,\n  \\u12    12\"... is not valid JSON"
+  },
+  {
+   "text": "{\"generated\":\"2026-10-24\",\"records\":[{\"id\":\"sphere/3/6\",\"N\":3,\"P\":6,\"score_\\u12ert\":1.2345678901234567,\"config\":{\"rho\":1.2345678901234567,\"pieces\":[{\"q\":[1,0,-0.5,2e-7]}]},\"status\":\"best_known\",\"bound\":null,\"ok\":true,\"no\":fals1e}]}",
+   "message": "Bad Unicode escape in JSON at position 80 (line 1 column 81)"
+  },
+  {
+   "text": "\"a string wi\\uth \\\\ and \\\" and \\u0001 and 😀\"",
+   "message": "Bad Unicode escape in JSON at position 14 (line 1 column 15)"
+  },
+  {
+   "text": "{\"a\" : [ 1 , 2 , { \"b\" : \"c\" } ] , \"d\" true\r\n-0.0 , \"e\" : 1E+2 }",
+   "message": "Expected ':' after property name in JSON at position 39 (line 1 column 40)"
+  },
+  {
+   "text": "{\"a\" : [ 1+, 2 , { \"b\" : \"c\" } ] , \"d\" : -0.0 , \"e\" : 1E+2 }",
+   "message": "Expected ',' or ']' after array element in JSON at position 10 (line 1 column 11)"
+  },
+  {
+   "text": "{\"P\":2,\"config\":{\"s\":1.5,\"pieces\":[[0,0,0,1,0,0,0],[0.25,-0.75,1e-9,0.5,0.5,0.5,0.5]]}",
+   "message": "Expected ',' or '}' after property value in JSON at position 86 (line 1 column 87)"
+  },
+  {
+   "text": "\"a string with,: \\\\ and \\\" and \\u0001 and 😀\"",
+   "message": null
+  },
+  {
+   "text": "{\"P\":2,\"confi{\"s\":1.5,\"piec",
+   "message": "Expected ':' after property name in JSON at position 15 (line 1 column 16)"
+  },
+  {
+   "text": "\"a string w \\\\ and \\\" and \\u0001 and 😀\"",
+   "message": null
+  },
+  {
+   "text": "\"a string wi\nth \\\\ and \\\"",
+   "message": "Bad control character in string literal in JSON at position 12 (line 1 column 13)"
+  },
+  {
+   "text": "[\n  {\n    \"a\": \"x\\ny\\\"zé\\\\wé€\",\n    b\": [\n      true,\n      false,\n      null,\n      -0.0015,\n      0,\n      12\n    ]\n  },\n  \"s\",\n  3\n]",
+   "message": "Expected double-quoted property name in JSON at position 36 (line 4 column 5)"
+  },
+  {
+   "text": "{\"a\" : [ 1 , 2 , {true\"b\" : \"c\" } ] , \"d\" : -0.0 , \"e\" : 1E+2 }",
+   "message": "Expected property name or '}' in JSON at position 18 (line 1 column 19)"
+  },
+  {
+   "text": "[\n  {\n    \"a\": \"x\\ny\\\"z\\\\wé€\",\n    \"b\": [\n      true,\n      false,\n      null,\n      -0.0015,\n      0,\n      12\n    ]\n  },\n \"s\",\n  3\n]",
+   "message": null
+  },
+  {
+   "text": "{\"P\":2,\"config-:{\"s\":1.5,\"pieces\":[[0,0,0,1,0,0,0],[0.25,-0.75,1e-9,0.5,0.5,0.5,0.5]]}}",
+   "message": "Expected ':' after property name in JSON at position 18 (line 1 column 19)"
+  },
+  {
+   "text": "12.3",
+   "message": null
+  },
+  {
+   "text": "{e\"a\" : [ 1 , 2 , { \"b: \"c\" } ] , \"d\" : -0.0 , \"e\" : 1E+2 }",
+   "message": "Expected property name or '}' in JSON at position 1 (line 1 column 2)"
+  },
+  {
+   "text": "{\"generated\":\"2026-10-24\",\"records\":[{\"id\":\"sphere/3/6\",\"N\":3,\"P\":6,\"score_cert\":1.2345678901234567,\"config\":{\"rho\":1.2345678901234567,\"pieces\":[{\"q\":[1,0,-0.5,2e-7]}]},\"sfatus\":\"best_known\",\"bound\":null,\"ok\":true,\"no\":fal",
+   "message": "Unexpected end of JSON input"
+  },
+  {
+   "text": "\"a string with \\\\ anx \\\" and \\u0 and 😀\"",
+   "message": "Bad Unicode escape in JSON at position 32 (line 1 column 33)"
+  },
+  {
+   "text": "12.E5 e-3",
+   "message": "Unterminated fractional number in JSON at position 3 (line 1 column 4)"
+  },
+  {
+   "text": "null2.5e-3",
+   "message": "Unexpected non-whitespace character after JSON at position 4 (line 1 column 5)"
+  },
+  {
+   "text": "[\n  {\n    \"a\": \"x\\ny\\\"z\\\\wé€\",\n    \"b\": [\n      true,\n      false",
+   "message": "Expected ',' or ']' after array element in JSON at position 65 (line 6 column 12)"
+  },
+  {
+   "text": "[\n  {\n    \"a\": \"x\\ny\\\"z\\\\wé€\",\n    \"b\": [\n      true,\n      false,\n      null,\n      -0.0015,\n      0,\n      12\n    \\u]\n  },\n  \"s\",\n  3\n]",
+   "message": "Expected ',' or ']' after array element in JSON at position 116 (line 11 column 5)"
+  },
+  {
+   "text": "{\"a\" : [ 1 , 2  { \"b\" : \"c\" } ] , \"d\" : -0.0 , \"e\" : 1E+2 }",
+   "message": "Expected ',' or ']' after array element in JSON at position 16 (line 1 column 17)"
+  },
+  {
+   "text": "{\"a\" : [ 1 , 2 , { \"b\" : \"c\"0} ] , \"d\" : -0.0 , \"e\" : 1E+2 }",
+   "message": "Expected ',' or '}' after property value in JSON at position 28 (line 1 column 29)"
+  },
+  {
+   "text": "{\"gener\r\nated\":\"2026-10-24\",\"records\":[{\"id\":\"sphere/3/6\",\"N\":3,\"P\":6,\"score_cert\":1.2345678901234567,\"config\":{\"rho\":1.2345678901234567,\"pieces\":[{\"q\":[1,0,-0.5,2e-7]}]},\"status\":\"best_known\",\"bound\":null,\"ok\":true,\"no\":false}]}",
+   "message": "Bad control character in string literal in JSON at position 7 (line 1 column 8)"
+  },
+  {
+   "text": "\"a string with \\\\ and \\\" and \\u0001 ]nd 😀\"",
+   "message": null
+  },
+  {
+   "text": ".5e-3",
+   "message": "Unexpected token '.', \".5e-3\" is not valid JSON"
+  },
+  {
+   "text": "[\n  {\n    \"a\": \"x\\ny\\\"z\\\\wé€\",\n    \"b\": [\n   true,\n      false,\n      null,\n      -0.0015,\n      0,\n      12\n    ]\n  },\n  \"s\",\n  3\n]",
+   "message": null
+  },
+  {
+   "text": "{\"P\":2,\"config\":{\"s\":1.5,\"pieces\":[[0,0,0,1,0,0,0],[0.5,-0.75,1e-9,0.5,0.5,0.5,0.5]]}}",
+   "message": null
+  },
+  {
+   "text": "{\"P\":2,\"config\":{\"s\":1.5,\"pieces\":[[0,0,0,1,0,0,0],[0.\t25,-0.75,1e-9,0.5,0.5,0.5,0.5]]}}",
+   "message": "Unterminated fractional number in JSON at position 54 (line 1 column 55)"
+  },
+  {
+   "text": "[\n  {\n    \"a\": \"x\\ny\\\"z\\\\wé€\",\n    \"b\": [\n      true,\n      false,\n      null,\n      -0.0015,\n      0,\n      12\n    \n  },\n  \"s\",\n  3\n]",
+   "message": "Expected ',' or ']' after array element in JSON at position 119 (line 12 column 3)"
+  },
+  {
+   "text": "12.5/-3",
+   "message": "Unexpected non-whitespace character after JSON at position 4 (line 1 column 5)"
+  },
+  {
+   "text": "{\"generated\":\"2026-10-24\",\"records\":[{\"id\"",
+   "message": "Expected ':' after property name in JSON at position 42 (line 1 column 43)"
+  },
+  {
+   "text": "[\n  {\n    \"a\": \"x\\nyz\\\\wé€\",\n    \"b\": [\n      true,\n      false,\n      \\null,\n      -0.0015,\n      0,\n      12\n    ]\n  },\n  \"s\",\n  3\n]",
+   "message": "Unexpected token '\\', ...\"se,\n      \\null,\n   \"... is not valid JSON"
+  },
+  {
+   "text": "P\":2,\"config\":{\"s\":1.5,\"pieces\":[[0,0,0,1,0,0,0],[0.25,-0.75,1e-9,0.5,0.5,0.5,0.5]]}}",
+   "message": "Unexpected token 'P', \"P\":2,\"conf\"... is not valid JSON"
+  },
+  {
+   "text": "12.5e-{3",
+   "message": "Exponent part is missing a number in JSON at position 6 (line 1 column 7)"
+  },
+  {
+   "text": "[\n  {\n    \"a\": \"x\\ny\\\"z\\\\wé€\",\n    \"b\": [\n      true,\n      false,\n      null,\n      -0.0015,\n      €0,\n,     12\n    ]\n  },\n  \"s\",\n  3\n]",
+   "message": "Unexpected token '€', ...\"15,\n      €0,\n,     \"... is not valid JSON"
+  },
+  {
+   "text": "[\n  {\n    \"a\": \"x\\ny\\\"z\\\\wé€\",\n    \"b\": [\n      true,\n  t   false,\n      null,\n      -0.0015,\n      0,\n    12\n    ]\n  },\n  \"s\",\n  3\n]",
+   "message": "Unexpected token ' ', ...\" true,\n  t   false,\n\"... is not valid JSON"
+  },
+  {
+   "text": "[\n  {\n    \"a\": \"x\\ny\\\"z\\\\wé€\",\n    \"b\": [\n      true,\n      false,\n      null,\n      -0.0015,\n      0,\n      12\n/    ]\n  },\n  \"s\",\n  3\n]",
+   "message": "Expected ',' or ']' after array element in JSON at position 112 (line 11 column 1)"
+  },
+  {
+   "text": "{\"P\":2,\"config\":{\"s\":1.5,\"pieces\":[[0,0,0,1,0,0,0],[0.25,-075,1e-9,0.5,0.5,0.5,0.5]]}}",
+   "message": "Unexpected number in JSON at position 59 (line 1 column 60)"
+  },
+  {
+   "text": "P\":2,\"confi{\"s\":1.5,\"pieces\":[[0,0,0,1,0,0,0],[0.25,-0.75,1e-9,0.5,0.5,0.5,0.5]]}}",
+   "message": "Unexpected token 'P', \"P\":2,\"conf\"... is not valid JSON"
+  },
+  {
+   "text": "[\n  {\n    \"a\": \"1x\\ny\\\"z\\\\wé€\",\n    \"b\": [\n      true,\n      false,\n      null,\n      -0.0015,\n      0,\n      12\n    ]\n  },\n  \"s\",\n  3\n]",
+   "message": null
+  },
+  {
+   "text": "{\"generated\":\"2026-10-24\",\"records\":[{\"id\":\"sphere/3/6\",\"N\":3,\"P\":6,\"score_cert\":1.2345678901234567,\"config\":{\"rho\":1.2345678901234567,\"pieces\":[{\"q\":[1,0,-0.5,2e-7]}]},\"status\":\"best_known\",\"bound\":null,\"ok\":true,\"no\":fal€se}]}",
+   "message": "Unexpected token '€', ...\"e,\"no\":fal€se}]}\" is not valid JSON"
+  },
+  {
+   "text": "{\"P\":2,\"config\":{\"s\":1.5,\"pieces\":[[0,0,0,1,0,0,0],[0.25,-0.75,e1e-9,0.5,0.5,0.5e,0.5]]}}",
+   "message": "Unexpected token 'e', ...\".25,-0.75,e1e-9,0.5,\"... is not valid JSON"
+  },
+  {
+   "text": "{\"a\" : [ 1 , 2 0, {  : \"c\" } ] , \"d\" : -0.0 , \"e\" : 1E+2 }",
+   "message": "Expected ',' or ']' after array element in JSON at position 15 (line 1 column 16)"
+  },
+  {
+   "text": "{\"generated\":\"2026-10-24\",\"records\":[{\"id\":\"sphere/3/6\",\"N\":3,\"P\":6,\"score_cert\":1.245678901234567,\"config\":{\"rho\":1.2345678901234567,\"pieces\":[{\"q\":[1,0,-0.5,2e-7]}]},\"status\":\"best_known\",\"bound\":null,\"ok",
+   "message": "Unterminated string in JSON at position 206 (line 1 column 207)"
+  },
+  {
+   "text": "[\n  {\n    \"a\": \"x\\ny\\\"z\\\\wé€\",\n    \"b\": [\n      true,\n      false,\n      null,\n      -0.0015,\n      0,\n      12\n\n    ]\n  },\n  \"s\",\n  3\n]",
+   "message": null
+  },
+  {
+   "text": "{\"P\":2,\"config\":{\"s\":1.5,\"pieces\":[[0,0,0,1,0,0,0],[0.25,-0.75,1e-9,0.5,0.5,0.5,0..5]]}}",
+   "message": "Unterminated fractional number in JSON at position 82 (line 1 column 83)"
+  },
+  {
+   "text": "{\"a\" : [ 1 , , { \"b\" : \"c\" } ] , \"d\" : -0.0 , \"e\" : 1E+2 }",
+   "message": "Unexpected token ',', ...\"\" : [ 1 , , { \"b\" : \"... is not valid JSON"
+  },
+  {
+   "text": "{\"generated\":\"2026-10-24\",\"records\":[{\"id\":\"sphere/3/6\",\"Nu\":3,\"P\":6,\"score_cert\":1.2345678901234567,\"config\":{\"rho\":1.2345678901234567,\"pieces\":[{\"q\":[1,0,-0.5,2e-7]}]},\"status\":\"best_known\",\"bound\":null,\"ok\":true,\"no\":false}]}",
+   "message": null
+  },
+  {
+   "text": "{\"generated\":\"2026-10-24\",\"records\":[{\"id\":\"spre/3/6\",\"N\":3,\"P\":6,\"score_cert\":1.2345678901234567,\"config\":{\"rho\":1.2345678901234567,\"pieces\":[{\"q\":[1,0,-0.5,2e-7]}]},\"status\":\"best_known\",\"bound\":null,\"ok\":true,\"no\":false}]}",
+   "message": null
+  },
+  {
+   "text": "{\"a\" : [ 1 , 2 , { \"\tb\" : \"c\" } ] , \"d\" : -0.0 , \"e\"  1E+2 }",
+   "message": "Bad control character in string literal in JSON at position 20 (line 1 column 21)"
+  },
+  {
+   "text": "[\n  {\n    \"a\": \"x\\ny\\\"z\\\\wé€\",\n    \"b\": [\n      true,\n      false,\n ",
+   "message": "Unexpected end of JSON input"
+  },
+  {
+   "text": "\"atring with\n\\\\ and \\\" and \\u0001 and 😀\"",
+   "message": "Bad control character in string literal in JSON at position 12 (line 1 column 13)"
+  },
+  {
+   "text": "{\"generated\":\"2026-10x24",
+   "message": "Unterminated string in JSON at position 24 (line 1 column 25)"
+  },
+  {
+   "text": "\"a string with \\\\ and \\\" and \\u0001\r and 😀\"",
+   "message": "Bad control character in string literal in JSON at position 35 (line 1 column 36)"
+  },
+  {
+   "text": "{\"a\" : [ 1 , 2 , { \"b\" : \"c\" } ] , \"d\" : -0.0, \"e\" : 1E+2 }",
+   "message": null
+  },
+  {
+   "text": "[\n  {\n    \"a\": \"x\\ny\"\"z\\\\wé€\",\n    \"b\": [\n      true,\n      false,\n      null,\n      -0.0015,\n      0,\n      12\n    ]\n  },\n  \"s\",\n  3\n]",
+   "message": "Expected ',' or '}' after property value in JSON at position 21 (line 3 column 16)"
+  },
+  {
+   "text": "{\"P\":2,\"config\":{\"s\":1.5,\"pieces\":[[0,0,0,1,0,0,0][[0.25,-0.75,1e-9,0.5,0.5,0.5,0.5]]}}",
+   "message": "Expected ',' or ']' after array element in JSON at position 50 (line 1 column 51)"
+  },
+  {
+   "text": "[\n  {\n    \"a\": \"x\\ny\\\"z\\\\wé€\",\n    \"b\": [\n      true,\n      false,\n      null,\n      -0.001\r5,\n      0,\n      12\n    ]\n  },\n  \"s\",\n  3\n]😀",
+   "message": "Expected ',' or ']' after array element in JSON at position 92 (line 9 column 1)"
+  },
+  {
+   "text": "\"a string with \\\\ and \\\" anndtrue \\u0001 and 😀\"",
+   "message": null
+  },
+  {
+   "text": "\"a string wi]th \\\\ and \\\" anéd \\u0001 and 😀\"",
+   "message": null
+  },
+  {
+   "text": "[\n  {\n    \"a\": \"x\\ny\\z\\\\wé€\",\n    \"b\": [\n      true,\n      false,\n      null,\n      -0.0015,\n      0,\n      12\n    ]\n  },\n { \"s\",\n  3\n]",
+   "message": "Bad escaped character in JSON at position 21 (line 3 column 16)"
+  },
+  {
+   "text": "{\"P\":2,\"config\":{\"s\":1.5,\"pieces\":[[0,,1,0,0,0],[0.25,-0.75,1e-9,0.5,0.5,0.5,0.5]]}}",
+   "message": "Unexpected token ',', ...\"eces\":[[0,,1,0,0,0],\"... is not valid JSON"
+  },
+  {
+   "text": "{\"a\" : [\\u121 , 2 , { \"b\" : \"c\" ",
+   "message": "Unexpected token '\\', \"{\"a\" : [\\u121 , 2 \"... is not valid JSON"
+  },
+  {
+   "text": "15e-n3",
+   "message": "Exponent part is missing a number in JSON at position 4 (line 1 column 5)"
+  },
+  {
+   "text": "[\n  {\n    \"a\": \"x\\ny\\\"z\\\\w€\",\n    \"b\": [\n      true,\n      false,\n      null,\n      -0.0015,\n      0,\n      12\n    ]\n  },\n  \"s\",\n  3\n]",
+   "message": null
+  },
+  {
+   "text": "{\"P\":2,\"config\":{\"s\":1.5,\"pieces\":[[0,0,0\",1,0,0,0],[0.25,-0.75,1e-9,0.5,0.5,0.5,0\u0001.5]]}}",
+   "message": "Expected ',' or ']' after array element in JSON at position 41 (line 1 column 42)"
+  },
+  {
+   "text": "{\"generated\":\"2026-10-24\",\"records\":[{\"id\":\"sphere/3/6\",\"N\":3,\"P\":6,\"score_cert\":1.245678901234567,\"config\":{\"rho\":1.2345678901234567,\"pieces\":[{\"q\":[1,0,-0.5,2e-7]}]},\"sta\":\"best_known\",\"bound\":null,\"ok\":true,\"no\":false}]}",
+   "message": null
+  },
+  {
+   "text": "{\"generated\":\"2026-10-24\",\"records\":[{\"id\":\"sphere/3/6\",\"N\":3,\"P\":6,\"score_cert\":1.2345678901234567,\"config\":{\"rho\":1.2345678901234567,\"pieces\":[{\"q\":[1,0,-0.5,e-7]}]},\"status\":\"best_known\",\"bound\":null,\"ok\":true,\"no\":false}]}",
+   "message": "Unexpected token 'e', ...\"[1,0,-0.5,e-7]}]},\"s\"... is not valid JSON"
+  },
+  {
+   "text": "[\n  {\n    \"a\": \"x\\ny\\\"z\\\\wé€\",\n    \"b\": [\n      true,\n      false,\n      null,\n      -0.0015,\n      0,\n      12\n    ]\n  },\n  \"s\",\\\n  3\n]",
+   "message": "Unexpected token '\\', ...\" },\n  \"s\",\\\n  3\n]\" is not valid JSON"
+  },
+  {
+   "text": "{\"P\":2,\"config\":{\"s\":1.5,\"pieces\":[[0,0,0,1,0,0,0],[0.25,-0.75,1e-9,0.5,0.5,0.5,0.]}}",
+   "message": "Unterminated fractional number in JSON at position 82 (line 1 column 83)"
+  },
+  {
+   "text": "{\"P\":2,\"c",
+   "message": "Unterminated string in JSON at position 9 (line 1 column 10)"
+  },
+  {
+   "text": "12.5e-{{3",
+   "message": "Exponent part is missing a number in JSON at position 6 (line 1 column 7)"
+  },
+  {
+   "text": "12.\r+e-3",
+   "message": "Unterminated fractional number in JSON at position 3 (line 1 column 4)"
+  },
+  {
+   "text": "{\"generated\":\"2026-10-24\",\"records\":[{\"id\":\"sphere/3/6\",\"N\":3,\"P\":6,\"score_cert\":1.2345678901234567,\"config\":{\"rho\":1.2345678901234567,\"pie ces\":[{\"q\":[1,0,-0.5,2e-7]}]},\"status\":\"best_known\",\"bound\":null,\"ok\":true,\"no\":false}]}",
+   "message": null
+  },
+  {
+   "text": "\"na string wth \\\\ and \\\" and \\u0001 and 😀\"",
+   "message": null
+  },
+  {
+   "text": "{\"P\":2,\"config\":{\"s\":,\"pieces\":[[0,0,0,,0,0,0],[0.25,-0.75,1e-9,0.5,0.5,0.5,0.5]]}}",
+   "message": "Unexpected token ',', ...\"fig\":{\"s\":,\"pieces\":\"... is not valid JSON"
+  },
+  {
+   "text": "{\"P\":2,\"config\":{\"s\":1.5,\"pieces\":[[0,0,0,1+0,0,0]",
+   "message": "Expected ',' or ']' after array element in JSON at position 43 (line 1 column 44)"
+  },
+  {
+   "text": "{:2,\"",
+   "message": "Expected property name or '}' in JSON at position 1 (line 1 column 2)"
+  },
+  {
+   "text": "\"00 string with \\\\ and \\\" and \\u0001 a\tnd 😀\"",
+   "message": "Bad control character in string literal in JSON at position 38 (line 1 column 39)"
+  },
+  {
+   "text": "\"a stri\\ng with \\\\ and \\\" and \\u0001 and 😀\"",
+   "message": null
+  },
+  {
+   "text": "[12.5e-3",
+   "message": "Expected ',' or ']' after array element in JSON at position 8 (line 1 column 9)"
+  },
+  {
+   "text": "{\"a\" : [  2 , { \"b\" : \"c\" } ] , \"d\" : -0.0 , \"e\" : 1E+2 }",
+   "message": null
+  },
+  {
+   "text": "[\n  {\n    \"a\": \"x\\ny\\\"z\\\\wé€\",\n    b\": [\n      true,\n      false,\n      null,\n      -0.0015,\n      0,\n      12\n    ]\n  },\n  \"s\",\n  3\n]",
+   "message": "Expected double-quoted property name in JSON at position 35 (line 4 column 5)"
+  },
+  {
+   "text": "\"a string with \\\\ and \\\" and \\u0001 and \r\n😀\"",
+   "message": "Bad control character in string literal in JSON at position 40 (line 1 column 41)"
+  },
+  {
+   "text": "{\"generated\":\"2026-10-24\",\"records\":[{\"id\":\"sphere/3/6\",\"N\":3,\"P\":6,\"score_cert\":1.2345678901234567,\"config\":{\"rho\":1.2345678901234567,\"pieces\":f[{\"q\":[1,0,-0.5,2e-7]}]},\"status\":\"best_known\",\"bound\":null,\"ok\":true,\"no\":false}]}",
+   "message": "Unexpected token '[', ...\"\"pieces\":f[{\"q\":[1,0\"... is not valid JSON"
+  },
+  {
+   "text": "{\"a\" : [ 1 , 2",
+   "message": "Expected ',' or ']' after array element in JSON at position 14 (line 1 column 15)"
+  },
+  {
+   "text": "[\n  {\n    \"a\": \"x\\ny\\\"z\\\\wé€\",\n    \"b\": [\n      true,\n }    false,\n      null,\n      -0.0015,\n      0,\n      12\n    ]",
+   "message": "Unexpected token '}', ...\"   true,\n }    false\"... is not valid JSON"
+  },
+  {
+   "text": "{\"generated\":\"2026-10-24\",\"records\":[{\"id\":\"sphere/3/6\",\"N\":3,\"P\":6,\"score_cert\":1.2345678.901234567,\"config\":{\"rho\":1.2345678901234567,\"pieces\":[{\"q\":[1,0,-0.5,2e-7]}]},\"status\":\"best_known\",\"bound\":null,\"ok\":true,\"no\":false}]}",
+   "message": "Expected ',' or '}' after property value in JSON at position 90 (line 1 column 91)"
+  },
+  {
+   "text": "{\"a\" : [ 1 , 2 , { \"b\" : \"c\" } ] , \"dE\" : -0.0 , \"e\n : 1E+2 }",
+   "message": "Bad control character in string literal in JSON at position 51 (line 1 column 52)"
+  },
+  {
+   "text": "[\n  {\n    \"a\": \"x\\ny\\\"z\\\\wé€\",\n    \"b\": [\n      true,\n      false,\n      null,\n      -0.0015,\n      \t,\n      12\n    ]\n  },\n  \"s\",\n  3\n]",
+   "message": "Unexpected token ',', ...\"5,\n      \t,\n      12\"... is not valid JSON"
+  },
+  {
+   "text": "{\"P\":2,\"config\":{\"s\":1.5,\"pieces\":[[0,0,0,1,0,0,0],[0.25,-0.75,1e-9,0.5,0.5,05,0.5]]}}",
+   "message": "Unexpected number in JSON at position 77 (line 1 column 78)"
+  },
+  {
+   "text": "\"a string with  and \\\" and \\u00",
+   "message": "Bad Unicode escape in JSON at position 31 (line 1 column 32)"
+  },
+  {
+   "text": "\"a string with \\\\ and \\\" and \\u0 0.01 and 😀\"",
+   "message": "Bad Unicode escape in JSON at position 32 (line 1 column 33)"
+  },
+  {
+   "text": "{\"P\":2,\"config\":{\"s\":1.5,\"pces\":[[0,0,0,1,0,0,0],[0.25,-0.75,1e-9,0.5,0",
+   "message": "Expected ',' or ']' after array element in JSON at position 71 (line 1 column 72)"
+  },
+  {
+   "text": "1u.5e",
+   "message": "Unexpected non-whitespace character after JSON at position 1 (line 1 column 2)"
+  },
+  {
+   "text": "{\"generated\":\"",
+   "message": "Unterminated string in JSON at position 14 (line 1 column 15)"
+  },
+  {
+   "text": "\"a string with \\\\ and \\\" and \\u0001 and  😀\"",
+   "message": null
+  },
+  {
+   "text": "{\"P\":2,\"config\":{\"s\":1.5,\"pieces\":[[0,0,0,1,0,0,0],[0.25,-0.75,1e-9,\n0.5,0.5,0.5,0.5]]}}f",
+   "message": "Unexpected non-whitespace character after JSON at position 88 (line 2 column 20)"
+  },
+  {
+   "text": "{\"P\":2,\"config\":{\"s\":1.5,\"pieces\":[[0,0,0,1,0,0,0],[0.25,-0.75,1\\u-9,0.5,0.5,0.5,0.5]]}}",
+   "message": "Expected ',' or ']' after array element in JSON at position 64 (line 1 column 65)"
+  },
+  {
+   "text": "{\"P\":2,\"config\":{\"s\":1.5,\"pieces\":[[0,u,0,1,0,0,0],[0.,-0.75,1e-9,0.5,0.5,0.5,0.5]]}}",
+   "message": "Unexpected token 'u', ...\"eces\":[[0,u,0,1,0,0,\"... is not valid JSON"
+  },
+  {
+   "text": "\"a string with[\\\\ and \\\" and \\u0001 and 😀\"",
+   "message": null
+  },
+  {
+   "text": "{\"generated\":\"26-10-24\",\"records\":[{\"id\":\"sphere/3/6\",\"N\":3,\"P\":6,\"score_cert\":1.2345678901234",
+   "message": "Expected ',' or '}' after property value in JSON at position 94 (line 1 column 95)"
+  },
+  {
+   "text": "{\"generated\":\"2026-10-24\",\"records\":[{\"id\":\"sphere/3/6\",\"N\":3,\"P\":6,\"score_cert\":1.2345678901234567,\"config\":{\"rho\":1.234567890123456u7,\"pieces\":[{\"q\":[1,0,-0.5,2e-7]}]},\"status\":\"best_known\",\"bound\":null,\"ok\":true,\"no\":false}]}",
+   "message": "Expected ',' or '}' after property value in JSON at position 133 (line 1 column 134)"
+  },
+  {
+   "text": "{\"generated\":\"2026-10-24\",ecords\":[{\"id\":\"sphere/3/6\",\"N\":3,\"P\":6,\"score_cert\":1.2345678901234567,\"config\":{\"rho\":1.234n5678901234567,\"pieces\":[{\"q\":[1,0,-0.5,2e-7]}]},\"status\":\"best_known\",\"bound\":null,\"ok\":true,\"no\":false}]}",
+   "message": "Expected double-quoted property name in JSON at position 26 (line 1 column 27)"
+  },
+  {
+   "text": "{\"generated\":\"2026-10-24\",\"records\":[{\"id\":\"sphere/3/6\",\"N\":3,\"P\":6core_cert\":1.2345678901234567,\"config\":{\"rho\":1.2345678901234567,\"pieces\":[{\"q\":[1,0,-0.5,2e-7]}]},\"status\":\"best_known\",\"bound\":null,\"ok\":true,\"no\":false}]}",
+   "message": "Expected ',' or '}' after property value in JSON at position 67 (line 1 column 68)"
+  },
+  {
+   "text": "12.5e\"-{",
+   "message": "Exponent part is missing a number in JSON at position 5 (line 1 column 6)"
+  },
+  {
+   "text": "{\"generated\":\"2026-10-24\",\"records\":[{\"id\":\"sphere/3/6\",\"N\":3,\"P\":6,\"score_cert\":1.234\n678901234567,\"config\":{\"rho\":1.2345678901234567,\"pieces\":[{\"q\":[1,0,-0.5,2e-7]}]},\"status\":\"best_known\",\"nd\":null,\"ok\":true,\"no\":false}]}",
+   "message": "Expected ',' or '}' after property value in JSON at position 87 (line 2 column 1)"
+  },
+  {
+   "text": "5e😀-3",
+   "message": "Exponent part is missing a number in JSON at position 2 (line 1 column 3)"
+  },
+  {
+   "text": "[\n  {\n    \"a\": \"x\\ny0\\\"z\\\\wé€\",\n    \"b\": [\n      true,\n      false,\n      null,\n      -0.0015,\n      0,\n      12\n    ]\n  },\n  \"s\",\n  3\n]",
+   "message": null
+  },
+  {
+   "text": "{\"P\":2:,\"config\":{\"s\":1.5,\"pieces\":[[0,0,0,1,0,0,0],[0.25,-0.75,1e-9,0.5,😀0.5,0.5,0.5]]}}",
+   "message": "Expected ',' or '}' after property value in JSON at position 6 (line 1 column 7)"
+  },
+  {
+   "text": "{\"generated\":\"2026-10-24\",\"records\":[{\"id\":\"sphere/3/6\",\"N\":3,\"P\":6-\"score_cert\":1.2345678901234567,\"config\":{\"rho\":1.2345678901234567,\"pieces\":[{\"q\":[1,0,-0.5,2e-7]}]},\"statu\ns\":\"best_known\",\"bound\":null,\"ok\":true,\"no\":false}]}",
+   "message": "Expected ',' or '}' after property value in JSON at position 67 (line 1 column 68)"
+  },
+  {
+   "text": "{\"a\" : [ 1 , 2 , { \"b\" : \"c\" } ] , \"d\" :00 -0.0 , \"e\" : 1E+2 }",
+   "message": "Unexpected number in JSON at position 41 (line 1 column 42)"
+  },
+  {
+   "text": "{\"generated\":\"2026-10-24\",\"records\":[{\"id\":\"sphere/3/6\",\"N\":3,\"P\":6,\"score_cert\":1.2345678901234567,\"config\":{\"rho\":1.23456789012",
+   "message": "Expected ',' or '}' after property value in JSON at position 129 (line 1 column 130)"
+  },
+  {
+   "text": "{\"generated\":\"2026-10-24\",\"records\":[{\"id\":\"sphere/3/6\",\"N\":3,\"P\":6,\"score_cert\":1.2345678901234567,\"config\":{\"rho\":1.2345678901234567,\"pieces\":[{\"q\":[\\u121,0,-0.5,2e-7]}]},\"status\":\"best\u0001known\",\"bound\":null,\"ok\":true,\"no\":false}]}",
+   "message": "Unexpected token '\\', ...\"s\":[{\"q\":[\\u121,0,-0\"... is not valid JSON"
+  },
+  {
+   "text": "12.,5e-3",
+   "message": "Unterminated fractional number in JSON at position 3 (line 1 column 4)"
+  },
+  {
+   "text": "{\"a\" : [ 1 , 2 , { \"b\" : \"c\" } ] , \"d\" : -0.0{ , \"e\" : 1E+2 }",
+   "message": "Expected ',' or '}' after property value in JSON at position 45 (line 1 column 46)"
+  },
+  {
+   "text": "[\n  {\n    \"a\": \"x\\ny\\\"z\\\\wé€\",\n    \"b\": [\n      true,\n      false,\n      null,\n",
+   "message": "Unexpected end of JSON input"
+  },
+  {
+   "text": "{\"P\":2,\"conf\":{\"s\":1.5,\"pieces\":[[0,0,0,1,0,0,0],[0.25,-0.75,1e-9,0.5,0.5,0.5,0.5]]}}",
+   "message": null
+  },
+  {
+   "text": "[\n \" {\n    \"a\": \"y\\\"z\\\\wé€\",\n    \"b\": [\n      true,\n      false,\n      null,\n      -0.0015,\n      0,\n      12\n    ]\n  },\n  \"s\",\n  3\n]",
+   "message": "Bad control character in string literal in JSON at position 6 (line 2 column 5)"
+  },
+  {
+   "text": "{\"generated\":\"2026-10-24\",\"records\":[{\"id\":\"sphere/3/6\",\"N\":3,\"P\":6,\"score_cert\":1.2345678901234567,\"config\":{\"rho\":1.45678901234567,\"pieces\":[{\"q\":[1,0,-0.5,2e-7]}]},\"status\":\"best_known\",\"bound\":null,\"ok\":true,\"no\":false}]}",
+   "message": null
+  },
+  {
+   "text": "12-",
+   "message": "Unexpected non-whitespace character after JSON at position 2 (line 1 column 3)"
+  },
+  {
+   "text": "1.5e-3",
+   "message": null
+  },
+  {
+   "text": "{\"P\r\":2,\"config\":{\"s\":1.5,\"ces\":[[0,0,0,1,0,0,0],[0.25,-0.75,1e-9,0.5,0.5,0.5,0.5]]}}",
+   "message": "Bad control character in string literal in JSON at position 3 (line 1 column 4)"
+  },
+  {
+   "text": "{\"generated\":\"2026-10-24\",\"records\"😀[{\"id\":\"sphere/3/6\",\"N\":3,\"P\":6,\"score_cert\":1.2345678901234567,\"config\":{\"rho\":1.2345678901234567,\"pieces\":[{\"q\":[1,0,-0.5,2e-7]}]},\"status\":\"best_known\",\"bound\":null,\"ok\":true,\"no\":false}]}",
+   "message": "Expected ':' after property name in JSON at position 35 (line 1 column 36)"
+  },
+  {
+   "text": "[\n  {\n    \"a\": \"x\\ny\\\"wé€\",\n    \"b\": [\n      true,\n      false,\n      null,\n      -0.0015,\n      0,\n      12\n    ]\n  },\n  \"s\",\n  3\n]",
+   "message": null
+  },
+  {
+   "text": "{\"generated\":\"2026-10-24\",\"records\":[{\"id\":\"sphere/3/6\",\"N\":3,\"P\":6,\"score_cert\":1.2345678901234567,\"config\":{\"rho\":1.2345678901234567,\"pieces\":[{\"q\":[E1,0,-0.5,2e-7]}]},\"sttatus\":\"best_known\",\"bound\":null,\"ok\":true,\"no\":false}]}",
+   "message": "Unexpected token 'E', ...\"s\":[{\"q\":[E1,0,-0.5,\"... is not valid JSON"
+  },
+  {
+   "text": "[\n  {\n   [ \"a\": \"x\\ny\\\"z\\\\wé€\",\n    \"b\": [\n      true,\n      false,\n      null,\n      -0.0015,\n      0,\n      12\n    ]\n  },\n  \"s\",\n  3\n]",
+   "message": "Expected property name or '}' in JSON at position 9 (line 3 column 4)"
+  },
+  {
+   "text": "1€2.-e-3",
+   "message": "Unexpected non-whitespace character after JSON at position 1 (line 1 column 2)"
+  },
+  {
+   "text": "{\"generated\":\"202",
+   "message": "Unterminated string in JSON at position 17 (line 1 column 18)"
+  },
+  {
+   "text": "{\"generated\":\"2026-10-24\",\"records\":[{\"id\":\"sphere/3/6\",\"N\":3,\"P€\":6,\"score_cert\":1.2345678901234567,\"config\":{\"rho\":1.2345678901234567,\"pieces\":[{\"q\":[1,0,-0.5,2e-7]}]},\"status\":\"best_known\",\"bound\":null,\"ok\":true,\"no\":false}]}",
+   "message": null
+  },
+  {
+   "text": "{\"a\" : [ 1 , 2 , { \"b\" : \"c\" true} ] , \"d\" : -0.0 , \"e\" : 1E+2 }",
+   "message": "Expected ',' or '}' after property value in JSON at position 29 (line 1 column 30)"
+  },
+  {
+   "text": "{\"a\" : [ 1 , 2 , { \"b\" : \"c\" } ] , \"d\" :f -.0.0 , \"e\" : 1E+2 }",
+   "message": "Unexpected token ' ', ...\"] , \"d\" :f -.0.0 , \"\"... is not valid JSON"
+  },
+  {
+   "text": "\"a string +ith \\\\ and \\\" and \\u0001 and 😀\"",
+   "message": null
+  },
+  {
+   "text": "\"a string with \\\\ and \\\"an0d \\u0001 and 😀\"",
+   "message": null
+  },
+  {
+   "text": "\"a string with \\\\ and \\\" and \\u0001 and 😀\"",
+   "message": null
+  },
+  {
+   "text": "{\"generated\":\"2026-10-24\",\"records\":[{\"id\":\"sphere/3/6\",\"N\":3,\"P\":6,\"",
+   "message": "Unterminated string in JSON at position 69 (line 1 column 70)"
+  },
+  {
+   "text": "a\" : [ 1 , 2 ,]{ \"b\" : \"c\" } ] , \"d\" : -0.0 , \"e\" : 1E+2 }",
+   "message": "Unexpected token 'a', \"a\" : [ 1 ,\"... is not valid JSON"
+  },
+  {
+   "text": "{\"a\" : [ 1 , 2 , { \"b\" : \"c\" } ] , \"d\" : -0.0 , \"e 1E+2 }",
+   "message": "Unterminated string in JSON at position 57 (line 1 column 58)"
+  },
+  {
+   "text": "{\"generated\":\"2026-10-24\",\"records\":[{\"id\":\"sphere/3/6\",\"N\":3,\"P\":6,\"score_cert\":1.2345678901234567,\"config\":{\"rho\":1.2345€678901234567,\"pieces\":[{\"q\":[1,0,-0.5,2e-7]}]},\"status\":\"best_known\",\"bound\":null,\"ok\":true,\"no\":false}]}",
+   "message": "Expected ',' or '}' after property value in JSON at position 122 (line 1 column 123)"
+  },
+  {
+   "text": "{\"generated\":\"2026-10-24\",\"records\":[{\"id\":\"sphere/3/6\",\"N\":3,\"P\":6,\"score_cert\":1.2345678901234567,\"config\":{\"rho\":1.2345678901234567,\"pieces\":[{\"q\":[1,0,-0.5,2e-7},\"status\":\"best_knownE\",\"bound\":null,\"ok\":true,\"no\":false}]}",
+   "message": "Expected ',' or ']' after array element in JSON at position 164 (line 1 column 165)"
+  },
+  {
+   "text": "[\n {\n    \"a\": \"x\\ny\\\"z\\\\wé€\",\n    \"b\": [\n  e   true,\n      false,\n      null,\n      -0.0015,\n      0,\n      12\n    ]\n  },\n  \"s\",\n  3\n]",
+   "message": "Unexpected token 'e', ...\" \"b\": [\n  e   true,\n\"... is not valid JSON"
+  },
+  {
+   "text": "[\n  {\n    \"a\": \"x\\\"z\\\\wé€\",\n    \"b\": [\n      true,\n      false,\n      null,\n      ",
+   "message": "Unexpected end of JSON input"
+  },
+  {
+   "text": "{\"P\":2,\"config\":{\"s\":1.5,\"pieces\":[[0,0,0,1,0,0,0],[0.25,-0.75,1e-9,0.5,0.50.5,0.5]]}}",
+   "message": "Expected ',' or ']' after array element in JSON at position 76 (line 1 column 77)"
+  },
+  {
+   "text": "12.5e-n",
+   "message": "Exponent part is missing a number in JSON at position 6 (line 1 column 7)"
+  },
+  {
+   "text": "{\"generated\":\"2026-10-24\",\"records\":[{\"id\":\"sphere/3/6\",\"N\":3,\"P\":6,\"score_cert\":1.2345678901234567,\"config\":{\"rho\":1.2345678901234567,\"pieces\":[{\"q\":[1,0,-02e-7]}]},\"status\":\"best_known\",\"boundull,\"ok\":true,\"no\":false}]}",
+   "message": "Unexpected number in JSON at position 157 (line 1 column 158)"
+  },
+  {
+   "text": "{ : [ 1 , 2 , { \"b\" : \"c\" } ] , \"d\" : 0.0 , \"e\" : 1E+2 }",
+   "message": "Expected property name or '}' in JSON at position 2 (line 1 column 3)"
+  },
+  {
+   "text": "{\"a\" : [ \r\n1 , 2 , { \"b\"true : \"c\" } ] , \"d\" : -0.0 , \"e\" : 1E+2 }",
+   "message": "Expected ':' after property name in JSON at position 24 (line 2 column 14)"
+  },
+  {
+   "text": "{\"P\":2,\"config\":{\"s\":1.5,\"piec+s\":[[0,0,0,1,0,0,0],[0.25,-0.75,1e-9,0.5,0.5,0.5,0.5]]}}",
+   "message": null
+  },
+  {
+   "text": "1E2.5e-3",
+   "message": "Unexpected non-whitespace character after JSON at position 3 (line 1 column 4)"
+  },
+  {
+   "text": "[\n  {\n  \"a\": \"x\\ny\\\"z\\\\wé€\",\n    \"b\": [\n      true,\n      false,\n      null,\n      -0.0015,\n      0,\n      12\n    ]\n  },\n  ",
+   "message": "Unexpected end of JSON input"
+  },
+  {
+   "text": "\"a string with \\\\ and \\\" and \\u0001\r\nnd 😀\"",
+   "message": "Bad control character in string literal in JSON at position 35 (line 1 column 36)"
+  },
+  {
+   "text": "\"a string with \\\\  \\\" and \\u0001 and 😀\"",
+   "message": null
+  },
+  {
+   "text": "{\"a\" : [ 1 , 2 , { \"b\" : \"c\" } ] , \"d\" : -0.0 , \"e\"",
+   "message": "Expected ':' after property name in JSON at position 51 (line 1 column 52)"
+  },
+  {
+   "text": "{\"P\":2,\"config\":{\"s\":1.5,\"pieces\":[[0,0,0,1,0,0,[0.25,-0.75,1e-9,0.5,0.5,0.5,0.5]]}}",
+   "message": "Expected ',' or ']' after array element in JSON at position 82 (line 1 column 83)"
+  },
+  {
+   "text": "12.5-3",
+   "message": "Unexpected non-whitespace character after JSON at position 4 (line 1 column 5)"
+  },
+  {
+   "text": "5e-3",
+   "message": null
+  },
+  {
+   "text": "{\"a\" : [ 1 , 2 ,  \"b\" : \"c\" } ]  \"d\" : -0.0 , \"e\" : 1E+2 }",
+   "message": "Expected ',' or ']' after array element in JSON at position 22 (line 1 column 23)"
+  },
+  {
+   "text": "\"a string with \\\\ and \\\" and \\u0001 and u😀\"",
+   "message": null
+  },
+  {
+   "text": "{\"a\" : [ 1 , 2 , { \"b\"00: \"c\" } ] , \"d\" : -0.0\"e\" : 1E+2 }",
+   "message": "Expected ':' after property name in JSON at position 22 (line 1 column 23)"
+  },
+  {
+   "text": "{\r\na\" : [ 1 , 2 , { \"b\" : \"c\" } ] , \"d\" : -0.0 , \"e\" : 1E+2 }",
+   "message": "Expected property name or '}' in JSON at position 3 (line 2 column 1)"
+  },
+  {
+   "text": "{\"generated\":\"2026-10-24\",\"records\":[{\"id\":\"sphere/3/6\",\"N\":3,\"P\":6,\"score_c\\ert\":1.2345678901234567,\"config\":{\"rho\":1.2345678901",
+   "message": "Bad escaped character in JSON at position 77 (line 1 column 78)"
+  },
+  {
+   "text": "\"a stringf with \\\\ and \\\" and \\u0001 and 😀\"",
+   "message": null
+  },
+  {
+   "text": "{\"P\":2x\"config\":{\"s\":1.5,\"pieces\":[[0,0,0,1,0,0,0],[0.25,-0.75,1e-9,0.5,0.5,0.5,0.5]]}}",
+   "message": "Expected ',' or '}' after property value in JSON at position 6 (line 1 column 7)"
+  },
+  {
+   "text": "[\n  {\n    \"a\": \"x\\ny\\\"z\\\\wé€\",\n    \"b\": [\n      true,\n      false,\n      ll,\n      -0.0u015,\n      0,\n      12\n    ]\n  },\n  \"s\",\n  3\n]",
+   "message": "Unexpected token 'l', ...\"se,\n      ll,\n      \"... is not valid JSON"
+  },
+  {
+   "text": "{\"P\":2,\"config\":{\"s\":1.5,\"pieces\":[[0,0,0,1,0,0,0],[0.25,-0.75,1e-9,0.5,0.5,0.5,0.5]]}}",
+   "message": null
+  },
+  {
+   "text": "{\"P\":2,\"config\":{\":1.5,\"pieces\":[[0,0,0,1,0,0,0],[0.25,-0.75,1e-9,0.5,0.5,0.5,0.5]]}}",
+   "message": "Expected ':' after property name in JSON at position 24 (line 1 column 25)"
+  },
+  {
+   "text": "{\"P\":2,\"config\":{\"s\":1.5,\"pieces\":[[0,0,0,1,0,0,0],[0.25,-0.75,1e-9,0.5,,0.5,0.5]]}}",
+   "message": "Unexpected token ',', ...\",1e-9,0.5,,0.5,0.5]]\"... is not valid JSON"
+  },
+  {
+   "text": "12",
+   "message": null
+  },
+  {
+   "text": "{\"a\" : [ 1 , 2 , { \"b\" : \"c\" } ] , \"d\" \\u: -0.0 , \"e\" : 1E+2 }",
+   "message": "Expected ':' after property name in JSON at position 39 (line 1 column 40)"
+  },
+  {
+   "text": "{\"a\" : [ 1 , 2 , { \"b\" : \"c\" } ] , \"d\" : -0. \"e\" : 1E+2 }",
+   "message": "Unterminated fractional number in JSON at position 44 (line 1 column 45)"
+  },
+  {
+   "text": "{\"P\":2,\"config\":{\"s\":1\"pieces\":[[0,0,0,1,0,0,0],[0.25,-0.75,1e-9,0.5,0.5f0.5,0.5]]}}",
+   "message": "Expected ',' or '}' after property value in JSON at position 22 (line 1 column 23)"
+  },
+  {
+   "text": "/12.5e-3",
+   "message": "Unexpected token '/', \"/12.5e-3\" is not valid JSON"
+  },
+  {
+   "text": "\"a str with \\\\ and +\" and \\u0001 and 😀\"",
+   "message": "Unexpected non-whitespace character after JSON at position 22 (line 1 column 23)"
+  },
+  {
+   "text": "{\"generated\":\"2026-10-24\",\"records\":[{\"id\":\"sphere/3/6\",\"N\":3,\"P\":6,\"score_cert\":1.2345678901234567,\"config\":{\"rho\":1.2345678901234567,\"pieces\":[{\"q\":[1,0,-0.5,2e-7]}]},\"status\":\"best_known\",\"bonullnd\":null,\"ok\":true,\"no\":false}]}",
+   "message": null
+  },
+  {
+   "text": "{\"a\" : [ 1 , 2 , { \"\"b\" : \"c\" } ] , \"d\" : -0.0 :, \"e\" : 1E+2 }",
+   "message": "Expected ':' after property name in JSON at position 21 (line 1 column 22)"
+  },
+  {
+   "text": "\r\n12.5e-31",
+   "message": null
+  },
+  {
+   "text": "[\n  {\n    \"a\": \"x\\ny\\\"z\\\\€\",\n    \"b\": [\n      true,\n      false,\n    - null,\n      -0.0015,\n      0,\n      12\n    ]\n  },\n  \"s\",\n  3\n]",
+   "message": "No number after minus sign in JSON at position 70 (line 7 column 6)"
+  },
+  {
+   "text": "{\"P\":2,\"config\":{\"s\":1.5,\"pieces\":[[0,0,0,1,0,0,0],[0.25,-0.75,1e-9,0.5,0.5,0.5,0.5]}}",
+   "message": "Expected ',' or ']' after array element in JSON at position 84 (line 1 column 85)"
+  },
+  {
+   "text": "{\"generated\":\"2026-10-24\",\"records\":[{\"i\\u12d\":\"sphere/3/6\",\"N\":3,\"P\":6,\"score_cert\":1.2345678901234567,\"config\":{\"rho\":1.2345678901234567,\"pieces\":[{\"q\":[1,0,-0.5,2e-7]}]},\"status\":\"best_known\",\"bound\":null,\"ok\":true,\"no\":false}]}",
+   "message": "Bad Unicode escape in JSON at position 45 (line 1 column 46)"
+  },
+  {
+   "text": "{\"a\" : [ 1 , 2 , { \"b\" : \"c\"1 } ] , \"d\" : -0.0 , \"e\" : 1E+2 }",
+   "message": "Expected ',' or '}' after property value in JSON at position 28 (line 1 column 29)"
+  },
+  {
+   "text": "{\"a\" : [ 1, 2 , { \"b\" : \"c\" x ] , \"d\" : -0.0 , \"e\" : 1E+2 }",
+   "message": "Expected ',' or '}' after property value in JSON at position 28 (line 1 column 29)"
+  },
+  {
+   "text": "\"a string with \\\\ ",
+   "message": "Unterminated string in JSON at position 18 (line 1 column 19)"
+  },
+  {
+   "text": "1002.5\\u12-3",
+   "message": "Unexpected non-whitespace character after JSON at position 6 (line 1 column 7)"
+  },
+  {
+   "text": "{\"P\"\t:2,\"config\":{\"s\":1.5,\"pieces\":[[0,0,0,1,0,0,0],[0.25,-0.75,1e-9,0. 5,0.5,0.5,0.5]]}}",
+   "message": "Unterminated fractional number in JSON at position 71 (line 1 column 72)"
+  },
+  {
+   "text": "[\n  {\n    \"a\": \"x\\ny\\\"z\\\\wé€\",\n    \"b\": [\n      true,\n      false,\n      null,\n      -0.0,015,\n      0,\n      12\n    ]\n  },\n  \"s\",\n  3\n]",
+   "message": "Unexpected number in JSON at position 91 (line 8 column 13)"
+  },
+  {
+   "text": "[\n  {\n    \"a\": \"x\\ny\\\"z\\\\\rwé€\",\n    \"b\": [\n      true,\n      false,\n      null,\n      -0.0015,\n      0,\n      12\n    ]\n  },\n  \"s\",\n  3\n]",
+   "message": "Bad control character in string literal in JSON at position 25 (line 3 column 20)"
+  },
+  {
+   "text": "{\"P\":2,\"config\":{\"s\":1.5,\"pieces\":[[0,0,0,1,0,0,0],[0.25,-0.75,1enull9,0.5,0.5,0.5,0.5]]}}",
+   "message": "Exponent part is missing a number in JSON at position 65 (line 1 column 66)"
+  },
+  {
+   "text": "1\r\n.5e-3",
+   "message": "Unexpected non-whitespace character after JSON at position 3 (line 2 column 1)"
+  },
+  {
+   "text": "[\n  {\n    \"a\": \"x\\ny\\\"z\\\\wé€\",\n    \"b\": [\n      true,\n      false,\n      null,\n      -0.0015,\n      0,\n      12\n ]\n  },\n  \"s\",\n  3\n]",
+   "message": null
+  },
+  {
+   "text": "{\"a\" : [ 1 , 2 , { \"b\" \"c\" }, ] , \"d\" : -0.0 , \"e\" : 1E+2 }",
+   "message": "Expected ':' after property name in JSON at position 23 (line 1 column 24)"
+  },
+  {
+   "text": "\"a string with \\\\ and \\\" and \\u00",
+   "message": "Bad Unicode escape in JSON at position 33 (line 1 column 34)"
+  },
+  {
+   "text": "{\"a\" : [ 1 ",
+   "message": "Expected ',' or ']' after array element in JSON at position 11 (line 1 column 12)"
+  },
+  {
+   "text": "{\"generated\":\"2026-10-24\",\"records\":[{\"id\":\"sphere]/3/6\",\"N\":3,\"P\":6,\"score_cert\":1.2345678901234567,\"config\":{\"rho\":1.2345678901234567,\"pieces\":[{\"q\":[1,0,-0.5,2e-7]}]},\"status\":\"best_known\",\"boundull,\"ok\":true,\"no\":false}]}",
+   "message": "Expected ':' after property name in JSON at position 203 (line 1 column 204)"
+  },
+  {
+   "text": "12.5\r\ne\"-3",
+   "message": "Unexpected non-whitespace character after JSON at position 6 (line 2 column 1)"
+  },
+  {
+   "text": "\"a string wit \\\\ and \\\" and \\u0001 and 😀\"\r",
+   "message": null
+  },
+  {
+   "text": "[\n  {\n    \"a\": \"x\\ny\\\"z\\\\wé€\",\n    \"b\": [\n      tr€ue,\n      false,\n      null,\n      -0.0015,\n      0,\n      12\n    ]\n  },\n  \"s\",\n  3\n]",
+   "message": "Unexpected token '€', ...\"[\n      tr€ue,\n     \"... is not valid JSON"
+  },
+  {
+   "text": "[\n  {\n    \"a\": \"x\\ny\\\"z\\\\wé€\",\n    \"b\": [\n      true,\n      false,+\n      null,\n   \r   -0.0015,\n      0,\n      12\n    ]\n  },\n  \"s\",\n  3\n]",
+   "message": "Unexpected token '+', ...\"    false,+\n      nu\"... is not valid JSON"
+  },
+  {
+   "text": "{\"P\":2,\"config\":{\"s\":1.5,\"pieces\":[[0,0,0,1,0,0,0],[0.25,e-0.75,1e-9,0.5,0.5,0.5,0.5]]}}",
+   "message": "Unexpected token 'e', ...\",0],[0.25,e-0.75,1e-\"... is not valid JSON"
+  },
+  {
+   "text": "{\"generated\":\"2026-10-24\",\"records\":[{\"id\":\"sphere/3/6\",\"N\":3,\"P\":6,\"score_cert\":1.2345678901234567,\"éconfig\":{\"rho\":1.2345678901234567,\"piec\\u12s\":[{\"q\":[1,0,-0.5,2e-7]}]},\"status\":\"best_known\",\"bound\":null,\"ok\":true,\"no\":false}]}",
+   "message": "Bad Unicode escape in JSON at position 145 (line 1 column 146)"
+  },
+  {
+   "text": "{\"P\":2,\"config\":{\"s\":1.5,\"pieces\":[[0,0,0,1,0,0,0],[0. 25,-0.75,1e-9,0.5,0.5,0.5,0.5]]}}",
+   "message": "Unterminated fractional number in JSON at position 54 (line 1 column 55)"
+  },
+  {
+   "text": "{\"P\":2,\"config\":{\"strue\":true1.5,\"pieces\":[[0,0,0,1,0,0,0],[0.25,-0.75,1e-9,0.5,0.5,0.5,0.5]]}}",
+   "message": "Expected ',' or '}' after property value in JSON at position 29 (line 1 column 30)"
+  },
+  {
+   "text": "\"a str\ring with \\\\ and \\\" and 001 and 😀\"",
+   "message": "Bad control character in string literal in JSON at position 6 (line 1 column 7)"
+  },
+  {
+   "text": "[\n  {\n    \"a\": \"x\\ny\\\"z\\\\wé€\",\n    \"b\": [\n      true,\n   false,\n      null,\n      -0.0015,\n      0,\n      12\n    ]\n  },\n  \"s\",\n  3\n]",
+   "message": null
+  },
+  {
+   "text": "\"a str\u0001ing with \\\\ and \\\" and \\u0001nd 😀\"",
+   "message": "Bad control character in string literal in JSON at position 6 (line 1 column 7)"
+  },
+  {
+   "text": "[\n  {\n    \"a\": \"x\\ny\\\"z\\\\wé€\",\n    \"b\": [\n      true,\n      false,\n  \n    null,\n      -0.0015,\n      0,\n      12\n    ]\n  },\n  \"s\",\n  3\n]",
+   "message": null
+  },
+  {
+   "text": "{\"P\":2,\"config\":{\"s\":1.5,\"pieces\":[[0,0,0,1,0,0,0],[0.25",
+   "message": "Expected ',' or ']' after array element in JSON at position 56 (line 1 column 57)"
+  },
+  {
+   "text": "{\"P\":2,\"confing\":{\"s\":1.5,\"pieces\":[[0,0,0,1,0,0,0],[0.25,-0.75,1e-9,0.5,0.5,0.5,0.5]]}}",
+   "message": null
+  },
+  {
+   "text": "+{\"P\":2,\"config\":{\"s\":1.5,\"pieces\":[[0,0,0,1,t,0,0],[0.25,-0.75,1e-9,0.5,0.5,0.5,0.5]]}}",
+   "message": "Unexpected token '+', \"+{\"P\":2,\"c\"... is not valid JSON"
+  },
+  {
+   "text": "{\"a\" : [ 1 , 2 , { \"b\" : \"c\" } ] , \"d\" : -x0 , \"e\" : 1E+2 }",
+   "message": "No number after minus sign in JSON at position 42 (line 1 column 43)"
+  },
+  {
+   "text": "12.5e-u.3",
+   "message": "Exponent part is missing a number in JSON at position 6 (line 1 column 7)"
+  },
+  {
+   "text": "[\n  {\n   ",
+   "message": "Expected property name or '}' in JSON at position 9 (line 3 column 4)"
+  },
+  {
+   "text": "\"aring with \\\\ nd \\\" and \\u0001 and 😀\"",
+   "message": null
+  },
+  {
+   "text": "[\n  {\n    \"a\": \"x\\ny\\\"z\\\\wé€\",\n    \"b\"\n      true,\n      false,\n    null,\n      -0.0015,\n      0,\n      12\n    ]\n  },\n  \"s\",\n  3\n]",
+   "message": "Expected ':' after property name in JSON at position 45 (line 5 column 7)"
+  },
+  {
+   "text": "[\n  {\n    \"a\": \"x\\ny\\\"z\\\\wé€\",\n    \"b\": [\n      true,\n      false,\n      null,\n      -0.0015,\n      0,\n      12\n    ]\n  },\n  \",\n  3\n]",
+   "message": "Bad control character in string literal in JSON at position 127 (line 13 column 5)"
+  },
+  {
+   "text": "{\"generated\":\"2026-10-24\",\"records\":[{\"id\":\"sphere/3/6\",\"N\":3,\"P\":6,\"score_cert\":1.2345678901234567,\"config\":{\"rho\":10.2345678901234567,\"pieces\":[{\"q\":[1,0,-0.5,2e-7]}]},\"status\":\"best_known\",\"bound\":null,\"ok\":true,\"no\":false}]}",
+   "message": null
+  },
+  {
+   "text": "[\n  {\n    \"a\": \"x\\ny\\\"z\\\\wé€\",\n    \"b\": [\n      true,\n ",
+   "message": "Unexpected end of JSON input"
+  },
+  {
+   "text": "{\"generated\":\"2026-10-24\"00\"records\":[{\"id\":\"sphere/3/6\",\"N\":3,\"P\":6,\"score_cert\":1.2345678901234567,\"config\":{\"rho\":1.2345678901234567,\"pieces\":[{\"q\":[1,0,-0.5,2e-7]}]},\"status\":\"best_kntrueown\",\"bound\":null,\"ok\":true,\"no\":false}]}",
+   "message": "Expected ',' or '}' after property value in JSON at position 25 (line 1 column 26)"
+  },
+  {
+   "text": "12.5e-3\\u",
+   "message": "Unexpected non-whitespace character after JSON at position 7 (line 1 column 8)"
+  },
+  {
+   "text": "{\"generated\":\"2026-10-24\",\"records\":[{\"id\":\"sphere/3/6\",\"N\":3,\"P\":6,\"score_cert\":1.2345678901234567,\"config\"",
+   "message": "Expected ':' after property name in JSON at position 108 (line 1 column 109)"
+  },
+  {
+   "text": "\"a string with \\\\- and \\\" and \\u0001 fand 😀\"",
+   "message": null
+  },
+  {
+   "text": "{\"a\"00 : [ 1 , 2 , \"b\" : \"c\" } ] , \"d\" : -0.0 , \"e\" : 1E+2 }",
+   "message": "Expected ':' after property name in JSON at position 4 (line 1 column 5)"
+  },
+  {
+   "text": "\"a string with \\\\ and \\\" aEd \\u0001 and 😀\"",
+   "message": null
+  },
+  {
+   "text": "12.5Ee-",
+   "message": "Exponent part is missing a number in JSON at position 5 (line 1 column 6)"
+  },
+  {
+   "text": "{\"P\":",
+   "message": "Unexpected end of JSON input"
+  },
+  {
+   "text": "12.{5e-3",
+   "message": "Unterminated fractional number in JSON at position 3 (line 1 column 4)"
+  },
+  {
+   "text": "{\"a\" : [ 1 , 2 , { \"b\" : \"c\" } ] , \"d\" : 0 , \"\" : 1E+2 }",
+   "message": null
+  },
+  {
+   "text": "{\"a\" : [ 1 , 2 , { \"b\" : \"c\" } ] , :\"d\" : -0x.0 , \"e\" : 1E+2 }",
+   "message": "Expected double-quoted property name in JSON at position 35 (line 1 column 36)"
+  },
+  {
+   "text": "\"a s:tring with \\\\ and\" and \\u0001 and 😀\"",
+   "message": "Unexpected non-whitespace character after JSON at position 24 (line 1 column 25)"
+  },
+  {
+   "text": "{\"a\" : [ 1 , 2 , { \"b.\" : \"c\" } ] , \"d\" : -0.0 , \"e\" : 1E+2 }",
+   "message": null
+  },
+  {
+   "text": "{\"generated\":\"2026-10-24\",\"records\":[{\"id\":\"sphere/3/6\",\"N\":3,\"P\":6,\"score_cert\":1.2345678901234567,\"config\":{\"rho\"1.2345678901234567,\"pieces\":[{\"q\":[1,0,-0.5,2e-7]}]},\"status\":\"best_known\",\"bound\":null,\"ok\":true,\"no\":false}]}",
+   "message": "Expected ':' after property name in JSON at position 115 (line 1 column 116)"
+  },
+  {
+   "text": "12\u0001.5e-\"3",
+   "message": "Unexpected non-whitespace character after JSON at position 2 (line 1 column 3)"
+  },
+  {
+   "text": "{\"a\" : [ 1 , 2 , { \"b\" : \"c\" } ] , \"d\" : -0.0 ,e\" : 1E+2 }",
+   "message": "Expected double-quoted property name in JSON at position 47 (line 1 column 48)"
+  },
+  {
+   "text": "{\"a\" : [ 1 : 2 , { \"b\" : \"c\" } ] , \"d\" : -0.0 , \"e\" : 1E+2 }",
+   "message": "Expected ',' or ']' after array element in JSON at position 11 (line 1 column 12)"
+  },
+  {
+   "text": "{\"generated\":\"2026-10-24\",\"records\"\\u:[{\"id\":\"sphere/3/6\",\"N\":3,\"P\":6,\"score_cert\":1.2345678901234567,\"config\":{\"rho\":1.2345678901234567,\"pieces\":[{\"q\":[1,0,-0.5,2e-7]}]},\"status\":\"best_known\\u12,\"bound\":null,\"ok\":true,\"no\":false}]}",
+   "message": "Expected ':' after property name in JSON at position 35 (line 1 column 36)"
+  },
+  {
+   "text": "[\n  {\n    \"a\": \"x\\ny\\\"z\\\\wé€\",\n    \"b\": [\n      true,\n      false,\n   e   null,\n      -0.0015,\n      0,\n      12\n    ]\n  f},\n  \"s\",\n  3\n]",
+   "message": "Unexpected token 'e', ...\"false,\n   e   null,\n\"... is not valid JSON"
+  },
+  {
+   "text": "{\"P\":2,\"config\":{\"s\"\"1.5,\"piec}es\":[[0,0,0,1,0,0,0],[0.25,-0.75,1e-9,0.5,0.5,0.5,0.5]]}}",
+   "message": "Expected ':' after property name in JSON at position 20 (line 1 column 21)"
+  },
+  {
+   "text": "{\"a\" : [ 1 , 2 , { \"b\" : \"c\" } ] , \"dt\" : -0.0 , \"e\" : 1E+2 }",
+   "message": null
+  },
+  {
+   "text": "{\"generated\":\"2026-10-24\",\"records\":[{\"id\":\"sphere/3/6\",\"N\":3,\"P\":6,\"score_cert\":1.2345678901234567,\"config\":{\"rho\":1.2345678901234567,\"pieces\":[{\"q\":[1,0,-0.5,2e-7]}]},\"status\":\"best_known\",\"bound\":null,\"ok\":true,\"no\":fnullalse}]}",
+   "message": "Unexpected token 'n', ...\"rue,\"no\":fnullalse}]\"... is not valid JSON"
+  },
+  {
+   "text": "{\"a\" : [ 1 , 2 , { \"b\" : \"c\" } ] , \"d\" : -0.é0 , \"e\" : 1E+2 }",
+   "message": "Unterminated fractional number in JSON at position 44 (line 1 column 45)"
+  },
+  {
+   "text": "{\"a\" : [ 12 , { \"b\" : \"c\" } ] , \"d\" : -0.0 , \"e\" : 1E+2 }",
+   "message": null
+  },
+  {
+   "text": "{\"generated\":\"2026-10-24\",\"recos\":[{\"id\":\"sphere/3/6",
+   "message": "Unterminated string in JSON at position 52 (line 1 column 53)"
+  },
+  {
+   "text": "{\"a\" : [ 1 , 21, { \"b\" : \"c\" } ] , \"d\" : -0.0 , \"e\" : 1E/+2 }",
+   "message": "Exponent part is missing a number in JSON at position 56 (line 1 column 57)"
+  }
+ ]
+}

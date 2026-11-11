@@ -92,6 +92,26 @@ defect.
   them, since they run on several threads. Each request alone is answered as in the source, and
   requests that touch the same data end as they would have in some order of arrival: the
   transaction that stores an entry still decides who leads. The lines of the log follow that order.
+- **The heavy checks of the spaces** (spaces.ts: `heavyTurn`). In the source a heavy check
+  shares the server's one thread with every other request, in slices of 20 ms, and one runs at a
+  time. Here one runs at a time too, on a thread kept for the heavy checks beside the workers that
+  verify everything else, so the queue is the source's: the same checks count as heavy, eight may
+  wait their turn, and one more is refused with the same 503 (`the server is busy checking other
+  entries`, `Retry-After: 5`). What a client can see of the change is how long a turn lasts (the
+  500 polyhedra of the harness's `spaces-heavy`: 0.8 to 0.9 s of work in the source, 0.15 to 0.2 s
+  here, on the same machine), and so how often a request finds the queue full; and a submission
+  that is not heavy is not slowed by one that is.
+- **One check at a time per address** (spaces.ts: `checking`). The source answers 429 (`an entry
+  from this address is still being checked`, `Retry-After: 1`) to a submission that it looks at
+  while an entry of the same address, or of the submit key, is being checked. On one thread that
+  happens only while that check waits for its turn as a heavy check or has worked for more than a
+  slice of 20 ms: a shorter check is over before the next request is read. The Rust server gives
+  the same 429 while a heavy check of the address waits or runs. A submission that finds a check
+  of its address that is not heavy waits for it, some milliseconds, and is then handled as the
+  next request would have been in the source; it is not refused, so that two entries sent at once
+  are not told to wait where the source would have taken both. A check that is not heavy and yet
+  outlasts a slice in the source (29 many-sided pieces on a surface, say) therefore refuses no
+  one here.
 - **The connection itself** is the HTTP library's (hyper) and zlib's: the `Date`, `Connection` and
   `Keep-Alive` headers, when an idle connection is closed (Node: after 5 s; here: after 60 s), the
   version in the status line of an answer to an HTTP/1.0 request, where a streamed body is cut into
@@ -100,8 +120,9 @@ defect.
   closes its sending side before it has read the answer gets none (Node: the answer, if it was
   ready at that moment).
 - **The repository's root** is the working directory of `polypack-server`; the TypeScript server
-  finds it from the place of its own source file. `data/records.json`, `apps/web/dist` and the
-  default database are looked for there.
+  finds it from the place of its own source file. `data/records.json`, the spaces' records
+  (`data/<space>/records.json`, and the configurations kept apart in `data/<space>/configs/`),
+  `apps/web/dist` and the default database are looked for there.
 - **What an internal error writes to stderr** is one line with the error's text, where Node prints
   the exception with its stack; the answer (500, `Internal Server Error`) is the same.
 

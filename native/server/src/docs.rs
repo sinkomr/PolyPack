@@ -212,12 +212,10 @@ pub fn docs_page(limits: DocsLimits, spaces: &SpacesDocs) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::spaces::{SpacesPort, StandInSpaces};
 
     #[test]
     fn the_page_renders_every_expression() {
-        let spaces = StandInSpaces::new();
-        let page = docs_page(DocsLimits { atlas_max_span: 100.0, atlas_max_pieces: 6000.0, holder_cache_names: 32.0, holder_max_age_ms: 900_000.0 }, spaces.docs());
+        let page = docs_page(DocsLimits { atlas_max_span: 100.0, atlas_max_pieces: 6000.0, holder_cache_names: 32.0, holder_max_age_ms: 900_000.0 }, &SpacesDocs::of_the_package());
         assert!(page.starts_with("<!doctype html>\n<html lang=\"en\">"));
         assert!(page.ends_with("</body>\n</html>"));
         assert!(!page.contains("${"));
