@@ -1,5 +1,5 @@
 import { expect, test } from "@playwright/test";
-import type { HolderResponse } from "@polypack/geometry";
+import type { HolderResponse, HoldersResponse } from "@polypack/geometry";
 
 const NAME = "Holder Page Test";
 
@@ -161,4 +161,67 @@ test("thousands of pairs are listed at once, in runs of P", async ({ page }) => 
   ]);
   await expect(page.locator("#rows tr").nth(1).locator("td").last()).toHaveText("1–3, 9");
   await expect(page.locator("#note")).toContainText("in 5,040 pairs of shapes");
+});
+
+test("the heading of a column sorts the holders table by it, and again turns the order round", async ({ page }) => {
+  // the list as the server would send it, by records and then by site bests
+  const holder = (name: string, records: number, site_bests: number, peak: number, beat_published: number) => ({
+    name,
+    records,
+    beat_published,
+    site_bests,
+    pending: 0,
+    peak,
+  });
+  const answer: HoldersResponse = {
+    holders: [
+      holder("mia", 9, 12, 9, 4),
+      holder("Zed", 5, 5, 20, 0),
+      holder("ann", 5, 5, 6, 4),
+      holder("Bob", 0, 0, 11, 0),
+    ],
+  };
+  await page.route(/\/api\/holders$/, (route) => route.fulfill({ json: answer }));
+  await page.goto("/holders.html");
+
+  const names = page.locator("#rows td.name");
+  const places = page.locator("#rows td:first-child");
+  const heading = (name: string) => page.getByRole("columnheader", { name, exact: true });
+  const sortBy = (name: string) => heading(name).getByRole("button", { name, exact: true }).click();
+
+  // as loaded: by place, and only that heading says so
+  await expect(names).toHaveText(["mia", "Zed", "ann", "Bob"]);
+  await expect(places).toHaveText(["1", "2", "2", "4"]);
+  await expect(heading("#")).toHaveAttribute("aria-sort", "ascending");
+  await expect(page.locator("th[aria-sort]")).toHaveCount(1);
+
+  // a column of counts starts with its largest; the place stays with the name
+  await sortBy("Most held");
+  await expect(names).toHaveText(["Zed", "Bob", "mia", "ann"]);
+  await expect(places).toHaveText(["2", "4", "1", "2"]);
+  await expect(heading("Most held")).toHaveAttribute("aria-sort", "descending");
+  await expect(page.locator("th[aria-sort]")).toHaveCount(1);
+  await sortBy("Most held");
+  await expect(names).toHaveText(["ann", "mia", "Bob", "Zed"]);
+  await expect(heading("Most held")).toHaveAttribute("aria-sort", "ascending");
+
+  // equal counts stay in the order of the server
+  await sortBy("Beat published");
+  await expect(names).toHaveText(["mia", "ann", "Zed", "Bob"]);
+
+  // names from A, whatever their capitals
+  await sortBy("Name");
+  await expect(names).toHaveText(["ann", "Bob", "mia", "Zed"]);
+  await expect(heading("Name")).toHaveAttribute("aria-sort", "ascending");
+  await sortBy("Name");
+  await expect(names).toHaveText(["Zed", "mia", "Bob", "ann"]);
+
+  // the keyboard reaches a heading, and # brings the first order back
+  await heading("#").getByRole("button").focus();
+  await page.keyboard.press("Enter");
+  await expect(names).toHaveText(["mia", "Zed", "ann", "Bob"]);
+  await expect(heading("#")).toHaveAttribute("aria-sort", "ascending");
+  await expect(page.locator("th[aria-sort]")).toHaveCount(1);
+  // a name still leads to its page
+  await expect(names.first().getByRole("link", { name: "mia" })).toHaveAttribute("href", "/holder.html?name=mia");
 });
