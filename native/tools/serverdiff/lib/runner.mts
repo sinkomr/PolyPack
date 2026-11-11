@@ -6,7 +6,7 @@ import { createHash } from "node:crypto";
 import { existsSync, mkdirSync, readFileSync, readdirSync, rmSync, statSync, writeFileSync } from "node:fs";
 import { dirname, join, resolve } from "node:path";
 import { DatabaseSync } from "node:sqlite";
-import { gunzipSync, gzipSync } from "node:zlib";
+import { gunzipSync, gzipSync, inflateSync } from "node:zlib";
 import { RawResponse, RequestSpec, SseStream, freePort, openSse, send } from "./http.mts";
 
 export const REPO = resolve(import.meta.dirname, "../../../..");
@@ -291,15 +291,17 @@ export async function runScenario(o: RunOptions): Promise<RunResult> {
     }
     let bytes = r.body;
     const packed: string[] = [];
-    const unpack = (what: string) => {
+    const unpack = (what: string, open: (packed: Buffer) => Buffer = gunzipSync) => {
       try {
-        bytes = gunzipSync(bytes);
+        bytes = open(bytes);
         packed.push(what);
       } catch (e) {
         rec.unpackError = `${what}: ${e instanceof Error ? e.message : String(e)}`;
       }
     };
     if (bytes.length && /\bgzip\b/.test(headers["content-encoding"] ?? "")) unpack("content-encoding");
+    // deflate too: Node's zlib does not write the same bytes on every processor (its x86-64 build finds other matches)
+    else if (bytes.length && /\bdeflate\b/.test(headers["content-encoding"] ?? "")) unpack("content-encoding", inflateSync);
     if (bytes.length && (headers["content-type"] ?? "").startsWith("application/gzip")) unpack("gzip file");
     if (packed.length) {
       // the bytes of a compressed body are the compressor's; what it holds is compared
