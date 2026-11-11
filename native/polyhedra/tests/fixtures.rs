@@ -1,7 +1,9 @@
 //! The port against the TypeScript's answers kept in `tests/fixtures/` (written by
-//! `native/tools/polyhedra-ref.mts --fixtures`): a few cases of every kind with what `parsePolyhedraConfig` and
-//! `validatePolyhedra` (tolerances 1e-9 and 1e-11, at most 20 errors) said, and lines of the catalogue. The full
-//! comparison is the example `polyhedradiff` with `native/tools/polyhedra-compare.mjs`.
+//! `native/tools/polyhedra-ref.mts --fixtures` under Node 24 on Linux x86-64, the production platform:
+//! native/tools/LINUX_REFERENCE.md): a few cases of every kind with what `parsePolyhedraConfig` and
+//! `validatePolyhedra` (tolerances 1e-9 and 1e-11, at most 20 errors) said, and lines of the catalogue. Every
+//! answer and every line must be the TypeScript's byte for byte. The full comparison is the example
+//! `polyhedradiff` with `native/tools/polyhedra-compare.mjs`.
 
 mod common;
 
@@ -34,23 +36,8 @@ fn cases_answer_as_the_typescript() {
     assert!(kinds.len() >= 20, "kinds: {kinds:?}");
 }
 
-/// The numbers of a catalogue line: every JSON string that reads as a number, in order.
-fn numbers(v: &Value, out: &mut Vec<f64>) {
-    match v {
-        Value::String(s) => {
-            if let Ok(x) = s.parse::<f64>() {
-                out.push(x);
-            }
-        }
-        Value::Array(a) => a.iter().for_each(|x| numbers(x, out)),
-        Value::Object(o) => o.values().for_each(|x| numbers(x, out)),
-        _ => {}
-    }
-}
-
-/// Names, lists and messages are the TypeScript's byte for byte. The volume bound is a cube root, and
-/// `polypack_js::math::cbrt` can differ from V8's in the last place (native/PORTING.md): those lines must have the
-/// same text and numbers within 1e-12 relative.
+/// Names, lists, ids, containers, messages and bounds are the TypeScript's byte for byte. The volume bound is a cube
+/// root: `polypack_js::math::cbrt` is V8's own, bit for bit, so its lines are exact too.
 #[test]
 fn catalogue_is_the_typescript_s() {
     let reference = lines("catalogue.jsonl");
@@ -58,19 +45,6 @@ fn catalogue_is_the_typescript_s() {
     for want in &reference {
         let v: Value = serde_json::from_str(want).expect("a catalogue line");
         let key = v["k"].as_str().expect("k");
-        let got = common::catalogue_line(key);
-        if &got == want {
-            continue;
-        }
-        assert!(key.starts_with("domain_bound/") || key.starts_with("volume_bound/"), "{key}:\n {got}\n {want}");
-        let g: Value = serde_json::from_str(&got).unwrap();
-        let (mut a, mut b) = (Vec::new(), Vec::new());
-        numbers(&g["v"], &mut a);
-        numbers(&v["v"], &mut b);
-        assert_eq!(a.len(), b.len(), "{key}");
-        for (x, y) in a.iter().zip(&b) {
-            assert!((x - y).abs() <= 1e-12 * y.abs(), "{key}: {x} | {y}");
-        }
-        assert_eq!(g["v"]["label"], v["v"]["label"], "{key}");
+        assert_eq!(&common::catalogue_line(key), want, "{key}");
     }
 }

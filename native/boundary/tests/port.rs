@@ -1,5 +1,10 @@
-//! The port against the TypeScript's own verdicts, without Node: the fixtures were written by
-//! native/tools/boundary-ref.mts (mode `fixtures`) from the full comparison's cases.
+//! The port against the TypeScript's own verdicts, without Node. The fixtures were written under Node 24 on Linux x86-64,
+//! the production platform (native/tools/LINUX_REFERENCE.md): cases.jsonl and extras.jsonl by native/tools/boundary-ref.mts
+//! (mode `fixtures`) from the full comparison's cases, builders.json by native/tools/boundary-tables.mts. Every number is
+//! compared exactly: `polypack_js::math` is that Node's Math bit for bit, and nothing here goes through `Math.pow` with a
+//! result that depends on its last bit (the d-cube's volume bound starts from one and is then refined exactly).
+//! A fixture cannot hold a -0 (JSON.stringify writes 0), so where numbers are compared as numbers 0 and -0 are the same;
+//! the builders' fixture hashes the bits, signs of zero included.
 
 mod common;
 
@@ -13,58 +18,9 @@ fn lines(text: &str) -> Vec<Value> {
     text.lines().filter(|l| !l.trim().is_empty()).map(|l| serde_json::from_str(l).expect("a JSON line")).collect()
 }
 
-/// The numbers of a text, and the text with each replaced by '#'.
-fn split_numbers(text: &str) -> (String, Vec<f64>) {
-    let b = text.as_bytes();
-    let mut out = String::new();
-    let mut numbers = Vec::new();
-    let mut i = 0;
-    while i < b.len() {
-        let start = i;
-        let mut j = i;
-        if b[j] == b'-' && j + 1 < b.len() && b[j + 1].is_ascii_digit() {
-            j += 1;
-        }
-        if j < b.len() && b[j].is_ascii_digit() {
-            while j < b.len() && b[j].is_ascii_digit() {
-                j += 1;
-            }
-            if j + 1 < b.len() && b[j] == b'.' && b[j + 1].is_ascii_digit() {
-                j += 1;
-                while j < b.len() && b[j].is_ascii_digit() {
-                    j += 1;
-                }
-            }
-            if j < b.len() && b[j] == b'e' {
-                let mut k = j + 1;
-                if k < b.len() && (b[k] == b'-' || b[k] == b'+') {
-                    k += 1;
-                }
-                if k < b.len() && b[k].is_ascii_digit() {
-                    while k < b.len() && b[k].is_ascii_digit() {
-                        k += 1;
-                    }
-                    j = k;
-                }
-            }
-            numbers.push(text[start..j].parse::<f64>().expect("a number"));
-            out.push('#');
-            i = j;
-        } else {
-            // (multi-byte characters pass through byte by byte: the texts compared are the same on both sides)
-            out.push(b[i] as char);
-            i += 1;
-        }
-    }
-    (out, numbers)
-}
-
-fn close(x: f64, y: f64) -> bool {
-    x == y || (x - y).abs() <= 1e-12 || (x - y).abs() <= 1e-6 * x.abs().max(y.abs())
-}
-
-/// The comparison of native/tools/boundary-compare.mjs: identical, or equal up to the last digits of the numbers in the reasons.
-fn same_run(a: &Value, b: &Value) -> Result<bool, String> {
+/// Is a run of the port the TypeScript's: the same verdict, score, work (nD) or thrown error, and the same reasons,
+/// every character of them (so every digit of the numbers they quote)?
+fn same_run(a: &Value, b: &Value) -> Result<(), String> {
     // numbers are compared as doubles (JSON writes 1 where Rust holds 1.0), everything else as it is
     let field = |v: &Value, k: &str| -> Value {
         match v.get(k) {
@@ -73,38 +29,18 @@ fn same_run(a: &Value, b: &Value) -> Result<bool, String> {
             None => Value::Null,
         }
     };
-    for k in ["tol", "throw", "ok", "score", "steps", "ops"] {
+    for k in ["tol", "throw", "ok", "score", "steps", "ops", "reasons"] {
         if field(a, k) != field(b, k) {
             return Err(format!("{k}: {:?} against {:?}", a.get(k), b.get(k)));
         }
     }
-    if a.get("throw").is_some() {
-        return Ok(true);
-    }
-    let (ra, rb) = (a["reasons"].as_array().unwrap(), b["reasons"].as_array().unwrap());
-    if ra.len() != rb.len() {
-        return Err(format!("{} reasons against {}", ra.len(), rb.len()));
-    }
-    let mut identical = true;
-    for (x, y) in ra.iter().zip(rb) {
-        if x == y {
-            continue;
-        }
-        identical = false;
-        let (tx, nx) = split_numbers(x.as_str().unwrap());
-        let (ty, ny) = split_numbers(y.as_str().unwrap());
-        if tx != ty || nx.len() != ny.len() || nx.iter().zip(&ny).any(|(p, q)| !close(*p, *q)) {
-            return Err(format!("reason {x} against {y}"));
-        }
-    }
-    Ok(identical)
+    Ok(())
 }
 
 #[test]
 fn the_validator_gives_the_verdicts_of_the_typescript() {
     let cases = lines(include_str!("fixtures/cases.jsonl"));
     assert!(cases.len() >= 24, "only {} fixture cases", cases.len());
-    let mut identical = 0;
     let mut runs = 0;
     for v in &cases {
         let c = read_case(v);
@@ -112,27 +48,22 @@ fn the_validator_gives_the_verdicts_of_the_typescript() {
         assert_eq!(expected.len(), c.tols.len());
         for (k, &tol) in c.tols.iter().enumerate() {
             let got = outcome_json(tol, &check(&c, tol));
-            match same_run(&expected[k], &got) {
-                Ok(same) => identical += same as usize,
-                Err(why) => panic!("case {} ({}) at tolerance {}: {}", c.id, v["kind"], tol, why),
+            if let Err(why) = same_run(&expected[k], &got) {
+                panic!("case {} ({}) at tolerance {}: {}", c.id, v["kind"], tol, why);
             }
             runs += 1;
         }
     }
-    println!("{runs} runs of {} cases, {identical} identical byte for byte", cases.len());
-    // (when the fixtures were written every run was identical; native/PORTING.md allows the last digits of a number to differ)
+    println!("{runs} runs of {} cases, every one the TypeScript's to the last digit", cases.len());
 }
 
-/// Do two results agree: the same structure and texts, and numbers that are the same double (or, for the bounds whose
-/// formulas use cbrt and pow, the neighbouring one)?
-fn agree(a: &Value, b: &Value, ulps: bool) -> bool {
+/// Do two results agree: the same structure and texts, and every number the same double (0 and -0 are one number here:
+/// the fixture is JSON, which has no -0)?
+fn agree(a: &Value, b: &Value) -> bool {
     match (a, b) {
-        (Value::Number(x), Value::Number(y)) => {
-            let (x, y) = (x.as_f64().unwrap(), y.as_f64().unwrap());
-            x == y || (ulps && (x - y).abs() <= 4.0 * f64::EPSILON * x.abs().max(y.abs()))
-        }
-        (Value::Array(x), Value::Array(y)) => x.len() == y.len() && x.iter().zip(y).all(|(p, q)| agree(p, q, ulps)),
-        (Value::Object(x), Value::Object(y)) => x.len() == y.len() && x.iter().all(|(k, p)| y.get(k).is_some_and(|q| agree(p, q, ulps))),
+        (Value::Number(x), Value::Number(y)) => x.as_f64().unwrap() == y.as_f64().unwrap(),
+        (Value::Array(x), Value::Array(y)) => x.len() == y.len() && x.iter().zip(y).all(|(p, q)| agree(p, q)),
+        (Value::Object(x), Value::Object(y)) => x.len() == y.len() && x.iter().all(|(k, p)| y.get(k).is_some_and(|q| agree(p, q))),
         _ => a == b,
     }
 }
@@ -153,68 +84,120 @@ fn the_other_functions_give_the_results_of_the_typescript() {
             // a product of two doubles: the same on both sides
             got = serde_json::from_str(&got.to_string()).unwrap();
         }
-        // ballBounds and pieceBounds (and the domain's bounds that quote them) go through Math.cbrt, ndBoundKind through Math.pow
-        let ulps = matches!(name, "ballBounds" | "pieceBounds" | "bound");
-        assert!(agree(&q["out"], &got, ulps), "{q}: {got}");
+        // exact, the bounds too: ballBounds, pieceBounds and the domain's bounds that quote them are Math.cbrt's, and the
+        // d-cube's volume bound is the largest double under an exact comparison, whatever Math.pow gave to start from
+        assert!(agree(&q["out"], &got), "{q}: {got}");
     }
 }
 
-fn numbers(v: &Value, out: &mut Vec<f64>, shape: &mut String) {
-    match v {
-        Value::Number(n) => {
-            out.push(n.as_f64().unwrap());
-            shape.push('#');
-        }
-        Value::Array(a) => {
-            shape.push('[');
-            for x in a {
-                numbers(x, out, shape);
-            }
-            shape.push(']');
-        }
-        Value::Object(o) => {
-            shape.push('{');
-            for (k, x) in o {
-                shape.push_str(k);
-                numbers(x, out, shape);
-            }
-            shape.push('}');
-        }
-        other => shape.push_str(&other.to_string()),
-    }
+const FNV_OFFSET: u32 = 0x811c_9dc5;
+const FNV_PRIME: u32 = 0x0100_0193;
+
+/// FNV-1a on 32 bits of a list of whole numbers (a -1 is its 32 bits), as native/tools/boundary-tables.mts hashes them.
+fn hash_ints(list: &[i64]) -> u32 {
+    list.iter().fold(FNV_OFFSET, |h, &v| (h ^ (v as i32 as u32)).wrapping_mul(FNV_PRIME))
 }
 
-/// The largest difference between the numbers of two tables of one shape; None when the shapes differ.
-/// Integers (indices, counts) must be equal: a difference of 1 or more fails the callers' bound.
-fn largest_difference(a: &Value, b: &Value) -> Option<f64> {
-    let (mut na, mut nb, mut sa, mut sb) = (Vec::new(), Vec::new(), String::new(), String::new());
-    numbers(a, &mut na, &mut sa);
-    numbers(b, &mut nb, &mut sb);
-    if sa != sb {
-        return None;
-    }
-    Some(na.iter().zip(&nb).map(|(x, y)| (x - y).abs()).fold(0.0, f64::max))
+/// FNV-1a on 32 bits of the high and then the low half of each double: a -0 is not a 0.
+fn hash_bits(list: &[f64]) -> u32 {
+    list.iter().fold(FNV_OFFSET, |h, &x| {
+        let b = x.to_bits();
+        let h = (h ^ (b >> 32) as u32).wrapping_mul(FNV_PRIME);
+        (h ^ b as u32).wrapping_mul(FNV_PRIME)
+    })
 }
 
-#[test]
-fn the_ported_builder_gives_the_polytopes_of_the_tables() {
-    // hull.rs and polytope.rs (build_polytope) against the tables the TypeScript wrote: the same cells, facets, gluings and
-    // edges, and numbers equal up to the rounding of atan2, cos and sin
-    for name in POLYTOPES {
-        let table = common::polytope_json(get_polytope(name).unwrap());
-        let built = common::polytope_json(&build_catalogue_polytope(name).unwrap());
-        let d = largest_difference(&table, &built).unwrap_or_else(|| panic!("{name}: the built polytope has another structure"));
-        assert!(d < 1e-12, "{name}: the built polytope differs by {d}");
+/// The lists the fixture hashes (the header of native/tools/boundary-tables.mts gives their order) against one row of it.
+fn assert_row(what: &str, row: &Value, counts: &[(&str, usize)], ints: &[i64], doubles: &[f64], named: &[(&str, f64)]) {
+    for &(key, n) in counts {
+        assert_eq!(row[key].as_u64(), Some(n as u64), "{what}: {key}");
+    }
+    assert_eq!(row["ints"].as_u64(), Some(ints.len() as u64), "{what}: how many whole numbers");
+    assert_eq!(row["structure"].as_u64(), Some(hash_ints(ints) as u64), "{what}: the structure (cells, facets, gluings, edges)");
+    assert_eq!(row["doubles"].as_u64(), Some(doubles.len() as u64), "{what}: how many doubles");
+    assert_eq!(row["bits"].as_u64(), Some(hash_bits(doubles) as u64), "{what}: a double is not Node's (the hash of their bits)");
+    let sum = doubles.iter().fold(0.0, |a, b| a + b);
+    assert_eq!(row["sum"].as_f64().unwrap().to_bits(), sum.to_bits(), "{what}: the sum of the doubles, {sum}");
+    for &(key, x) in named {
+        assert_eq!(row[key].as_f64().unwrap().to_bits(), x.to_bits(), "{what}: {key} {x}");
     }
 }
 
 #[test]
-fn the_ported_builder_gives_the_pieces_of_the_table() {
-    for name in POLYTOPE_PIECES {
-        let table = common::piece_json(piece_shape(name).unwrap());
-        let built = common::piece_json(&build_piece_shape(name).unwrap());
-        let d = largest_difference(&table, &built).unwrap_or_else(|| panic!("{name}: the built piece has another structure"));
-        assert!(d < 1e-14, "{name}: the built piece differs by {d}");
+fn the_builders_give_the_polytopes_and_pieces_of_linux_node() {
+    // hull.rs and polytope.rs (build_polytope, with the topology cache) and pieces.rs (build_piece_shape) against what
+    // Node 24 on Linux x86-64 builds: the same cells, facets, gluings and edges, and every double the same bits
+    let fixture: Value = serde_json::from_str(include_str!("fixtures/builders.json")).unwrap();
+    let rows = fixture["polytopes"].as_array().unwrap();
+    assert_eq!(rows.len(), POLYTOPES.len());
+    for (row, name) in rows.iter().zip(POLYTOPES) {
+        assert_eq!(row["name"].as_str(), Some(name));
+        let p = get_polytope(name).unwrap();
+        assert_eq!(row["d"].as_u64(), Some(p.d as u64));
+        let mut ints: Vec<i64> = Vec::new();
+        let mut doubles: Vec<f64> = p.vertices.iter().flatten().copied().collect();
+        for (i, c) in p.cells.iter().enumerate() {
+            let ct = &p.topo.cells[i];
+            ints.push(c.index as i64);
+            ints.extend(c.vertex_ids.iter().map(|&v| v as i64));
+            ints.extend(c.hinges.iter().flatten().map(|&v| v as i64));
+            doubles.extend(&c.normal);
+            doubles.extend(&c.origin);
+            doubles.extend(c.frame.iter().flatten());
+            doubles.extend(c.vertices.iter().flatten());
+            for f in &c.facets {
+                ints.push(f.neighbor as i64);
+                ints.push(f.neighbor_facet as i64);
+                ints.extend(f.vertices.iter().map(|&v| v as i64));
+                doubles.extend(&f.inside.n);
+                doubles.push(f.inside.h);
+                doubles.extend(f.to_neighbor.a.iter().flatten());
+                doubles.extend(&f.to_neighbor.b);
+            }
+            ints.extend(ct.pair_hinge.iter().map(|&v| v as i64));
+            ints.extend(p.topo.hinge_edge[i].iter().map(|&v| v as i64));
+            doubles.extend(&ct.hinge_dihedral);
+            for g in &ct.glue {
+                doubles.extend(g.m);
+                doubles.extend(g.t);
+            }
+        }
+        ints.extend(p.edges.iter().flatten().map(|&v| v as i64));
+        doubles.push(p.hinge_angle);
+        doubles.extend(&p.edge_angles);
+        doubles.push(p.volume);
+        let counts = [
+            ("vertices", p.vertices.len()),
+            ("cells", p.cells.len()),
+            ("facets", p.cells.iter().map(|c| c.facets.len()).sum()),
+            ("hinges", p.cells.iter().map(|c| c.hinges.len()).sum()),
+            ("edges", p.edges.len()),
+        ];
+        assert_row(name, row, &counts, &ints, &doubles, &[("hingeAngle", p.hinge_angle), ("volume", p.volume)]);
+        // what `get_polytope` keeps is what the builder gives each time
+        let again = build_catalogue_polytope(name).unwrap();
+        assert_eq!(common::polytope_json(p).to_string(), common::polytope_json(&again).to_string(), "{name}: built twice");
+    }
+    let rows = fixture["pieces"].as_array().unwrap();
+    assert_eq!(rows.len(), POLYTOPE_PIECES.len());
+    for (row, name) in rows.iter().zip(POLYTOPE_PIECES) {
+        assert_eq!(row["name"].as_str(), Some(name));
+        let s = piece_shape(name).unwrap();
+        assert_eq!(s, &build_piece_shape(name).unwrap(), "{name}: built twice");
+        let mut ints: Vec<i64> = Vec::new();
+        for f in &s.faces {
+            ints.push(f.len() as i64);
+            ints.extend(f.iter().map(|&v| v as i64));
+        }
+        ints.extend(s.edges.iter().flatten().map(|&v| v as i64));
+        let mut doubles: Vec<f64> = s.vertices.iter().flatten().copied().collect();
+        doubles.extend(s.normals.iter().flatten());
+        doubles.extend([s.inradius, s.circumradius, s.midradius, s.volume]);
+        doubles.extend(&s.mirror);
+        doubles.extend(s.edge_dirs.iter().flatten());
+        let counts = [("vertices", s.vertices.len()), ("faces", s.faces.len()), ("edges", s.edges.len()), ("edgeDirs", s.edge_dirs.len())];
+        let named = [("inradius", s.inradius), ("circumradius", s.circumradius), ("midradius", s.midradius), ("volume", s.volume)];
+        assert_row(name, row, &counts, &ints, &doubles, &named);
     }
 }
 
@@ -267,7 +250,8 @@ fn a_typed_configuration_is_checked_as_its_json() {
 fn the_cube_roots_of_the_bounds_are_node_s() {
     // The bounds of bounds.rs are cube roots that the server shows and compares sizes with, so they need Math.cbrt bit for
     // bit: V8's (FreeBSD's s_cbrt.c, accurate to 0.667 units in the last place) differs from a correctly rounded cube root
-    // for about one argument in seven. [x, Math.cbrt(x)] from Node 26 (V8 14.6), 1,507 arguments.
+    // for about one argument in seven. [x, Math.cbrt(x)] for 1,507 arguments, as Node 24 on Linux x86-64 gives them (the
+    // same doubles as the file first held, from Node 26 on a Mac).
     let vectors: Vec<(f64, f64)> = serde_json::from_str(include_str!("fixtures/cbrt.json")).unwrap();
     assert!(vectors.len() > 1000);
     for (x, y) in &vectors {

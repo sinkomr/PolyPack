@@ -163,9 +163,9 @@ pub fn extra(v: &Value) -> Value {
             "CONTAINER_PIECES": CONTAINERS.iter().map(|c| container_pieces(c).unwrap().to_vec()).collect::<Vec<_>>(),
             "CONTAINER_MAX_P": CONTAINERS.iter().map(|c| container_max_p(c).unwrap()).collect::<Vec<_>>(),
         }),
-        // the catalogue's polytope as the validator uses it (read from its table)
+        // the catalogue's polytope as the validator uses it (built once by the ported builder and kept)
         "polytope" => polytope_json(get_polytope(s("name")).unwrap()),
-        // the same polytope built by the port of the TypeScript builder (hull.rs, polytope.rs)
+        // the same polytope built anew by the port of the TypeScript builder (hull.rs, polytope.rs)
         "polytopeBuilt" => polytope_json(&build_catalogue_polytope(s("name")).unwrap()),
         "piece" => piece_json(piece_shape(s("name")).unwrap()),
         "pieceBuilt" => piece_json(&build_piece_shape(s("name")).unwrap()),

@@ -11,7 +11,7 @@
 //!  - 120-cell: the standard coordinates of circumradius 2 sqrt 2 and edge 3 - sqrt 5 (Coxeter).
 //! The generators return the vertices before the unit-edge scale (RAW); `unit_vertices` scales.
 //!
-//! The server reads its polytopes from tables (polytope.rs); these lists feed `build_polytope`.
+//! These lists feed `build_polytope`, which builds the server's polytopes (polytope.rs: `get_polytope`).
 
 use polypack_js::math;
 

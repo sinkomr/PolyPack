@@ -53,9 +53,12 @@ Two things can still differ, and both are named where they are compared:
 5. **Generators that yield for the event loop** (`validationSteps`, `runStepsAsync`) become plain
    functions: the Rust server runs a check on a worker thread. A cap on the work that changes the
    verdict stays.
-6. **Tables** (solids, polytopes) are not retyped. A tool in `native/tools/` writes them from the
-   TypeScript module as JSON into the crate's `data/` directory, the crate reads them with
-   `include_str!`, and the tool's `--check` mode fails when the file is out of date.
+6. **Tables of data** (the solids of surface and polyhedra, the nD polytopes) are not retyped. A
+   tool in `native/tools/` writes them from the TypeScript module as JSON into the crate's `data/`
+   directory, the crate reads them with `include_str!`, and the tool's `--check` mode fails when
+   the file is out of date. A table that the source *computes* with sines and cosines (the
+   4-polytopes of boundary) is computed by the ported builder instead: a file of it would hold the
+   numbers of whichever Node wrote it.
 7. **Names** follow the source in snake_case, and each function's comment names the TypeScript
    function it ports (`packages/torus/src/validate.ts: validationSteps`). Geometry that is not
    obvious keeps the source's explanation.
@@ -154,4 +157,6 @@ to 1e-12: the message may name the other one), and a number equal **at the scale
 itself).
 
 A few dozen cases with the TypeScript's verdicts are kept in `native/<family>/tests/fixtures/`, so
-that `cargo test` checks the port without Node.
+that `cargo test` checks the port without Node. The fixtures are written by Node 24 on linux/amd64
+and the tests demand every number exactly; `native/tools/LINUX_REFERENCE.md` says how to run a
+reference tool under that Node.

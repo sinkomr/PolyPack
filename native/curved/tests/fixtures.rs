@@ -1,12 +1,13 @@
 //! The port against the TypeScript's own answers, without Node: the cases of
 //! tests/fixtures/validate.jsonl and bound.jsonl were written by native/tools/curved-ref.mts
-//! (`--fixtures native/curved/tests/fixtures`) with what packages/curved answered for them.
+//! (`--fixtures native/curved/tests/fixtures`) with what packages/curved answered for them, under
+//! Node 24 on Linux x86-64, the production platform (native/tools/LINUX_REFERENCE.md).
 //!
-//! The rule is the comparison's (native/PORTING.md, native/tools/curved-compare.mjs): the same
-//! verdicts, counts, reasons and contacts, and numbers that agree to 1e-6 relative or 1e-12
-//! absolute, also inside a message. Two things may differ, both in the last bit of a sine:
-//! `strictlyValid` where the smallest gap is zero to 1e-12, and the witness of a contact (which
-//! edge and vertex give the separation) where the gap is the same.
+//! Every answer must be the TypeScript's exactly: the same verdicts (`strictlyValid` too), counts
+//! and reasons, character for character; the same contacts with the same witnesses; and every
+//! number the same double, the sign of a zero included (the reference writes each result number as
+//! its own text, "-0" for the negative zero). `polypack_js::math` is that Node's Math bit for bit,
+//! and nothing here goes through `Math.pow` with an exponent other than 2 or 0.5.
 
 // Negated comparisons are the source's: `!(a <= b)` is true for NaN.
 #![allow(clippy::neg_cmp_op_on_partial_ord)]
@@ -38,75 +39,17 @@ fn dec(s: &str) -> f64 {
     }
 }
 
-/// The comparison's rule for two computed numbers.
-fn close(a: f64, b: f64) -> bool {
-    (a.is_nan() && b.is_nan()) || a == b || (a - b).abs() <= 1e-12 || (a - b).abs() <= 1e-6 * a.abs().max(b.abs())
-}
-
-/// A message with its numbers taken out: the text with a # for each, and the numbers.
-fn split(text: &str) -> (String, Vec<f64>) {
-    let b = text.as_bytes();
-    let mut out = String::new();
-    let mut numbers = Vec::new();
-    let mut i = 0;
-    while i < b.len() {
-        for word in ["NaN", "-Infinity", "Infinity"] {
-            if text[i..].starts_with(word) {
-                numbers.push(dec(word));
-                out.push('#');
-                i += word.len();
-            }
-        }
-        if i >= b.len() {
-            break;
-        }
-        let digit = |j: usize| j < b.len() && b[j].is_ascii_digit();
-        let start = i;
-        let mut j = i;
-        if b[j] == b'-' && digit(j + 1) {
-            j += 1;
-        }
-        if digit(j) {
-            while digit(j) {
-                j += 1;
-            }
-            if j < b.len() && b[j] == b'.' && digit(j + 1) {
-                j += 1;
-                while digit(j) {
-                    j += 1;
-                }
-            }
-            if j < b.len()
-                && b[j] == b'e'
-                && (digit(j + 1) || (j + 1 < b.len() && (b[j + 1] == b'-' || b[j + 1] == b'+') && digit(j + 2)))
-            {
-                j += 2;
-                while digit(j) {
-                    j += 1;
-                }
-            }
-            numbers.push(text[start..j].parse().unwrap());
-            out.push('#');
-            i = j;
-        } else {
-            let ch = text[i..].chars().next().unwrap();
-            out.push(ch);
-            i += ch.len_utf8();
-        }
+/// A result number as the reference writes it: `Object.is(x, -0) ? "-0" : String(x)`.
+fn enc(x: f64) -> String {
+    if x == 0.0 && x.is_sign_negative() {
+        "-0".into()
+    } else {
+        jsfmt::num(x)
     }
-    (out, numbers)
 }
 
 fn same_texts(what: &str, expect: &[String], got: &[String]) {
-    assert_eq!(expect.len(), got.len(), "{what}: {expect:?} | {got:?}");
-    for (e, g) in expect.iter().zip(got) {
-        let ((te, ne), (tg, ng)) = (split(e), split(g));
-        assert_eq!(te, tg, "{what}");
-        assert_eq!(ne.len(), ng.len(), "{what}: {e} | {g}");
-        for (x, y) in ne.iter().zip(&ng) {
-            assert!(close(*x, *y), "{what}: {e} | {g}");
-        }
-    }
+    assert_eq!(expect, got, "{what}");
 }
 
 fn strings(v: &Value) -> Vec<String> {
@@ -140,9 +83,13 @@ fn case_of(v: &Value) -> (CurvedProblem, CurvedConfig) {
     (problem, config)
 }
 
+/// Contacts and reasons the reference writes in full (native/tools/curved-ref.mts: MAX_CONTACTS, MAX_ERRORS_WRITTEN);
+/// their counts are always written.
+const WRITTEN: usize = 40;
+
 fn same_run(what: &str, expect: &Value, got: &ValidationResult) {
     assert_eq!(expect["valid"].as_bool().unwrap(), got.valid, "{what}: valid");
-    let number = |key: &str| dec(expect[key].as_str().unwrap());
+    assert_eq!(expect["strictlyValid"].as_bool().unwrap(), got.strictly_valid, "{what}: strictlyValid");
     for (key, value) in [
         ("score", got.score),
         ("tightSize", got.tight_size),
@@ -150,58 +97,32 @@ fn same_run(what: &str, expect: &Value, got: &ValidationResult) {
         ("minPairGap", got.min_pair_gap),
         ("minContainerGap", got.min_container_gap),
     ] {
-        assert!(
-            close(number(key), value),
-            "{what}: {key} {} | {}",
-            expect[key],
-            jsfmt::num(value)
-        );
+        assert_eq!(expect[key].as_str().unwrap(), enc(value), "{what}: {key}");
     }
-    if !(number("minGap").abs() <= 1e-12 && got.min_gap.abs() <= 1e-12) {
-        assert_eq!(
-            expect["strictlyValid"].as_bool().unwrap(),
-            got.strictly_valid,
-            "{what}: strictlyValid"
-        );
-    }
-    assert_eq!(
-        expect["nErrors"].as_u64().unwrap() as usize,
-        got.errors.len(),
-        "{what}: number of reasons"
-    );
+    assert_eq!(expect["nErrors"].as_u64().unwrap() as usize, got.errors.len(), "{what}: number of reasons");
     let written = strings(&expect["errors"]);
-    same_texts(what, &written, &got.errors[..written.len()]);
-    let contacts = expect["contacts"].as_array().unwrap();
-    // a contact on one side only is a tie when its gap is the contact tolerance to 1e-12
-    let on_the_edge = |gap: f64| (gap - 1e-7).abs() <= 1e-12;
-    if expect["nContacts"].as_u64().unwrap() as usize != got.contacts.len() {
-        assert!(
-            contacts.iter().any(|c| on_the_edge(dec(c[5].as_str().unwrap())))
-                || got.contacts.iter().any(|c| on_the_edge(c.gap)),
-            "{what}: {} contacts | {}",
-            expect["nContacts"],
-            got.contacts.len()
-        );
-        return;
-    }
-    for (e, g) in contacts.iter().zip(&got.contacts) {
-        assert_eq!(e[0].as_str().unwrap(), g.kind.as_str(), "{what}: contact kind");
-        assert_eq!(
-            [e[1].as_i64().unwrap(), e[2].as_i64().unwrap(), e[3].as_i64().unwrap()],
-            [g.i as i64, g.j as i64, g.wall as i64],
-            "{what}: contact"
-        );
-        assert!(
-            close(dec(e[5].as_str().unwrap()), g.gap),
-            "{what}: contact gap {} | {}",
-            e[5],
-            jsfmt::num(g.gap)
-        );
-        // (the witness and the vertex of a pair may be another candidate of the same gap)
-        if g.witness.is_none() {
-            assert_eq!(e[4].as_i64().unwrap(), g.vertex as i64, "{what}: contact vertex");
-        }
-    }
+    same_texts(what, &written, &got.errors[..got.errors.len().min(WRITTEN)]);
+    assert_eq!(expect["nContacts"].as_u64().unwrap() as usize, got.contacts.len(), "{what}: number of contacts");
+    let contacts: Vec<Value> = got
+        .contacts
+        .iter()
+        .take(WRITTEN)
+        .map(|c| {
+            let mut row = vec![
+                Value::from(c.kind.as_str()),
+                Value::from(c.i as i64),
+                Value::from(c.j as i64),
+                Value::from(c.wall as i64),
+                Value::from(c.vertex as i64),
+                Value::from(enc(c.gap)),
+            ];
+            if let Some(w) = c.witness {
+                row.extend([Value::from(w.owner as i64), Value::from(w.edge as i64), Value::from(w.vertex as i64)]);
+            }
+            Value::Array(row)
+        })
+        .collect();
+    assert_eq!(expect["contacts"], Value::Array(contacts), "{what}: contacts (kind, i, j, wall, vertex, gap, witness)");
 }
 
 /// packages/spaces/src/validate.ts: check(), the curved branch (as the curveddiff example has it).
@@ -390,17 +311,9 @@ fn bounds_and_the_domain_answer_as_the_typescript() {
             match (&row[1], bound) {
                 (Value::Null, None) => {}
                 (Value::String(e), Some(g)) => {
-                    let e = dec(e);
-                    // near the ideal polygon (K < 0) the side is (2/r) atanh(a) with a near 1: one unit in the
-                    // last place of a is sinh(2x)/(2x) of them in the side, x = r side / 2
-                    let half = (-k).sqrt() * e / 2.0;
-                    let condition = if k < 0.0 && m > 0.0 {
-                        (2.0 * half).sinh() / (2.0 * half)
-                    } else {
-                        1.0
-                    };
-                    let allowed = 1e-12f64.max(64.0 * f64::EPSILON * condition);
-                    assert!(((e - g) / e).abs() <= allowed, "curvedBoundOf {what} P={p}: {e} | {g}");
+                    // exact, also near the ideal polygon (K < 0), where the side is (2/r) atanh(a) with a near 1 and one
+                    // unit in the last place of a would be sinh(2x)/(2x) of them in the side
+                    assert_eq!(e, &enc(g), "curvedBoundOf {what} P={p}");
                 }
                 (e, g) => panic!("curvedBoundOf {what} P={p}: {e} | {g:?}"),
             }
@@ -409,7 +322,7 @@ fn bounds_and_the_domain_answer_as_the_typescript() {
             let (s, e) = (dec_in(&row[0]), dec(row[1].as_str().unwrap()));
             let g = container_circumradius(m as u32, k, s);
             assert!(
-                e == g || (e.is_nan() && g.is_nan()) || ((e - g) / e).abs() <= 1e-12,
+                e.to_bits() == g.to_bits() || (e.is_nan() && g.is_nan()),
                 "containerCircumradius {what} s={s}: {e} | {g}"
             );
         }
@@ -438,19 +351,4 @@ fn the_domain_has_the_typescript_s_number_of_problems() {
         }
     }
     assert_eq!(count, v["problems"].as_f64().unwrap());
-}
-
-#[test]
-fn messages_split_into_text_and_numbers() {
-    let (text, numbers) = split("size must be below 3.141592653589793 (open hemisphere) at K=1e-7");
-    assert_eq!(text, "size must be below # (open hemisphere) at K=#");
-    assert_eq!(numbers, vec![std::f64::consts::PI, 1e-7]);
-    let (text, numbers) =
-        split("A 7-gon container at K = -0.5 holds at most 12 unit 3-gons: NaN -Infinity 2π/√K ≈ 6.283.");
-    assert_eq!(
-        text,
-        "A #-gon container at K = # holds at most # unit #-gons: # # #π/√K ≈ #."
-    );
-    assert_eq!(numbers.len(), 8);
-    assert!(numbers[4].is_nan() && numbers[5] == f64::NEG_INFINITY);
 }

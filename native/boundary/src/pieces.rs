@@ -11,15 +11,17 @@
 //!  - icosahedron: the cyclic shifts of (0, +-1/2, +-phi/2);
 //! phi = (1 + sqrt 5) / 2.
 //!
-//! `piece_shape` reads the shapes from the table native/boundary/data/pieces.json, written from the
-//! TypeScript's `pieceShape` by native/tools/boundary-tables.mts (native/PORTING.md rule 6).
-//! `build_piece_shape` is the port of the TypeScript builder; a test compares the two.
+//! `piece_shape` builds a shape on first use with `build_piece_shape`, the port of the source's
+//! builder (square roots and V8's hypot only), and keeps it, as the source's `pieceShape` does. The
+//! five shapes equal Node's in every number and in the signs of zero (some face normals of the
+//! dodecahedron and the icosahedron hold a -0); a test holds that against a fixture written under
+//! Node 24 on Linux x86-64 (native/tools/boundary-tables.mts). The crate used to read them from a
+//! table written by the TypeScript; see polytope.rs for why it builds them instead.
 
 use crate::linalg::{cross3, dot3, sub3, unit3, V3};
 use polypack_js::math;
 use serde::Deserialize;
 use std::cmp::Ordering;
-use std::collections::BTreeMap;
 use std::sync::OnceLock;
 
 /// packages/boundary/src/pieces.ts: PieceShape
@@ -55,12 +57,11 @@ pub fn is_polytope_piece(x: &str) -> bool {
     POLYTOPE_PIECES.contains(&x)
 }
 
-/// The shape of a Platonic piece (loaded once). packages/boundary/src/pieces.ts: pieceShape
+/// The shape of a Platonic piece (built once). packages/boundary/src/pieces.ts: pieceShape
 pub fn piece_shape(name: &str) -> Option<&'static PieceShape> {
-    static SHAPES: OnceLock<BTreeMap<String, PieceShape>> = OnceLock::new();
-    SHAPES
-        .get_or_init(|| serde_json::from_str(include_str!("../data/pieces.json")).expect("native/boundary/data/pieces.json is the table written by boundary-tables.mts"))
-        .get(name)
+    static SHAPES: [OnceLock<Option<PieceShape>>; 5] = [OnceLock::new(), OnceLock::new(), OnceLock::new(), OnceLock::new(), OnceLock::new()];
+    let i = POLYTOPE_PIECES.iter().position(|&n| n == name)?;
+    SHAPES[i].get_or_init(|| build_piece_shape(name)).as_ref()
 }
 
 fn ordering(x: f64) -> Ordering {

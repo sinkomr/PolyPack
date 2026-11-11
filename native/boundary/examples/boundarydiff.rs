@@ -50,7 +50,7 @@ fn main() {
         let v: Value = serde_json::from_str(&line).unwrap();
         cases.push(read_case(&v));
     }
-    // the tables load on first use: outside the timings, as the server's first check pays it once
+    // the polytopes are built on first use: outside the timings, as the server's first check pays it once
     for name in POLYTOPES {
         get_polytope(name).unwrap();
     }

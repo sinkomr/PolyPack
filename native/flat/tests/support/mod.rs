@@ -311,102 +311,36 @@ pub fn strict_time_input(config: &PackingConfig) -> Option<Container> {
 
 // ------------------------------------------------------------------ the rule of the comparison
 
-/// A message with every number replaced by `#`, and the numbers (native/PORTING.md).
-fn split_numbers(text: &str) -> (String, Vec<f64>) {
-    let bytes = text.as_bytes();
-    let mut shape = String::new();
-    let mut found = Vec::new();
-    let mut i = 0;
-    while i < bytes.len() {
-        if bytes[i].is_ascii_digit() {
-            let start = i;
-            while i < bytes.len() && bytes[i].is_ascii_digit() {
-                i += 1;
-            }
-            if i + 1 < bytes.len() && bytes[i] == b'.' && bytes[i + 1].is_ascii_digit() {
-                i += 1;
-                while i < bytes.len() && bytes[i].is_ascii_digit() {
-                    i += 1;
-                }
-            }
-            if i < bytes.len() && bytes[i] == b'e' {
-                let mut j = i + 1;
-                if j < bytes.len() && (bytes[j] == b'+' || bytes[j] == b'-') {
-                    j += 1;
-                }
-                if j < bytes.len() && bytes[j].is_ascii_digit() {
-                    while j < bytes.len() && bytes[j].is_ascii_digit() {
-                        j += 1;
-                    }
-                    i = j;
-                }
-            }
-            found.push(text[start..i].parse::<f64>().unwrap());
-            shape.push('#');
-        } else {
-            let c = text[i..].chars().next().unwrap();
-            shape.push(c);
-            i += c.len_utf8();
-        }
-    }
-    (shape, found)
-}
-
-/// The largest |coordinate| among the inputs of a case or a call (poses and flat point lists).
-pub fn coordinate_scale(input: &Value) -> f64 {
-    fn largest(v: &Value) -> f64 {
-        match v {
-            Value::Number(n) => n.as_f64().map_or(0.0, f64::abs),
-            Value::Array(list) => list.iter().map(largest).fold(0.0, f64::max),
-            Value::Object(o) => ["x", "y"].iter().filter_map(|k| o.get(*k)).map(largest).fold(0.0, f64::max),
-            _ => 0.0,
-        }
-    }
-    let poses = [&input["body"]["pieces"], &input["pts"], &input["a"], &input["b"], &input["pose"], &input["pieces"]];
-    poses.iter().map(|v| largest(v)).fold(1.0, f64::max)
-}
-
-/// The difference between the reference's answer and the port's, or None when they agree as
-/// native/PORTING.md asks: the same structure, booleans and counts; texts equal once their numbers
-/// are placeholders, those numbers to 1e-6 relative or 1e-12 absolute; other numbers to 1e-12 of
-/// their scale, which is at least `scale` (1, or the largest coordinate of the input: the size of
-/// a set of points near (1e6, -1e6) is a difference of numbers near 1e6). The rule of
-/// native/tools/flat-compare.mjs, without its verified ties, which the sample does not hold.
-pub fn difference(path: &str, reference: &Value, port: &Value, scale: f64) -> Option<String> {
+/// The difference between the reference's answer and the port's, or None when they are the same:
+/// the same structure, booleans, counts and texts (so every digit of a number inside a message),
+/// and every number the same double. The fixtures were written by Node 24 on Linux x86-64, the
+/// production platform, whose Math `polypack_js::math` is bit for bit, and nothing of this family
+/// goes through `Math.pow` with an exponent other than 2 or 0.5, so nothing is "close".
+///
+/// 0 and -0 are one number here: the reference is JSON, which has no -0 (JSON.stringify writes 0
+/// where the TypeScript holds the -0 that the port holds too, the centre of a turned container for
+/// one).
+pub fn difference(path: &str, reference: &Value, port: &Value) -> Option<String> {
     match (reference, port) {
         (Value::Number(a), Value::Number(b)) => {
             let (a, b) = (a.as_f64().unwrap(), b.as_f64().unwrap());
-            let unit = scale.max(1.0).max(a.abs()).max(b.abs());
-            if a == b || (a - b).abs() <= 1e-12 * unit {
+            if a == b {
                 None
             } else {
                 Some(format!("{path}: {a} against {b}"))
-            }
-        }
-        (Value::String(a), Value::String(b)) => {
-            if a == b {
-                return None;
-            }
-            let (sa, na) = split_numbers(a);
-            let (sb, nb) = split_numbers(b);
-            let close = |x: f64, y: f64| (x - y).abs() <= 1e-12 || (x - y).abs() <= 1e-6 * x.abs().max(y.abs());
-            if sa == sb && na.iter().zip(&nb).all(|(&x, &y)| close(x, y)) {
-                None
-            } else {
-                Some(format!("{path}: {a:?} against {b:?}"))
             }
         }
         (Value::Array(a), Value::Array(b)) => {
             if a.len() != b.len() {
                 return Some(format!("{path}: {} entries against {}", a.len(), b.len()));
             }
-            a.iter().zip(b).enumerate().find_map(|(i, (x, y))| difference(&format!("{path}[{i}]"), x, y, scale))
+            a.iter().zip(b).enumerate().find_map(|(i, (x, y))| difference(&format!("{path}[{i}]"), x, y))
         }
         (Value::Object(a), Value::Object(b)) => {
             for key in a.keys().chain(b.keys()) {
                 match (a.get(key), b.get(key)) {
                     (Some(x), Some(y)) => {
-                        if let Some(d) = difference(&format!("{path}.{key}"), x, y, scale) {
+                        if let Some(d) = difference(&format!("{path}.{key}"), x, y) {
                             return Some(d);
                         }
                     }

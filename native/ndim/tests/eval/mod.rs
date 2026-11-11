@@ -264,75 +264,65 @@ pub fn answer(c: &Value) -> Value {
     }
 }
 
-/// Whether two answers are the same, as native/tools/ndim-compare.mjs decides it: equal texts, or
-/// texts that are equal once every number in them is replaced by a placeholder and whose numbers
-/// agree to 1e-6 relative or 1e-12 absolute. `exact` is set to false when a number differed.
-pub fn same(a: &Value, b: &Value, exact: &mut bool) -> bool {
-    match (a, b) {
-        (Value::String(x), Value::String(y)) => {
-            if x == y {
-                return true;
-            }
-            let (tx, nx) = split_numbers(x);
-            let (ty, ny) = split_numbers(y);
-            if tx != ty || nx.len() != ny.len() {
-                return false;
-            }
-            *exact = false;
-            nx.iter().zip(&ny).all(|(&p, &q)| {
-                p == q || (p - q).abs() <= 1e-12 || (p - q).abs() <= 1e-6 * p.abs().max(q.abs()) || (p.is_nan() && q.is_nan())
-            })
-        }
-        (Value::Number(x), Value::Number(y)) => x.as_f64() == y.as_f64(),
-        (Value::Array(x), Value::Array(y)) => x.len() == y.len() && x.iter().zip(y).all(|(p, q)| same(p, q, exact)),
-        (Value::Object(x), Value::Object(y)) => {
-            x.len() == y.len() && x.iter().all(|(k, p)| y.get(k).is_some_and(|q| same(p, q, exact)))
-        }
-        _ => a == b,
+/// What is not the same in two answers (the place and the two values), or None when the port's answer is the
+/// TypeScript's exactly: the same structure, booleans, counts and texts. Every number of an answer is written as its
+/// own text (`String(x)`), so equal texts are equal doubles, and a number inside a message is its digits.
+///
+/// One exception, and it is named here: a bound that went through `Math.pow` with an exponent other than 2 and 0.5.
+/// The volume bound of `ndLowerBound` is `Math.pow(P vol(piece) / vol(container), 1 / d)`
+/// (packages/ndspace/src/bounds.ts). Node calls the C library's `pow`, which is not correctly rounded;
+/// `polypack_js::math::pow` is (native/PORTING.md, "Differences that are meant"). So in the answer of a `bound` case
+/// (`pow_bounds` true), where a row's lower bound is of the kind "volume", its `value`, its `entry` (the value times
+/// 1 - 1e-12) and the domain's `value` that quotes it may be the neighbouring double: one unit in the last place, no
+/// more. `pow_differences` counts the numbers that used the exception.
+pub fn difference(a: &Value, b: &Value, pow_bounds: bool, pow_differences: &mut usize) -> Option<String> {
+    walk(a, b, "", pow_bounds, pow_differences)
+}
+
+/// Two doubles from their texts that are the same or neighbours: one unit in the last place apart.
+fn neighbours(x: &str, y: &str) -> bool {
+    match (x.parse::<f64>(), y.parse::<f64>()) {
+        (Ok(p), Ok(q)) => p.is_finite() && q.is_finite() && p.is_sign_negative() == q.is_sign_negative() && p.to_bits().abs_diff(q.to_bits()) <= 1,
+        _ => false,
     }
 }
 
-/// A text with its numbers taken out: the text with `#` for each, and the numbers.
-fn split_numbers(s: &str) -> (String, Vec<f64>) {
-    let b = s.as_bytes();
-    let mut out = String::new();
-    let mut nums = Vec::new();
-    let mut i = 0;
-    while i < b.len() {
-        let rest = &s[i..];
-        let special = ["-Infinity", "Infinity", "NaN"].iter().find(|w| rest.starts_with(**w));
-        if let Some(w) = special {
-            nums.push(match *w {
-                "Infinity" => f64::INFINITY,
-                "-Infinity" => f64::NEG_INFINITY,
-                _ => f64::NAN,
-            });
-            out.push('#');
-            i += w.len();
-            continue;
-        }
-        let digit_at = |k: usize| k < b.len() && b[k].is_ascii_digit();
-        let start_of_number = digit_at(i) || (b[i] == b'-' && digit_at(i + 1));
-        // a digit inside a word ("pieces[3]" counts, "4_21" and names do not matter here: both sides have the same text)
-        if start_of_number {
-            let mut j = i + 1;
-            while j < b.len() && (b[j].is_ascii_digit() || b[j] == b'.' && digit_at(j + 1)) {
-                j += 1;
+fn walk(a: &Value, b: &Value, path: &str, pow_bounds: bool, pow_differences: &mut usize) -> Option<String> {
+    match (a, b) {
+        (Value::Array(x), Value::Array(y)) => {
+            if x.len() != y.len() {
+                return Some(format!("{path}: {} entries | {}", x.len(), y.len()));
             }
-            if j < b.len() && b[j] == b'e' && (digit_at(j + 1) || (j + 1 < b.len() && (b[j + 1] == b'-' || b[j + 1] == b'+') && digit_at(j + 2))) {
-                j += 2;
-                while digit_at(j) {
-                    j += 1;
+            x.iter().zip(y).enumerate().find_map(|(i, (p, q))| walk(p, q, &format!("{path}[{i}]"), pow_bounds, pow_differences))
+        }
+        (Value::Object(x), Value::Object(y)) => {
+            if x.len() != y.len() || x.keys().any(|k| !y.contains_key(k)) {
+                return Some(format!("{path}: other fields: {a} | {b}"));
+            }
+            // a volume bound, here or quoted by the domain: the fields that hold a result of Math.pow(x, 1 / d)
+            let volume = pow_bounds
+                && ((path.ends_with(".lower") && x.get("kind").and_then(Value::as_str) == Some("volume") && y.get("kind").and_then(Value::as_str) == Some("volume"))
+                    || (path.ends_with(".domain") && [x, y].iter().all(|o| o.get("label").and_then(Value::as_str).is_some_and(|l| l.starts_with("volume bound")))));
+            for (k, p) in x {
+                let q = &y[k];
+                if p == q {
+                    continue;
+                }
+                if volume && (k == "value" || k == "entry") {
+                    if let (Some(s), Some(t)) = (p.as_str(), q.as_str()) {
+                        if neighbours(s, t) {
+                            *pow_differences += 1;
+                            continue;
+                        }
+                    }
+                }
+                if let Some(d) = walk(p, q, &format!("{path}.{k}"), pow_bounds, pow_differences) {
+                    return Some(d);
                 }
             }
-            nums.push(s[i..j].parse().unwrap_or(f64::NAN));
-            out.push('#');
-            i = j;
-            continue;
+            None
         }
-        let ch = rest.chars().next().unwrap();
-        out.push(ch);
-        i += ch.len_utf8();
+        _ if a == b => None,
+        _ => Some(format!("{path}: {a} | {b}")),
     }
-    (out, nums)
 }

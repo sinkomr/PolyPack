@@ -2,7 +2,7 @@
 // timings: the reference that native/spaces (crate polypack-spaces) is compared with
 // (native/PORTING.md).
 //
-//   node --import tsx native/tools/spaces-ref.mts OUTDIR SNAPDIR [--fixtures native/spaces/tests/fixtures] [--quick] [--skip-main]
+//   node --import tsx native/tools/spaces-ref.mts OUTDIR SNAPDIR [--fixtures native/spaces/tests/fixtures] [--quick] [--skip-main] [--no-times]
 //   cargo run --release -p polypack-spaces --example spacesdiff -- OUTDIR
 //   node native/tools/spaces-compare.mjs OUTDIR
 //
@@ -104,6 +104,9 @@ const quick = qk >= 0 ? (args.splice(qk, 1), true) : false;
 // and timings are those of the earlier run. For work on the auxiliary cases and on the fixtures.
 const sm = args.indexOf("--skip-main");
 const skipMain = sm >= 0 ? (args.splice(sm, 1), true) : false;
+// --no-times: the timing passes are left out and ts-times.json is not written (for a run under emulation)
+const nt = args.indexOf("--no-times");
+const noTimes = nt >= 0 ? (args.splice(nt, 1), true) : false;
 const [outDir, snapDir] = args;
 if (!outDir || !snapDir) throw new Error("usage: spaces-ref.mts OUTDIR SNAPDIR [--fixtures DIR] [--quick] [--skip-main]");
 mkdirSync(outDir, { recursive: true });
@@ -589,14 +592,14 @@ if (skipMain) {
   const parsedCases = cases.map((c) => JSON.parse(JSON.stringify(c)) as Case);
   const best = new Array<number>(cases.length).fill(Infinity);
   t0 = performance.now();
-  for (let round = 0; round < 5; round++)
+  for (let round = 0; round < (noTimes ? 0 : 5); round++)
     for (const [k, c] of parsedCases.entries()) {
       const t = process.hrtime.bigint();
       validateSpaceSubmission(c.space, c.problem, c.config, c.opts);
       const d = Number(process.hrtime.bigint() - t);
       if (d < best[k]) best[k] = d;
     }
-  writeFileSync(join(outDir, "ts-times.json"), JSON.stringify(best));
+  if (!noTimes) writeFileSync(join(outDir, "ts-times.json"), JSON.stringify(best));
   console.error(`timings in ${((performance.now() - t0) / 1000).toFixed(1)} s`);
 }
 

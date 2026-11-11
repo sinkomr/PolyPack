@@ -1,5 +1,6 @@
 //! The port against the TypeScript's answers kept in `tests/fixtures` (written by
-//! `native/tools/flat-ref.mts --fixtures`): a sample of the comparison that runs without Node.
+//! `native/tools/flat-ref.mts --fixtures` under Node 24 on Linux x86-64, the production platform:
+//! native/tools/LINUX_REFERENCE.md): a sample of the comparison that runs without Node.
 //!
 //! - cases.jsonl / ref.jsonl: bodies of POST /api/submit (real leading boards, their mutants,
 //!   random boards, lattices, boards at the limits, malformed bodies, JSON texts) with what
@@ -8,8 +9,8 @@
 //!   the enclosing containers, strictVerify, the rules about published values, parseProvenance and
 //!   eventKeys.
 //!
-//! The rule is native/PORTING.md's (see `support::difference`): the same verdicts, counts and
-//! pieces, texts equal once numbers are placeholders, numbers to the last digits.
+//! Every answer must be the TypeScript's exactly (see `support::difference`): the same verdicts,
+//! counts, pieces and texts, and every number the same double.
 
 mod support;
 
@@ -38,7 +39,7 @@ fn bodies_are_answered_as_the_typescript_answers_them() {
     let (mut valid, mut invalid, mut malformed) = (0, 0, 0);
     for (case, want) in cases.iter().zip(&reference) {
         let got = support::run_case(case);
-        if let Some(d) = support::difference("case", want, &got, support::coordinate_scale(case)) {
+        if let Some(d) = support::difference("case", want, &got) {
             panic!("case {} ({}): {d}", case["id"], case["kind"]);
         }
         match want["server"]["valid"].as_bool() {
@@ -62,7 +63,7 @@ fn single_functions_answer_as_the_typescript_does() {
     assert_eq!(functions, ["bound", "eventKeys", "improves", "lit", "pair", "points", "provenance", "shape", "shapeCode", "strict"]);
     for (call, want) in calls.iter().zip(&reference) {
         let got = support::run_call(call);
-        if let Some(d) = support::difference("call", want, &got, support::coordinate_scale(call)) {
+        if let Some(d) = support::difference("call", want, &got) {
             panic!("call {} ({}): {d}", call["id"], call["fn"]);
         }
     }

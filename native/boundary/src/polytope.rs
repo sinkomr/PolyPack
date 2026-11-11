@@ -1,12 +1,24 @@
 //! Convex 4-polytopes as boundary spaces: cells (facets), their local frames, ridges, gluings and
 //! hinges. Port of packages/boundary/src/polytope.ts.
 //!
-//! The catalogue's six polytopes (`get_polytope`) are read from tables written by the TypeScript
-//! (native/tools/boundary-tables.mts, native/PORTING.md rule 6): the builder's convex hull uses
-//! atan2, cos and sin, whose last bit differs between V8 and Rust's `libm`, and the validator
-//! compares exactly in places (a centre on a window's face), so the tables keep the Rust server on
-//! the very doubles of the TypeScript one. `build_polytope` is the port of the builder itself; a
-//! test checks that it gives the tables' polytopes up to rounding.
+//! The catalogue's six polytopes (`get_polytope`) are built here, by `build_polytope`, the port of
+//! the source's builder, on first use, as the source's `getPolytope` builds them. The builder's
+//! convex hull uses atan2, cos and sin and the hinges' angles use acos, and the validator compares
+//! exactly in places (a centre on a window's face), so the polytopes must be the very doubles of
+//! the TypeScript server: they are, because `polypack_js::math` is bit for bit the functions of
+//! Node on the production platform (Node 24 on Linux x86-64). The six polytopes built here equal
+//! the ones that Node builds, in every one of their 159,453 numbers and in the signs of zero; the
+//! test `the_builders_give_the_polytopes_and_pieces_of_linux_node` holds that against a fixture
+//! written under that Node (native/tools/boundary-tables.mts).
+//!
+//! The crate used to embed the polytopes as tables written by the TypeScript. The tables had been
+//! written by Node on an Apple Silicon Mac, whose V8 is compiled with fused multiply-add: its sine,
+//! cosine and arc tangent differ from the production platform's in the last bit for a few
+//! arguments (the first, for the 16-cell, is `Math.sin(0.6154797086703874)` in hull.ts's `pivot`).
+//! 373 numbers of the 16-cell, 24-cell, 120-cell and 600-cell were therefore not the server's, by
+//! up to 7e-16 relative, which changed the last digits of 36 depths and one verdict at the
+//! tolerance among 14,127 checks compared with Linux Node. A table of computed numbers is only as
+//! good as the platform that wrote it; the ported builder does not depend on one.
 //!
 //! Conventions (deterministic for every polytope, and equal to the research prototype's tess.py for
 //! the tesseract, so its configurations import unchanged):
@@ -36,7 +48,6 @@ use crate::hull::convex_hull;
 use crate::linalg::{dot, iso_from_affine, orthonormal_basis, reject_from, sub, to_v3, unit, Iso3, V3};
 use crate::types::{Affine, Cell, CellFacet, HalfSpace, CONTAINERS, POLYTOPES};
 use polypack_js::math;
-use serde::Deserialize;
 use std::cmp::Ordering;
 use std::collections::HashMap;
 use std::sync::OnceLock;
@@ -429,99 +440,17 @@ pub fn is_container_name(x: &str) -> bool {
     CONTAINERS.contains(&x)
 }
 
-/// A polytope's table (native/boundary/data/polytope-<name>.json, written by native/tools/boundary-tables.mts).
-#[derive(Deserialize)]
-#[serde(rename_all = "camelCase")]
-struct PolytopeTable {
-    name: String,
-    d: usize,
-    vertices: Vec<Vec<f64>>,
-    cells: Vec<CellTable>,
-    hinge_angle: f64,
-    edges: Vec<[usize; 2]>,
-    edge_angles: Vec<f64>,
-}
-
-#[derive(Deserialize)]
-#[serde(rename_all = "camelCase")]
-struct CellTable {
-    index: usize,
-    normal: Vec<f64>,
-    origin: Vec<f64>,
-    frame: Vec<Vec<f64>>,
-    vertices: Vec<Vec<f64>>,
-    hinges: Vec<[usize; 2]>,
-    facets: Vec<CellFacet>,
-    vertex_ids: Vec<usize>,
-    /// CellTopo.hingeDihedral as the TypeScript computed it (pi - acos).
-    hinge_dihedral: Vec<f64>,
-}
-
-fn table_text(name: &str) -> Option<&'static str> {
-    Some(match name {
-        "tesseract" => include_str!("../data/polytope-tesseract.json"),
-        "5cell" => include_str!("../data/polytope-5cell.json"),
-        "16cell" => include_str!("../data/polytope-16cell.json"),
-        "24cell" => include_str!("../data/polytope-24cell.json"),
-        "120cell" => include_str!("../data/polytope-120cell.json"),
-        "600cell" => include_str!("../data/polytope-600cell.json"),
-        _ => return None,
-    })
-}
-
-fn from_table(name: &str) -> Result<Polytope, String> {
-    let text = table_text(name).ok_or_else(|| format!("unknown polytope {name}"))?;
-    let t: PolytopeTable = serde_json::from_str(text).map_err(|e| format!("polytope table {name}: {e}"))?;
-    let mut dihedrals: Vec<Vec<f64>> = Vec::with_capacity(t.cells.len());
-    let mut cells: Vec<Cell> = Vec::with_capacity(t.cells.len());
-    for c in t.cells {
-        dihedrals.push(c.hinge_dihedral);
-        cells.push(Cell {
-            index: c.index,
-            normal: c.normal,
-            origin: c.origin,
-            frame: c.frame,
-            vertices: c.vertices,
-            hinges: c.hinges,
-            facets: c.facets,
-            vertex_ids: c.vertex_ids,
-        });
-    }
-    let mut cell_topos = Vec::with_capacity(cells.len());
-    for (c, dihedral) in cells.iter().zip(dihedrals) {
-        let mut ct = cell_topo_of(c)?;
-        if dihedral.len() != ct.hinge_dihedral.len() {
-            return Err(format!("polytope table {name}: cell {} has {} dihedral angles for {} hinges", c.index, dihedral.len(), ct.hinge_dihedral.len()));
-        }
-        // the TypeScript's own angles (acos differs in the last bit between V8 and libm)
-        ct.hinge_dihedral = dihedral;
-        cell_topos.push(ct);
-    }
-    let hinge_edge = hinge_edges(&cells, &t.edges);
-    let volume = boundary_volume_of(&cells);
-    Ok(Polytope {
-        name: t.name,
-        d: t.d,
-        vertices: t.vertices,
-        cells,
-        hinge_angle: t.hinge_angle,
-        edges: t.edges,
-        edge_angles: t.edge_angles,
-        topo: PolyTopo { cells: cell_topos, hinge_edge },
-        volume,
-    })
-}
-
-/// The catalogue's polytopes (unit edge, centred at the origin), loaded once and shared.
+/// The catalogue's polytopes (unit edge, centred at the origin), each built on first use and shared.
 /// packages/boundary/src/polytope.ts: getPolytope
 pub fn get_polytope(name: &str) -> Result<&'static Polytope, String> {
     static CACHE: [OnceLock<Result<Polytope, String>>; 6] = [OnceLock::new(), OnceLock::new(), OnceLock::new(), OnceLock::new(), OnceLock::new(), OnceLock::new()];
     let i = POLYTOPES.iter().position(|&n| n == name).ok_or_else(|| format!("unknown polytope {name}"))?;
-    CACHE[i].get_or_init(|| from_table(name)).as_ref().map_err(|e| e.clone())
+    CACHE[i].get_or_init(|| build_catalogue_polytope(name)).as_ref().map_err(|e| e.clone())
 }
 
-/// The polytope of the catalogue built by the port of the TypeScript builder (not from its table):
-/// for the test that compares the two, and for timing.
+/// A polytope of the catalogue, built anew (what `get_polytope` builds once and keeps): for timing
+/// the builder, and for the comparison's `polytopeBuilt`.
+/// packages/boundary/src/polytope.ts: getPolytope, without its cache
 pub fn build_catalogue_polytope(name: &str) -> Result<Polytope, String> {
     if name == "tesseract" {
         build_polytope("tesseract", &tesseract_vertices(), 1e-9)

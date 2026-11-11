@@ -18,9 +18,10 @@
 //! the inner side, (p - r0).n(t) <= 0, exactly while t <= atan2(-b, a), a value in (0, pi). The
 //! largest admissible t is the minimum over p, and the points that reach it join the contact set.
 //!
-//! The server's polytopes are read from tables written by the TypeScript (polytope.rs), because the
-//! pivots use atan2, cos and sin, whose last bit differs between V8 and the `libm` crate; this
-//! module is the port that `build_polytope` runs, and a test compares its polytopes with the tables.
+//! The server's polytopes are built with this hull (polytope.rs: `build_polytope`). The pivots use
+//! atan2, cos and sin, and one unit in the last place of a single sine changes a hundred numbers of
+//! a polytope: they are `polypack_js::math`'s, which are Node's on the production platform bit for
+//! bit, and a test holds the polytopes against a fixture written under that Node.
 
 use crate::linalg::{dot, norm, orthonormal_basis, reject_from, sub, unit};
 use polypack_js::math;

@@ -1,11 +1,13 @@
 //! The port against the TypeScript's verdicts, without Node: the fixtures under tests/fixtures were
-//! written by `node --import tsx native/tools/surface-ref.mts OUTDIR --fixtures native/surface/tests/fixtures`
-//! from packages/surface.
+//! written by `native/tools/surface-ref.mts OUTDIR --fixtures native/surface/tests/fixtures` from
+//! packages/surface, under Node 24 on Linux x86-64, the production platform
+//! (native/tools/LINUX_REFERENCE.md).
 //!
-//! The rule of the comparison is native/PORTING.md's: the same form of verdict, the same `ok`, the
-//! same messages after each number is replaced by a placeholder, and the numbers equal to 1e-6
-//! relative or 1e-12 absolute (the transcendental functions of `polypack_js` can differ from V8's
-//! in the last bit).
+//! Every answer must be the TypeScript's exactly: the same form of verdict, the same `ok`, the same
+//! messages character for character (so every digit of the numbers they quote), and every number
+//! the same double. `polypack_js::math` is that Node's Math bit for bit, and nothing of this family
+//! goes through `Math.pow` with an exponent other than 2 or 0.5. A verdict's numbers are compared as
+//! the text JavaScript writes them (String(x), where a -0 is "0").
 
 use polypack_js::fmt;
 use polypack_surface::chains::ChainError;
@@ -39,84 +41,6 @@ fn text_number(s: &str) -> f64 {
     }
 }
 
-/// Two numbers agree: the same, or within 1e-6 relative or 1e-12 absolute.
-fn close(a: f64, b: f64) -> bool {
-    if a == b || (a.is_nan() && b.is_nan()) {
-        return true;
-    }
-    if !a.is_finite() || !b.is_finite() {
-        return false;
-    }
-    let d = (a - b).abs();
-    d <= 1e-12 || d / a.abs().max(b.abs()) <= 1e-6
-}
-
-/// A text with its numbers taken out: the text with "#" for each number, and the numbers. A
-/// number is what the comparison tool's pattern takes: -?digits(.digits)?(e[+-]?digits)?, NaN or
-/// -?Infinity.
-fn split_numbers(text: &str) -> (String, Vec<f64>) {
-    let b = text.as_bytes();
-    let mut shape = String::new();
-    let mut numbers = Vec::new();
-    let mut i = 0;
-    while i < b.len() {
-        let rest = &text[i..];
-        let word = ["NaN", "-Infinity", "Infinity"].into_iter().find(|w| rest.starts_with(w));
-        if let Some(w) = word {
-            numbers.push(text_number(w));
-            shape.push('#');
-            i += w.len();
-            continue;
-        }
-        let mut j = i;
-        if b[j] == b'-' && j + 1 < b.len() && b[j + 1].is_ascii_digit() {
-            j += 1;
-        }
-        if !b[j].is_ascii_digit() {
-            // one whole character, which may be several bytes
-            let ch = rest.chars().next().unwrap();
-            shape.push(ch);
-            i += ch.len_utf8();
-            continue;
-        }
-        while j < b.len() && b[j].is_ascii_digit() {
-            j += 1;
-        }
-        if j + 1 < b.len() && b[j] == b'.' && b[j + 1].is_ascii_digit() {
-            j += 1;
-            while j < b.len() && b[j].is_ascii_digit() {
-                j += 1;
-            }
-        }
-        if j < b.len() && b[j] == b'e' {
-            let mut k = j + 1;
-            if k < b.len() && (b[k] == b'-' || b[k] == b'+') {
-                k += 1;
-            }
-            if k < b.len() && b[k].is_ascii_digit() {
-                while k < b.len() && b[k].is_ascii_digit() {
-                    k += 1;
-                }
-                j = k;
-            }
-        }
-        numbers.push(text[i..j].parse().unwrap());
-        shape.push('#');
-        i = j;
-    }
-    (shape, numbers)
-}
-
-/// Two texts agree up to the last digits of their numbers.
-fn close_text(a: &str, b: &str) -> bool {
-    if a == b {
-        return true;
-    }
-    let (sa, na) = split_numbers(a);
-    let (sb, nb) = split_numbers(b);
-    sa == sb && na.len() == nb.len() && na.iter().zip(&nb).all(|(x, y)| close(*x, *y))
-}
-
 /// What differs between the TypeScript's verdict and the port's, or None.
 fn verdict_diff(want: &Value, got: &Result<Validation, ChainError>) -> Option<String> {
     match got {
@@ -129,7 +53,7 @@ fn verdict_diff(want: &Value, got: &Result<Validation, ChainError>) -> Option<St
                 return Some(format!("thrown class {class} / {got_class}"));
             }
             let message = want["message"].as_str().unwrap();
-            if !close_text(message, e.message()) {
+            if message != e.message() {
                 return Some(format!("thrown message `{message}` / `{}`", e.message()));
             }
             None
@@ -146,13 +70,13 @@ fn verdict_diff(want: &Value, got: &Result<Validation, ChainError>) -> Option<St
                 return Some(format!("{} errors / {}: {:?}", errors.len(), v.errors.len(), v.errors));
             }
             for (a, b) in errors.iter().zip(&v.errors) {
-                if !close_text(a.as_str().unwrap(), b) {
+                if a.as_str().unwrap() != b {
                     return Some(format!("error `{}` / `{b}`", a.as_str().unwrap()));
                 }
             }
             for (key, x) in [("minPairSep", v.min_pair_sep), ("minConeSep", v.min_cone_sep), ("minWallSep", v.min_wall_sep)] {
                 let a = want[key].as_str().unwrap();
-                if !close_text(a, &fmt::num(x)) {
+                if a != fmt::num(x) {
                     return Some(format!("{key} {a} / {}", fmt::num(x)));
                 }
             }
@@ -232,7 +156,7 @@ fn solids_are_the_typescript_solids() {
             None => assert!(s.degree.is_nan(), "{name}"),
         }
         match w["coneAngle"].as_f64() {
-            Some(c) => assert!((c - s.cone_angle).abs() < 1e-12, "{name}"),
+            Some(c) => assert_eq!(c.to_bits(), s.cone_angle.to_bits(), "{name}: coneAngle {c} / {}", s.cone_angle),
             None => assert!(s.cone_angle.is_nan(), "{name}"),
         }
         assert_eq!(w["uniform"].as_bool().unwrap(), s.uniform, "{name}");
@@ -251,7 +175,8 @@ fn solids_are_the_typescript_solids() {
         ];
         for (key, got) in sums {
             let a = w[key].as_f64().unwrap();
-            assert!((a - got).abs() <= 1e-11 * a.abs().max(1.0), "{name}: {key} {a} / {got}");
+            // the sum of the same doubles in the same order
+            assert_eq!(a.to_bits(), got.to_bits(), "{name}: {key} {a} / {got}");
         }
     }
     assert!(get_solid("hypercube").is_err());
@@ -279,22 +204,9 @@ fn domain_is_the_typescript_domain() {
             Some(g) => {
                 assert_eq!(b["label"].as_str().unwrap(), g.label, "{p}");
                 let a = text_number(b["value"].as_str().unwrap());
-                assert!((a - g.value).abs() <= 1e-12 * a, "{p}: {a} / {}", g.value);
+                assert_eq!(a.to_bits(), g.value.to_bits(), "{p}: {a} / {}", g.value);
             }
         }
     }
     assert!(outside >= 10);
-}
-
-#[test]
-fn numbers_are_taken_out_of_messages() {
-    let (shape, numbers) = split_numbers("pieces 3 and 12 overlap on face 0 (depth 1.5e-7), w=-Infinity, NaN, 2.25");
-    assert_eq!(shape, "pieces # and # overlap on face # (depth #), w=#, #, #");
-    assert_eq!(numbers[..4], [3.0, 12.0, 0.0, 1.5e-7]);
-    assert_eq!(numbers[4], f64::NEG_INFINITY);
-    assert!(numbers[5].is_nan());
-    assert_eq!(numbers[6], 2.25);
-    assert!(close_text("by 0.123456789012", "by 0.123456789013"));
-    assert!(!close_text("by 0.123456", "by 0.124456"));
-    assert!(!close_text("piece 1 by 0.5", "piece 2 by 0.5"));
 }
