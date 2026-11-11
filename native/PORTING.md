@@ -80,7 +80,19 @@ defect.
 - **Three kinds of request body** are read differently (`polypack_js::json::parse`): a number too
   large for a double is read as `null` (JavaScript: `Infinity`; both are refused where a number is
   wanted), an escaped half of a surrogate pair becomes U+FFFD at once (JavaScript: when the text
-  is stored), and nesting deeper than 128 levels is invalid JSON.
+  is stored), and nesting deeper than 4,096 levels is invalid JSON (`json::MAX_DEPTH`). Node reads
+  a body nested as deep as its 256 KiB allow, 131,072 levels. So a submission that nests deeper
+  than 4,096 levels in a field the server does not read is accepted there and refused here (400,
+  `body is not valid JSON`), and a `method_params` that deep is refused by both, there for its
+  size and here as invalid JSON. Up to 4,096 levels the two answer alike. The limit exists because
+  a JSON value is copied, compared, written and released by functions that call themselves once
+  per level, and a stack that overflows ends the whole process. It is twice what either server
+  can store: `method_params`, the one field stored as it was sent, is at most 4,096 bytes as
+  JSON, which nest 2,046 levels deep. Every thread has a stack of 64 MiB, 49 times what the
+  deepest value needs in a release build (`pool::THREAD_STACK_BYTES`, measured with
+  `server/examples/stackprobe.rs`), and a test runs every step at the full depth on a quarter of
+  it. A stored text nested deeper than 4,096 levels, which only a hand can have put into the
+  database, is a SyntaxError (500) for the routes that read its row; JavaScript reads it.
 - **Overload.** The TypeScript server does everything on one thread and refuses submissions with
   503 (`the server is busy`, `Retry-After: 5`) while that thread runs late: the delay of its event
   loop over the last one to two seconds is above `OVERLOAD_DELAY_MS` (load.ts: `LoopDelay`). The
@@ -95,6 +107,9 @@ defect.
   them, since they run on several threads. Each request alone is answered as in the source, and
   requests that touch the same data end as they would have in some order of arrival: the
   transaction that stores an entry still decides who leads. The lines of the log follow that order.
+  Requests that read the store on their own task wait for one of a few turns first, one per core
+  (`pool::blocking`), in the order they came, so that however many wait, the process keeps a few
+  threads per core (600 requests at once on eight cores: 35 threads, where it was 530).
 - **The heavy checks of the spaces** (spaces.ts: `heavyTurn`). In the source a heavy check
   shares the server's one thread with every other request, in slices of 20 ms, and one runs at a
   time. Here one runs at a time too, on a thread kept for the heavy checks beside the workers that
@@ -122,6 +137,33 @@ defect.
   lines are refused before the server sees them (a `<` in a request target, for one). A client that
   closes its sending side before it has read the answer gets none (Node: the answer, if it was
   ready at that moment).
+- **The limits of a request** are Node's (`node.rs`: `ConnLimits`), and a request that breaks one
+  gets the bytes Node writes before it destroys the socket (`HTTP/1.1 408 Request Timeout`, `431
+  Request Header Fields Too Large` or `400 Bad Request`, each with `Connection: close` and nothing
+  else), with these differences in when:
+  - a head that has not arrived is given up after 60 s, where Node looks every 30 s and so gives
+    it up after 60 to 90 s;
+  - a request that has not arrived whole is given up 300 s after its head, where Node gives it up
+    300 to 330 s after its first byte;
+  - a head is refused when its request target and the names and values of its headers come to
+    16,384 bytes or more, as in Node, except that the spaces after a value do not count here
+    (hyper drops them before the server sees the head) and do count there;
+  - a head of more than 64 KiB in all, or of more than 2,000 headers, is refused by hyper itself,
+    whose 431 also carries `content-length: 0` and `date`. Node reads the first 2,000 headers of
+    a request and drops the rest without a word.
+
+  A request whose body does not arrive whole (a chunk size that is none, a connection closed
+  before the length it named, the time above) is answered by no route and changes nothing, on
+  both servers; the submit routes write a line to stderr for it, as Hono's error handler does.
+- **The stop.** On SIGTERM or SIGINT Node closes its listening socket and exits at once. It can:
+  on its one thread the transaction that stores an entry and the writing of its answer are one
+  uninterrupted step. Here they are steps of two threads, and a process that exited between them
+  left an entry stored whose sender never heard of it (2 of 22,385 entries in 12 stops under
+  load). So the Rust server takes no further connection and no further request (a request that
+  comes now finds its connection closed, as it would after the exit), waits until every POST
+  request under way has been answered, and exits then with status 0: after 25 to 33 ms under
+  load, and after two seconds at most, when a request under way does not end (a body still being
+  sent, heavy checks in their queue). Open live streams are not waited for.
 - **The repository's root** is the working directory of `polypack-server`; the TypeScript server
   finds it from the place of its own source file. `data/records.json`, the spaces' records
   (`data/<space>/records.json`, and the configurations kept apart in `data/<space>/configs/`),

@@ -9,6 +9,18 @@ export const NOLIMIT = { perIp: 1_000_000, verifyMsPerMinute: 1e12, perKey: 1_00
 const METHODS = SOLVER_METHODS.map(([name]) => name);
 const scaled = (pieces: Pose[], f: number): Pose[] => pieces.map((p) => ({ ...p, x: p.x * f, y: p.y * f }));
 const enc = encodeURIComponent;
+/** `levels` arrays, one inside the other. */
+const nest = (levels: number): unknown => {
+  let v: unknown = [];
+  for (let i = 1; i < levels; i++) v = [v];
+  return v;
+};
+/** `levels` objects `{"a": ...}`, one inside the other, around a 1. */
+const nestObjects = (levels: number): unknown => {
+  let v: unknown = 1;
+  for (let i = 0; i < levels; i++) v = { a: v };
+  return v;
+};
 
 /** POST /api/submit: what it accepts and every way it refuses. */
 function submit(): Scenario {
@@ -53,6 +65,10 @@ function submit(): Scenario {
   for (const text of ["{", "", " ", "nul", "{'N':4}", '{"N":4,}', "﻿{}", '{"N":4}{"N":5}', "NaN", "[1,2", '"abc'])
     s.req("POST", "/api/submit", { text, headers: { "content-type": "application/json", "x-test-client-ip": "10.0.0.1" }, expect: 400 });
   for (const text of ["null", "[]", '"text"', "5", "true", "{}", "[{}]"])
+    s.req("POST", "/api/submit", { text, headers: { "x-test-client-ip": "10.0.0.1" }, expect: 400 });
+  // a backslash before a character of two, three and four bytes, at the end of the text, and an escape cut short: not JSON
+  // (the Rust server once answered 500 to the first three)
+  for (const text of ['{"x":"\\é"}', '{"N":4,"name":"\\€"}', '["\\😀"]', '{"x":"\\', '"\\u12', '{"name":"\\ud83d\\u"}', '[1e999,"\\é"]'])
     s.req("POST", "/api/submit", { text, headers: { "x-test-client-ip": "10.0.0.1" }, expect: 400 });
   // any content type is read as JSON; duplicate keys, escapes and whitespace are JSON's own
   s.req("POST", "/api/submit", { text: ` \n{"N":4,"M":4,"P":15,"P":16,"name":"dup\\u0041 \\ud83d\\ude00","pieces":${JSON.stringify(grid(16, 4))}}\r\n`, headers: { "content-type": "text/plain", "x-test-client-ip": "10.0.0.1" } });
@@ -172,6 +188,14 @@ function provenance(): Scenario {
   ok({ found_with: "optimizer", method: "polish", software: "s".repeat(80) });
   ok({ found_with: "optimizer", method: "polish", method_params: { text: "p".repeat(4096 - 11) } });
   ok({ found_with: "optimizer", method: "polish", method_params: { "é": "😀".repeat(1021) } });
+  // Nesting. A method_params may be 4,096 bytes of JSON, which nest at most 2,046 levels deep: stored as sent
+  // and read back. (The Rust server once read no body nested deeper than 128 levels and no stored row deeper than 512.)
+  ok({ found_with: "optimizer", method: "polish", method_params: { a: nest(129) } });
+  ok({ found_with: "optimizer", method: "polish", method_params: { a: nest(2000) } });
+  ok({ found_with: "optimizer", method: "polish", method_params: { a: nest(2045) } });
+  ok({ found_with: "optimizer", method: "polish", method_params: nestObjects(682) });
+  // a field the server does not read may nest deeper than any it stores
+  ok({ extra: nest(3000), more: nestObjects(1500) });
   // the legacy `agent` field: "ai" without found_with is "not recorded", anything else is ignored
   ok({ agent: "ai" });
   ok({ agent: "human" });
@@ -193,6 +217,11 @@ function provenance(): Scenario {
   no({ agent: "ai", software: "x", seed: 1 });
   for (const method_params of [[], "x", 5, null, { text: "p".repeat(4096 - 10) }, { "é": "😀".repeat(1022) }])
     no({ found_with: "optimizer", method: "polish", method_params });
+  // one level more than 4,096 bytes hold, and far more: refused for the size, in the same words
+  for (const method_params of [{ a: nest(2046) }, nestObjects(683), { a: nest(3000) }, nestObjects(2500)]) no({ found_with: "optimizer", method: "polish", method_params });
+  // every other field nested where a number or a text belongs
+  no({ found_with: nest(3000), method: nest(3000), seed: nest(3000), budget: nestObjects(3000), software: nest(3000) });
+  no({ N: nest(3000), M: nestObjects(3000), P: nest(3000), pieces: nest(3000), container_phi: nest(3000), name: nest(3000), agent_note: nestObjects(3000) });
   for (const seed of [-1, 1.5, "1", null, 9007199254740992, 1e300, [1]]) no({ found_with: "optimizer", method: "polish", seed });
   for (const budget of [{}, { evals: 0 }, { evals: 1.5 }, { evals: "1" }, { time_s: 0 }, { time_s: -1 }, { time_s: "1" }, { x: 1 }, { evals: 1, x: 1 }, [], "x", 5, null, { evals: null }, { time_s: 1e999 }])
     no({ found_with: "optimizer", method: "polish", budget });

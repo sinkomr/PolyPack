@@ -233,6 +233,11 @@ export function snapshotScenario(site: SiteEntry[]): Scenario {
   for (const P of [11, 12, 30]) s.submit(squares(P, { name: `bot ${P}`, found_with: "external" }, grid(P, 6)), 200);
   s.submit(squares(3, { name: "modest" }, row(3, 2.5)), 200).submit(squares(3, { name: "claimant" }, row(3)), 200);
   s.submit({ N: 0, M: 4, P: 2, pieces: disks(2, 1.5), name: "disk", units: "diameter" }, 200);
+  // an entry whose method_params nests 2,000 levels deep: stored, read back, and in the file of its pair
+  // (the Rust server once answered 500 for an entry and a file with a row nested deeper than 512)
+  let deep: unknown = [];
+  for (let i = 1; i < 2000; i++) deep = [deep];
+  s.submit(squares(13, { name: "deep", found_with: "optimizer", method: "polish", method_params: { a: deep } }, grid(13, 6)), 200).get("/api/submissions/7", 200);
   for (const e of site) s.spaceSubmit(spaceBody(e));
   // the manifest lists nothing of them until it is built again
   file("4-4.json.gz", 404);

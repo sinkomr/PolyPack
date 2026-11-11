@@ -21,23 +21,25 @@
 //!    written as `null`);
 //!  - an escape of half a surrogate pair (`"\ud800"`) is kept as it is by JavaScript; here it
 //!    becomes U+FFFD;
-//!  - nesting deeper than `MAX_DEPTH` (512) is refused (JavaScript has no fixed limit).
+//!  - nesting deeper than `MAX_DEPTH` is refused (JavaScript has no fixed limit).
 
 use polypack_js::fmt;
 use serde_json::{Map, Number, Value};
 
 use super::error::{Result, StoreError};
 
-/// Deepest nesting `parse` reads. The parser itself keeps the open arrays and objects on a list,
-/// but `stringify` and the release of a `Value` recurse once per level, and a stack overflow ends
-/// the process, so the depth is bounded well inside the stack of a worker thread: the test below
-/// runs all three at this depth on a 1 MB stack, unoptimised (measured 2026-11-10: 1024 levels
-/// still pass there, 2048 overflow).
-/// What the server stores is far shallower: a configuration nests four deep, and serde_json, which
-/// reads the requests of the Rust server, stops at 128. Only `method_params` written by the
-/// TypeScript server from a request built for the purpose could be deeper (4096 bytes allow about
-/// 2000 levels); reading such a row gives a SyntaxError here.
-pub const MAX_DEPTH: usize = 512;
+/// Deepest nesting `parse` reads: that of a request body (`polypack_js::json::MAX_DEPTH`, 4,096).
+/// The parser itself keeps the open arrays and objects on a list, but `stringify`, a copy and the
+/// release of a `Value` call themselves once per level, and a stack overflow ends the process, so
+/// the depth is bounded, and every thread that handles stored text has a stack sized for it
+/// (`pool::THREAD_STACK_BYTES`; the test below and tests/app.rs run everything at this depth on a
+/// quarter of that stack).
+/// What the server stores is far shallower: a configuration nests four deep. The deepest text
+/// either server can have written is a `method_params` at its limit of 4,096 bytes, which nest
+/// 2,046 levels deep: a row of the TypeScript server with one must be read back and written out
+/// as that server does it. Deeper text can only have been put into the database by hand; reading
+/// it gives a SyntaxError here (JavaScript reads it).
+pub const MAX_DEPTH: usize = polypack_js::json::MAX_DEPTH;
 
 /// True for a key that JavaScript orders as an array index: the canonical decimal form of an
 /// integer from 0 to 2^32 - 2.
@@ -486,9 +488,9 @@ mod tests {
 
     #[test]
     fn reads_and_writes_the_deepest_nesting_on_a_small_stack_and_refuses_deeper() {
-        // a worker thread of the server has less stack than the main thread
+        // a quarter of the stack the server's threads have
         std::thread::Builder::new()
-            .stack_size(1 << 20)
+            .stack_size(crate::pool::THREAD_STACK_BYTES / 4)
             .spawn(|| {
                 let deep = format!("{}{}", "[".repeat(MAX_DEPTH), "]".repeat(MAX_DEPTH));
                 assert_eq!(round(&deep), deep);

@@ -8,11 +8,66 @@
 //! an exception (500), and one beyond the end of the file promises bytes that never come.
 
 use std::path::Path;
+use std::sync::Arc;
 
 use bytes::Bytes;
+use futures_util::stream;
 
-use crate::hono::{Req, Res, ResBody, Thrown};
+use crate::hono::{BodyStream, Req, Res, ResBody, Thrown};
 use crate::js;
+
+/// How much of a file is read at a time: the `highWaterMark` of Node's `createReadStream`.
+const CHUNK: u64 = 64 * 1024;
+
+/// `createReadStream(path, { start, end })`, piped to the answer: `count` bytes of the file from
+/// `start`, read a chunk at a time, each when the connection asks for more. A client that stops
+/// reading stops the reading of the file: what a stalled download holds is the chunk in hand and
+/// the connection's write buffer, whatever the size of the file. (The whole file in memory per
+/// answer, as it was once read, let a few hundred stalled downloads of the largest viewer page
+/// take gigabytes.) The stream ends early when the file does.
+fn file_stream(file: Option<std::fs::File>, start: u64, count: u64) -> BodyStream {
+    struct Reading {
+        file: Arc<std::fs::File>,
+        at: u64,
+        left: u64,
+    }
+    let Some(file) = file else {
+        return Box::pin(stream::empty());
+    };
+    Box::pin(stream::unfold(Reading { file: Arc::new(file), at: start, left: count }, |mut r| async move {
+        if r.left == 0 {
+            return None;
+        }
+        let (file, at, want) = (r.file.clone(), r.at, r.left.min(CHUNK) as usize);
+        // a read of a file blocks its thread, for as long as the disk takes
+        let read = crate::pool::blocking(move || -> std::io::Result<Vec<u8>> {
+            use std::os::unix::fs::FileExt;
+            let mut buf = vec![0u8; want];
+            let mut got = 0;
+            while got < want {
+                match file.read_at(&mut buf[got..], at + got as u64) {
+                    Ok(0) => break,
+                    Ok(n) => got += n,
+                    Err(e) if e.kind() == std::io::ErrorKind::Interrupted => {}
+                    Err(e) => return Err(e),
+                }
+            }
+            buf.truncate(got);
+            Ok(buf)
+        })
+        .await;
+        match read {
+            // the file is shorter than it was said to be: the answer ends here
+            Ok(buf) if buf.is_empty() => None,
+            Ok(buf) => {
+                r.at += buf.len() as u64;
+                r.left -= buf.len() as u64;
+                Some((Ok(Bytes::from(buf)), r))
+            }
+            Err(_) => None,
+        }
+    }))
+}
 
 /// hono/utils/mime: baseMimes.
 const MIMES: [(&str, &str); 56] = [
@@ -91,7 +146,8 @@ fn refused(filename: &str) -> bool {
     filename.contains('\\') || filename.contains("//") || filename.split('/').any(|segment| segment == "." || segment == "..")
 }
 
-/// serveStatic({ root }). `Ok(None)`: no such file, the next handler answers (`next()`).
+/// serveStatic({ root }). `Ok(None)`: no such file, the next handler answers (`next()`). It looks
+/// the file up and opens it, which may block: call it from `pool::blocking`.
 pub fn serve_static(root: &str, req: &Req) -> Result<Option<Res>, Thrown> {
     let filename = js::try_decode_uri(&req.path);
     if refused(&filename) {
@@ -117,20 +173,12 @@ pub fn serve_static(root: &str, req: &Req) -> Result<Option<Res>, Thrown> {
         res.set("content-length", size.to_string());
         return Ok(Some(res));
     }
-    let read = |from: u64, count: u64| -> Bytes {
-        use std::io::{Read, Seek, SeekFrom};
-        let mut out = Vec::new();
-        if let Ok(mut f) = std::fs::File::open(Path::new(&path)) {
-            if f.seek(SeekFrom::Start(from)).is_ok() {
-                let _ = f.take(count).read_to_end(&mut out);
-            }
-        }
-        Bytes::from(out)
-    };
+    // The file is opened now and read as the answer is sent. One that cannot be opened, or that
+    // ends before the length the answer names, leaves that answer short (ResBody::Promised).
+    let open = || std::fs::File::open(Path::new(&path)).ok();
     if range.is_empty() {
         res.set("content-length", size.to_string());
-        let bytes = read(0, size);
-        res.body = if bytes.len() as u64 == size { ResBody::Full(bytes) } else { ResBody::Short(bytes) };
+        res.body = ResBody::Promised { stream: file_stream(open(), 0, size), bytes: size };
         return Ok(Some(res));
     }
     res.set("accept-ranges", "bytes");
@@ -160,8 +208,7 @@ pub fn serve_static(root: &str, req: &Req) -> Result<Option<Res>, Thrown> {
     res.set("content-length", polypack_js::fmt::num(chunksize));
     res.set("content-range", format!("bytes {}-{}/{}", polypack_js::fmt::num(start), polypack_js::fmt::num(end), size));
     res.status = 206;
-    let bytes = read(start as u64, chunksize as u64);
-    res.body = if bytes.len() as f64 == chunksize { ResBody::Full(bytes) } else { ResBody::Short(bytes) };
+    res.body = ResBody::Promised { stream: file_stream(open(), start as u64, chunksize as u64), bytes: chunksize as u64 };
     Ok(Some(res))
 }
 

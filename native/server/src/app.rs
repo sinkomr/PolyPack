@@ -16,6 +16,9 @@
 //!    as in the source, so two entries racing for one problem end as in some order of arrival.
 //!  - The limits of submissions have their own lock inside `SubmitLimits`; the live streams have
 //!    theirs (`follow`).
+//!  - A handler that answers from the store on the request's own task does so in a section that
+//!    may block (`pool::blocking`): it waits for one of a few turns first, as a task, so that
+//!    however many requests wait for the store, they do not each hold a thread.
 
 use std::collections::{BTreeMap, HashMap};
 use std::sync::atomic::{AtomicBool, Ordering};
@@ -583,22 +586,22 @@ impl App {
         let handled: Handled = match (method, &segments[1..]) {
             ("GET", ["api"]) => Ok(hono::html(self.docs.clone())),
             ("GET", ["api", "health"]) => Ok(hono::json_text("{\"ok\":true}", 200)),
-            ("GET", ["api", "problems", n, m, p]) if nonempty(&[n, m, p]) => tokio::task::block_in_place(|| self.problem(n, m, p)),
-            ("GET", ["api", "leaderboard", n, m, p]) if nonempty(&[n, m, p]) => tokio::task::block_in_place(|| self.leaderboard(n, m, p)),
-            ("GET", ["api", "records"]) => tokio::task::block_in_place(|| self.records(req)),
-            ("GET", ["api", "records", "pairs"]) => tokio::task::block_in_place(|| self.record_pairs()),
+            ("GET", ["api", "problems", n, m, p]) if nonempty(&[n, m, p]) => crate::pool::blocking(|| self.problem(n, m, p)).await,
+            ("GET", ["api", "leaderboard", n, m, p]) if nonempty(&[n, m, p]) => crate::pool::blocking(|| self.leaderboard(n, m, p)).await,
+            ("GET", ["api", "records"]) => crate::pool::blocking(|| self.records(req)).await,
+            ("GET", ["api", "records", "pairs"]) => crate::pool::blocking(|| self.record_pairs()).await,
             ("GET", ["api", "holders"]) => self.holders().await,
             ("GET", ["api", "holder"]) => self.holder(req).await,
-            ("GET", ["api", "atlas"]) => tokio::task::block_in_place(|| self.atlas(req)),
-            ("GET", ["api", "submissions", id]) if !id.is_empty() => tokio::task::block_in_place(|| self.submission(id)),
+            ("GET", ["api", "atlas"]) => crate::pool::blocking(|| self.atlas(req)).await,
+            ("GET", ["api", "submissions", id]) if !id.is_empty() => crate::pool::blocking(|| self.submission(id)).await,
             ("POST", ["api", "submit"]) => self.submit(req).await,
             ("GET", ["api", "events"]) => Ok(self.events(req)),
-            ("GET", ["api", "admin", "pending"]) => tokio::task::block_in_place(|| self.admin_pending(req)),
+            ("GET", ["api", "admin", "pending"]) => crate::pool::blocking(|| self.admin_pending(req)).await,
             ("POST", ["api", "admin", "review"]) => self.admin_review(req).await,
             ("POST", ["api", "admin", "remove"]) => self.admin_remove(req).await,
             ("POST", ["api", "admin", "edit"]) => self.admin_edit(req).await,
             ("POST", ["api", "admin", "holder-peaks"]) => self.admin_holder_peaks(req).await,
-            ("GET", ["api", "snapshot"]) => tokio::task::block_in_place(|| self.snapshot_manifest()),
+            ("GET", ["api", "snapshot"]) => crate::pool::blocking(|| self.snapshot_manifest()).await,
             ("GET", ["api", "snapshot", file]) if !file.is_empty() => self.snapshot_file(file, req).await,
             _ => {
                 // The spaces share the submission limits of /api/submit: one count and one
@@ -632,7 +635,7 @@ impl App {
                         // spaces, whose catalogues it reads.
                         if method == "GET" && path == "/api/leaders" {
                             let closed = |n: f64, m: f64, p: f64| self.literature.closed(n, m, p);
-                            tokio::task::block_in_place(|| leaders_route(req, &self.store, self.spaces.as_ref(), &closed))
+                            crate::pool::blocking(|| leaders_route(req, &self.store, self.spaces.as_ref(), &closed)).await
                         } else {
                             // app.all("/api/*")
                             Ok(hono::json_error("not found", 404))
@@ -1113,7 +1116,7 @@ impl App {
             let _building = self.building.lock().await;
             while !self.state().counts.done {
                 let app = self.clone();
-                tokio::task::block_in_place(move || app.count_page())?;
+                crate::pool::blocking(move || app.count_page()).await?;
                 tokio::task::yield_now().await;
             }
         }
@@ -1160,7 +1163,7 @@ impl App {
         let mut done = false;
         while !done {
             // a page, in a turn
-            let step = tokio::task::block_in_place(|| -> Result<bool, Thrown> {
+            let step = crate::pool::blocking(|| -> Result<bool, Thrown> {
                 let _state = self.state();
                 let store = self.store();
                 let page = store.problems_named(name, after, self.holder_chunk)?;
@@ -1187,7 +1190,8 @@ impl App {
                     }
                     _ => Ok(true),
                 }
-            })?;
+            })
+            .await?;
             done = step;
             if !done {
                 tokio::task::yield_now().await;
@@ -1510,8 +1514,15 @@ impl App {
             return Ok(self.reject(&sub, 413, vec!["request body too large".to_string()], None, None, None));
         }
         // read no further than the limit: a chunked body has no Content-Length to check first
-        let Some(body) = hono::read_body_within(req, MAX_BODY_BYTES).await else {
-            return Ok(self.reject(&sub, 413, vec!["request body too large".to_string()], None, None, None));
+        let body = match hono::read_body_within(req, MAX_BODY_BYTES).await {
+            Ok(Some(body)) => body,
+            Ok(None) => return Ok(self.reject(&sub, 413, vec!["request body too large".to_string()], None, None, None)),
+            // The body did not arrive whole: nothing is verified or stored, and no line of the log
+            // is written. In the source the read throws and Hono's error handler prints it.
+            Err(cut) => {
+                eprintln!("Error: aborted");
+                return Ok(cut);
+            }
         };
         // the rest is the work of a core: on a worker
         let app = self.clone();
@@ -1842,10 +1853,13 @@ impl App {
         Ok(hono::json(&Pending { pending: self.store().pending()? }, 200))
     }
 
-    /// `await c.req.json().catch(() => null)`: the body as JSON; None when it is not JSON.
-    async fn body_json(req: &mut Req) -> Option<Value> {
-        let bytes = hono::read_body(req).await;
-        polypack_js::json::parse(&bytes).ok()
+    /// `await c.req.json().catch(() => null)`: the body as JSON; None when it is not JSON. `Err`
+    /// when the body did not arrive whole (`hono::read_body`): the request ends there, unanswered,
+    /// and nothing is changed. (In the source the route goes on with `null` and answers 400 to a
+    /// socket that Node has destroyed: no change either.)
+    async fn body_json(req: &mut Req) -> Result<Option<Value>, Res> {
+        let bytes = hono::read_body(req).await?;
+        Ok(polypack_js::json::parse(&bytes).ok())
     }
 
     /// `body.id` when `Number.isInteger(body.id)`.
@@ -1861,7 +1875,10 @@ impl App {
         if let Some(denied) = self.admin(req) {
             return Ok(denied);
         }
-        let body = Self::body_json(req).await;
+        let body = match Self::body_json(req).await {
+            Ok(body) => body,
+            Err(cut) => return Ok(cut),
+        };
         let decision = match body.as_ref().and_then(|b| b.get("decision")).and_then(Value::as_str) {
             Some("confirmed") => Some(Decision::Confirmed),
             Some("rejected") => Some(Decision::Rejected),
@@ -1872,7 +1889,7 @@ impl App {
         };
         // a confirmed claim becomes a record and a rejected one is deleted: the problem's leader may change
         // a confirmed entry stays listed; a rejected one is deleted, and its pair may have no entry left
-        let ok = tokio::task::block_in_place(|| self.change_entry(id, true, decision == Decision::Rejected, |store| store.review(id, decision)))?;
+        let ok = crate::pool::blocking(|| self.change_entry(id, true, decision == Decision::Rejected, |store| store.review(id, decision))).await?;
         if ok {
             (self.log)(&format!("[review] submission {} marked {}", fmt::num(id), if decision == Decision::Confirmed { "confirmed" } else { "rejected" }));
             Ok(hono::json_text("{\"ok\":true}", 200))
@@ -1888,11 +1905,14 @@ impl App {
         if let Some(denied) = self.admin(req) {
             return Ok(denied);
         }
-        let body = Self::body_json(req).await;
+        let body = match Self::body_json(req).await {
+            Ok(body) => body,
+            Err(cut) => return Ok(cut),
+        };
         let Some(id) = Self::integer_id(body.as_ref()) else {
             return Ok(hono::json_error("body must be {\"id\": number}", 400));
         };
-        let ok = tokio::task::block_in_place(|| self.change_entry(id, true, true, |store| store.remove(id)))?;
+        let ok = crate::pool::blocking(|| self.change_entry(id, true, true, |store| store.remove(id))).await?;
         if ok {
             (self.log)(&format!("[review] submission {} removed", fmt::num(id)));
             Ok(hono::json_text("{\"ok\":true}", 200))
@@ -1908,7 +1928,10 @@ impl App {
         if let Some(denied) = self.admin(req) {
             return Ok(denied);
         }
-        let body = Self::body_json(req).await;
+        let body = match Self::body_json(req).await {
+            Ok(body) => body,
+            Err(cut) => return Ok(cut),
+        };
         let (Some(id), Some(object)) = (Self::integer_id(body.as_ref()), body.as_ref().and_then(Value::as_object)) else {
             return Ok(hono::json_error("body must be an object with a numeric id", 400));
         };
@@ -1961,7 +1984,7 @@ impl App {
         }
         // only a new name can change the holders' counts: the entry stays the problem's leader, or not
         // name, note and provenance only: the entry stays in its pair, so the pairs are not touched
-        let ok = tokio::task::block_in_place(|| self.change_entry(id, changes.name.is_some(), false, |store| store.edit(id, &changes)))?;
+        let ok = crate::pool::blocking(|| self.change_entry(id, changes.name.is_some(), false, |store| store.edit(id, &changes))).await?;
         if ok {
             (self.log)(&format!("[review] submission {} edited: {}", fmt::num(id), if changed.is_empty() { "nothing".to_string() } else { changed.join(", ") }));
             Ok(hono::json_text("{\"ok\":true}", 200))
@@ -1979,7 +2002,10 @@ impl App {
         if let Some(denied) = self.admin(req) {
             return Ok(denied);
         }
-        let body = Self::body_json(req).await;
+        let body = match Self::body_json(req).await {
+            Ok(body) => body,
+            Err(cut) => return Ok(cut),
+        };
         let rows = body.as_ref().and_then(|b| b.get("peaks")).and_then(Value::as_array);
         let Some(rows) = rows.filter(|r| !r.is_empty() && r.len() <= MAX_PEAK_ROWS) else {
             return Ok(hono::json_error(&format!("body must be {{\"peaks\": [{{\"name\": string, \"peak\": number}}, ...]}} with 1 to {MAX_PEAK_ROWS} rows"), 400));
@@ -1997,7 +2023,7 @@ impl App {
             let had = given.get(name).copied().unwrap_or(0.0);
             given.insert(name.to_string(), polypack_js::math::max(peak, had));
         }
-        let raised = tokio::task::block_in_place(|| -> Result<usize, Thrown> {
+        let raised = crate::pool::blocking(|| -> Result<usize, Thrown> {
             let mut state = self.state();
             let state = &mut *state;
             let up: Vec<HolderPeak> = given.iter().filter(|(name, peak)| **peak > state.peaks.get(*name).copied().unwrap_or(0.0)).map(|(name, peak)| HolderPeak { name: name.clone(), peak: *peak }).collect();
@@ -2020,7 +2046,8 @@ impl App {
                 state.holders_body = None;
             }
             Ok(up.len())
-        })?;
+        })
+        .await?;
         (self.log)(&format!("[holders] {raised} of {} peak(s) raised by an administrator", given.len()));
         Ok(hono::json(&json!({ "ok": true, "raised": raised as f64 }), 200))
     }

@@ -192,8 +192,9 @@ impl Answer {
 async fn finish(res: Res) -> Answer {
     let bytes = match res.body {
         ResBody::Null => Vec::new(),
-        ResBody::Full(b) | ResBody::Short(b) => b.to_vec(),
-        ResBody::Stream(mut s) => {
+        ResBody::Full(b) => b.to_vec(),
+        ResBody::Cut(words) => words.to_vec(),
+        ResBody::Stream(mut s) | ResBody::Promised { stream: mut s, .. } => {
             let mut all = Vec::new();
             while let Some(Ok(part)) = s.next().await {
                 all.extend_from_slice(&part);
@@ -211,7 +212,7 @@ impl Server {
         for (k, v) in headers {
             map.insert(HeaderName::from_bytes(k.as_bytes()).unwrap(), HeaderValue::from_str(v).unwrap());
         }
-        let mut req = Req { method: method.to_string(), path: url::get_path(&href), url: href, headers: map, remote: None, body: Mutex::new(body.map(|b| axum::body::Body::from(b.to_string()))) };
+        let mut req = Req { method: method.to_string(), path: url::get_path(&href), url: href, headers: map, remote: None, body: Mutex::new(body.map(|b| axum::body::Body::from(b.to_string()))), deadline: None };
         let res = self.app.fetch(method, &mut req).await.expect("a route of the API");
         finish(res).await
     }

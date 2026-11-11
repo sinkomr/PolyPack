@@ -16,6 +16,22 @@ use crate::clock::Clock;
 
 type Job = Box<dyn FnOnce() + Send + 'static>;
 
+/// The stack of every thread of the server: the workers of the pools here, the threads of the
+/// runtime (main.rs) and the thread that warms the tables (node.rs).
+///
+/// It is set, not left to the platform's default (2 MiB for a spawned thread, the shell's limit
+/// for the main one), because of JSON: a body may nest 4,096 levels deep
+/// (`polypack_js::json::MAX_DEPTH`), and a `serde_json::Value` that deep is copied, compared,
+/// written and released by functions that call themselves once per level. A stack that overflows
+/// ends the whole process, so the size has a margin, not a guess. What each of them needs at that
+/// depth was measured with examples/stackprobe.rs (2026-11-10, arm64 macOS; `stackprobe search
+/// 4096`), and the most is the copy of a value: 1.3 MiB in a release build (333 bytes a level;
+/// comparing takes 285, the provenance's `json_stringify` 237, the store's writer 141, an answer's
+/// writer 125, the release 61) and 8.4 MiB unoptimised (2,141 bytes a level). 64 MiB is 49 times
+/// the first and 7 times the second; tests/app.rs runs all of them at the full depth on a quarter
+/// of it. The memory is reserved address space: only the pages a thread has touched are real.
+pub const THREAD_STACK_BYTES: usize = 64 << 20;
+
 /// load.ts: LoopDelay, without its timer: the longest wait of the current window and of the one
 /// before it, and the longest since `take_peak`.
 #[derive(Debug)]
@@ -48,6 +64,50 @@ impl Delay {
     }
 }
 
+/// How many sections of the threads that answer requests may block at once (`blocking`): one per
+/// core, and at least two.
+fn blocking_permits() -> usize {
+    std::thread::available_parallelism().map_or(2, |n| n.get()).max(2)
+}
+
+/// The runtime of the server: its threads have the stack of `THREAD_STACK_BYTES`, and there are
+/// not many of them. Besides one worker per core, the runtime starts a thread for every section
+/// that blocks (`blocking`: it takes over the tasks of the thread that blocks) and for every
+/// `spawn_blocking` (a snapshot's file, a build), up to this bound; beyond it such a job waits
+/// for a thread, and a section blocks its own thread without one taking over. The bound leaves
+/// room for every turn of `blocking` and for the snapshot's jobs at once (snapshot.rs: 2 files
+/// and a build), where the runtime's default is 512.
+pub fn runtime() -> tokio::runtime::Runtime {
+    runtime_with_stack(THREAD_STACK_BYTES)
+}
+
+/// `runtime` with threads whose stack is `stack_bytes` (the tests of the stack's margin).
+pub fn runtime_with_stack(stack_bytes: usize) -> tokio::runtime::Runtime {
+    tokio::runtime::Builder::new_multi_thread().enable_all().thread_stack_size(stack_bytes).max_blocking_threads(blocking_permits() + 8).build().expect("the runtime can be started")
+}
+
+static BLOCKING: std::sync::LazyLock<tokio::sync::Semaphore> = std::sync::LazyLock::new(|| tokio::sync::Semaphore::new(blocking_permits()));
+
+/// Runs `section`, which may block its thread (it waits for the store's lock or the state's, runs
+/// a statement, reads a file, compresses an answer), when its turn comes, and gives its result.
+///
+/// A thread of the runtime that blocks hands its other tasks to another thread first
+/// (`block_in_place`), and the runtime starts a new thread for that whenever none is idle. So
+/// without a turn, every request that waits for the store's lock while one statement is slow
+/// holds a thread of its own: 600 requests for a leaderboard at once on a database of a million
+/// entries, and the process went from 18 threads to 530 (measured 2026-11-10). Node queues such
+/// requests on its one thread. Here they wait for one of a few turns as tasks, which cost no
+/// thread, in the order they came (the semaphore is first come, first served), and with the
+/// bound of `runtime` the process keeps a few threads per core however many requests wait: 35
+/// on eight cores under the same 600 requests
+/// (tests/app.rs: `requests_that_wait_for_the_store_do_not_each_hold_a_thread`).
+///
+/// A section must not ask for another turn inside it.
+pub async fn blocking<T>(section: impl FnOnce() -> T) -> T {
+    let _turn = BLOCKING.acquire().await.expect("the turns are never closed");
+    tokio::task::block_in_place(section)
+}
+
 struct Queue {
     jobs: VecDeque<(f64, Job)>,
     delay: Delay,
@@ -70,6 +130,11 @@ pub struct Pool {
 impl Pool {
     /// `threads` workers; 0 means one per core of the machine.
     pub fn new(threads: usize, clock: Clock) -> Pool {
+        Pool::with_stack(threads, clock, THREAD_STACK_BYTES)
+    }
+
+    /// `new` with workers whose stack is `stack_bytes` (the tests of the stack's margin).
+    pub fn with_stack(threads: usize, clock: Clock, stack_bytes: usize) -> Pool {
         let threads = if threads == 0 { std::thread::available_parallelism().map_or(1, |n| n.get()) } else { threads };
         let t = clock.performance_now();
         let shared = Arc::new(Shared {
@@ -85,6 +150,7 @@ impl Pool {
             let shared = shared.clone();
             std::thread::Builder::new()
                 .name(format!("verify-{k}"))
+                .stack_size(stack_bytes)
                 .spawn(move || worker(&shared))
                 .expect("a worker thread can be started");
         }

@@ -19,10 +19,13 @@
 //!    outlasted a slice. A check that does neither is over before the next request is read. Here:
 //!    a submission that finds a heavy check of its address in flight is refused, and one that
 //!    finds a check that is not heavy waits the milliseconds until it is over and is then handled
-//!    as the next request would have been.
+//!    as the next request would have been. It waits as a task, not on a worker: its job ends
+//!    there (`Step::Wait`) and another takes it up when the check is over, so that several
+//!    entries sent at once from one address, or under the submit key, hold one worker between
+//!    them and not one each.
 
 use std::collections::{HashMap, VecDeque};
-use std::sync::{Arc, Condvar, Mutex};
+use std::sync::{Arc, Mutex};
 
 use bytes::Bytes;
 use polypack_flat::provenance::MAX_SOFTWARE_LENGTH;
@@ -171,6 +174,8 @@ fn with_raw<T: Serialize + ?Sized>(head: &T, raw: &[(&str, Option<&str>)]) -> St
 struct Checking {
     /// The check waits for its turn as a heavy check, or has it.
     heavy: bool,
+    /// The submissions of the address that wait for this check to be over; each is told.
+    waiting: Vec<tokio::sync::oneshot::Sender<()>>,
 }
 
 /// What the source keeps in the closure of `registerSpaceRoutes`.
@@ -229,8 +234,6 @@ pub struct SpaceRoutes {
     /// GET /api/spaces: the same bytes for every request.
     spaces_answer: Arc<Packed>,
     state: Mutex<State>,
-    /// Signalled whenever an address's check is over.
-    released: Condvar,
     /// One listing of a space is made at a time; a request that arrives meanwhile gets that one.
     listing: [Mutex<()>; 8],
     /// The one thread that runs the heavy checks, beside the workers of the pool.
@@ -273,7 +276,6 @@ impl SpaceRoutes {
             loaded,
             spaces_answer: Packed::of(&answer),
             state: Mutex::new(State { records_cache: Default::default(), version: 0, checking: HashMap::new(), heavy_running: false, heavy_waiting: VecDeque::new() }),
-            released: Condvar::new(),
             listing: Default::default(),
             heavy: Pool::new(1, clock),
         })
@@ -337,14 +339,14 @@ pub async fn space_routes(ctx: &SpaceRouteContext<'_>, method: &str, path: &str,
         ("GET", ["api", "spaces"]) => Ok(send(req, &ctx.routes.spaces_answer).await),
         ("GET", ["api", "spaces", "entries", id]) if !id.is_empty() => {
             compressed = true;
-            tokio::task::block_in_place(|| entry(ctx, id))
+            crate::pool::blocking(|| entry(ctx, id)).await
         }
         ("POST", ["api", "spaces", "submit"]) => submit(ctx, req).await,
-        ("GET", ["api", "spaces", space, "site-only"]) if !space.is_empty() => tokio::task::block_in_place(|| site_only(ctx, space, req)),
+        ("GET", ["api", "spaces", space, "site-only"]) if !space.is_empty() => crate::pool::blocking(|| site_only(ctx, space, req)).await,
         ("GET", ["api", "spaces", space, "records" | "problems"]) if !space.is_empty() => listing(ctx, space, req).await,
         ("GET", ["api", "spaces", space, "problems", ..]) if !space.is_empty() => {
             compressed = true;
-            tokio::task::block_in_place(|| problem(ctx, space, path))
+            crate::pool::blocking(|| problem(ctx, space, path)).await
         }
         ("POST", ["api", "admin", "spaces", "remove"]) => admin_remove(ctx, req).await,
         ("POST", ["api", "admin", "spaces", "edit"]) => admin_edit(ctx, req).await,
@@ -414,7 +416,7 @@ async fn listing(ctx: &SpaceRouteContext<'_>, space: &str, req: &Req) -> Handled
     if let Some(cached) = cached {
         return Ok(send(req, &cached).await);
     }
-    let packed = tokio::task::block_in_place(|| -> Result<Arc<Packed>, Thrown> {
+    let packed = crate::pool::blocking(|| -> Result<Arc<Packed>, Thrown> {
         // the source makes a listing in one turn; a request that arrives while one is made gets that one
         let _making = routes.listing[space.index()].lock().unwrap();
         let at = {
@@ -431,7 +433,8 @@ async fn listing(ctx: &SpaceRouteContext<'_>, space: &str, req: &Req) -> Handled
             state.records_cache[space.index()] = Some(packed.clone());
         }
         Ok(packed)
-    })?;
+    })
+    .await?;
     Ok(send(req, &packed).await)
 }
 
@@ -525,10 +528,11 @@ fn problem(ctx: &SpaceRouteContext<'_>, space: &str, path: &str) -> Handled {
     Ok(hono::json_text(with_raw(&head, &[("certified_config", certified.as_deref()), ("site_config", entry.as_ref().map(|e| e.config.as_str()))]), 200))
 }
 
-/// `await c.req.json().catch(() => null)`: the body as JSON; None when it is not JSON.
-async fn body_json(req: &mut Req) -> Option<Value> {
-    let bytes = hono::read_body(req).await;
-    polypack_js::json::parse(&bytes).ok()
+/// `await c.req.json().catch(() => null)`: the body as JSON; None when it is not JSON. `Err` when
+/// the body did not arrive whole (`hono::read_body`): the request ends there, and nothing is changed.
+async fn body_json(req: &mut Req) -> Result<Option<Value>, Res> {
+    let bytes = hono::read_body(req).await?;
+    Ok(polypack_js::json::parse(&bytes).ok())
 }
 
 /// `body.id` when `Number.isInteger(body.id)`.
@@ -546,11 +550,14 @@ async fn admin_remove(ctx: &SpaceRouteContext<'_>, req: &mut Req) -> Handled {
     if let Some(denied) = (ctx.admin)(req) {
         return Ok(denied);
     }
-    let body = body_json(req).await;
+    let body = match body_json(req).await {
+        Ok(body) => body,
+        Err(cut) => return Ok(cut),
+    };
     let Some(id) = integer_id(body.as_ref()) else {
         return Ok(hono::json_error("body must be {\"id\": number}", 400));
     };
-    tokio::task::block_in_place(|| {
+    crate::pool::blocking(|| {
         // the change and the forgetting of the kept listing as one step, as in the source's one turn
         let mut state = ctx.routes.state.lock().unwrap();
         let Some(r) = ctx.store.lock().unwrap().space_remove(id)? else {
@@ -560,6 +567,7 @@ async fn admin_remove(ctx: &SpaceRouteContext<'_>, req: &mut Req) -> Handled {
         (ctx.log)(&format!("[spaces] entry {} ({}) removed", fmt::num(id), r.problem));
         Ok(hono::json_text("{\"ok\":true}", 200))
     })
+    .await
 }
 
 /// POST /api/admin/spaces/edit
@@ -567,7 +575,10 @@ async fn admin_edit(ctx: &SpaceRouteContext<'_>, req: &mut Req) -> Handled {
     if let Some(denied) = (ctx.admin)(req) {
         return Ok(denied);
     }
-    let body = body_json(req).await;
+    let body = match body_json(req).await {
+        Ok(body) => body,
+        Err(cut) => return Ok(cut),
+    };
     // !body || typeof body !== "object" || !Number.isInteger(body.id)
     let Some(id) = integer_id(body.as_ref()) else {
         return Ok(hono::json_error("body must be an object with a numeric id", 400));
@@ -597,7 +608,7 @@ async fn admin_edit(ctx: &SpaceRouteContext<'_>, req: &mut Req) -> Handled {
     if !errors.is_empty() {
         return Ok(hono::json_error(&errors.join("; "), 400));
     }
-    tokio::task::block_in_place(|| {
+    crate::pool::blocking(|| {
         let mut state = ctx.routes.state.lock().unwrap();
         let Some(r) = ctx.store.lock().unwrap().space_edit(id, &changes)? else {
             return Ok(hono::json_error("no such space entry", 404));
@@ -606,6 +617,7 @@ async fn admin_edit(ctx: &SpaceRouteContext<'_>, req: &mut Req) -> Handled {
         (ctx.log)(&format!("[spaces] entry {} ({}) edited: {}", fmt::num(id), r.problem, if changed.is_empty() { "nothing".to_string() } else { changed.join(", ") }));
         Ok(hono::json_text("{\"ok\":true}", 200))
     })
+    .await
 }
 
 /// What a submission needs of the server once its body is read, owned: its work goes to a worker.
@@ -637,14 +649,16 @@ impl InFlight {
             return;
         }
         self.over = true;
-        {
-            let mut state = self.routes.state.lock().unwrap_or_else(|e| e.into_inner());
-            if self.turn {
-                state.heavy_done();
-            }
-            state.checking.remove(&self.address);
+        let mut state = self.routes.state.lock().unwrap_or_else(|e| e.into_inner());
+        if self.turn {
+            state.heavy_done();
         }
-        self.routes.released.notify_all();
+        // the submissions that waited for this check are looked at again
+        if let Some(check) = state.checking.remove(&self.address) {
+            for waiting in check.waiting {
+                let _ = waiting.send(());
+            }
+        }
     }
 }
 
@@ -678,11 +692,37 @@ struct Admitted {
     in_flight: InFlight,
 }
 
-/// What the first job of a submission ends with.
+/// A submission read as far as its place among the checks: what is left of its body once every
+/// refusal that the body alone decides has been passed (`Submission::first`), and what `admit`
+/// goes on with.
+struct Read {
+    submission: Submission,
+    space: SpaceName,
+    cat: Arc<SpaceCatalogue>,
+    p: Arc<SpaceProblemEntry>,
+    /// `body.config`.
+    config: Value,
+    /// `parseSpaceConfig(parsedId, body.config)`.
+    shape: Parsed,
+    name: String,
+    agent_note: String,
+    software: Option<String>,
+    method: Option<String>,
+    seed: Option<f64>,
+    /// `p.certified?.score ?? null`.
+    cert: Option<f64>,
+    heavy: bool,
+    estimate: f64,
+}
+
+/// What a job of a submission ends with.
 enum Step {
     Answer(Res),
     /// A heavy check has its place: it runs when `turn` says so (None: at once).
     Heavy { submission: Box<Submission>, admitted: Box<Admitted>, turn: Option<tokio::sync::oneshot::Receiver<()>> },
+    /// A check of the same address that is not heavy is in flight: the submission is looked at
+    /// again (`Read::admit`) when `released` says that it is over.
+    Wait { read: Box<Read>, released: tokio::sync::oneshot::Receiver<()> },
 }
 
 /// One POST /api/spaces/submit, from its first line on.
@@ -723,7 +763,7 @@ impl Submission {
     }
 
     /// POST /api/spaces/submit, from the body on, up to the check; and the check and the rest too
-    /// when it is not a heavy one. On a worker.
+    /// when it is not a heavy one and nothing of its address is in the way. On a worker.
     fn first(mut self, body: &[u8]) -> Result<Step, Thrown> {
         let refuse = |s: &Submission, status: u16, reasons: Vec<String>| Ok(Step::Answer(s.reject(status, reasons, None)));
         let Ok(json) = polypack_js::json::parse(body) else {
@@ -807,70 +847,7 @@ impl Submission {
         let shape = parse_space_config(&parsed_id, Some(&config));
         let heavy = is_heavy(space, &parsed_id);
         let estimate = estimate_ms(space, &parsed_id);
-        let address = self.submitter.key.clone();
-        loop {
-            let current = self.env.store.lock().unwrap().space_leader(space.as_str(), &p.id)?.map(|l| l.score);
-            let best_before: Vec<f64> = [cert, current].into_iter().flatten().collect();
-            let best = if best_before.is_empty() { None } else { Some(polypack_js::math::min_of(&best_before)) };
-            if SPACES_CHECKED_ONLY_IF_KEPT.contains(&space) {
-                // the stated score is known before any geometry: one that cannot be kept is not checked
-                if let Parsed::Ok { score: stated, .. } = &shape {
-                    if !improves_space_best(space, *stated, cert, current) {
-                        let body = SpaceSubmitResponse {
-                            valid: false,
-                            reasons: vec![format!(
-                                "not checked: a size of {} cannot be kept, since it is not below the research record by more than a relative {} and below the site's best by more than a relative 1e-9",
-                                fmt::num(*stated),
-                                fmt::exponential(space_record_margin(space), None)
-                            )],
-                            score: Some(*stated),
-                            leader: false,
-                            best_score: best,
-                            id: None,
-                            beats_certified: false,
-                            checked: Some(false),
-                        };
-                        return Ok(Step::Answer(self.answer(&body, 200, None)));
-                    }
-                }
-            }
-
-            // The time the check takes is charged to the address, as for /api/submit. A configuration
-            // that beats the research record must also be valid at the strict tolerance. An address
-            // has one check at a time, an estimate of its cost is reserved from the budget before it
-            // starts, and the heavy checks run one at a time server-wide, a few waiting their turn.
-            let mut state = routes.state.lock().unwrap();
-            if let Some(in_flight) = state.checking.get(&address) {
-                if in_flight.heavy {
-                    drop(state);
-                    let reasons = vec![format!("an entry {} is still being checked; send the next one when it is answered", self.submitter.from)];
-                    return Ok(Step::Answer(self.reject(429, reasons, Some(1.0))));
-                }
-                // a check that is over in one go: this submission is looked at when it is (see the top of the file)
-                drop(routes.released.wait(state).unwrap());
-                continue;
-            }
-            // A body that is not a configuration of this problem (types, ids, sizes, finite numbers,
-            // piece count) is refused here, before it takes a place in the heavy queue or any of the budget.
-            if let Parsed::Failed { malformed, errors } = &shape {
-                drop(state);
-                return refuse(&self, if *malformed { 400 } else { 422 }, errors.iter().take(20).cloned().collect());
-            }
-            if heavy && state.heavy_running && state.heavy_waiting.len() as f64 >= SPACE_HEAVY_CHECKS_WAITING {
-                drop(state);
-                return Ok(Step::Answer(self.reject(503, vec!["the server is busy checking other entries; try again in a few seconds".to_string()], Some(OVERLOAD_RETRY_S))));
-            }
-            state.checking.insert(address.clone(), Checking { heavy });
-            let turn = if heavy { state.heavy_turn() } else { None };
-            drop(state);
-            let in_flight = InFlight { routes: routes.clone(), address, turn: heavy && turn.is_none(), over: false };
-            self.env.limits.budget_charge(&self.submitter, estimate);
-            let admitted = Admitted { space, cat, p, config, name, agent_note, software, method, seed, cert, current, best, estimate, in_flight };
-            if heavy {
-                return Ok(Step::Heavy { submission: Box::new(self), admitted: Box::new(admitted), turn });
-            }
-            return self.check(admitted).map(Step::Answer);
-        }
+        Read { submission: self, space, cat, p, config, shape, name, agent_note, software, method, seed, cert, heavy, estimate }.admit()
     }
 
     /// POST /api/spaces/submit, from the check on.
@@ -967,6 +944,84 @@ impl Submission {
     }
 }
 
+impl Read {
+    /// POST /api/spaces/submit, from the reading of the site's leader on: the submission is
+    /// refused, or has its place among the checks (and is checked, when the check is not a heavy
+    /// one), or waits for another of its address. On a worker; again after each wait.
+    fn admit(self) -> Result<Step, Thrown> {
+        let Read { submission, space, cat, p, config, shape, name, agent_note, software, method, seed, cert, heavy, estimate } = self;
+        let refuse = |s: &Submission, status: u16, reasons: Vec<String>| Ok(Step::Answer(s.reject(status, reasons, None)));
+        let routes = submission.env.routes.clone();
+        let address = submission.submitter.key.clone();
+        let current = submission.env.store.lock().unwrap().space_leader(space.as_str(), &p.id)?.map(|l| l.score);
+        let best_before: Vec<f64> = [cert, current].into_iter().flatten().collect();
+        let best = if best_before.is_empty() { None } else { Some(polypack_js::math::min_of(&best_before)) };
+        if SPACES_CHECKED_ONLY_IF_KEPT.contains(&space) {
+            // the stated score is known before any geometry: one that cannot be kept is not checked
+            if let Parsed::Ok { score: stated, .. } = &shape {
+                if !improves_space_best(space, *stated, cert, current) {
+                    let body = SpaceSubmitResponse {
+                        valid: false,
+                        reasons: vec![format!(
+                            "not checked: a size of {} cannot be kept, since it is not below the research record by more than a relative {} and below the site's best by more than a relative 1e-9",
+                            fmt::num(*stated),
+                            fmt::exponential(space_record_margin(space), None)
+                        )],
+                        score: Some(*stated),
+                        leader: false,
+                        best_score: best,
+                        id: None,
+                        beats_certified: false,
+                        checked: Some(false),
+                    };
+                    return Ok(Step::Answer(submission.answer(&body, 200, None)));
+                }
+            }
+        }
+
+        // The time the check takes is charged to the address, as for /api/submit. A configuration
+        // that beats the research record must also be valid at the strict tolerance. An address
+        // has one check at a time, an estimate of its cost is reserved from the budget before it
+        // starts, and the heavy checks run one at a time server-wide, a few waiting their turn.
+        let mut state = routes.state.lock().unwrap();
+        if let Some(in_flight) = state.checking.get_mut(&address) {
+            if in_flight.heavy {
+                drop(state);
+                let reasons = vec![format!("an entry {} is still being checked; send the next one when it is answered", submission.submitter.from)];
+                return Ok(Step::Answer(submission.reject(429, reasons, Some(1.0))));
+            }
+            // A check that is over in one go: this submission is looked at again when it is (see
+            // the top of the file). The wait is the request's task's, not this worker's: several
+            // entries of one address would otherwise each hold a worker while they wait.
+            let (tx, released) = tokio::sync::oneshot::channel();
+            in_flight.waiting.push(tx);
+            drop(state);
+            let read = Read { submission, space, cat, p, config, shape, name, agent_note, software, method, seed, cert, heavy, estimate };
+            return Ok(Step::Wait { read: Box::new(read), released });
+        }
+        // A body that is not a configuration of this problem (types, ids, sizes, finite numbers,
+        // piece count) is refused here, before it takes a place in the heavy queue or any of the budget.
+        if let Parsed::Failed { malformed, errors } = &shape {
+            drop(state);
+            return refuse(&submission, if *malformed { 400 } else { 422 }, errors.iter().take(20).cloned().collect());
+        }
+        if heavy && state.heavy_running && state.heavy_waiting.len() as f64 >= SPACE_HEAVY_CHECKS_WAITING {
+            drop(state);
+            return Ok(Step::Answer(submission.reject(503, vec!["the server is busy checking other entries; try again in a few seconds".to_string()], Some(OVERLOAD_RETRY_S))));
+        }
+        state.checking.insert(address.clone(), Checking { heavy, waiting: Vec::new() });
+        let turn = if heavy { state.heavy_turn() } else { None };
+        drop(state);
+        let in_flight = InFlight { routes: routes.clone(), address, turn: heavy && turn.is_none(), over: false };
+        submission.env.limits.budget_charge(&submission.submitter, estimate);
+        let admitted = Admitted { space, cat, p, config, name, agent_note, software, method, seed, cert, current, best, estimate, in_flight };
+        if heavy {
+            return Ok(Step::Heavy { submission: Box::new(submission), admitted: Box::new(admitted), turn });
+        }
+        submission.check(admitted).map(Step::Answer)
+    }
+}
+
 /// The nD problem of a parsed id (spaces.ts: ndProblem).
 fn nd_problem(id: &ParsedSpaceId) -> NdProblemId {
     NdProblemId { d: id.fields.number("d") as u32, piece: id.fields.text("piece").to_string(), container: id.fields.text("container").to_string(), p: id.p }
@@ -1032,8 +1087,14 @@ async fn submit(ctx: &SpaceRouteContext<'_>, req: &mut Req) -> Handled {
         return refuse(429, format!("too much verification work {}; wait {} s", submitter.from, fmt::num(wait)), Some(wait));
     }
     // read no further than the limit, also for a chunked body without a Content-Length
-    let Some(body) = hono::read_body_within(req, MAX_BODY_BYTES).await else {
-        return refuse(413, "request body too large".to_string(), None);
+    let body = match hono::read_body_within(req, MAX_BODY_BYTES).await {
+        Ok(Some(body)) => body,
+        Ok(None) => return refuse(413, "request body too large".to_string(), None),
+        // the body did not arrive whole: nothing is checked or stored (see app.rs: submit)
+        Err(cut) => {
+            eprintln!("Error: aborted");
+            return Ok(cut);
+        }
     };
     let submission = Submission {
         env: Env {
@@ -1052,20 +1113,28 @@ async fn submit(ctx: &SpaceRouteContext<'_>, req: &mut Req) -> Handled {
         verify_ms: None,
     };
     // the rest is the work of a core: on a worker
-    match ctx.pool.run(move || submission.first(&body)).await {
-        Err(message) => Err(Thrown::new(message)),
-        Ok(Err(thrown)) => Err(thrown),
-        Ok(Ok(Step::Answer(res))) => Ok(res),
-        Ok(Ok(Step::Heavy { submission, mut admitted, turn })) => {
-            // if (heavy) await heavyTurn()
-            if let Some(turn) = turn {
-                let _ = turn.await;
-                admitted.in_flight.turn = true;
+    let mut step = ctx.pool.run(move || submission.first(&body)).await;
+    loop {
+        match step {
+            Err(message) => return Err(Thrown::new(message)),
+            Ok(Err(thrown)) => return Err(thrown),
+            Ok(Ok(Step::Answer(res))) => return Ok(res),
+            Ok(Ok(Step::Wait { read, released })) => {
+                // the check in the way is over (or gone): on a worker again, as the next request would be
+                let _ = released.await;
+                step = ctx.pool.run(move || read.admit()).await;
             }
-            let heavy = ctx.routes.heavy.clone();
-            match heavy.run(move || submission.check(*admitted)).await {
-                Ok(handled) => handled,
-                Err(message) => Err(Thrown::new(message)),
+            Ok(Ok(Step::Heavy { submission, mut admitted, turn })) => {
+                // if (heavy) await heavyTurn()
+                if let Some(turn) = turn {
+                    let _ = turn.await;
+                    admitted.in_flight.turn = true;
+                }
+                let heavy = ctx.routes.heavy.clone();
+                return match heavy.run(move || submission.check(*admitted)).await {
+                    Ok(handled) => handled,
+                    Err(message) => Err(Thrown::new(message)),
+                };
             }
         }
     }
@@ -1140,7 +1209,7 @@ mod tests {
             let href = url::href("test", "/api/spaces/submit");
             let mut headers = axum::http::HeaderMap::new();
             headers.insert("x-ip", axum::http::HeaderValue::from_str(ip).unwrap());
-            let mut req = Req { method: "POST".to_string(), path: url::get_path(&href), url: href, headers, remote: None, body: Mutex::new(Some(axum::body::Body::from(body.to_string()))) };
+            let mut req = Req { method: "POST".to_string(), path: url::get_path(&href), url: href, headers, remote: None, body: Mutex::new(Some(axum::body::Body::from(body.to_string()))), deadline: None };
             let ctx = SpaceRouteContext {
                 routes: &self.routes,
                 spaces: &self.spaces,
@@ -1249,6 +1318,48 @@ mod tests {
         assert_eq!(lines, expected);
         let state = rig.routes.state.lock().unwrap();
         assert!(!state.heavy_running && state.heavy_waiting.is_empty() && state.checking.is_empty());
+    }
+
+    // A submission that finds a check of its address in flight that is not heavy waits for it.
+    // It once waited on its worker of the pool: as many entries of one address (or under the
+    // submit key) as there are workers, sent at once, and no worker was left for anyone else.
+    #[tokio::test(flavor = "multi_thread", worker_threads = 4)]
+    async fn a_submission_that_waits_for_another_of_its_address_holds_no_worker() {
+        let rig = Arc::new(Rig::new());
+        assert_eq!(rig.pool.threads(), 2);
+        // a check of 10.0.0.1 that is not heavy is in flight (the test stands in for it)
+        rig.routes.state.lock().unwrap().checking.insert("10.0.0.1".to_string(), Checking { heavy: false, waiting: Vec::new() });
+        let in_flight = InFlight { routes: rig.routes.clone(), address: "10.0.0.1".to_string(), turn: false, over: false };
+        // six more entries of the address arrive: three times the workers
+        let mut waiting = Vec::new();
+        for _ in 0..6 {
+            let r = rig.clone();
+            waiting.push(tokio::spawn(async move { r.submit("10.0.0.1", light()).await }));
+        }
+        for _ in 0..2000 {
+            if rig.routes.state.lock().unwrap().checking["10.0.0.1"].waiting.len() == 6 {
+                break;
+            }
+            tokio::time::sleep(std::time::Duration::from_millis(1)).await;
+        }
+        assert_eq!(rig.routes.state.lock().unwrap().checking["10.0.0.1"].waiting.len(), 6);
+        assert!(waiting.iter().all(|task| !task.is_finished()));
+        // the workers are free meanwhile: entries of other addresses are checked and answered
+        for k in 0..4 {
+            let answered = tokio::time::timeout(std::time::Duration::from_secs(10), rig.submit(&format!("10.0.1.{k}"), light())).await;
+            let (status, _, body) = answered.expect("an answer while the six wait");
+            assert_eq!(status, 422, "{body}");
+        }
+        let before = rig.lines.lock().unwrap().len();
+        // the check is over: the six are looked at, one after the other, each as the next request would be
+        drop(in_flight);
+        for task in waiting {
+            let (status, retry, body) = tokio::time::timeout(std::time::Duration::from_secs(10), task).await.expect("an answer once the check is over").unwrap();
+            assert_eq!((status, retry), (422, None), "{body}");
+        }
+        assert_eq!(rig.lines.lock().unwrap().len() - before, 6);
+        let state = rig.routes.state.lock().unwrap();
+        assert!(state.checking.is_empty() && !state.heavy_running);
     }
 
     // spaces.ts: `heavy`, and the estimate reserved from the budget.

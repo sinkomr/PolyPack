@@ -129,7 +129,7 @@ impl StaticSite {
             prepared.push(("cross-origin-embedder-policy".to_string(), "require-corp".to_string()));
         }
         let dist = self.dist.clone();
-        let served = tokio::task::block_in_place(|| serve_static(&dist, req));
+        let served = crate::pool::blocking(|| serve_static(&dist, req)).await;
         let mut res = match served {
             Ok(Some(res)) => res,
             Ok(None) => hono::not_found(),
@@ -161,8 +161,147 @@ struct TestControl {
     loop_delay_override: Arc<Mutex<Option<f64>>>,
 }
 
+/// What Node's `http.Server` allows a connection, by its defaults. They are those of Node 24 and
+/// of the Node 26 at hand alike: `new http.Server()` there reports requestTimeout 300000,
+/// headersTimeout 60000 and http.maxHeaderSize 16384, and the typings of Node 24
+/// (@types/node 24.19, http.d.ts) document the same. `@hono/node-server` makes its server with
+/// `createServer({}, listener)`: nothing of these is changed.
+#[derive(Clone, Copy, Debug)]
+pub struct ConnLimits {
+    /// `server.headersTimeout`: a request's head must have arrived this long after the connection
+    /// began to wait for it. Node looks every 30 s (`connectionsCheckingInterval`), so there the
+    /// time is 60 to 90 s; here it is 60 s.
+    pub headers_timeout: Duration,
+    /// `server.requestTimeout`: the whole request, body included, must have arrived this long
+    /// after it began (Node: 300 to 330 s after its first byte; here 300 s after its head).
+    pub request_timeout: Duration,
+    /// `--max-http-header-size`: a head is refused when the lengths of its request target and of
+    /// its header names and values come to this many bytes or more (measured against Node:
+    /// 16383 is read, 16384 refused, whatever the number of headers; the spaces after a name's
+    /// colon, the line ends, the method and the version do not count).
+    pub max_header_size: usize,
+}
+
+impl Default for ConnLimits {
+    fn default() -> ConnLimits {
+        ConnLimits { headers_timeout: Duration::from_secs(60), request_timeout: Duration::from_secs(300), max_header_size: 16 * 1024 }
+    }
+}
+
+/// Most headers a request may have: Node reads the first 2,000 (`server.maxHeadersCount`) and
+/// drops the rest without a word; hyper refuses a request with more than it was told to read
+/// (431), and 100 unless told. Within Node's 16 KiB of head, 2,000 headers are hardly reached.
+const MAX_HEADERS: usize = 2000;
+
+/// The most bytes of a head hyper buffers before it answers 431 itself. Node's rule
+/// (`ConnLimits::max_header_size`) counts less than every byte, so it is applied to the head once
+/// it is read (`Server::handle`); this is the room that takes: 16 KiB of names and values, and
+/// the separators of 2,000 headers with space to spare.
+const HEAD_BUFFER_BYTES: usize = 64 * 1024;
+
+/// What a connection says last, written as it is when the connection is given up (`hono::cut`).
+type LastWords = Arc<Mutex<Option<&'static [u8]>>>;
+
+/// A connection as hyper reads and writes it, with the last words of `Server::handle` when a
+/// request ends it: Node writes them to the socket itself and destroys it, and hyper has no such
+/// answer (one made through hyper would carry `content-length` and `date`).
+struct Wire {
+    io: hyper_util::rt::TokioIo<tokio::net::TcpStream>,
+    last_words: LastWords,
+}
+
+impl hyper::rt::Read for Wire {
+    fn poll_read(mut self: std::pin::Pin<&mut Self>, cx: &mut std::task::Context<'_>, buf: hyper::rt::ReadBufCursor<'_>) -> std::task::Poll<std::io::Result<()>> {
+        std::pin::Pin::new(&mut self.io).poll_read(cx, buf)
+    }
+}
+
+impl hyper::rt::Write for Wire {
+    fn poll_write(mut self: std::pin::Pin<&mut Self>, cx: &mut std::task::Context<'_>, buf: &[u8]) -> std::task::Poll<std::io::Result<usize>> {
+        std::pin::Pin::new(&mut self.io).poll_write(cx, buf)
+    }
+
+    fn poll_flush(mut self: std::pin::Pin<&mut Self>, cx: &mut std::task::Context<'_>) -> std::task::Poll<std::io::Result<()>> {
+        std::pin::Pin::new(&mut self.io).poll_flush(cx)
+    }
+
+    fn poll_shutdown(mut self: std::pin::Pin<&mut Self>, cx: &mut std::task::Context<'_>) -> std::task::Poll<std::io::Result<()>> {
+        std::pin::Pin::new(&mut self.io).poll_shutdown(cx)
+    }
+
+    fn is_write_vectored(&self) -> bool {
+        self.io.is_write_vectored()
+    }
+
+    fn poll_write_vectored(mut self: std::pin::Pin<&mut Self>, cx: &mut std::task::Context<'_>, bufs: &[std::io::IoSlice<'_>]) -> std::task::Poll<std::io::Result<usize>> {
+        std::pin::Pin::new(&mut self.io).poll_write_vectored(cx, bufs)
+    }
+}
+
+impl Drop for Wire {
+    fn drop(&mut self) {
+        // the connection is closed as this ends; a few bytes into an empty send buffer do not wait
+        if let Some(words) = self.last_words.lock().unwrap_or_else(|e| e.into_inner()).take() {
+            let _ = self.io.inner().try_write(words);
+        }
+    }
+}
+
+/// A request that ends its connection: what hyper is told when `Server::handle` gives last words.
+#[derive(Debug)]
+struct Cut;
+
+impl std::fmt::Display for Cut {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str("the request could not be read to its end")
+    }
+}
+
+impl std::error::Error for Cut {}
+
+/// A request that may write (a POST), from its arrival until its answer has been handed to the
+/// connection whole: what the stop waits for (`Server::stop`).
+struct Writing(Arc<std::sync::atomic::AtomicUsize>);
+
+impl Writing {
+    fn begin(count: &Arc<std::sync::atomic::AtomicUsize>) -> Writing {
+        count.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
+        Writing(count.clone())
+    }
+}
+
+impl Drop for Writing {
+    fn drop(&mut self) {
+        self.0.fetch_sub(1, std::sync::atomic::Ordering::SeqCst);
+    }
+}
+
+/// The body of an answer to such a request: the same body, counted until hyper has taken all of
+/// it or given it up.
+struct Counted {
+    body: axum::body::Body,
+    _writing: Writing,
+}
+
+impl hyper::body::Body for Counted {
+    type Data = bytes::Bytes;
+    type Error = axum::Error;
+
+    fn poll_frame(mut self: std::pin::Pin<&mut Self>, cx: &mut std::task::Context<'_>) -> std::task::Poll<Option<Result<hyper::body::Frame<bytes::Bytes>, axum::Error>>> {
+        std::pin::Pin::new(&mut self.body).poll_frame(cx)
+    }
+
+    fn is_end_stream(&self) -> bool {
+        self.body.is_end_stream()
+    }
+
+    fn size_hint(&self) -> hyper::body::SizeHint {
+        self.body.size_hint()
+    }
+}
+
 /// The server: the API, the test route when there is one, and the website.
-struct Server {
+pub struct Server {
     app: Arc<App>,
     test: Option<TestControl>,
     site: Option<StaticSite>,
@@ -170,12 +309,70 @@ struct Server {
     pool: Pool,
     /// HOST, when it is set.
     default_hostname: Option<String>,
+    /// The requests that may write and are not answered yet.
+    writing: Arc<std::sync::atomic::AtomicUsize>,
+    /// Told when the server stops: no further connection is taken.
+    stopping: tokio::sync::Notify,
+    /// True from then on: no further request is taken either.
+    stopped: std::sync::atomic::AtomicBool,
 }
 
 impl Server {
+    /// The API of `app` and, with `dist`, the website in that directory: the production server
+    /// without its settings, for a test that speaks to it over a socket (`serve`).
+    pub fn of(app: Arc<App>, dist: Option<String>) -> Arc<Server> {
+        let clock = Clock::new();
+        Arc::new(Server {
+            app,
+            test: None,
+            site: dist.map(|dist| StaticSite { dist }),
+            stats: Arc::new(Mutex::new(LoadStats::new(Box::new(|_| {})))),
+            pool: Pool::new(1, clock),
+            default_hostname: None,
+            writing: Arc::default(),
+            stopping: tokio::sync::Notify::new(),
+            stopped: false.into(),
+        })
+    }
+
+    /// The stop of node.ts (`server.close()`, then the process exits): no further connection and
+    /// no further request is taken (a request that comes now finds its connection closed, as it
+    /// would a process that has gone), and this returns once no request that may write is
+    /// unanswered, or after `at_most`.
+    ///
+    /// Node exits at once, and can: on its one thread a submission's transaction and the writing
+    /// of its answer are one uninterrupted step, so the signal comes before both or after both.
+    /// Here the transaction is committed on a worker and the answer written by another thread a
+    /// moment later; a process that exited in between left an entry stored whose sender never
+    /// heard of it (measured: 2 of 22,385 entries stored in 12 stops under load). So the stop
+    /// waits for the answers under way, some milliseconds. Open streams are not waited for.
+    pub async fn stop(&self, at_most: Duration) {
+        use std::sync::atomic::Ordering;
+        self.stopped.store(true, Ordering::SeqCst);
+        self.stopping.notify_waiters();
+        let give_up = tokio::time::Instant::now() + at_most;
+        let settle = Duration::from_millis(15);
+        loop {
+            if self.writing.load(Ordering::SeqCst) == 0 {
+                // an answer handed over is written to its socket in the same breath: let that pass
+                tokio::time::sleep(settle).await;
+                if self.writing.load(Ordering::SeqCst) == 0 {
+                    return;
+                }
+            } else if tokio::time::Instant::now() >= give_up {
+                return;
+            } else {
+                tokio::time::sleep(Duration::from_millis(1)).await;
+            }
+        }
+    }
+
     /// POST /__test/control: the one test-only route.
     async fn control(&self, test: &TestControl, req: &mut Req) -> Res {
-        let bytes = hono::read_body(req).await;
+        let bytes = match hono::read_body(req).await {
+            Ok(bytes) => bytes,
+            Err(cut) => return cut,
+        };
         let body = polypack_js::json::parse(&bytes).ok();
         let Some(Value::Object(body)) = body else {
             return hono::json_error("body must be a JSON object", 400);
@@ -215,35 +412,127 @@ impl Server {
         (res, head)
     }
 
-    /// One request of a connection.
-    async fn handle(self: Arc<Self>, remote: SocketAddr, request: Request) -> axum::response::Response {
+    /// One request of a connection: its answer, or the last words of the connection when the
+    /// request ends it (`hono::cut`).
+    async fn handle(self: Arc<Self>, remote: SocketAddr, request: Request, limits: ConnLimits) -> Result<axum::response::Response, &'static [u8]> {
+        // every route that changes anything is a POST
+        let writing = (request.method() == axum::http::Method::POST).then(|| Writing::begin(&self.writing));
+        // counted first, then looked at: a request is either seen by the stop or not begun
+        if self.stopped.load(std::sync::atomic::Ordering::SeqCst) {
+            return Err(b"");
+        }
+        let response = self.answer(remote, request, limits).await?;
+        Ok(match writing {
+            Some(writing) => response.map(|body| axum::body::Body::new(Counted { body, _writing: writing })),
+            None => response,
+        })
+    }
+
+    async fn answer(self: Arc<Self>, remote: SocketAddr, request: Request, limits: ConnLimits) -> Result<axum::response::Response, &'static [u8]> {
         let (parts, body) = request.into_parts();
+        // Node's parser counts the request target and every header's name and value as they come,
+        // and gives the connection up at `--max-http-header-size`, before the server sees the request
+        let target_bytes = if parts.uri.scheme().is_none() { parts.uri.path_and_query().map_or(0, |p| p.as_str().len()) } else { parts.uri.to_string().len() };
+        let head_bytes = target_bytes + parts.headers.iter().map(|(name, value)| name.as_str().len() + value.len()).sum::<usize>();
+        if head_bytes >= limits.max_header_size {
+            return Err(hono::cut::HEADER_FIELDS_TOO_LARGE);
+        }
         // @hono/node-server: newRequest. The URL is `http://` + Host + the request target.
         let target = parts.uri.path_and_query().map_or("", |p| p.as_str());
         if !target.starts_with('/') {
             // `OPTIONS *`, or no path at all: `new URL` throws, and node-server answers 400 (handleRequestError)
-            return hono::into_response(Res::new(400, hono::ResBody::Null).with("content-type", "text/plain; charset=UTF-8"), parts.method == axum::http::Method::HEAD);
+            return Ok(hono::into_response(Res::new(400, hono::ResBody::Null).with("content-type", "text/plain; charset=UTF-8"), parts.method == axum::http::Method::HEAD));
         }
         let host = parts.uri.authority().map(|a| a.as_str().to_string()).or_else(|| parts.headers.get("host").map(|h| js::latin1(h.as_bytes())));
         // a request of HTTP/1.0 may come without a Host header: the address the server listens on stands in (`hostname` of serve)
         let host = host.filter(|h| !h.is_empty()).or_else(|| if parts.version < axum::http::Version::HTTP_11 { self.default_hostname.clone() } else { None });
         let Some(host) = host else {
             // Node answers a request without a Host header itself
-            return hono::into_response(Res::new(400, hono::ResBody::Null).with("connection", "close"), parts.method == axum::http::Method::HEAD);
+            return Ok(hono::into_response(Res::new(400, hono::ResBody::Null).with("connection", "close"), parts.method == axum::http::Method::HEAD));
         };
         let href = url::href(&host, &js::latin1(target.as_bytes()));
         let has_body = !matches!(parts.method.as_str(), "GET" | "HEAD");
-        let req = Req { method: parts.method.as_str().to_string(), path: url::get_path(&href), url: href, headers: parts.headers, remote: Some(remote), body: Mutex::new(has_body.then_some(body)) };
+        let req = Req {
+            method: parts.method.as_str().to_string(),
+            path: url::get_path(&href),
+            url: href,
+            headers: parts.headers,
+            remote: Some(remote),
+            body: Mutex::new(has_body.then_some(body)),
+            deadline: Some(tokio::time::Instant::now() + limits.request_timeout),
+        };
         // Node runs a request to its end whether or not the client is still there; so does this:
         // the work is a task of its own, not a part of the connection that would end with it.
         let server = self.clone();
         match tokio::spawn(async move { server.fetch(req).await }).await {
-            Ok((res, head)) => hono::into_response(res, head),
+            Ok((Res { body: hono::ResBody::Cut(words), .. }, _)) => Err(words),
+            Ok((res, head)) => Ok(hono::into_response(res, head)),
             Err(e) => {
                 eprintln!("{e}");
-                hono::into_response(hono::text("Internal Server Error", 500), false)
+                Ok(hono::into_response(hono::text("Internal Server Error", 500), false))
             }
         }
+    }
+}
+
+/// Serves the connections of `listener` for ever: each by hyper, HTTP/1.1 only, as Node's `http`
+/// serves it, within `limits`.
+///
+/// A head that has not arrived in time ends the connection with Node's 408. When the client
+/// closes the connection, also only its sending side, what is being answered is given up at once
+/// (hyper's default; Node does the same, `socketOnEnd`, except that an answer it has ready at that
+/// moment still goes out): that is what ends a live stream whose reader has gone, and frees its
+/// listener.
+pub async fn serve(listener: tokio::net::TcpListener, server: Arc<Server>, limits: ConnLimits) {
+    let stopping = server.stopping.notified();
+    tokio::pin!(stopping);
+    loop {
+        let accepted = tokio::select! {
+            accepted = listener.accept() => accepted,
+            // `server.close()`: the socket is closed, the connections that are open go on
+            _ = &mut stopping => return,
+        };
+        let (stream, remote) = match accepted {
+            Ok(accepted) => accepted,
+            Err(_) => {
+                // out of file descriptors, or the connection was gone already: go on with the next
+                tokio::time::sleep(Duration::from_millis(50)).await;
+                continue;
+            }
+        };
+        // Node's sockets send at once (no Nagle delay)
+        let _ = stream.set_nodelay(true);
+        let server = server.clone();
+        tokio::spawn(async move {
+            let last_words: LastWords = Arc::new(Mutex::new(None));
+            let service = {
+                let last_words = last_words.clone();
+                hyper::service::service_fn(move |request: hyper::Request<hyper::body::Incoming>| {
+                    let (server, last_words) = (server.clone(), last_words.clone());
+                    async move {
+                        match server.handle(remote, request.map(axum::body::Body::new), limits).await {
+                            Ok(response) => Ok(response),
+                            Err(words) => {
+                                // hyper drops the connection for the error, and the Wire says the words as it goes
+                                *last_words.lock().unwrap_or_else(|e| e.into_inner()) = Some(words);
+                                Err(Cut)
+                            }
+                        }
+                    }
+                })
+            };
+            let mut http = hyper::server::conn::http1::Builder::new();
+            http.timer(hyper_util::rt::TokioTimer::new()).header_read_timeout(limits.headers_timeout).max_headers(MAX_HEADERS).max_header_size(HEAD_BUFFER_BYTES.max(limits.max_header_size));
+            let connection = http.serve_connection(Wire { io: hyper_util::rt::TokioIo::new(stream), last_words: last_words.clone() }, service);
+            tokio::pin!(connection);
+            if let Err(e) = connection.as_mut().await {
+                // hyper closes a connection whose head is late without a word; Node says 408 first
+                if e.is_timeout() {
+                    last_words.lock().unwrap_or_else(|e| e.into_inner()).get_or_insert(hono::cut::REQUEST_TIMEOUT);
+                }
+            }
+            // the connection, and with it the Wire, ends here
+        });
     }
 }
 
@@ -415,6 +704,9 @@ pub async fn main() {
         stats: stats.clone(),
         pool: pool.clone(),
         default_hostname: hostname.clone(),
+        writing: Arc::default(),
+        stopping: tokio::sync::Notify::new(),
+        stopped: false.into(),
     });
 
     // server.listen(port, hostname)
@@ -433,18 +725,33 @@ pub async fn main() {
     .unwrap_or_else(|e| fail(&format!("listen: {e}")));
     out(&format!("PolyPack server on http://localhost:{} (database {database_path}, {records_count} literature records)", polypack_js::fmt::num(port)));
 
-    // A host stops the process with a signal at every deploy and restart. Open live-update streams
-    // would keep it alive until the host kills it, so exit at once; SQLite has committed every write.
-    tokio::spawn(async {
-        use tokio::signal::unix::{signal, SignalKind};
-        let mut term = signal(SignalKind::terminate()).expect("a signal handler");
-        let mut int = signal(SignalKind::interrupt()).expect("a signal handler");
-        tokio::select! {
-            _ = term.recv() => {}
-            _ = int.recv() => {}
+    // The six 4-polytopes of the boundary space are built on first use (the 120-cell and the
+    // 600-cell take about 0.3 s each): now, beside the server, so that the first submission on one
+    // does not wait for it. A submission that comes before this is done waits for the same build.
+    let _ = std::thread::Builder::new().name("warm".to_string()).stack_size(crate::pool::THREAD_STACK_BYTES).spawn(|| {
+        for name in polypack_boundary::POLYTOPES {
+            let _ = polypack_boundary::get_polytope(name);
         }
-        std::process::exit(0);
     });
+
+    // A host stops the process with a signal at every deploy and restart. Open live-update streams
+    // would keep it alive until the host kills it, so exit at once; SQLite has committed every
+    // write. "At once" is once the answers under way are out (`Server::stop`): within two seconds
+    // whatever happens, and within some milliseconds in practice.
+    {
+        let server = server.clone();
+        tokio::spawn(async move {
+            use tokio::signal::unix::{signal, SignalKind};
+            let mut term = signal(SignalKind::terminate()).expect("a signal handler");
+            let mut int = signal(SignalKind::interrupt()).expect("a signal handler");
+            tokio::select! {
+                _ = term.recv() => {}
+                _ = int.recv() => {}
+            }
+            server.stop(Duration::from_secs(2)).await;
+            std::process::exit(0);
+        });
+    }
 
     // the timers of the source, each a task
     if let Some(dir) = snapshot_dir {
@@ -476,10 +783,11 @@ pub async fn main() {
             let mut wait = first;
             loop {
                 tokio::time::sleep(Duration::from_secs_f64(wait.max(0.0) / 1000.0)).await;
-                let next = tokio::task::block_in_place(|| {
+                let next = crate::pool::blocking(|| {
                     let store = store.lock().unwrap();
                     migration.tick(&store, &mut |msg: &str| println!("{msg}"))
-                });
+                })
+                .await;
                 match next {
                     Some(delay) => wait = delay,
                     None => break,
@@ -488,31 +796,7 @@ pub async fn main() {
         });
     }
 
-    // Each connection is served by hyper, HTTP/1.1 only, as Node's `http` serves it. A request's
-    // head must arrive within 60 s (Node: `headersTimeout`). When the client closes the connection,
-    // also only its sending side, what is being answered is given up at once (hyper's default; Node
-    // does the same, `socketOnEnd`, except that an answer it has ready at that moment still goes
-    // out): that is what ends a live stream whose reader has gone, and frees its listener.
-    loop {
-        let (stream, remote) = match listener.accept().await {
-            Ok(accepted) => accepted,
-            Err(_) => {
-                // out of file descriptors, or the connection was gone already: go on with the next
-                tokio::time::sleep(Duration::from_millis(50)).await;
-                continue;
-            }
-        };
-        // Node's sockets send at once (no Nagle delay)
-        let _ = stream.set_nodelay(true);
-        let server = server.clone();
-        tokio::spawn(async move {
-            let service = hyper::service::service_fn(move |request: hyper::Request<hyper::body::Incoming>| {
-                let server = server.clone();
-                async move { Ok::<_, std::convert::Infallible>(server.handle(remote, request.map(axum::body::Body::new)).await) }
-            });
-            let mut http = hyper::server::conn::http1::Builder::new();
-            http.timer(hyper_util::rt::TokioTimer::new()).header_read_timeout(Duration::from_secs(60));
-            let _ = http.serve_connection(hyper_util::rt::TokioIo::new(stream), service).await;
-        });
-    }
+    serve(listener, server, ConnLimits::default()).await;
+    // the server is stopping (the task above ends the process)
+    std::future::pending::<()>().await
 }

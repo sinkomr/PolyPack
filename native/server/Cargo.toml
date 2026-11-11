@@ -18,6 +18,8 @@ polypack-js = { path = "../js" }
 polypack-flat = { path = "../flat" }
 # the spaces: their catalogues, ids, configurations and the check of a submission (packages/spaces)
 polypack-spaces = { path = "../spaces" }
+# the boundary space's 4-polytopes, built at startup instead of by the first submission (node.rs)
+polypack-boundary = { path = "../boundary" }
 serde = { version = "1", features = ["derive"] }
 # preserve_order: an object keeps the order of its keys, as in JavaScript (the store re-orders
 # integer-like keys itself, see store/json.rs); float_roundtrip: a number read is the exact double

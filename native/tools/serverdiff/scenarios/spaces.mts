@@ -61,9 +61,23 @@ function bodies(recs: Record_[]): Scenario {
   for (const text of ["{", "", "nul", "﻿{}", '{"space":"sphere",}'])
     s.req("POST", "/api/spaces/submit", { text, headers: ip, expect: 400 });
   for (const text of ["null", "[]", '"x"', "5", "true", "[{}]"]) s.req("POST", "/api/spaces/submit", { text, headers: ip, expect: 400 });
+  // a backslash before a character of several bytes, and an escape cut short: not JSON (once a 500 of the Rust server)
+  for (const text of ['{"space":"sphere","name":"\\é"}', '["\\😀"]', '{"space":"\\u12'])
+    s.req("POST", "/api/spaces/submit", { text, headers: ip, expect: 400 });
   const good = body(r.space, r.id, r.config);
   const bad = (change: Record<string, unknown>, expect?: number) => s.spaceSubmit({ ...good, ...change }, expect);
   bad({}, 200);
+  // nesting far deeper than a configuration has: in a field that is not read (ignored), in the configuration and in the other fields (refused)
+  const nest = (levels: number): unknown => {
+    let v: unknown = [];
+    for (let i = 1; i < levels; i++) v = [v];
+    return v;
+  };
+  bad({ extra: nest(3000) }, 200);
+  bad({ config: nest(3000) });
+  bad({ config: { ...(r.config as Record<string, unknown>), pieces: nest(3000) } });
+  bad({ config: { ...(r.config as Record<string, unknown>), extra: nest(3000) } });
+  bad({ id: nest(3000), name: nest(3000), agent_note: nest(3000), software: nest(3000), method: nest(3000), seed: nest(3000) }, 400);
   for (const space of [undefined, null, 5, "", "nospace", "Sphere", ["sphere"], "sphere "]) bad({ space }, 400);
   for (const id of [undefined, null, 5, "", "sphere", "sphere/", "sphere/3", "sphere/3/0", "sphere/3/x", "sphere/2/5", "sphere/3/101", "sphere/3/6/7", "torus/sq/0/2", ["sphere/3/6"], {}, "sphere/3/6 ", "sphere/03/6", "sphere/3/1e1", "sphere/101/2", "sphere/3/1.0"])
     bad({ id }, 400);

@@ -111,6 +111,21 @@ mod tests {
     }
 }
 
+/// Deepest nesting of arrays and objects that [`parse`] reads; a text nested deeper is invalid.
+///
+/// JavaScript has no such limit: Node reads and writes a text nested as deep as the 256 KiB of a
+/// request body allow (131,072 levels). A limit is needed here because a `serde_json::Value` is
+/// cloned, written and released by functions that call themselves once per level, and a stack
+/// that overflows ends the whole process. It is set well above what the server can ever store:
+/// `method_params`, the one field that is stored as it was sent, is at most 4,096 bytes as JSON,
+/// which nest at most 2,046 levels deep (2,047 inside a body). Every thread of the server that
+/// handles such values has a stack sized for this depth with a margin (`polypack-server`:
+/// `pool::THREAD_STACK_BYTES`, and the test of it).
+pub const MAX_DEPTH: usize = 4096;
+
+/// The nesting serde_json reads by itself (its `remaining_depth` of 128 allows 127 levels).
+const SERDE_DEPTH: usize = 127;
+
 /// `JSON.parse` of a request body, as the TypeScript server reads one (`await c.req.json()`): the
 /// bytes are decoded as UTF-8 with U+FFFD for invalid sequences and a leading byte order mark is
 /// dropped, then parsed. `Err` holds serde_json's message (the server answers "invalid JSON"
@@ -122,19 +137,208 @@ mod tests {
 ///    `null`, which every reader of a number rejects with the same message as a non-finite number;
 ///  - half a surrogate pair escaped in a string (`"\ud800"`) stays half a pair in JavaScript until
 ///    the text is stored, when SQLite's UTF-8 makes it U+FFFD; here it is U+FFFD from the start;
-///  - nesting deeper than 128 levels is invalid here.
+///  - nesting deeper than [`MAX_DEPTH`] levels is invalid here.
 pub fn parse(bytes: &[u8]) -> Result<serde_json::Value, String> {
     let text = String::from_utf8_lossy(bytes);
     let text = text.strip_prefix('\u{feff}').unwrap_or(&text);
-    match serde_json::from_str::<serde_json::Value>(text) {
+    match read(text) {
         Ok(v) => Ok(v),
         Err(e) => {
             // the slow path: the two repairs above, then one more try
             let patched = repair(text);
             if patched == text {
-                Err(e.to_string())
+                Err(e)
             } else {
-                serde_json::from_str::<serde_json::Value>(&patched).map_err(|e| e.to_string())
+                read(&patched)
+            }
+        }
+    }
+}
+
+/// serde_json's reading of a text, to `MAX_DEPTH` levels instead of its own 127.
+fn read(text: &str) -> Result<serde_json::Value, String> {
+    match serde_json::from_str::<serde_json::Value>(text) {
+        Ok(v) => Ok(v),
+        Err(e) => match depth(text) {
+            d if d > MAX_DEPTH => Err(format!("nesting deeper than {MAX_DEPTH} levels")),
+            // serde_json gave up for the depth alone, or for the depth first
+            d if d > SERDE_DEPTH => read_deep(text),
+            _ => Err(e.to_string()),
+        },
+    }
+}
+
+/// How deep the arrays and objects of a JSON text nest: the most brackets open at once, outside
+/// strings. (Of a text that is not JSON it is some number; `read_deep` then says what is wrong.)
+fn depth(text: &str) -> usize {
+    let (mut open, mut deepest) = (0usize, 0usize);
+    let mut in_string = false;
+    let mut bytes = text.bytes();
+    while let Some(c) = bytes.next() {
+        if in_string {
+            match c {
+                b'\\' => {
+                    bytes.next();
+                }
+                b'"' => in_string = false,
+                _ => {}
+            }
+        } else {
+            match c {
+                b'"' => in_string = true,
+                b'[' | b'{' => {
+                    open += 1;
+                    deepest = deepest.max(open);
+                }
+                b']' | b'}' => open = open.saturating_sub(1),
+                _ => {}
+            }
+        }
+    }
+    deepest
+}
+
+/// What `serde_json::from_str::<Value>` gives for a text, without its limit on nesting: the
+/// arrays and objects being read are kept on a list, not on the call stack, and every string,
+/// number and literal is read by serde_json itself, so that a value is the same whichever of the
+/// two read it (an integer stays an integer, `-0` a float, a key given twice keeps its first place
+/// and its last value).
+fn read_deep(text: &str) -> Result<serde_json::Value, String> {
+    use serde_json::{Map, Value};
+    /// An array or object whose closing bracket has not been read yet.
+    enum Open {
+        Array(Vec<Value>),
+        /// The properties so far, and the name of the one whose value is being read.
+        Object(Map<String, Value>, String),
+    }
+    let b = text.as_bytes();
+    let ws = |at: &mut usize| {
+        while matches!(b.get(*at), Some(b' ' | b'\n' | b'\t' | b'\r')) {
+            *at += 1;
+        }
+    };
+    // The end of the string that opens at `at`: the index after its closing quote.
+    let string_end = |at: usize| -> Result<usize, String> {
+        let mut i = at + 1;
+        loop {
+            match b.get(i) {
+                None => return Err("EOF while parsing a string".to_string()),
+                Some(b'\\') => i += 2,
+                Some(b'"') => return Ok(i + 1),
+                Some(_) => i += 1,
+            }
+        }
+    };
+    // A property name and its colon, after which the property's value starts.
+    let key = |at: &mut usize| -> Result<String, String> {
+        ws(at);
+        if b.get(*at) != Some(&b'"') {
+            return Err(format!("key must be a string at byte {at}"));
+        }
+        let end = string_end(*at)?;
+        let name = serde_json::from_str::<String>(&text[*at..end]).map_err(|e| e.to_string())?;
+        *at = end;
+        ws(at);
+        if b.get(*at) != Some(&b':') {
+            return Err(format!("expected `:` at byte {at}"));
+        }
+        *at += 1;
+        Ok(name)
+    };
+    let mut at = 0usize;
+    let mut open: Vec<Open> = Vec::new();
+    loop {
+        // the start of a value
+        ws(&mut at);
+        let mut value = match b.get(at) {
+            None => return Err("EOF while parsing a value".to_string()),
+            Some(&c @ (b'[' | b'{')) => {
+                if open.len() >= MAX_DEPTH {
+                    return Err(format!("nesting deeper than {MAX_DEPTH} levels"));
+                }
+                at += 1;
+                ws(&mut at);
+                if c == b'[' {
+                    if b.get(at) == Some(&b']') {
+                        at += 1;
+                        Value::Array(Vec::new())
+                    } else {
+                        open.push(Open::Array(Vec::new()));
+                        continue;
+                    }
+                } else if b.get(at) == Some(&b'}') {
+                    at += 1;
+                    Value::Object(Map::new())
+                } else {
+                    let name = key(&mut at)?;
+                    open.push(Open::Object(Map::new(), name));
+                    continue;
+                }
+            }
+            Some(&c) => {
+                // a string, a number or a literal: to its end, and serde_json reads it
+                let end = if c == b'"' {
+                    string_end(at)?
+                } else {
+                    let mut i = at;
+                    while !matches!(b.get(i), None | Some(b',' | b']' | b'}' | b' ' | b'\n' | b'\t' | b'\r')) {
+                        i += 1;
+                    }
+                    i
+                };
+                // the token begins and ends at ASCII bytes, or at the ends of the text
+                let token = text.get(at..end).ok_or_else(|| "EOF while parsing a string".to_string())?;
+                let v = serde_json::from_str::<Value>(token).map_err(|e| e.to_string())?;
+                at = end;
+                v
+            }
+        };
+        // a whole value: it goes into the array or object it belongs to, which may end with it
+        loop {
+            match open.last_mut() {
+                None => {
+                    ws(&mut at);
+                    if at != b.len() {
+                        return Err(format!("trailing characters at byte {at}"));
+                    }
+                    return Ok(value);
+                }
+                Some(Open::Array(list)) => {
+                    list.push(value);
+                    ws(&mut at);
+                    match b.get(at) {
+                        Some(b',') => {
+                            at += 1;
+                            break;
+                        }
+                        Some(b']') => {
+                            at += 1;
+                            let Some(Open::Array(list)) = open.pop() else { unreachable!() };
+                            value = Value::Array(list);
+                        }
+                        _ => return Err(format!("expected `,` or `]` at byte {at}")),
+                    }
+                }
+                Some(Open::Object(map, name)) => {
+                    // as serde_json's own reader: a key given again keeps its place and takes the new value
+                    map.insert(std::mem::take(name), value);
+                    ws(&mut at);
+                    match b.get(at) {
+                        Some(b',') => {
+                            at += 1;
+                            let next = key(&mut at)?;
+                            let Some(Open::Object(_, name)) = open.last_mut() else { unreachable!() };
+                            *name = next;
+                            break;
+                        }
+                        Some(b'}') => {
+                            at += 1;
+                            let Some(Open::Object(map, _)) = open.pop() else { unreachable!() };
+                            value = Value::Object(map);
+                        }
+                        _ => return Err(format!("expected `,` or `}}` at byte {at}")),
+                    }
+                }
             }
         }
     }
@@ -175,8 +379,10 @@ fn repair(text: &str) -> String {
                     }
                     continue;
                 }
-                out.push_str(&text[i..i + 2]);
-                i += 2;
+                // the backslash and the character after it, of however many bytes
+                let ch_len = text[i + 1..].chars().next().map_or(1, char::len_utf8);
+                out.push_str(&text[i..i + 1 + ch_len]);
+                i += 1 + ch_len;
                 continue;
             }
             if c == b'"' {
@@ -226,5 +432,101 @@ mod parse_tests {
         assert!(parse(b"{").is_err());
         assert_eq!(parse(br#"["\ud800", "a\udc00b", "\ud83d\ude00", "\\ud800"]"#).unwrap(), json!(["\u{fffd}", "a\u{fffd}b", "\u{1f600}", "\\ud800"]));
         assert_eq!(parse(br#"{"a":1,"a":2}"#).unwrap(), json!({ "a": 2 }));
+    }
+
+    // A text serde_json refuses is patched and read again (`repair`). The patching once cut two
+    // bytes after a backslash, which is inside the next character when that has several bytes: a
+    // panic, where the text is simply not JSON.
+    #[test]
+    fn a_backslash_before_any_character_is_not_json_and_does_not_panic() {
+        // before a character of 2, 3 and 4 bytes; as the last byte; alone in a string
+        for text in ["{\"x\":\"\\\u{e9}\"}", "{\"x\":\"\\\u{20ac}\"}", "{\"x\":\"\\\u{1f600}\"}", "[\"\\\u{e9}", "\"\\", "\\", "[1,\"a\\", "\"\\\u{e9}\\\u{20ac}\\\u{1f600}\""] {
+            assert!(parse(text.as_bytes()).is_err(), "{text:?}");
+            // and with something before it that sends the text through the patching whatever follows
+            assert!(parse(format!("[1e999,{text}").as_bytes()).is_err(), "{text:?}");
+        }
+        // `\u` with fewer than four hex digits at the end of the text, in and out of a string
+        for text in ["\"\\u", "\"\\u1", "\"\\u12", "\"\\u123", "\"\\ud83d\\u", "\"\\ud83d\\ude0", "\\u12", "[\"\\u12\u{e9}\"]", "\"\\u\u{e9}\u{e9}\u{e9}\u{e9}\""] {
+            assert!(parse(text.as_bytes()).is_err(), "{text:?}");
+        }
+        // an invalid byte after a backslash is U+FFFD by then, three bytes
+        assert!(parse(b"\"\\\xff\"").is_err());
+        // what is patched still reads: the escapes that are JSON's, beside a number out of range
+        assert_eq!(parse("[1e999,\"\\n\\\\\u{e9}\\\"\u{1f600}\\u00e9\"]".as_bytes()).unwrap(), json!([null, "\n\\\u{e9}\"\u{1f600}\u{e9}"]));
+    }
+
+    fn nested(open: &str, inner: &str, close: &str, levels: usize) -> String {
+        format!("{}{inner}{}", open.repeat(levels), close.repeat(levels))
+    }
+
+    /// Runs `f` on a thread with a stack of `bytes`, as the server's threads have one of a known size.
+    fn on_a_stack_of<T: Send + 'static>(bytes: usize, f: impl FnOnce() -> T + Send + 'static) -> T {
+        std::thread::Builder::new().stack_size(bytes).spawn(f).unwrap().join().unwrap()
+    }
+
+    // serde_json alone refuses nesting of 128 levels; the server must read what the TypeScript
+    // server reads and stores (a `method_params` of 4,096 bytes nests 2,046 deep).
+    #[test]
+    fn reads_nesting_to_the_limit_and_refuses_deeper() {
+        on_a_stack_of(16 << 20, || {
+            // (the values are released on this stack: 1.6 MiB unoptimised at the limit)
+            for levels in [1, 126, 127, 128, 129, 500, 2047, MAX_DEPTH] {
+                let arrays = nested("[", "", "]", levels);
+                let v = parse(arrays.as_bytes()).unwrap_or_else(|e| panic!("{levels} arrays: {e}"));
+                assert_eq!(stringify(&v), arrays, "{levels} arrays");
+                let objects = nested("{\"a\":", "1.5", "}", levels);
+                let v = parse(objects.as_bytes()).unwrap_or_else(|e| panic!("{levels} objects: {e}"));
+                assert_eq!(stringify(&v), objects, "{levels} objects");
+            }
+            for levels in [MAX_DEPTH + 1, MAX_DEPTH + 2, 100_000] {
+                assert!(parse(nested("[", "", "]", levels).as_bytes()).is_err(), "{levels} arrays");
+                assert!(parse(nested("[", "1", "]", levels).as_bytes()).is_err(), "{levels} arrays");
+                assert!(parse(nested("{\"a\":", "{}", "}", levels - 1).as_bytes()).is_err(), "{levels} objects");
+            }
+            // brackets inside strings are not nesting
+            let text = format!("[\"{}\\\"{}\"]", "[".repeat(5000), "{".repeat(5000));
+            assert!(parse(text.as_bytes()).is_ok());
+            // a submission as the harness sends it: the nesting is in one field, among others
+            let body = format!("{{\"N\":4,\"method_params\":{{\"a\":{}}},\"name\":\"deep\",\"N\":5}}", nested("[", "1e400,\"\\ud800\",-0,7", "]", 2000));
+            let v = parse(body.as_bytes()).unwrap();
+            assert_eq!(v["N"], json!(5));
+            assert_eq!(v.as_object().unwrap().keys().collect::<Vec<_>>(), ["N", "method_params", "name"]);
+            let mut inner = &v["method_params"]["a"];
+            for _ in 1..2000 {
+                inner = &inner[0];
+            }
+            // read as a shallow text is: out of range as null, half a pair as U+FFFD, -0 a float, 7 an integer
+            assert_eq!(*inner, parse(b"[1e400,\"\\ud800\",-0,7]").unwrap());
+            assert!(inner[2].is_f64() && inner[3].is_u64());
+            // deep and not JSON
+            for bad in [nested("[", "", "]", 300) + "x", nested("[", "1,", "]", 300), nested("[", "", "}", 300), nested("{\"a\":", "", "}", 300), nested("[", "tru", "]", 300), "[".repeat(300), nested("{\"a\" ", "1", "}", 300), nested("[", "\"a\nb\"", "]", 300), nested("[", "01", "]", 300), nested("{", "", "}", 300), nested("[", "\"\\\u{e9}\"", "]", 300)] {
+                assert!(parse(bad.as_bytes()).is_err(), "{}", &bad[bad.len() / 2 - 20..bad.len() / 2 + 20]);
+            }
+        });
+    }
+
+    // The reader for deep texts must give what serde_json gives: here on texts serde_json reads too.
+    #[test]
+    fn the_reader_for_deep_texts_agrees_with_serde_json() {
+        let texts = [
+            "null", " true ", "false", "0", "-0", "-0.0", "1", "-1", "18446744073709551615", "18446744073709551616", "-9223372036854775808", "-9223372036854775809", "1.0", "1e2", "1E-7", "0.1",
+            "5e-324", "1e308", "123456789012345678901234567890", "\"\"", "\"a\\u0041\\/\\n\\ud83d\\ude00\u{e9}\"", "[]", "{}", "[ ]", "{ }", "[1,2,3]", " [ 1 , [ 2 , { \"a\" : [ ] } ] , \"x\" ] ",
+            "{\"b\":1,\"a\":{\"b\":[true,false,null]},\"b\":2,\"10\":3,\"2\":4}", "{\"a\\u0041\":1,\"aA\":2}", "[[[[[[1.5]]]]],[[[[]]]],{\"\":{\"\":{}}}]", "\t\r\n[1]\t\r\n",
+            // and what neither reads
+            "", " ", "[", "]", "{", "}", "[1,]", "[,1]", "[1 2]", "{\"a\":1,}", "{\"a\"}", "{\"a\":}", "{a:1}", "{1:1}", "[1]]", "[1]x", "01", "1.", ".5", "+1", "1e", "- 1", "tru", "nulll", "NaN", "\"a", "\"a\nb\"",
+            "\"\\x\"", "\"\\ud800\"", "\"\\u12\"", "1e400", "[1e400]", "{\"a\":1}{\"a\":2}", "[\"a\"\"b\"]", "[1\"a\"]", "{\"a\":1 \"b\":2}", "{\"a\"::1}", "[1,,2]", "\u{feff}1", "[\u{a0}1]", "'a'",
+        ];
+        for text in texts {
+            let (deep, serde) = (read_deep(text), serde_json::from_str::<serde_json::Value>(text));
+            match (&deep, &serde) {
+                (Ok(a), Ok(b)) => {
+                    assert_eq!(a, b, "{text:?}");
+                    // the same text too: the order of keys, integers as integers
+                    assert_eq!(serde_json::to_string(a).unwrap(), serde_json::to_string(b).unwrap(), "{text:?}");
+                }
+                (Err(_), Err(_)) => {}
+                _ => panic!("{text:?}: the deep reader gives {deep:?}, serde_json {serde:?}"),
+            }
+        }
     }
 }

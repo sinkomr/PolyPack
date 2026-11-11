@@ -35,6 +35,10 @@ pub struct Req {
     /// The body, until a route reads it; what is left unread is drained after the answer. (Behind
     /// a lock only so that a request can be shared between threads; nothing ever waits for it.)
     pub body: std::sync::Mutex<Option<Body>>,
+    /// When the whole request must have arrived (Node: `requestTimeout`): a body that a route is
+    /// still reading then ends the request and the connection (`cut::REQUEST_TIMEOUT`). None: no
+    /// such time (requests made in process, by tests).
+    pub deadline: Option<tokio::time::Instant>,
 }
 
 impl Req {
@@ -76,10 +80,29 @@ pub enum ResBody {
     Full(Bytes),
     /// A stream whose length is not known when the head is written: sent chunked.
     Stream(BodyStream),
-    /// An answer whose `Content-Length` header promises more bytes than are sent (a defect of the
-    /// source's static files, see node.rs): these bytes, then nothing, until the connection is
-    /// closed after Node's keep-alive time.
-    Short(Bytes),
+    /// A stream under a `Content-Length` that the answer names itself (a static file, read as it
+    /// is sent): `bytes` of it are promised. When the stream ends before that (a defect of the
+    /// source's static files: a `Range` beyond the end of the file, see serve_static.rs), the
+    /// client is left waiting for the rest until the connection is closed after Node's keep-alive
+    /// time.
+    Promised { stream: BodyStream, bytes: u64 },
+    /// No answer of the server's: the request could not be read to its end, and the connection is
+    /// closed after these bytes, written as they are (see `cut`).
+    Cut(&'static [u8]),
+}
+
+/// What Node's HTTP server writes to a connection before it destroys it, when a request cannot be
+/// read to its end (lib/_http_server.js: `socketOnError`). No route answers such a request, and
+/// nothing is done for it.
+pub mod cut {
+    /// A body that is not framed as HTTP frames one (a chunk size that is none), or that ends
+    /// before its length.
+    pub const BAD_REQUEST: &[u8] = b"HTTP/1.1 400 Bad Request\r\nConnection: close\r\n\r\n";
+    /// A request that has not arrived whole in time: its head within `headersTimeout`, all of it
+    /// within `requestTimeout`.
+    pub const REQUEST_TIMEOUT: &[u8] = b"HTTP/1.1 408 Request Timeout\r\nConnection: close\r\n\r\n";
+    /// A head larger than `--max-http-header-size`.
+    pub const HEADER_FIELDS_TOO_LARGE: &[u8] = b"HTTP/1.1 431 Request Header Fields Too Large\r\nConnection: close\r\n\r\n";
 }
 
 /// An answer: a `Response` of the source.
@@ -93,6 +116,16 @@ pub struct Res {
 impl Res {
     pub fn new(status: u16, body: ResBody) -> Res {
         Res { status, headers: Vec::new(), body }
+    }
+
+    /// The end of a request that could not be read (`ResBody::Cut`).
+    pub fn cut(last_words: &'static [u8]) -> Res {
+        Res::new(0, ResBody::Cut(last_words))
+    }
+
+    /// Whether this is no answer but the end of the connection.
+    pub fn is_cut(&self) -> bool {
+        matches!(self.body, ResBody::Cut(_))
     }
 
     /// `headers.get(name)`.
@@ -571,32 +604,22 @@ pub async fn compress(method: &str, accept_encoding: Option<&str>, mut res: Res)
     let Some(encoding) = select_encoding(accept_encoding) else {
         return res;
     };
-    let data: Bytes = match std::mem::replace(&mut res.body, ResBody::Null) {
+    res.body = match std::mem::replace(&mut res.body, ResBody::Null) {
         // !ctx.res.body
         ResBody::Null => return res,
-        ResBody::Full(b) => b,
-        ResBody::Short(b) => {
-            res.body = ResBody::Short(b);
+        other @ ResBody::Cut(_) => {
+            res.body = other;
             return res;
         }
-        ResBody::Stream(mut s) => {
-            let mut all = Vec::new();
-            while let Some(part) = s.next().await {
-                match part {
-                    Ok(b) => all.extend_from_slice(&b),
-                    Err(_) => break,
-                }
-            }
-            Bytes::from(all)
+        // CPU work of some milliseconds for the largest answers: off the threads that answer requests
+        ResBody::Full(data) => {
+            let packed = if data.len() > 16 * 1024 { crate::pool::blocking(move || encode(encoding, &data)).await } else { encode(encoding, &data) };
+            ResBody::Stream(Box::pin(stream::once(async move { Ok(Bytes::from(packed)) })))
         }
+        // a stream is compressed as it comes, as the source pipes it through a CompressionStream:
+        // nothing is held of it but the compressor's window
+        ResBody::Stream(s) | ResBody::Promised { stream: s, .. } => ResBody::Stream(compressed(encoding, s)),
     };
-    // CPU work of some milliseconds for the largest answers: off the threads that answer requests
-    let packed = if data.len() > 16 * 1024 {
-        tokio::task::spawn_blocking(move || encode(encoding, &data)).await.expect("the compressor does not panic")
-    } else {
-        encode(encoding, &data)
-    };
-    res.body = ResBody::Stream(Box::pin(stream::once(async move { Ok(Bytes::from(packed)) })));
     res.delete("content-length");
     res.set("content-encoding", encoding);
     if let Some(etag) = res.header("etag").map(str::to_string) {
@@ -605,6 +628,82 @@ pub async fn compress(method: &str, accept_encoding: Option<&str>, mut res: Res)
         }
     }
     res
+}
+
+/// A zlib compressor writing into memory.
+enum Packer {
+    Gzip(flate2::write::GzEncoder<Vec<u8>>),
+    Deflate(flate2::write::ZlibEncoder<Vec<u8>>),
+}
+
+impl Packer {
+    fn new(encoding: &str) -> Packer {
+        if encoding == "gzip" {
+            Packer::Gzip(gzip_writer(Vec::new(), flate2::Compression::default()))
+        } else {
+            Packer::Deflate(flate2::write::ZlibEncoder::new(Vec::new(), flate2::Compression::default()))
+        }
+    }
+
+    /// Takes `data` in and gives what the compressor has written out so far (often nothing).
+    fn push(&mut self, data: &[u8]) -> Vec<u8> {
+        match self {
+            Packer::Gzip(e) => {
+                e.write_all(data).expect("writing to memory");
+                std::mem::take(e.get_mut())
+            }
+            Packer::Deflate(e) => {
+                e.write_all(data).expect("writing to memory");
+                std::mem::take(e.get_mut())
+            }
+        }
+    }
+
+    /// The rest of the output.
+    fn finish(self) -> Vec<u8> {
+        match self {
+            Packer::Gzip(e) => e.finish().expect("writing to memory"),
+            Packer::Deflate(e) => e.finish().expect("writing to memory"),
+        }
+    }
+}
+
+/// A stream, compressed chunk by chunk as it is read: `body.pipeThrough(new
+/// CompressionStream(encoding))`. The source is read only when the reader of the answer wants
+/// more, so a client that stops reading stops the reading of the source too.
+pub fn compressed(encoding: &'static str, source: BodyStream) -> BodyStream {
+    struct Piping {
+        source: BodyStream,
+        /// None once the source has ended and the last bytes are out.
+        packer: Option<Packer>,
+    }
+    Box::pin(stream::unfold(Piping { source, packer: Some(Packer::new(encoding)) }, |mut piping| async move {
+        loop {
+            let mut packer = piping.packer.take()?;
+            match piping.source.next().await {
+                Some(Ok(chunk)) => {
+                    // zlib on a chunk of a file is a millisecond or more of a core
+                    let (packer, out) = if chunk.len() > 16 * 1024 {
+                        crate::pool::blocking(move || {
+                            let out = packer.push(&chunk);
+                            (packer, out)
+                        })
+                        .await
+                    } else {
+                        let out = packer.push(&chunk);
+                        (packer, out)
+                    };
+                    piping.packer = Some(packer);
+                    if !out.is_empty() {
+                        return Some((Ok(Bytes::from(out)), piping));
+                    }
+                }
+                // the source failed: so does the answer, where it stands
+                Some(Err(e)) => return Some((Err(e), piping)),
+                None => return Some((Ok(Bytes::from(packer.finish())), piping)),
+            }
+        }
+    }))
 }
 
 /// Node's keep-alive time: an answer that promises bytes it does not send leaves the client waiting
@@ -638,33 +737,86 @@ pub fn into_response(res: Res, head: bool) -> axum::response::Response {
                 }
                 Body::from(b)
             }
-            ResBody::Null if has_length && res.header("content-length") != Some("0") => short_body(Bytes::new()),
+            // a length and no body (OPTIONS on a static file): the client waits for bytes that never come
+            ResBody::Null if has_length && res.header("content-length") != Some("0") => Body::from_stream(silence()),
             ResBody::Null if has_length => Body::empty(),
             // no length: an empty stream, which is sent as an empty chunked body
             ResBody::Null => Body::from_stream(stream::empty::<Result<Bytes, std::io::Error>>()),
             ResBody::Stream(s) => Body::from_stream(s),
-            ResBody::Short(b) => short_body(b),
+            ResBody::Promised { stream, bytes } => promised_body(stream, bytes),
+            // node.rs ends the connection before it comes to this
+            ResBody::Cut(_) => Body::empty(),
         }
     };
     builder.body(body).expect("a valid response")
 }
 
-/// The bytes, then silence for Node's keep-alive time, then the connection is cut.
-fn short_body(bytes: Bytes) -> Body {
-    let first = stream::iter(if bytes.is_empty() { None } else { Some(Ok::<Bytes, std::io::Error>(bytes)) });
-    let then = stream::once(async {
+/// Silence for Node's keep-alive time, then the connection is cut.
+fn silence() -> impl Stream<Item = Result<Bytes, std::io::Error>> {
+    stream::once(async {
         tokio::time::sleep(KEEP_ALIVE).await;
         Err::<Bytes, std::io::Error>(std::io::Error::other("the answer promised more bytes than it has"))
+    })
+}
+
+/// The stream, and when it has ended before `promised` bytes, silence for Node's keep-alive time
+/// before the connection is cut.
+fn promised_body(source: BodyStream, promised: u64) -> Body {
+    struct Counting {
+        source: Option<BodyStream>,
+        left: u64,
+    }
+    let counted = stream::unfold(Counting { source: Some(source), left: promised }, |mut c| async move {
+        let source = c.source.as_mut()?;
+        match source.next().await {
+            Some(Ok(chunk)) => {
+                c.left = c.left.saturating_sub(chunk.len() as u64);
+                Some((Ok(chunk), c))
+            }
+            Some(Err(e)) => {
+                c.source = None;
+                Some((Err(e), c))
+            }
+            None if c.left == 0 => None,
+            None => {
+                c.source = None;
+                tokio::time::sleep(KEEP_ALIVE).await;
+                Some((Err(std::io::Error::other("the answer promised more bytes than it has")), c))
+            }
+        }
     });
-    Body::from_stream(first.chain(then))
+    Body::from_stream(counted)
+}
+
+/// The next frame of a request body; None at its end. `Err` is the end of the request: the body
+/// did not arrive whole (a chunk size that is none, a connection closed before the length was
+/// reached: `cut::BAD_REQUEST`), or not by the request's deadline (`cut::REQUEST_TIMEOUT`).
+///
+/// In Node the stream of such a body fails (`aborted`), the route that reads it throws, and the
+/// socket is destroyed; nothing is done with the part that came. A truncated or mis-framed upload
+/// whose beginning happens to be a whole JSON text must not be taken for the body.
+async fn next_frame(body: &mut Body, deadline: Option<tokio::time::Instant>) -> Result<Option<hyper::body::Frame<Bytes>>, Res> {
+    let frame = match deadline {
+        Some(at) => match tokio::time::timeout_at(at, body.frame()).await {
+            Ok(frame) => frame,
+            Err(_) => return Err(Res::cut(cut::REQUEST_TIMEOUT)),
+        },
+        None => body.frame().await,
+    };
+    match frame {
+        None => Ok(None),
+        Some(Ok(frame)) => Ok(Some(frame)),
+        Some(Err(_)) => Err(Res::cut(cut::BAD_REQUEST)),
+    }
 }
 
 /// limits.ts: readBodyWithin, the part of hono/body-limit and `c.req.text()`: the request body as
 /// bytes, or None when it is larger than `max`. A body with a Content-Length above the limit is
-/// not read at all; one without (chunked) is read only up to the limit.
-pub async fn read_body_within(req: &mut Req, max: usize) -> Option<Bytes> {
+/// not read at all; one without (chunked) is read only up to the limit. `Err` when the body does
+/// not arrive whole and in time (`next_frame`): the caller returns it, and does nothing else.
+pub async fn read_body_within(req: &mut Req, max: usize) -> Result<Option<Bytes>, Res> {
     let Some(mut body) = req.take_body() else {
-        return Some(Bytes::new());
+        return Ok(Some(Bytes::new()));
     };
     let has_transfer_encoding = req.headers.contains_key("transfer-encoding");
     if !has_transfer_encoding {
@@ -672,43 +824,39 @@ pub async fn read_body_within(req: &mut Req, max: usize) -> Option<Bytes> {
             // parseInt(length, 10) > maxSize
             if js::parse_int(&length) > max as f64 {
                 req.put_body(body);
-                return None;
+                return Ok(None);
             }
         }
     }
     let mut parts: Vec<Bytes> = Vec::new();
     let mut size = 0usize;
-    while let Some(frame) = body.frame().await {
-        let Ok(frame) = frame else {
-            // the connection broke: there is no one to answer
-            break;
-        };
+    while let Some(frame) = next_frame(&mut body, req.deadline).await? {
         if let Ok(data) = frame.into_data() {
             size += data.len();
             if size > max {
                 req.put_body(body);
-                return None;
+                return Ok(None);
             }
             parts.push(data);
         }
     }
-    Some(concat(parts, size))
+    Ok(Some(concat(parts, size)))
 }
 
-/// The whole request body (`await c.req.text()` without a limit).
-pub async fn read_body(req: &mut Req) -> Bytes {
+/// The whole request body (`await c.req.text()` without a limit). `Err` as for `read_body_within`.
+pub async fn read_body(req: &mut Req) -> Result<Bytes, Res> {
     let Some(mut body) = req.take_body() else {
-        return Bytes::new();
+        return Ok(Bytes::new());
     };
     let mut parts: Vec<Bytes> = Vec::new();
     let mut size = 0usize;
-    while let Some(Ok(frame)) = body.frame().await {
+    while let Some(frame) = next_frame(&mut body, req.deadline).await? {
         if let Ok(data) = frame.into_data() {
             size += data.len();
             parts.push(data);
         }
     }
-    concat(parts, size)
+    Ok(concat(parts, size))
 }
 
 fn concat(mut parts: Vec<Bytes>, size: usize) -> Bytes {

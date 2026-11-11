@@ -58,12 +58,14 @@ struct Setup {
     snapshots: Option<std::path::PathBuf>,
     threads: usize,
     measured_delay: bool,
+    /// The stack of the pool's workers; None: the server's.
+    stack: Option<usize>,
 }
 
 impl Default for Setup {
     fn default() -> Self {
         let free = LimitOptions { per_ip: Some(1e9), verify_ms_per_minute: Some(1e12), ..LimitOptions::default() };
-        Setup { limits: free, holders_chunk: None, holder_chunk: None, snapshots: None, threads: 2, measured_delay: false }
+        Setup { limits: free, holders_chunk: None, holder_chunk: None, snapshots: None, threads: 2, measured_delay: false, stack: None }
     }
 }
 
@@ -80,7 +82,10 @@ fn server(setup: Setup) -> Server {
         let write = write.clone();
         Arc::new(Mutex::new(LoadStats::new(Box::new(move |line| write(line)))))
     };
-    let pool = Pool::new(setup.threads, clock.clone());
+    let pool = match setup.stack {
+        Some(bytes) => Pool::with_stack(setup.threads, clock.clone(), bytes),
+        None => Pool::new(setup.threads, clock.clone()),
+    };
     let literature = Arc::new(Literature::new(records()).expect("the test's records"));
     let snapshots = setup.snapshots.map(|dir| {
         let l = literature.clone();
@@ -127,14 +132,15 @@ fn request(method: &str, path: &str, headers: &[(&str, &str)], body: Option<Stri
     for (k, v) in headers {
         map.insert(HeaderName::from_bytes(k.as_bytes()).unwrap(), HeaderValue::from_str(v).unwrap());
     }
-    Req { method: method.to_string(), path: url::get_path(&href), url: href, headers: map, remote: None, body: Mutex::new(body.map(axum::body::Body::from)) }
+    Req { method: method.to_string(), path: url::get_path(&href), url: href, headers: map, remote: None, body: Mutex::new(body.map(axum::body::Body::from)), deadline: None }
 }
 
 async fn finish(res: Res) -> Answer {
     let body = match res.body {
         ResBody::Null => Vec::new(),
-        ResBody::Full(b) | ResBody::Short(b) => b.to_vec(),
-        ResBody::Stream(mut s) => {
+        ResBody::Full(b) => b.to_vec(),
+        ResBody::Cut(words) => words.to_vec(),
+        ResBody::Stream(mut s) | ResBody::Promised { stream: mut s, .. } => {
             let mut all = Vec::new();
             while let Some(Ok(part)) = s.next().await {
                 all.extend_from_slice(&part);
@@ -815,4 +821,554 @@ async fn changes_during_the_first_count_are_counted_once() {
         }
         assert_eq!(holders_listed(&s).await, counted_from_the_store(&s), "round {round}");
     }
+}
+
+// ---------------------------------------------------------------------------------------------
+// Hardening (2026-11-10): what a request must not be able to do to the server. Each test stands
+// for a finding of the robustness review and fails on the server as it was before.
+// ---------------------------------------------------------------------------------------------
+
+/// The bytes the test's process holds on its heap, so that a test can say what a request costs.
+struct CountingAllocator;
+
+static LIVE_BYTES: std::sync::atomic::AtomicUsize = std::sync::atomic::AtomicUsize::new(0);
+
+// SAFETY: every call goes to the system's allocator unchanged; only the sizes are added up.
+unsafe impl std::alloc::GlobalAlloc for CountingAllocator {
+    unsafe fn alloc(&self, layout: std::alloc::Layout) -> *mut u8 {
+        LIVE_BYTES.fetch_add(layout.size(), std::sync::atomic::Ordering::Relaxed);
+        unsafe { std::alloc::System.alloc(layout) }
+    }
+    unsafe fn dealloc(&self, ptr: *mut u8, layout: std::alloc::Layout) {
+        LIVE_BYTES.fetch_sub(layout.size(), std::sync::atomic::Ordering::Relaxed);
+        unsafe { std::alloc::System.dealloc(ptr, layout) }
+    }
+    unsafe fn alloc_zeroed(&self, layout: std::alloc::Layout) -> *mut u8 {
+        LIVE_BYTES.fetch_add(layout.size(), std::sync::atomic::Ordering::Relaxed);
+        unsafe { std::alloc::System.alloc_zeroed(layout) }
+    }
+    unsafe fn realloc(&self, ptr: *mut u8, layout: std::alloc::Layout, new_size: usize) -> *mut u8 {
+        LIVE_BYTES.fetch_add(new_size, std::sync::atomic::Ordering::Relaxed);
+        LIVE_BYTES.fetch_sub(layout.size(), std::sync::atomic::Ordering::Relaxed);
+        unsafe { std::alloc::System.realloc(ptr, layout, new_size) }
+    }
+}
+
+#[global_allocator]
+static ALLOCATOR: CountingAllocator = CountingAllocator;
+
+fn live_bytes() -> usize {
+    LIVE_BYTES.load(std::sync::atomic::Ordering::Relaxed)
+}
+
+/// The threads of this process.
+fn thread_count() -> usize {
+    if let Ok(tasks) = std::fs::read_dir("/proc/self/task") {
+        return tasks.count();
+    }
+    // macOS: one line per thread, after a header
+    let out = std::process::Command::new("ps").args(["-M", "-p", &std::process::id().to_string()]).output().expect("ps");
+    String::from_utf8_lossy(&out.stdout).lines().count().saturating_sub(1)
+}
+
+/// The server on a socket of its own, as production serves it (`node::serve`), within `limits`.
+async fn listening(s: &Server, dist: Option<&std::path::Path>, limits: polypack_server::node::ConnLimits) -> std::net::SocketAddr {
+    listening_server(s, dist, limits).await.0
+}
+
+async fn listening_server(s: &Server, dist: Option<&std::path::Path>, limits: polypack_server::node::ConnLimits) -> (std::net::SocketAddr, Arc<polypack_server::node::Server>) {
+    let listener = tokio::net::TcpListener::bind(("127.0.0.1", 0)).await.unwrap();
+    let address = listener.local_addr().unwrap();
+    let server = polypack_server::node::Server::of(s.app.clone(), dist.map(|d| d.to_string_lossy().into_owned()));
+    tokio::spawn(polypack_server::node::serve(listener, server.clone(), limits));
+    (address, server)
+}
+
+/// Sends `request` as it is and reads until the server closes the connection, or for `wait` at most.
+/// Returns what came, and whether the server closed.
+async fn raw(address: std::net::SocketAddr, request: &[u8], close_sending_side: bool, wait: Duration) -> (String, bool) {
+    use tokio::io::{AsyncReadExt, AsyncWriteExt};
+    let mut stream = tokio::net::TcpStream::connect(address).await.unwrap();
+    // (a server that has heard enough closes while the rest is still being sent)
+    let _ = stream.write_all(request).await;
+    if close_sending_side {
+        let _ = stream.shutdown().await;
+    }
+    let mut got = Vec::new();
+    let closed = tokio::time::timeout(wait, stream.read_to_end(&mut got)).await.is_ok();
+    (String::from_utf8_lossy(&got).into_owned(), closed)
+}
+
+fn post(path: &str, more_headers: &str, body: &str) -> Vec<u8> {
+    format!("POST {path} HTTP/1.1\r\nHost: test\r\n{more_headers}Content-Length: {}\r\n\r\n{body}", body.len()).into_bytes()
+}
+
+fn chunked(path: &str, more_headers: &str, body: &str, after: &str) -> Vec<u8> {
+    format!("POST {path} HTTP/1.1\r\nHost: test\r\n{more_headers}Transfer-Encoding: chunked\r\n\r\n{:x}\r\n{body}\r\n{after}", body.len()).into_bytes()
+}
+
+fn rows(s: &Server) -> (f64, usize) {
+    let store = s.store.lock().unwrap();
+    (store.count(4.0, 4.0, 11.0).unwrap(), store.leaders().unwrap().len())
+}
+
+const BAD_REQUEST: &str = "HTTP/1.1 400 Bad Request\r\nConnection: close\r\n\r\n";
+const REQUEST_TIMEOUT: &str = "HTTP/1.1 408 Request Timeout\r\nConnection: close\r\n\r\n";
+const TOO_LARGE: &str = "HTTP/1.1 431 Request Header Fields Too Large\r\nConnection: close\r\n\r\n";
+
+// Finding 3: a body whose reading ends in an error was taken for a body that had ended. A chunked
+// upload with a whole valid submission in its first chunk and a chunk size that is none after it
+// was verified and stored; so was one cut short of its Content-Length. Node ends such a request
+// with 400 and `Connection: close`, written to the socket as they are, and does nothing.
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn a_body_that_does_not_arrive_whole_is_not_acted_on() {
+    let s = server(Setup::default());
+    let address = listening(&s, None, polypack_server::node::ConnLimits::default()).await;
+    let wait = Duration::from_secs(5);
+    let entry = squares(11, 4, 1.0, "ann").to_string();
+    let space_entry = json!({ "space": "sphere", "id": "sphere/3/2", "name": "ann", "config": { "rho": 100, "pieces": [{ "q": [1, 0, 0, 0] }, { "q": [0, 1, 0, 0] }] } }).to_string();
+    let auth = format!("Authorization: Bearer {ADMIN}\r\n");
+
+    // the framing is right: stored, and an administrator can remove it
+    let (answer, _) = raw(address, &chunked("/api/submit", "Connection: close\r\n", &entry, "0\r\n\r\n"), false, wait).await;
+    assert!(answer.starts_with("HTTP/1.1 200 OK\r\n") && answer.contains("\"id\":1"), "{answer}");
+    assert_eq!(rows(&s), (1.0, 1));
+    let lines = s.log.lock().unwrap().len();
+
+    // a chunk size that is none, after a whole submission: the same entry again would count
+    for (path, headers, body) in [("/api/submit", "", &entry), ("/api/spaces/submit", "", &space_entry), ("/api/admin/remove", auth.as_str(), &"{\"id\":1}".to_string()), ("/api/admin/edit", auth.as_str(), &"{\"id\":1,\"name\":\"eve\"}".to_string())] {
+        let (answer, closed) = raw(address, &chunked(path, headers, body, "zz\r\n"), false, wait).await;
+        assert_eq!((answer.as_str(), closed), (BAD_REQUEST, true), "{path}");
+    }
+    // a body shorter than its Content-Length, and a chunked one without its last chunk, the sending side closed
+    for path in ["/api/submit", "/api/spaces/submit"] {
+        let body = if path == "/api/submit" { &entry } else { &space_entry };
+        let mut short = post(path, "", body);
+        short.truncate(short.len() - 1);
+        let whole_json_short_length = format!("POST {path} HTTP/1.1\r\nHost: test\r\nContent-Length: {}\r\n\r\n{body}", body.len() + 10).into_bytes();
+        for request in [short, whole_json_short_length, chunked(path, "", body, "")] {
+            let (answer, closed) = raw(address, &request, true, wait).await;
+            assert_eq!((answer.as_str(), closed), (BAD_REQUEST, true), "{path}");
+        }
+    }
+    let (answer, closed) = raw(address, &format!("POST /api/admin/remove HTTP/1.1\r\nHost: test\r\n{auth}Content-Length: 20\r\n\r\n{{\"id\":1}}").into_bytes(), true, wait).await;
+    assert_eq!((answer.as_str(), closed), (BAD_REQUEST, true));
+
+    // nothing was stored, counted, removed, renamed or logged
+    assert_eq!(rows(&s), (1.0, 1));
+    assert_eq!(s.store.lock().unwrap().space_best("sphere").unwrap().len(), 0);
+    assert_eq!(s.get("/api/leaderboard/4/4/11").await.json()["entries"][0]["name"], json!("ann"));
+    assert_eq!(s.log.lock().unwrap().len(), lines);
+}
+
+// Finding 2: only a request's head had a time limit; a client could send half a body and hold the
+// connection, and the buffer of it, for ever. And a head could be 408 KiB where Node reads 16.
+// Node's limits (ConnLimits::default) with Node's answers: 408 or 431 and `Connection: close`.
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn a_request_must_arrive_whole_in_time_and_with_a_head_of_nodes_size() {
+    let node = polypack_server::node::ConnLimits::default();
+    assert_eq!((node.headers_timeout, node.request_timeout, node.max_header_size), (Duration::from_secs(60), Duration::from_secs(300), 16384));
+
+    let s = server(Setup::default());
+    let limits = polypack_server::node::ConnLimits { headers_timeout: Duration::from_millis(400), request_timeout: Duration::from_millis(900), ..node };
+    let address = listening(&s, None, limits).await;
+    let wait = Duration::from_secs(10);
+    let entry = squares(11, 4, 1.0, "ann").to_string();
+
+    // nothing sent, and half a head: 408 when the head is late
+    for request in ["", "POST /api/submit HTTP/1.1\r\nHost: test\r\nX-A: 1\r\n"] {
+        let began = std::time::Instant::now();
+        let (answer, closed) = raw(address, request.as_bytes(), false, wait).await;
+        assert_eq!((answer.as_str(), closed), (REQUEST_TIMEOUT, true), "{request:?}");
+        assert!(began.elapsed() >= Duration::from_millis(390) && began.elapsed() < Duration::from_secs(5), "{:?}", began.elapsed());
+    }
+    // a head and a body that stops short, by its length and chunked, on the routes that read a body
+    let auth = format!("Authorization: Bearer {ADMIN}\r\n");
+    let short = |path: &str, headers: &str, body: &str| format!("POST {path} HTTP/1.1\r\nHost: test\r\n{headers}Content-Length: {}\r\n\r\n{body}", body.len() + 10).into_bytes();
+    for request in [short("/api/submit", "", &entry), chunked("/api/submit", "", &entry, ""), short("/api/spaces/submit", "", &entry), short("/api/admin/remove", &auth, "{\"id\":1}"), short("/api/admin/holder-peaks", &auth, "{\"peaks\":[{\"name\":\"ann\",\"peak\":3}]}")] {
+        let began = std::time::Instant::now();
+        let (answer, closed) = raw(address, &request, false, wait).await;
+        assert_eq!((answer.as_str(), closed), (REQUEST_TIMEOUT, true));
+        assert!(began.elapsed() >= Duration::from_millis(890) && began.elapsed() < Duration::from_secs(5), "{:?}", began.elapsed());
+    }
+    assert_eq!(rows(&s), (0.0, 0));
+    assert!(s.log.lock().unwrap().is_empty());
+    // a body that comes slowly, yet within the time, is read
+    {
+        use tokio::io::{AsyncReadExt, AsyncWriteExt};
+        let request = post("/api/submit", "Connection: close\r\n", &entry);
+        let mut stream = tokio::net::TcpStream::connect(address).await.unwrap();
+        for part in request.chunks(request.len() / 4 + 1) {
+            stream.write_all(part).await.unwrap();
+            tokio::time::sleep(Duration::from_millis(100)).await;
+        }
+        let mut got = String::new();
+        stream.read_to_string(&mut got).await.unwrap();
+        assert!(got.starts_with("HTTP/1.1 200 OK\r\n"), "{got}");
+    }
+
+    // the head: Node counts the request target and each header's name and value, and refuses at 16384
+    let head = |filler: usize| format!("GET /api/health HTTP/1.1\r\nHost: test\r\nConnection: close\r\nX-Big: {}\r\n\r\n", "a".repeat(filler));
+    let counted = "/api/health".len() + "Host".len() + "test".len() + "Connection".len() + "close".len() + "X-Big".len();
+    let (answer, _) = raw(address, head(16383 - counted).as_bytes(), false, wait).await;
+    assert!(answer.starts_with("HTTP/1.1 200 OK\r\n"), "{answer}");
+    for filler in [16384 - counted, 20_000, 60_000] {
+        let (answer, closed) = raw(address, head(filler).as_bytes(), false, wait).await;
+        assert_eq!((answer.as_str(), closed), (TOO_LARGE, true), "{filler}");
+    }
+    // beyond what is buffered of a head, the HTTP library's own 431 (which a client that is still
+    // sending may lose: the connection is reset under it, as Node's is)
+    let (answer, closed) = raw(address, head(500_000).as_bytes(), false, wait).await;
+    assert!(closed && (answer.is_empty() || answer.starts_with("HTTP/1.1 431 Request Header Fields Too Large\r\n")), "{}", &answer[..answer.len().min(200)]);
+    // many headers are no reason to refuse (Node reads 2,000)
+    let many: String = (0..1500).map(|i| format!("x{i}: 1\r\n")).collect();
+    let (answer, _) = raw(address, format!("GET /api/health HTTP/1.1\r\nHost: test\r\nConnection: close\r\n{many}\r\n").as_bytes(), false, wait).await;
+    assert!(answer.starts_with("HTTP/1.1 200 OK\r\n"), "{}", &answer[..answer.len().min(200)]);
+}
+
+// Finding 1: a static file was read whole into memory for each answer, so every client that asked
+// for a large file and stopped reading held the file's size. The file is now read as it is sent.
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn a_stalled_download_holds_a_chunk_of_the_file_not_the_file() {
+    use tokio::io::{AsyncReadExt, AsyncWriteExt};
+    const FILE_BYTES: usize = 24 << 20;
+    const DOWNLOADS: usize = 16;
+    let dir = temp_dir("static");
+    std::fs::create_dir_all(dir.join("spaces")).unwrap();
+    // bytes that do not repeat, so that a wrong offset would show; and a page that compresses
+    let mut next = rng(7);
+    let data: Vec<u8> = (0..FILE_BYTES).map(|_| (next() * 256.0) as u8).collect();
+    std::fs::write(dir.join("big.bin"), &data).unwrap();
+    let page: Vec<u8> = (0..FILE_BYTES / 8).flat_map(|i| format!("<p>{i}</p>\n").into_bytes()).collect();
+    std::fs::write(dir.join("spaces").join("viewer.html"), &page).unwrap();
+    std::fs::write(dir.join("empty.txt"), b"").unwrap();
+
+    let s = server(Setup::default());
+    let address = listening(&s, Some(&dir), polypack_server::node::ConnLimits::default()).await;
+    let get = |path: &str, headers: &str| format!("GET {path} HTTP/1.1\r\nHost: test\r\n{headers}\r\n").into_bytes();
+
+    // clients that ask for the file, read its first bytes and then stop
+    let before = live_bytes();
+    let mut stalled = Vec::new();
+    for k in 0..DOWNLOADS {
+        let mut stream = tokio::net::TcpStream::connect(address).await.unwrap();
+        let path = if k % 2 == 0 { get("/big.bin", "") } else { get("/spaces/viewer.html", "Accept-Encoding: gzip\r\n") };
+        stream.write_all(&path).await.unwrap();
+        let mut first = [0u8; 512];
+        stream.read_exact(&mut first).await.unwrap();
+        assert!(first.starts_with(b"HTTP/1.1 200 OK\r\n"));
+        stalled.push(stream);
+    }
+    tokio::time::sleep(Duration::from_millis(500)).await;
+    let held = live_bytes().saturating_sub(before);
+    // (as it was: sixteen times the file, 384 MiB; other tests of this binary run meanwhile, hence the room)
+    assert!(held < 48 << 20, "{DOWNLOADS} stalled downloads of a file of {} MiB hold {} MiB", FILE_BYTES >> 20, held >> 20);
+    drop(stalled);
+
+    // and the answers are what they were
+    let wait = Duration::from_secs(60);
+    let split = |answer: &[u8]| -> (String, Vec<u8>) {
+        let at = answer.windows(4).position(|w| w == b"\r\n\r\n").expect("a head");
+        (String::from_utf8_lossy(&answer[..at]).to_lowercase(), answer[at + 4..].to_vec())
+    };
+    let fetch = |request: Vec<u8>| async move {
+        let mut stream = tokio::net::TcpStream::connect(address).await.unwrap();
+        stream.write_all(&request).await.unwrap();
+        let mut got = Vec::new();
+        tokio::time::timeout(wait, stream.read_to_end(&mut got)).await.expect("the answer ends").unwrap();
+        got
+    };
+    let (head, body) = split(&fetch(get("/big.bin", "Connection: close\r\n")).await);
+    assert!(head.starts_with("http/1.1 200 ok") && head.contains(&format!("content-length: {FILE_BYTES}")) && head.contains("content-type: application/octet-stream"), "{head}");
+    assert!(body == data, "the file as it is on disk");
+    // a range, as the source reads one
+    let (head, body) = split(&fetch(get("/big.bin", "Connection: close\r\nRange: bytes=1000000-1299999\r\n")).await);
+    assert!(head.starts_with("http/1.1 206") && head.contains("content-length: 300000") && head.contains(&format!("content-range: bytes 1000000-1299999/{FILE_BYTES}")), "{head}");
+    assert!(body == data[1_000_000..1_300_000]);
+    // HEAD: the length and no body; an empty file
+    let (head, body) = split(&fetch(format!("HEAD /big.bin HTTP/1.1\r\nHost: test\r\nConnection: close\r\n\r\n").into_bytes()).await);
+    assert!(head.contains(&format!("content-length: {FILE_BYTES}")) && body.is_empty(), "{head}");
+    let (head, body) = split(&fetch(get("/empty.txt", "Connection: close\r\n")).await);
+    assert!(head.starts_with("http/1.1 200 ok") && head.contains("content-length: 0") && body.is_empty(), "{head}");
+    // under /spaces the answer is compressed as it is read: chunked, and the page when unpacked
+    let (head, body) = split(&fetch(get("/spaces/viewer.html", "Connection: close\r\nAccept-Encoding: gzip\r\n")).await);
+    assert!(head.contains("content-encoding: gzip") && head.contains("transfer-encoding: chunked") && head.contains("vary: accept-encoding") && !head.contains("content-length"), "{head}");
+    let mut packed = Vec::new();
+    let mut rest = &body[..];
+    loop {
+        let line_end = rest.windows(2).position(|w| w == b"\r\n").expect("a chunk size");
+        let size = usize::from_str_radix(std::str::from_utf8(&rest[..line_end]).unwrap(), 16).unwrap();
+        if size == 0 {
+            break;
+        }
+        packed.extend_from_slice(&rest[line_end + 2..line_end + 2 + size]);
+        rest = &rest[line_end + 2 + size + 2..];
+    }
+    let mut unpacked = Vec::new();
+    std::io::Read::read_to_end(&mut flate2::read::GzDecoder::new(&packed[..]), &mut unpacked).unwrap();
+    assert!(unpacked == page, "the page, unpacked");
+    assert!(packed.len() < page.len() / 2);
+    // without Accept-Encoding it comes as it is, with its length
+    let (head, body) = split(&fetch(get("/spaces/viewer.html", "Connection: close\r\n")).await);
+    assert!(head.contains(&format!("content-length: {}", page.len())) && head.contains("vary: accept-encoding") && body == page, "{head}");
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
+// Finding 6: every request that waited for the store's lock held a thread of its own (the runtime
+// starts one whenever a thread blocks and none is idle): 600 requests for a leaderboard at once,
+// 530 threads. They now wait for a turn as tasks, and the runtime's threads are bounded.
+#[test]
+fn requests_that_wait_for_the_store_do_not_each_hold_a_thread() {
+    const REQUESTS: usize = 400;
+    let runtime = polypack_server::pool::runtime();
+    runtime.block_on(async {
+        let s = Arc::new(server(Setup::default()));
+        assert_eq!(s.submit_squares(11, 4, 1.0, "ann").await.status, 200);
+        let before = thread_count();
+        // one statement is slow: the store is held, and every request for a leaderboard waits for it
+        let held = s.store.clone();
+        let (locked, is_locked) = std::sync::mpsc::channel();
+        let (release, released) = std::sync::mpsc::channel::<()>();
+        let holder = std::thread::spawn(move || {
+            let _store = held.lock().unwrap();
+            locked.send(()).unwrap();
+            let _ = released.recv();
+        });
+        is_locked.recv().unwrap();
+        let mut waiting = Vec::new();
+        let order = Arc::new(Mutex::new(Vec::new()));
+        for k in 0..REQUESTS {
+            let (s, order) = (s.clone(), order.clone());
+            waiting.push(tokio::spawn(async move {
+                let answer = s.get("/api/leaderboard/4/4/11").await;
+                order.lock().unwrap().push(k);
+                answer.status
+            }));
+        }
+        // while they wait, the threads are counted
+        let mut most = before;
+        for _ in 0..10 {
+            tokio::time::sleep(Duration::from_millis(100)).await;
+            most = most.max(thread_count());
+        }
+        // and the server still answers what needs no store
+        assert_eq!(tokio::time::timeout(Duration::from_secs(5), s.get("/api/health")).await.expect("an answer while the store is held").status, 200);
+        release.send(()).unwrap();
+        holder.join().unwrap();
+        for task in waiting {
+            assert_eq!(task.await.unwrap(), 200);
+        }
+        assert_eq!(order.lock().unwrap().len(), REQUESTS);
+        // (as it was: a thread for each of the 400. Other tests of this binary start threads meanwhile, hence the room.)
+        assert!(most < before + 150, "{REQUESTS} requests waiting for the store: {before} threads before, {most} at most");
+    });
+}
+
+// Finding 4: the deepest nesting. A `method_params` at its limit of 4,096 bytes nests 2,046
+// levels deep; the TypeScript server stores it, and serde_json alone reads 127. A body within the
+// limit of polypack_js::json::MAX_DEPTH goes through every step, here on a quarter of the stack
+// the server's threads have, since a stack that overflows ends the process: this test passing
+// means none did.
+#[test]
+fn the_deepest_json_is_read_stored_and_written_on_a_quarter_of_the_stack() {
+    use polypack_js::json::MAX_DEPTH;
+    let quarter = polypack_server::pool::THREAD_STACK_BYTES / 4;
+    let runtime = polypack_server::pool::runtime_with_stack(quarter);
+    // everything runs on the runtime's threads and the pool's: this thread only waits
+    let work = runtime.spawn(async move {
+        let dir = temp_dir("deep");
+        let s = server(Setup { snapshots: Some(dir.clone()), stack: Some(quarter), ..Setup::default() });
+        let parse = |text: &str| polypack_js::json::parse(text.as_bytes()).unwrap_or_else(|e| panic!("not JSON ({e})"));
+        let submit = |s: &Server, text: String| {
+            let mut req = request("POST", "/api/submit", &[], Some(text));
+            let app = s.app.clone();
+            async move { finish(app.fetch("POST", &mut req).await.expect("a path of the API")).await }
+        };
+        let method = polypack_server::docs::method_names()[0];
+        let pieces = serde_json::to_string(&squares(12, 4, 1.0, "x")["pieces"]).unwrap();
+        // `{"a":[[ ... ]]}` of exactly 4,096 bytes: 2,046 levels
+        let params = |levels: usize| format!("{{\"a\":{}{}}}", "[".repeat(levels - 1), "]".repeat(levels - 1));
+        let deepest = params(2046);
+        assert_eq!(deepest.len(), 4096);
+        let body = |p: usize, params: &str, more: &str| format!("{{\"N\":4,\"M\":4,\"P\":{p},\"name\":\"deep\",\"found_with\":\"optimizer\",\"method\":\"{method}\",\"method_params\":{params},\"pieces\":{pieces}{more}}}");
+
+        // accepted, stored as it was sent, read back and written out
+        let stored = submit(&s, body(12, &deepest, "")).await;
+        assert_eq!(stored.status, 200, "{}", stored.body);
+        let id = parse(&stored.body)["id"].as_f64().expect("kept");
+        let back = s.get(&format!("/api/submissions/{id}")).await;
+        assert_eq!(back.status, 200);
+        assert!(back.body.contains(&format!("\"method_params\":{deepest},")), "the entry as it is read back");
+        // the administrator's views of it, and a change of it
+        let pending = s.call("GET", "/api/admin/pending", &[("authorization", &format!("Bearer {ADMIN}"))], None).await;
+        assert_eq!(pending.status, 200);
+        let edit = format!("{{\"id\":{id},\"found_with\":\"optimizer\",\"method\":\"{method}\",\"method_params\":{}}}", params(2000));
+        let mut req = request("POST", "/api/admin/edit", &[("authorization", &format!("Bearer {ADMIN}"))], Some(edit));
+        assert_eq!(finish(s.app.fetch("POST", &mut req).await.unwrap()).await.body, "{\"ok\":true}");
+        assert!(s.get(&format!("/api/submissions/{id}")).await.body.contains(&format!("\"method_params\":{},", params(2000))));
+        // the snapshot's file of the pair holds the entry
+        let lit = Arc::new(Literature::new(records()).unwrap());
+        let build = BuildOptions { store: s.store.clone(), dir: dir.clone(), closed: Arc::new(move |n, m, p| lit.closed(n, m, p)), spaces: None, log: Arc::new(|_: &str| {}), clock: s.clock.clone() };
+        tokio::task::spawn_blocking(move || build_snapshot(&build).unwrap()).await.unwrap();
+        let mut req = request("GET", "/api/snapshot/4-4.json.gz", &[], None);
+        let res = s.app.fetch("GET", &mut req).await.unwrap();
+        assert_eq!(res.status, 200);
+        let ResBody::Full(gz) = res.body else { panic!("not bytes") };
+        let mut text = String::new();
+        std::io::Read::read_to_string(&mut flate2::read::GzDecoder::new(&gz[..]), &mut text).unwrap();
+        assert!(text.contains("\"name\":\"deep\""), "{}", &text[..text.len().min(300)]);
+
+        // one level more than 4,096 bytes hold: refused for its size, as the source refuses it
+        for levels in [2047, 3000, MAX_DEPTH - 1] {
+            let refused = submit(&s, body(12, &params(levels), "")).await;
+            assert_eq!(refused.status, 400);
+            assert_eq!(parse(&refused.body)["reasons"], json!(["method_params must be at most 4096 bytes as JSON"]), "{levels} levels");
+        }
+        // a field the server does not read may nest to the limit; beyond it the body is not JSON here
+        let ignored = |levels: usize| format!(",\"extra\":{}{}", "[".repeat(levels), "]".repeat(levels));
+        let accepted = submit(&s, body(12, "{}", &ignored(MAX_DEPTH - 1))).await;
+        assert_eq!(accepted.status, 200, "{}", accepted.body);
+        for levels in [MAX_DEPTH, 100_000] {
+            let refused = submit(&s, body(12, "{}", &ignored(levels))).await;
+            assert_eq!((refused.status, parse(&refused.body)["reasons"].clone()), (400, json!(["body is not valid JSON"])), "{levels} levels");
+        }
+        // every field that is read, nested to the limit where a number or a text belongs: refused in words, not by a crash
+        let deep = format!("{}{}", "[".repeat(MAX_DEPTH - 1), "]".repeat(MAX_DEPTH - 1));
+        let deep_object = format!("{}1{}", "{\"a\":".repeat(MAX_DEPTH - 1), "}".repeat(MAX_DEPTH - 1));
+        for field in ["N", "M", "P", "pieces", "container_phi", "name", "agent_note", "units", "found_with", "method", "seed", "budget", "software", "agent"] {
+            for value in [&deep, &deep_object] {
+                let text = format!("{{\"N\":4,\"M\":4,\"P\":12,\"name\":\"deep\",\"pieces\":{pieces},\"{field}\":{value}}}");
+                let answer = submit(&s, text).await;
+                assert!(answer.status == 400 || (field == "agent" && answer.status == 200) || (field == "units" && answer.status == 200), "{field}: {} {}", answer.status, &answer.body[..answer.body.len().min(200)]);
+            }
+        }
+        // the spaces: a configuration, an id and every other field nested to the limit
+        let space_ids = ["polyhedra/tidintid/30", "surface/cube/fold/4/30", "curved/-1/3/0/30", "torus/sq/0/30", "sphere/3/30", "sphere/3/2", "balls/ap12inball/100", "boundary/120cell/ball/5", "ndim/10/ball/ball/2"];
+        for id in space_ids {
+            let space = id.split('/').next().unwrap();
+            let shallow = MAX_DEPTH - 3;
+            let nest = |levels: usize| format!("{}{}", "[".repeat(levels), "]".repeat(levels));
+            let configs = [
+                nest(shallow),
+                format!("{{\"pieces\":{}}}", nest(shallow)),
+                format!("{{\"s\":1,\"rho\":1,\"size\":1,\"pieces\":[{}],\"poses\":[{}]}}", nest(shallow - 1), nest(shallow - 1)),
+                format!("{{\"s\":1,\"rho\":100,\"pieces\":[{{\"q\":[1,0,0,0]}},{{\"q\":[0,1,0,0]}}],\"extra\":{}}}", nest(shallow)),
+                format!("{}1{}", "{\"pieces\":".repeat(shallow), "}".repeat(shallow)),
+            ];
+            for config in &configs {
+                let text = format!("{{\"space\":\"{space}\",\"id\":\"{id}\",\"name\":\"deep\",\"units\":\"diameter\",\"config\":{config}}}");
+                let mut req = request("POST", "/api/spaces/submit", &[], Some(text));
+                let answer = finish(s.app.fetch("POST", &mut req).await.unwrap()).await;
+                assert!([200, 400, 409, 422].contains(&answer.status), "{id}: {} {}", answer.status, &answer.body[..answer.body.len().min(200)]);
+            }
+            for field in ["id", "name", "agent_note", "software", "method", "seed", "units", "space"] {
+                let text = format!("{{\"space\":\"{space}\",\"id\":\"{id}\",\"name\":\"deep\",\"config\":{{}},\"{field}\":{deep}}}");
+                let mut req = request("POST", "/api/spaces/submit", &[], Some(text));
+                let answer = finish(s.app.fetch("POST", &mut req).await.unwrap()).await;
+                assert!([400, 409, 426].contains(&answer.status), "{id} {field}: {} {}", answer.status, &answer.body[..answer.body.len().min(200)]);
+            }
+        }
+        // the administrator's routes: a row that is none is written back in the refusal
+        let row = format!("{}1{}", "{\"a\":".repeat(MAX_DEPTH - 2), "}".repeat(MAX_DEPTH - 2));
+        let peaks = format!("{{\"peaks\":[{row}]}}");
+        let mut req = request("POST", "/api/admin/holder-peaks", &[("authorization", &format!("Bearer {ADMIN}"))], Some(peaks));
+        let answer = finish(s.app.fetch("POST", &mut req).await.unwrap()).await;
+        assert!(answer.status == 400 && answer.body.contains("bad row") && answer.body.len() > row.len(), "{} {}", answer.status, &answer.body[..answer.body.len().min(200)]);
+        for path in ["/api/admin/review", "/api/admin/remove", "/api/admin/edit", "/api/admin/spaces/remove", "/api/admin/spaces/edit"] {
+            for text in [deep.clone(), format!("{{\"id\":{deep}}}"), format!("{{\"id\":{},\"decision\":{deep},\"name\":{deep},\"agent_note\":{deep},\"found_with\":{deep},\"method_params\":{deep_object},\"budget\":{deep_object}}}", if path.ends_with("/edit") { id } else { 999.0 })] {
+                let mut req = request("POST", path, &[("authorization", &format!("Bearer {ADMIN}"))], Some(text));
+                let answer = finish(s.app.fetch("POST", &mut req).await.unwrap()).await;
+                assert!(answer.status == 400 || answer.status == 404, "{path}: {} {}", answer.status, answer.body);
+            }
+        }
+        // the first entry is still what it was made by the edit
+        assert!(s.get(&format!("/api/submissions/{id}")).await.body.contains(&format!("\"method_params\":{},", params(2000))));
+        let _ = std::fs::remove_dir_all(&dir);
+    });
+    runtime.block_on(work).expect("no step failed");
+}
+
+// Finding 5, as a client sees it: a backslash before a character of several bytes is not JSON
+// (400), where the reading once panicked (500).
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn a_body_that_is_almost_json_is_refused_in_words() {
+    let s = server(Setup::default());
+    for text in ["{\"x\":\"\\\u{e9}\"}", "{\"N\":4,\"name\":\"\\\u{1f600}\"}", "[1e999,\"\\\u{20ac}\"]", "{\"x\":\"\\"] {
+        for path in ["/api/submit", "/api/spaces/submit"] {
+            let mut req = request("POST", path, &[], Some(text.to_string()));
+            let answer = finish(s.app.fetch("POST", &mut req).await.unwrap()).await;
+            assert_eq!((answer.status, answer.json()["reasons"].clone()), (400, json!(["body is not valid JSON"])), "{text:?}");
+        }
+    }
+}
+
+// The stop (SIGTERM): the process once exited the moment the signal came, also between the
+// transaction that stored an entry and the writing of its answer (2 of 22,385 entries in 12 stops
+// under load had no answer). The stop now waits for the answers under way, takes no new request,
+// and gives up waiting after a set time.
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn the_stop_waits_for_the_answers_under_way_and_takes_nothing_new() {
+    use tokio::io::{AsyncReadExt, AsyncWriteExt};
+    let s = server(Setup::default());
+    let (address, listening) = listening_server(&s, None, polypack_server::node::ConnLimits::default()).await;
+    let entry = squares(11, 4, 1.0, "ann").to_string();
+    // a connection that is open and idle, and an entry whose storing is held up: the store is busy
+    let mut idle = tokio::net::TcpStream::connect(address).await.unwrap();
+    idle.write_all(b"GET /api/health HTTP/1.1\r\nHost: test\r\n\r\n").await.unwrap();
+    let mut first = [0u8; 17];
+    idle.read_exact(&mut first).await.unwrap();
+    assert_eq!(&first, b"HTTP/1.1 200 OK\r\n");
+    let held = s.store.clone();
+    let (locked, is_locked) = std::sync::mpsc::channel();
+    let (release, released) = std::sync::mpsc::channel::<()>();
+    let holder = std::thread::spawn(move || {
+        let _store = held.lock().unwrap();
+        locked.send(()).unwrap();
+        let _ = released.recv();
+    });
+    is_locked.recv().unwrap();
+    let under_way = tokio::spawn(async move { raw(address, &post("/api/submit", "Connection: close\r\n", &entry), false, Duration::from_secs(20)).await });
+    tokio::time::sleep(Duration::from_millis(200)).await;
+
+    // the stop does not return while the entry is unanswered
+    let began = std::time::Instant::now();
+    let stop = {
+        let listening = listening.clone();
+        tokio::spawn(async move { listening.stop(Duration::from_secs(20)).await })
+    };
+    tokio::time::sleep(Duration::from_millis(300)).await;
+    assert!(!stop.is_finished());
+    // nothing new is taken meanwhile: not on a connection that was open, and no new connection
+    idle.write_all(&post("/api/submit", "", &squares(12, 4, 1.0, "late").to_string())).await.unwrap();
+    let mut rest = Vec::new();
+    let _ = tokio::time::timeout(Duration::from_secs(5), idle.read_to_end(&mut rest)).await.expect("the connection is closed");
+    assert!(!String::from_utf8_lossy(&rest).contains("HTTP/1.1 200"), "{}", String::from_utf8_lossy(&rest));
+    let refused = match tokio::net::TcpStream::connect(address).await {
+        Err(_) => true,
+        Ok(mut late) => {
+            let _ = late.write_all(b"GET /api/health HTTP/1.1\r\nHost: test\r\n\r\n").await;
+            let mut got = Vec::new();
+            let _ = tokio::time::timeout(Duration::from_secs(1), late.read_to_end(&mut got)).await;
+            got.is_empty()
+        }
+    };
+    assert!(refused, "a connection after the stop is not served");
+    // the store is free again: the entry is stored and answered, and only then is the stop over
+    release.send(()).unwrap();
+    holder.join().unwrap();
+    let (answer, _) = under_way.await.unwrap();
+    assert!(answer.starts_with("HTTP/1.1 200 OK\r\n") && answer.contains("\"id\":1"), "{answer}");
+    tokio::time::timeout(Duration::from_secs(5), stop).await.expect("the stop ends once the answer is out").unwrap();
+    assert!(began.elapsed() >= Duration::from_millis(300));
+    assert_eq!(rows(&s), (1.0, 1));
+
+    // and a request that never ends does not hold the stop for longer than it is told to wait
+    let s = server(Setup::default());
+    let (address, listening) = listening_server(&s, None, polypack_server::node::ConnLimits::default()).await;
+    let mut slow = tokio::net::TcpStream::connect(address).await.unwrap();
+    slow.write_all(b"POST /api/submit HTTP/1.1\r\nHost: test\r\nContent-Length: 100\r\n\r\n{").await.unwrap();
+    tokio::time::sleep(Duration::from_millis(100)).await;
+    let began = std::time::Instant::now();
+    listening.stop(Duration::from_millis(300)).await;
+    assert!(began.elapsed() >= Duration::from_millis(290) && began.elapsed() < Duration::from_secs(3), "{:?}", began.elapsed());
 }
