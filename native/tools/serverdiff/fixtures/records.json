@@ -1,0 +1,22 @@
+{
+ "generated": "serverdiff fixture",
+ "units": "diameter",
+ "records": [
+  {"N": 4, "M": 4, "P": 2, "value": 2, "display": "2", "display_precision": 0, "status": "proven", "source_name": "fixture: proven", "source_url": "https://example.invalid/a", "accessed": "2026-10-07", "conversion_note": "none"},
+  {"N": 4, "M": 4, "P": 3, "value": 5, "display": "5.00", "display_precision": 2, "status": "best_known", "source_name": "fixture: easy to beat", "source_url": "https://example.invalid/b", "accessed": "2026-10-07", "conversion_note": "none"},
+  {"N": 4, "M": 4, "P": 4, "value": 2, "display": "2", "display_precision": 0, "status": "trivial_tiling", "source_name": "fixture: tiling", "source_url": "https://example.invalid/c", "accessed": "2026-10-07", "conversion_note": "none"},
+  {"N": 4, "M": 4, "P": 5, "value": 3, "display": "3", "display_precision": 0, "status": "best_known", "source_name": "fixture: with coordinates", "source_url": "https://example.invalid/d", "picture_url": "https://example.invalid/d.gif", "accessed": "2026-10-07", "citation": "a citation", "conversion_note": "none", "note": "a note", "coordinates_note": "made by hand", "container_phi": 0,
+   "pieces": [{"x": 0, "y": 0, "theta": 0.7853981633974483}, {"x": 1, "y": 0, "theta": 0.7853981633974483}, {"x": 2, "y": 0, "theta": 0.7853981633974483}, {"x": 0, "y": 1, "theta": 0.7853981633974483}, {"x": 1, "y": 1, "theta": 0.7853981633974483}]},
+  {"N": 4, "M": 4, "P": 6, "value": 3, "display": "3", "display_precision": 0, "status": "proven_unrefereed", "source_name": "fixture: unrefereed", "source_url": "https://example.invalid/e", "accessed": "2026-10-07", "conversion_note": "none"},
+  {"N": 4, "M": 4, "P": 7, "value": 3, "display": "3.000", "display_precision": 3, "status": "best_known", "source_name": "fixture: no coordinates", "source_url": "https://example.invalid/f", "accessed": "2026-10-07", "conversion_note": "none"},
+  {"N": 4, "M": 4, "P": 8, "value": 2.5, "display": "2.5", "display_precision": 1, "status": "best_known", "source_name": "fixture: better than a row, with coordinates", "source_url": "https://example.invalid/g", "accessed": "2026-10-07", "conversion_note": "none",
+   "pieces": [{"x": 0, "y": 0, "theta": 0.7853981633974483}, {"x": 1, "y": 0, "theta": 0.7853981633974483}, {"x": 2, "y": 0, "theta": 0.7853981633974483}, {"x": 0, "y": 1, "theta": 0.7853981633974483}, {"x": 1, "y": 1, "theta": 0.7853981633974483}, {"x": 2, "y": 1, "theta": 0.7853981633974483}, {"x": 0, "y": 2, "theta": 0.7853981633974483}, {"x": 1, "y": 2, "theta": 0.7853981633974483}]},
+  {"N": 4, "M": 4, "P": 9, "value": 3.0000000000000004, "display": "3", "display_precision": 0, "status": "best_known", "source_name": "fixture: reached exactly", "source_url": "https://example.invalid/h", "accessed": "2026-10-07", "conversion_note": "none"},
+  {"N": 0, "M": 0, "P": 2, "value": 2, "display": "2", "display_precision": 0, "status": "proven", "source_name": "fixture: two disks", "source_url": "https://example.invalid/i", "accessed": "2026-10-07", "conversion_note": "halved"},
+  {"N": 0, "M": 0, "P": 3, "value": 2.1547005383792515, "display": "2.154700538379", "display_precision": 12, "status": "best_known", "source_name": "fixture: three disks", "source_url": "https://example.invalid/j", "accessed": "2026-10-07", "conversion_note": "halved"},
+  {"N": 0, "M": 4, "P": 2, "value": 1.7071067811865475, "display": "1.707", "display_precision": 3, "status": "best_known", "source_name": "fixture: disks in a square", "source_url": "https://example.invalid/k", "accessed": "2026-10-07", "conversion_note": "halved",
+   "pieces": [{"x": 0, "y": 0, "theta": 0}, {"x": 0.7071067811865476, "y": 0.7071067811865476, "theta": 0}]},
+  {"N": 4, "M": 0, "P": 2, "value": 4, "display": "2.00", "display_precision": 2, "status": "best_known", "source_name": "fixture: squares in a circle, easy to beat", "source_url": "https://example.invalid/l", "accessed": "2026-10-07", "conversion_note": "doubled"},
+  {"N": 3, "M": 6, "P": 6, "value": 1, "display": "1", "display_precision": 0, "status": "trivial_tiling", "source_name": "fixture: triangles tile a hexagon", "source_url": "https://example.invalid/m", "accessed": "2026-10-07", "conversion_note": "none"}
+ ]
+}
