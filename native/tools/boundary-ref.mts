@@ -2,7 +2,7 @@
 // (native/boundary) with its TypeScript source (packages/boundary). See native/PORTING.md.
 //
 //   node --import tsx native/tools/boundary-ref.mts gen OUTDIR [snapshot.json.gz]   writes OUTDIR/cases.jsonl and extras.jsonl
-//   node --import tsx native/tools/boundary-ref.mts run OUTDIR [k/n]                writes OUTDIR/ref.jsonl, ts-times.json, ref-extras.jsonl
+//   node --import tsx native/tools/boundary-ref.mts run OUTDIR [k/n] [--no-times]   writes OUTDIR/ref.jsonl, ts-times.json, ref-extras.jsonl
 //                                                                                (with k/n: shard k of n, files ref.k.jsonl, ts-times.k.json)
 //   node --import tsx native/tools/boundary-ref.mts fixtures OUTDIR                 writes native/boundary/tests/fixtures/*.jsonl from OUTDIR
 //   then: cargo run --release -p polypack-boundary --example boundarydiff -- OUTDIR/cases.jsonl OUTDIR/rust.jsonl OUTDIR/rust-times.json
@@ -70,7 +70,10 @@ import { mulberry32 } from "../../packages/boundary/src/search/random.ts";
 
 const here = dirname(fileURLToPath(import.meta.url));
 const repo = join(here, "..", "..");
-const [mode, outDir, arg3] = process.argv.slice(2);
+// --no-times: `run` makes the one pass that gives the verdicts and leaves out the four more of the timing (ts-times.json
+// then holds that one pass; for a run under emulation)
+const noTimes = process.argv.includes("--no-times");
+const [mode, outDir, arg3] = process.argv.slice(2).filter((a) => a !== "--no-times");
 if (!mode || !outDir) throw new Error("usage: boundary-ref.mts gen|run|fixtures OUTDIR [...]");
 
 type Problem = { polytope: string; piece: string; P: number };
@@ -788,7 +791,7 @@ else if (mode === "run") {
   }
   writeFileSync(join(outDir, `ref${tag}.jsonl`), lines.join("\n") + "\n");
   // timing: the validator as the server calls it, best of five passes per run (the first pass is the one above)
-  for (let pass = 0; pass < 4; pass++)
+  for (let pass = 0; pass < (noTimes ? 0 : 4); pass++)
     cases.forEach((c, i) =>
       tolsOf(c).forEach((tol, j) => {
         const stats = { steps: 0, ops: 0 };

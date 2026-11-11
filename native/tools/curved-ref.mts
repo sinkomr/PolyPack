@@ -1,7 +1,7 @@
 // Cases for the comparison of the Rust port of packages/curved (native/curved) with its TypeScript
 // source, and the TypeScript's verdicts, numbers and timings for them (native/PORTING.md).
 //
-//   node --import tsx native/tools/curved-ref.mts OUTDIR [--snapshot space-curved.json.gz] [--fixtures native/curved/tests/fixtures]
+//   node --import tsx native/tools/curved-ref.mts OUTDIR [--snapshot space-curved.json.gz] [--fixtures native/curved/tests/fixtures] [--no-times]
 //   cargo run --release -p polypack-curved --example curveddiff -- OUTDIR
 //   node native/tools/curved-compare.mjs OUTDIR
 //
@@ -44,6 +44,8 @@ if (!outDir) throw new Error("usage: curved-ref.mts OUTDIR [--snapshot FILE.json
 const opt = (name: string) => (args.includes(name) ? args[args.indexOf(name) + 1] : undefined);
 const snapshot = opt("--snapshot");
 const fixturesDir = opt("--fixtures");
+// --no-times: the timing passes are left out and ts-times.json is not written (for a run under emulation)
+const noTimes = args.includes("--no-times");
 const repo = new URL("../../", import.meta.url).pathname;
 mkdirSync(outDir, { recursive: true });
 
@@ -432,14 +434,14 @@ for (const [i, c] of read.entries()) {
 
 // timing: validate as the server calls it, best of five passes per case
 const best = new Float64Array(read.length).fill(Infinity);
-for (let pass = 0; pass < 5; pass++)
+for (let pass = 0; pass < (noTimes ? 0 : 5); pass++)
   for (const [i, c] of read.entries()) {
     const t = process.hrtime.bigint();
     validate(problemOf(c), c.K, c.config, { tol: 1e-9, maxErrors: MAX_REASONS });
     const d = Number(process.hrtime.bigint() - t);
     if (d < best[i]) best[i] = d;
   }
-writeFileSync(`${outDir}/ts-times.json`, JSON.stringify(Array.from(best)));
+if (!noTimes) writeFileSync(`${outDir}/ts-times.json`, JSON.stringify(Array.from(best)));
 
 // ---------------------------------------------------------------------------------------------
 // bounds and the domain

@@ -2,7 +2,7 @@
 // and timings for them (native/PORTING.md, "Comparing a port with its source").
 //
 //   node --import tsx native/tools/balls-ref.mts OUTDIR [--snapshot space-balls.json.gz]
-//        [--fixtures native/balls/tests/fixtures]
+//        [--fixtures native/balls/tests/fixtures] [--no-times]
 //   cargo run --release -p polypack-balls --example ballsdiff -- OUTDIR
 //   node native/tools/balls-compare.mjs OUTDIR
 //
@@ -70,6 +70,8 @@ const opt = (name: string): string | undefined => {
 };
 const snapshot = opt("--snapshot");
 const fixturesDir = opt("--fixtures");
+// --no-times: the timing passes are left out and ts-times.json is not written (for a run under emulation)
+const noTimes = args.includes("--no-times");
 mkdirSync(outDir, { recursive: true });
 
 // ---------------------------------------------------------------------------------------------------------------
@@ -188,7 +190,7 @@ function emit(kind: string, code: string, P: number, raw: unknown): void {
   const c: Case = { id: cases.length, kind, code, P, raw };
   cases.push(c);
   answers.push(JSON.stringify(answer(c)));
-  times.push(timing(c));
+  times.push(noTimes ? null : timing(c));
   kinds.set(kind, (kinds.get(kind) ?? 0) + 1);
   const n = Array.isArray((raw as { pieces?: unknown } | null)?.pieces) ? (raw as { pieces: unknown[] }).pieces.length : null;
   // fixtures: a few small cases of each kind, apart for ball pieces and for solid pieces
@@ -471,7 +473,7 @@ writeFileSync(
   `${cases.map((c) => JSON.stringify({ id: c.id, kind: c.kind, code: c.code, P: c.P, n: Array.isArray((c.raw as { pieces?: unknown } | null)?.pieces) ? (c.raw as { pieces: unknown[] }).pieces.length : null })).join("\n")}\n`,
 );
 writeFileSync(`${outDir}/ref.jsonl`, `${answers.join("\n")}\n`);
-writeFileSync(`${outDir}/ts-times.json`, JSON.stringify(times));
+if (!noTimes) writeFileSync(`${outDir}/ts-times.json`, JSON.stringify(times));
 
 // ---------------------------------------------------------------------------------------------------------------
 // the catalogue: names, ids, containers, bounds and the domain, one {k, v} per line; numbers as JavaScript prints

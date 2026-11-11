@@ -2,7 +2,7 @@
 // verdicts and timings for them (native/PORTING.md, "Comparing a port with its source").
 //
 //   node --import tsx native/tools/polyhedra-ref.mts OUTDIR [--snapshot space-polyhedra.json.gz]
-//        [--fixtures native/polyhedra/tests/fixtures] [--light]
+//        [--fixtures native/polyhedra/tests/fixtures] [--no-times] [--light]
 //   cargo run --release -p polypack-polyhedra --example polyhedradiff -- OUTDIR
 //   node native/tools/polyhedra-compare.mjs OUTDIR
 //
@@ -72,6 +72,8 @@ const opt = (name: string): string | undefined => {
 };
 const snapshot = opt("--snapshot");
 const fixturesDir = opt("--fixtures");
+// --no-times: the timing passes are left out and ts-times.json is not written (for a run under emulation)
+const noTimes = args.includes("--no-times");
 /** --light: a tenth of the real cases and none of the heavy ones, for a quick run. */
 const light = args.includes("--light");
 const repo = fileURLToPath(new URL("../../", import.meta.url));
@@ -194,7 +196,7 @@ function emit(kind: string, code: string, P: number, raw: Raw): void {
   write(casesOut, `${JSON.stringify(c)}\n`);
   write(indexOut, `${JSON.stringify({ id: c.id, kind, code, P, n })}\n`);
   write(refOut, `${a}\n`);
-  times.push(timing(c));
+  times.push(noTimes ? null : timing(c));
   kinds.set(kind, (kinds.get(kind) ?? 0) + 1);
   const small = n === null || n <= 12;
   const cap = kind === "malformed" ? 100 : 3;
@@ -622,7 +624,7 @@ if (!light) {
 
 await pending;
 await Promise.all([casesOut, indexOut, refOut].map((s) => new Promise((resolve) => s.end(resolve))));
-writeFileSync(`${outDir}/ts-times.json`, JSON.stringify(times));
+if (!noTimes) writeFileSync(`${outDir}/ts-times.json`, JSON.stringify(times));
 
 // ---------------------------------------------------------------------------------------------------------------
 // the catalogue: names, solids, domain and bounds, one {k, v} per line; numbers as JavaScript prints them

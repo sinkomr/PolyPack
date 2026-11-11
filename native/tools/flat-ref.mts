@@ -1,7 +1,7 @@
 // The TypeScript side of the comparison of the flat family (packages/geometry) with its Rust port
 // (native/flat). Builds the cases and writes what the TypeScript computes for each, with timings.
 //
-//   node --import tsx native/tools/flat-ref.mts OUTDIR PER_PAIR [--fixtures DIR] n-*.json.gz...
+//   node --import tsx native/tools/flat-ref.mts OUTDIR PER_PAIR [--fixtures DIR] [--no-times] n-*.json.gz...
 //   cargo run --release -p polypack-flat --example serverdiff -- OUTDIR
 //   node native/tools/flat-compare.mjs OUTDIR
 //
@@ -34,10 +34,14 @@ const args = process.argv.slice(2);
 let fixturesDir: string | null = null;
 const fx = args.indexOf("--fixtures");
 if (fx >= 0) fixturesDir = args.splice(fx, 2)[1];
+// --no-times: the timing passes are left out and ts-times.json is not written (for a run under emulation)
+const nt = args.indexOf("--no-times");
+const noTimes = nt >= 0;
+if (noTimes) args.splice(nt, 1);
 const [outDir, perPairArg, ...files] = args;
 const perPair = Number(perPairArg);
 if (!outDir || !(perPair >= 1) || files.length === 0) {
-  console.error("usage: flat-ref.mts OUTDIR PER_PAIR [--fixtures DIR] n-*.json.gz...");
+  console.error("usage: flat-ref.mts OUTDIR PER_PAIR [--fixtures DIR] [--no-times] n-*.json.gz...");
   process.exit(2);
 }
 mkdirSync(outDir, { recursive: true });
@@ -590,7 +594,7 @@ const evalNs = new Float64Array(cases.length).fill(Infinity);
 const strictNs = new Float64Array(cases.length).fill(Infinity);
 const parseNs = new Float64Array(cases.length).fill(Infinity);
 const now = () => process.hrtime.bigint();
-for (let pass = 0; pass < 5; pass++) {
+for (let pass = 0; pass < (noTimes ? 0 : 5); pass++) {
   for (let i = 0; i < cases.length; i++) {
     if (cases[i].text === undefined) {
       const t = now();
@@ -613,7 +617,7 @@ for (let pass = 0; pass < 5; pass++) {
   }
 }
 const finite = (a: Float64Array) => Array.from(a, (v) => (Number.isFinite(v) ? v : null));
-writeFileSync(`${outDir}/ts-times.json`, JSON.stringify({ parse: finite(parseNs), evaluate: finite(evalNs), strict: finite(strictNs) }));
+if (!noTimes) writeFileSync(`${outDir}/ts-times.json`, JSON.stringify({ parse: finite(parseNs), evaluate: finite(evalNs), strict: finite(strictNs) }));
 
 // ---------------------------------------------------------------- fixtures for cargo test
 if (fixturesDir) {

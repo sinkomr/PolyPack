@@ -1,7 +1,7 @@
 // Builds the cases of the torus family and writes the TypeScript's verdicts and timings: the
 // reference that native/torus (crate polypack-torus) is compared with (native/PORTING.md).
 //
-//   node --import tsx native/tools/torus-ref.mts OUTDIR space-torus.json.gz [--fixtures native/torus/tests/fixtures]
+//   node --import tsx native/tools/torus-ref.mts OUTDIR space-torus.json.gz [--fixtures native/torus/tests/fixtures] [--no-times]
 //   cargo run --release -p polypack-torus --example torusdiff -- OUTDIR
 //   node native/tools/torus-compare.mjs OUTDIR
 //
@@ -40,6 +40,10 @@ import {
 const args = process.argv.slice(2);
 const fx = args.indexOf("--fixtures");
 const fixturesDir = fx >= 0 ? args.splice(fx, 2)[1] : null;
+// --no-times: the timing passes are left out and ts-times.json is not written (for a run under emulation)
+const nt = args.indexOf("--no-times");
+const noTimes = nt >= 0;
+if (noTimes) args.splice(nt, 1);
 const [outDir, snapshot] = args;
 if (!outDir || !snapshot) throw new Error("usage: torus-ref.mts OUTDIR space-torus.json.gz [--fixtures DIR]");
 mkdirSync(outDir, { recursive: true });
@@ -473,14 +477,14 @@ if (fixturesDir) {
 
 // ---- timing: check() as the server calls it at 1e-9, best of five passes per case -----------------
 const best = new Float64Array(cases.length).fill(Infinity);
-for (let pass = 0; pass < 5; pass++)
+for (let pass = 0; pass < (noTimes ? 0 : 5); pass++)
   for (let i = 0; i < cases.length; i++) {
     const t = process.hrtime.bigint();
     runSteps(check(cases[i], 1e-9));
     const d = Number(process.hrtime.bigint() - t);
     if (d < best[i]) best[i] = d;
   }
-writeFileSync(`${outDir}/ts-times.json`, JSON.stringify(Array.from(best)));
+if (!noTimes) writeFileSync(`${outDir}/ts-times.json`, JSON.stringify(Array.from(best)));
 const kinds = new Map<string, number>();
 for (const c of cases) {
   const k = c.kind.replace(/^malformed-.*/, "malformed");

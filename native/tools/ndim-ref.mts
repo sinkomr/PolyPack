@@ -2,7 +2,7 @@
 // reference results of packages/ndim and packages/ndspace as the server calls them, with timings.
 //
 //   node --import tsx native/tools/ndim-ref.mts OUTDIR --build SNAPSHOT.json.gz     writes OUTDIR/cases.jsonl
-//   node --import tsx native/tools/ndim-ref.mts OUTDIR                              writes ref.jsonl and ts-times.json
+//   node --import tsx native/tools/ndim-ref.mts OUTDIR [--no-times]                 writes ref.jsonl and ts-times.json
 //   node --import tsx native/tools/ndim-ref.mts OUTDIR --fixtures N FILE            writes N of the cases with their results
 //
 // then `cargo run --release -p polypack-ndim --example ndimdiff -- OUTDIR` and
@@ -80,6 +80,8 @@ const flag = (name: string): string[] | null => {
 };
 const buildArg = flag("--build");
 const fixturesArg = flag("--fixtures");
+// --no-times: the timing passes are left out and ts-times.json is not written (for a run under emulation)
+const noTimes = flag("--no-times") !== null;
 const [outDir] = args;
 const snapshot = buildArg?.[0];
 if (!outDir) throw new Error("usage: ndim-ref.mts OUTDIR [--build SNAPSHOT.json.gz | --fixtures N FILE]");
@@ -959,7 +961,7 @@ const parsedOf = (c: Case) => {
   const r = parseNdConfig(p, c.raw);
   return r.ok ? { p, config: r.config } : null;
 };
-for (let pass = 0; pass < 5; pass++)
+for (let pass = 0; pass < (noTimes ? 0 : 5); pass++)
   for (let i = 0; i < cases.length; i++) {
     const q = parsedOf(cases[i]);
     if (!q) continue;
@@ -968,5 +970,5 @@ for (let pass = 0; pass < 5; pass++)
     const dt = Number(process.hrtime.bigint() - t);
     if (best[i] === null || dt < (best[i] as number)) best[i] = dt;
   }
-writeFileSync(join(outDir, "ts-times.json"), JSON.stringify(best));
+if (!noTimes) writeFileSync(join(outDir, "ts-times.json"), JSON.stringify(best));
 console.log(`timings in ${((performance.now() - t1) / 1000).toFixed(0)} s (with the results)`);
