@@ -11,6 +11,18 @@ fn shortest(x: f64) -> (String, i32) {
     // When x lies exactly halfway between two shortest candidates, Rust takes the upper one and
     // V8 the one with an even last digit (1616980188147352.25 prints as ...52.2 in JavaScript).
     let k = digits.len();
+    // A cheap test first. x = m * 2^e with m odd. For e < 0 its exact decimal expansion ends at the
+    // digit 10^e, so it has exp - e + 1 significant digits; a halfway value has exactly k + 1. For
+    // e >= 0, x is a whole number, and below 2^53 its shortest digits are all of its digits.
+    let bits = x.to_bits();
+    let raw_exp = ((bits >> 52) & 0x7ff) as i64;
+    let frac = bits & ((1u64 << 52) - 1);
+    let (mant, e2) = if raw_exp == 0 { (frac, -1074i64) } else { (frac | (1u64 << 52), raw_exp - 1075) };
+    let e2 = e2 + mant.trailing_zeros() as i64;
+    let may_tie = if e2 < 0 { exp as i64 - e2 + 1 == k as i64 + 1 } else { x >= 9007199254740992.0 };
+    if !may_tie {
+        return (digits, exp);
+    }
     let (ex, _) = exact(x);
     if ex.len() == k + 1 && ex[k] == 5 {
         let lower: Vec<u8> = ex[..k].to_vec();
