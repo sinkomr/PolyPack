@@ -193,6 +193,8 @@ export async function runScenario(o: RunOptions): Promise<RunResult> {
   let child: ChildProcess | null = null;
   let port = 0;
   let stdout: string[] = [];
+  /** L4: the lines of stdout written while the requests of a burst were under way together, as [from, to) of `stdout`. */
+  let together: [number, number][] = [];
   let stderr: string[] = [];
   /** How many lines of stderr the server had written when it began to answer. */
   let stderrAtReady = 0;
@@ -228,6 +230,7 @@ export async function runScenario(o: RunOptions): Promise<RunResult> {
     }
     Object.assign(vars, o.extraEnv ?? {});
     stdout = [];
+    together = [];
     stderr = [];
     runs++;
     const c = spawn("/bin/sh", ["-c", `exec ${o.command}`], { cwd: REPO, env: vars, stdio: ["ignore", "pipe", "pipe"] });
@@ -267,9 +270,13 @@ export async function runScenario(o: RunOptions): Promise<RunResult> {
     // what was written last has had its `data` event by the time the streams close
     await sleep(20);
     const s = logSubst();
+    const log = stdout.map((l) => normaliseLogLine(l, s));
+    // L4: in which order a server takes up requests that are under way together is its own (and a server with several
+    // threads takes them up in another than one with one thread), so the lines they wrote are compared as a set
+    for (const [from, to] of together) log.splice(from, to - from, ...log.slice(from, to).sort());
     return {
       exit,
-      stdout: stdout.map((l) => normaliseLogLine(l, s)),
+      stdout: log,
       // L3: the warnings of startup are compared; later, stderr holds the runtime's own report of an
       // internal error (a stack trace behind a 500), of which only its presence is compared
       stderr: stderr.slice(0, stderrAtReady).map((l) => normaliseLogLine(l, s)),
@@ -368,6 +375,7 @@ export async function runScenario(o: RunOptions): Promise<RunResult> {
         case "burst": {
           // all at once, or `concurrency` at a time in the order given
           const answers: RawResponse[] = new Array(step.requests.length);
+          const logFrom = stdout.length;
           let nextRequest = 0;
           const lane = async () => {
             for (;;) {
@@ -380,6 +388,11 @@ export async function runScenario(o: RunOptions): Promise<RunResult> {
           };
           await Promise.all(Array.from({ length: Math.min(step.requests.length, step.concurrency ?? step.requests.length) }, lane));
           w.t1 = serverNow();
+          if ((step.concurrency ?? step.requests.length) > 1) {
+            // the lines of the answers just given have been written; let them arrive here before the next step writes its own
+            await sleep(50);
+            together.push([logFrom, stdout.length]);
+          }
           if (step.summary) {
             // many answers: how many of each kind (status and body), not each one
             const kinds = new Map<string, number>();
