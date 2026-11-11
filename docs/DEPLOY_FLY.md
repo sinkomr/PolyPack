@@ -181,6 +181,27 @@ fly ssh console -C "node --no-warnings /app/apps/server/scripts/db-space.mjs --v
 
 It refuses to start before the migration is complete, or with less free disk than about twice the pages in use (a temporary copy next to the database, and the write-ahead log). While it runs, the site keeps answering, but submissions fail with HTTP 500 (the database is busy). `scripts/batch-search.ts` tries a failed submission again for about two minutes, and running the same command again sends what is still missing. Run it at a quiet time, and not while a backup runs. On the synthetic copy it took a fraction of a second; on the live volume it will take longer, by an amount not yet measured. Its output gives the figures before and after. Take a new backup afterwards.
 
+## The Rust server
+
+`native/server` is the same server written in Rust: the same routes, answers, database and log lines, with the geometry checks running on every core instead of one thread (`native/PORTING.md` says what "the same" means and lists the few differences that are meant). `fly.toml` still builds `./Dockerfile`, the Node server. `Dockerfile.rust` builds the image with the Rust server; it keeps Node in the image only for the two tools above that run on the machine (`backup-to-mac.sh`, `db-space.mjs`).
+
+Both servers read and write the same database file, and either can take over from the other at any time: the schema, the row encodings and the migrations are the same (checked by handing one file back and forth between the two, `native/tools/store-diff.sh`). So the change of server needs no conversion, and going back needs none either.
+
+To change to the Rust server:
+
+```sh
+fly volumes list
+fly volumes snapshots create <volume id>
+git mv Dockerfile Dockerfile.node
+git mv Dockerfile.rust Dockerfile
+```
+
+The snapshot is the copy to return to if anything is wrong with the data. Then commit, open a pull request and merge it when CI is green; CI deploys. After the deployment, `fly logs` should show eight `[spaces]` lines (one per family's catalogue), then `PolyPack server on http://localhost:8080 (...)`, and `https://polypack.fly.dev/api/health` answers `{"ok":true}`.
+
+To go back to the Node server, swap the two files again (`git mv Dockerfile Dockerfile.rust`, `git mv Dockerfile.node Dockerfile`) and deploy. For a faster return while a pull request runs, `fly releases --image` lists the earlier images and `fly deploy --image <the last Node image>` starts one directly.
+
+What differs for the operator: the Rust server must start in `/app` (the image sets it); it uses one thread per core for the checks, so the minute's `[load]` line reports, in the words "event loop delay up to N ms", the longest wait of a submission for a free core; and submissions are refused with 503 only when every core is busy, not when one thread runs late.
+
 ## Your own domain
 
 ```sh

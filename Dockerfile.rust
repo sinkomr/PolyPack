@@ -60,13 +60,18 @@ COPY data/ndim/records.json data/ndim/records.json
 COPY data/ndim/configs data/ndim/configs
 RUN npm run build
 
-FROM debian:bookworm-slim
+# node:24-slim rather than a bare Debian: the server itself needs no Node, but the operator's tools
+# run on this machine with it (deploy/fly/backup-to-mac.sh pipes a script into `node` here, and
+# apps/server/scripts/db-space.mjs measures and reclaims the database's space; both use only
+# node:sqlite). Same Debian release as the build stage, so the same C library.
+FROM node:24-slim
 # The server finds its files below its working directory, laid out as in the repository:
 # data/records.json, data/<space>/records.json, the configurations read on demand
 # (data/polyhedra/configs, data/ndim/configs) and the built website in apps/web/dist.
 WORKDIR /app
 COPY --from=server /src/native/target/release/polypack-server /app/polypack-server
 COPY --from=web /app/apps/web/dist apps/web/dist
+COPY apps/server/scripts apps/server/scripts
 COPY data/records.json data/records.json
 COPY data/surface/records.json data/surface/records.json
 COPY data/curved/records.json data/curved/records.json
