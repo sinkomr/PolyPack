@@ -1,0 +1,26 @@
+[package]
+name = "polypack-spaces"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+description = "PolyPack's spaces: problem ids, catalogues, configuration parsing and the server's check of a submission, ported from packages/spaces"
+
+[lib]
+name = "polypack_spaces"
+
+[dependencies]
+polypack-js = { path = "../js" }
+# packages/spaces ties the families' validators together: each is called as validate.ts calls it
+polypack-flat = { path = "../flat" }
+polypack-surface = { path = "../surface" }
+polypack-curved = { path = "../curved" }
+polypack-sphere = { path = "../sphere" }
+polypack-torus = { path = "../torus" }
+polypack-boundary = { path = "../boundary" }
+polypack-polyhedra = { path = "../polyhedra" }
+polypack-balls = { path = "../balls" }
+polypack-ndim = { path = "../ndim" }
+serde = { version = "1", features = ["derive"] }
+# float_roundtrip: a number read is the exact double JavaScript reads; preserve_order: an object keeps
+# the order of its keys, as in JavaScript (the domains' descriptions are written key for key)
+serde_json = { version = "1", features = ["float_roundtrip", "preserve_order"] }

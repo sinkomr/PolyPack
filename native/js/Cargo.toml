@@ -1,0 +1,18 @@
+[package]
+name = "polypack-js"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+description = "JavaScript's Math functions and number formats in Rust, so that ports of PolyPack's TypeScript validators give the same numbers and the same messages"
+
+[lib]
+name = "polypack_js"
+
+[dependencies]
+serde = "1"
+# preserve_order: an object keeps the order its keys were inserted in, as in JavaScript
+serde_json = { version = "1", features = ["float_roundtrip", "preserve_order"] }
+
+[dev-dependencies]
+# only to time polypack_js::math against it (examples/vectors.rs --bench)
+libm = "0.2"

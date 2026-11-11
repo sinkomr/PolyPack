@@ -1,0 +1,15 @@
+[package]
+name = "polypack-sphere"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+description = "PolyPack's sphere family: the server's validator, ported from packages/sphere"
+
+[lib]
+name = "polypack_sphere"
+
+[dependencies]
+polypack-js = { path = "../js" }
+serde = { version = "1", features = ["derive"] }
+# float_roundtrip: numbers read from JSON are the exact doubles JavaScript reads
+serde_json = { version = "1", features = ["float_roundtrip"] }

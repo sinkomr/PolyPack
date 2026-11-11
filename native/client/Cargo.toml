@@ -1,0 +1,28 @@
+[package]
+name = "polypack-native"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+description = "Native PolyPack volunteer client"
+
+[[bin]]
+name = "polypack-native"
+path = "src/main.rs"
+
+[dependencies]
+polypack-flat = { path = "../flat" }
+serde = { version = "1", features = ["derive"] }
+serde_json = { version = "1", features = ["preserve_order", "float_roundtrip"] }
+ureq = { version = "2", default-features = false, features = ["json"] }
+ctrlc = "3"
+
+[features]
+# HTTPS through rustls (ring); without it the client speaks plain HTTP only (a local server)
+default = ["tls"]
+tls = ["ureq/tls"]
+
+[target.'cfg(unix)'.dependencies]
+libc = "0.2"
+
+[target.'cfg(windows)'.dependencies]
+windows-sys = { version = "0.59", features = ["Win32_System_Threading"] }

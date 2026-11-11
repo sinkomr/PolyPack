@@ -1,5 +1,8 @@
 import { defineConfig, devices } from "@playwright/test";
 const production = process.env.POLYPACK_E2E_PRODUCTION === "1";
+// POLYPACK_E2E_SERVER=rust runs the same tests against the Rust server (native/server), built
+// beforehand with `cargo build --release -p polypack-server` in native/. It reads the same settings.
+const rustServer = process.env.POLYPACK_E2E_SERVER === "rust";
 
 // The end-to-end tests run against their own server (in-memory database) and web dev server,
 // on ports that do not clash with `npm run dev`.
@@ -16,7 +19,7 @@ export default defineConfig({
   ],
   webServer: [
     {
-      command: "npx tsx apps/server/src/node.ts",
+      command: rustServer ? "native/target/release/polypack-server" : "npx tsx apps/server/src/node.ts",
       env: {
         PORT: "8788",
         DATABASE_PATH: ":memory:",
