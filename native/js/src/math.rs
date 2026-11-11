@@ -3,6 +3,14 @@
 //! `sqrt`, `abs`, `floor`, `ceil`, `min` and `max` on finite numbers are the same in every language
 //! (IEEE 754); they are here so that a port can keep the shape of its source, and because
 //! `Math.max`, `Math.min` and `Math.round` have their own rules for NaN, signed zeros and halves.
+//!
+//! The transcendental functions are V8's (`crate::fdlibm`) and give Node's bits on Linux x86-64;
+//! `pow` is the correctly rounded power behind JavaScript's special cases (`pow.rs`), because V8
+//! leaves it to the C library. See the crate's documentation for what was measured.
+
+use crate::fdlibm;
+
+mod pow;
 
 pub const PI: f64 = std::f64::consts::PI;
 pub const SQRT2: f64 = std::f64::consts::SQRT_2;
@@ -10,85 +18,168 @@ pub const SQRT1_2: f64 = std::f64::consts::FRAC_1_SQRT_2;
 pub const E: f64 = std::f64::consts::E;
 pub const LN2: f64 = std::f64::consts::LN_2;
 
+/// `Math.sin`
 #[inline]
 pub fn sin(x: f64) -> f64 {
-    libm::sin(x)
+    fdlibm::sin(x)
 }
+/// `Math.cos`
 #[inline]
 pub fn cos(x: f64) -> f64 {
-    libm::cos(x)
+    fdlibm::cos(x)
 }
+/// `Math.tan`
 #[inline]
 pub fn tan(x: f64) -> f64 {
-    libm::tan(x)
+    fdlibm::tan(x)
 }
+/// `Math.asin`
 #[inline]
 pub fn asin(x: f64) -> f64 {
-    libm::asin(x)
+    fdlibm::asin(x)
 }
+/// `Math.acos`
 #[inline]
 pub fn acos(x: f64) -> f64 {
-    libm::acos(x)
+    fdlibm::acos(x)
 }
+/// `Math.atan`
 #[inline]
 pub fn atan(x: f64) -> f64 {
-    libm::atan(x)
+    fdlibm::atan(x)
 }
+/// `Math.atan2`
 #[inline]
 pub fn atan2(y: f64, x: f64) -> f64 {
-    libm::atan2(y, x)
+    fdlibm::atan2(y, x)
 }
+/// `Math.exp`
 #[inline]
 pub fn exp(x: f64) -> f64 {
-    libm::exp(x)
+    fdlibm::exp(x)
 }
+/// `Math.expm1`
+#[inline]
+pub fn expm1(x: f64) -> f64 {
+    fdlibm::expm1(x)
+}
+/// `Math.log`
 #[inline]
 pub fn log(x: f64) -> f64 {
-    libm::log(x)
+    fdlibm::log(x)
 }
+/// `Math.log1p`
+#[inline]
+pub fn log1p(x: f64) -> f64 {
+    fdlibm::log1p(x)
+}
+/// `Math.log2`
 #[inline]
 pub fn log2(x: f64) -> f64 {
-    libm::log2(x)
+    fdlibm::log2(x)
 }
+/// `Math.log10`
 #[inline]
 pub fn log10(x: f64) -> f64 {
-    libm::log10(x)
+    fdlibm::log10(x)
 }
+/// `Math.sinh`
 #[inline]
 pub fn sinh(x: f64) -> f64 {
-    libm::sinh(x)
+    fdlibm::sinh(x)
 }
+/// `Math.cosh`
 #[inline]
 pub fn cosh(x: f64) -> f64 {
-    libm::cosh(x)
+    fdlibm::cosh(x)
 }
+/// `Math.tanh`
 #[inline]
 pub fn tanh(x: f64) -> f64 {
-    libm::tanh(x)
+    fdlibm::tanh(x)
 }
+/// `Math.asinh`
 #[inline]
 pub fn asinh(x: f64) -> f64 {
-    libm::asinh(x)
+    fdlibm::asinh(x)
 }
+/// `Math.acosh`
+#[inline]
+pub fn acosh(x: f64) -> f64 {
+    fdlibm::acosh(x)
+}
+/// `Math.atanh`
 #[inline]
 pub fn atanh(x: f64) -> f64 {
-    libm::atanh(x)
+    fdlibm::atanh(x)
 }
+/// `Math.cbrt`
 #[inline]
 pub fn cbrt(x: f64) -> f64 {
-    libm::cbrt(x)
+    fdlibm::cbrt(x)
 }
-#[inline]
+
+/// `Math.pow(x, y)` and `x ** y`: V8's `math::pow` (src/numbers/ieee754.cc), which is the C
+/// library's `pow` behind JavaScript's special cases.
+///
+/// The C library is the one thing here that is not the same on every platform: macOS's and glibc's
+/// `pow` are different programs, and each is wrong by one unit in the last place for some arguments
+/// (not the same ones). This function is the correctly rounded power: the double nearest to the
+/// true value, which is what both libraries return for all but about one argument in a thousand
+/// (the counts are in `pow.rs`).
 pub fn pow(x: f64, y: f64) -> f64 {
-    // JavaScript's rules where they differ from C's: NaN for a NaN exponent (even of 1) and for
-    // (+-1) ** (+-Infinity); V8 gives x * x for the exponent 2 and the root for 0.5
-    if y.is_nan() || ((x == 1.0 || x == -1.0) && y.is_infinite()) {
+    // 1. If exponent is NaN, return NaN.
+    if y.is_nan() {
         return f64::NAN;
     }
-    if y == 2.0 {
-        return x * x;
+    // 9., 10. If exponent is +-Infinity and abs(base) is 1, return NaN (C gives 1).
+    if y.is_infinite() && (x == 1.0 || x == -1.0) {
+        return f64::NAN;
     }
-    libm::pow(x, y)
+    // "The following special cases just exist to match the optimizing compilers' behavior, which
+    // avoid calls to `pow` in those cases."
+    if y == 2.0 {
+        // x ** 2   ==>   x * x
+        return x * x;
+    } else if y == 0.5 {
+        // x ** 0.5   ==>  sqrt(x), except if x is -Infinity
+        if x.is_infinite() {
+            return f64::INFINITY;
+        } else {
+            // Note the +0 so that we get +0 for -0**0.5 rather than -0.
+            return (x + 0.0).sqrt();
+        }
+    }
+    // std::pow(x, y): the cases C99 (Annex F.9.4.4) and ECMAScript (Number::exponentiate) spell
+    // out, then the correctly rounded power of |x|.
+    if y == 0.0 || x == 1.0 {
+        return 1.0; // also for a NaN base with the exponent 0; (1, +-Infinity) and NaN exponents are gone
+    }
+    if x.is_nan() {
+        return f64::NAN;
+    }
+    // an odd whole exponent keeps the sign of a negative base; every double from 2^53 on is even
+    let whole = y == y.trunc();
+    let odd = whole && y.abs() < 9007199254740992.0 && (y.abs() as u64) & 1 == 1;
+    if x == 0.0 || x.is_infinite() {
+        // +-0 and +-Infinity: zero or infinity according to the sign of the exponent
+        let large = (x == 0.0) == (y < 0.0);
+        let magnitude = if large { f64::INFINITY } else { 0.0 };
+        return if odd && x.is_sign_negative() { -magnitude } else { magnitude };
+    }
+    if y.is_infinite() {
+        return if (x.abs() > 1.0) == (y > 0.0) { f64::INFINITY } else { 0.0 };
+    }
+    if x < 0.0 && !whole {
+        return f64::NAN;
+    }
+    // (-1)^y for a whole y is 1 or -1; 1^y went above
+    let r = if x == -1.0 { 1.0 } else { pow::pow_positive(x.abs(), y) };
+    if x < 0.0 && odd {
+        -r
+    } else {
+        r
+    }
 }
 
 /// `x ** n` for a whole exponent, as `Math.pow(x, n)`.

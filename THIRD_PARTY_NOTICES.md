@@ -302,3 +302,45 @@ LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 THE SOFTWARE.
 ```
+
+## fdlibm and V8 (the Math functions of the Rust server)
+
+`native/js/src/fdlibm.rs` is a port to Rust of `src/base/ieee754.cc` of V8, the
+JavaScript engine of Node (<https://v8.dev>; read in the Node source tree,
+<https://github.com/nodejs/node>, `deps/v8/src/base/ieee754.cc`, tags `v24.22.2`
+and `v26.5.0`, which differ only in a compiler pragma). That file is V8's
+adaptation of fdlibm, Sun's Freely Distributable Math Library
+(<http://www.netlib.org/fdlibm>): the sine, cosine, tangent and their inverses,
+the exponential and the logarithms, the hyperbolic functions and the cube root.
+The Rust validators call it so that they compute the same numbers as the
+TypeScript validators do on Node. The port keeps the notice of the file, which
+is also at the top of `fdlibm.rs`:
+
+```
+The following is adapted from fdlibm (http://www.netlib.org/fdlibm).
+
+====================================================
+Copyright (C) 1993 by Sun Microsystems, Inc. All rights reserved.
+
+Developed at SunSoft, a Sun Microsystems, Inc. business.
+Permission to use, copy, modify, and distribute this
+software is freely granted, provided that this notice
+is preserved.
+====================================================
+
+The original source code covered by the above license above has been
+modified significantly by Google Inc.
+Copyright 2016 the V8 project authors. All rights reserved.
+```
+
+V8 ships the fdlibm notice as `LICENSE.fdlibm`, copied in `LICENSES/fdlibm.txt`.
+The changes by the V8 authors are under V8's licence (BSD, three clauses),
+copied in `LICENSES/V8.txt`; the same licence covers `Math.hypot`, whose
+algorithm in `native/js/src/math.rs` follows V8's. The code was modified:
+translated to Rust line by line, and `legacy::pow`, which Node does not use, was
+left out.
+
+Nothing was taken from glibc: V8 can be built to use glibc's sine and cosine
+(`V8_USE_LIBM_TRIG_FUNCTIONS`), but Node's build does not set that flag and its
+`Math.sin` and `Math.cos` are the fdlibm ones. `Math.pow` in
+`native/js/src/math/pow.rs` is this project's own code.

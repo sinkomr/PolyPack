@@ -9,8 +9,10 @@ description = "JavaScript's Math functions and number formats in Rust, so that p
 name = "polypack_js"
 
 [dependencies]
-# fdlibm-derived transcendental functions in pure Rust: the same results on every platform
-libm = "0.2"
 serde = "1"
 # preserve_order: an object keeps the order its keys were inserted in, as in JavaScript
 serde_json = { version = "1", features = ["float_roundtrip", "preserve_order"] }
+
+[dev-dependencies]
+# only to time polypack_js::math against it (examples/vectors.rs --bench)
+libm = "0.2"
