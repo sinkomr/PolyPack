@@ -8,11 +8,38 @@ description = "The PolyPack server in Rust: the HTTP API, the database and the v
 [lib]
 name = "polypack_server"
 
+[[bin]]
+name = "polypack-server"
+path = "src/main.rs"
+
 [dependencies]
 polypack-js = { path = "../js" }
+# the polygon family: parse_config, evaluate, strict_verify, the records' rules
+polypack-flat = { path = "../flat" }
 serde = { version = "1", features = ["derive"] }
 # preserve_order: an object keeps the order of its keys, as in JavaScript (the store re-orders
 # integer-like keys itself, see store/json.rs); float_roundtrip: a number read is the exact double
 serde_json = { version = "1", features = ["float_roundtrip", "preserve_order"] }
 # bundled: a fixed SQLite inside the binary, whatever the host has
 rusqlite = { version = "0.41", features = ["bundled"] }
+# the HTTP server: axum on hyper, on tokio's multi-thread runtime
+axum = { version = "0.8", default-features = false }
+# hyper itself serves each connection (node.rs), with axum's body and message types: axum's Router
+# adds a Content-Length to answers that have none in the source (a HEAD request's), and its `serve`
+# has no setting for how long a request's head may take
+hyper = { version = "1", features = ["http1", "server"] }
+hyper-util = { version = "0.1", features = ["tokio"] }
+tokio = { version = "1", features = ["rt-multi-thread", "net", "time", "signal", "sync", "macros"] }
+bytes = "1"
+http-body-util = "0.1"
+futures-util = { version = "0.3", default-features = false, features = ["std"] }
+# gzip and deflate (hono/compress, the snapshot's files): zlib itself, as Node has it
+flate2 = { version = "1", default-features = false, features = ["zlib"] }
+# String.prototype.normalize("NFC") of names and notes
+unicode-normalization = "0.1"
+# Map and Set in insertion order
+indexmap = { version = "2", features = ["serde"] }
+
+[dev-dependencies]
+# examples/load.rs speaks HTTP itself, over plain sockets
+tokio = { version = "1", features = ["io-util"] }
