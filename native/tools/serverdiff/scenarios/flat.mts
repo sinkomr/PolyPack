@@ -452,10 +452,13 @@ function holders(): Scenario {
   s.add({ op: "restart" });
   // The first count is under way (three problems a step) while entries change. Each of these changes leaves
   // every count as it is (a worse entry, a note, a name set to what it was), so the answers do not depend on
-  // where the count was when the change came.
+  // where the count was when the change came. The requests are sent 15 ms apart, so that they arrive in
+  // their order: sent in one instant, the order in which a server takes them up (and so the order of its
+  // log lines) is its own, and a server with more than one thread takes them up in another.
   const worse = (body: unknown) => ({ method: "POST", path: "/api/submit", headers: { "x-test-client-ip": "10.0.0.1" }, json: body });
   s.add({
     op: "burst",
+    staggerMs: 15,
     requests: [
       { path: "/api/holders" },
       worse(squares(11, { name: "late and worse" }, grid(11, 4, 3))),
@@ -466,7 +469,8 @@ function holders(): Scenario {
     ],
   });
   // an administrator's change while the page of a name is being made (two problems a step)
-  s.add({ op: "burst", requests: [{ path: "/api/holder?name=erin" }, { method: "POST", path: "/api/admin/edit", headers: AUTH, json: { id: 7, agent_note: "edited during the page" } }, { path: "/api/holder?name=erin" }] });
+  // (15 ms apart for the same reason: whether the second reading joins the first or follows the change is otherwise a race)
+  s.add({ op: "burst", staggerMs: 15, requests: [{ path: "/api/holder?name=erin" }, { method: "POST", path: "/api/admin/edit", headers: AUTH, json: { id: 7, agent_note: "edited during the page" } }, { path: "/api/holder?name=erin" }] });
   holder("erin");
   // after a restart: peaks given before the first count are merged into it
   s.add({ op: "restart" });
