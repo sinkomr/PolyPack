@@ -11,4 +11,8 @@ name = "polypack_server"
 [dependencies]
 polypack-js = { path = "../js" }
 serde = { version = "1", features = ["derive"] }
-serde_json = { version = "1", features = ["float_roundtrip"] }
+# preserve_order: an object keeps the order of its keys, as in JavaScript (the store re-orders
+# integer-like keys itself, see store/json.rs); float_roundtrip: a number read is the exact double
+serde_json = { version = "1", features = ["float_roundtrip", "preserve_order"] }
+# bundled: a fixed SQLite inside the binary, whatever the host has
+rusqlite = { version = "0.41", features = ["bundled"] }
