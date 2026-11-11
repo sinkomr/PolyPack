@@ -406,8 +406,10 @@ fn repair(text: &str) -> String {
                 i += 1;
             }
             let token = &text[start..i];
+            // only a number of JSON's grammar: Rust reads more as a float (`01e999`, `1.e999`),
+            // and those are not JSON in JavaScript either
             match token.parse::<f64>() {
-                Ok(v) if v.is_infinite() => out.push_str("null"),
+                Ok(v) if v.is_infinite() && is_json_number(token.as_bytes()) => out.push_str("null"),
                 _ => out.push_str(token),
             }
             continue;
@@ -417,6 +419,42 @@ fn repair(text: &str) -> String {
         i += ch_len;
     }
     out
+}
+
+/// Whether `t` is a number as JSON writes one: `-?(0|[1-9][0-9]*)(\.[0-9]+)?([eE][+-]?[0-9]+)?`.
+fn is_json_number(t: &[u8]) -> bool {
+    let digits = |t: &[u8], mut i: usize| {
+        let from = i;
+        while i < t.len() && t[i].is_ascii_digit() {
+            i += 1;
+        }
+        (i, i > from)
+    };
+    let mut i = usize::from(t.first() == Some(&b'-'));
+    match t.get(i) {
+        Some(b'0') => i += 1,
+        Some(b'1'..=b'9') => i = digits(t, i).0,
+        _ => return false,
+    }
+    if t.get(i) == Some(&b'.') {
+        let (end, any) = digits(t, i + 1);
+        if !any {
+            return false;
+        }
+        i = end;
+    }
+    if matches!(t.get(i), Some(b'e' | b'E')) {
+        i += 1;
+        if matches!(t.get(i), Some(b'+' | b'-')) {
+            i += 1;
+        }
+        let (end, any) = digits(t, i);
+        if !any {
+            return false;
+        }
+        i = end;
+    }
+    i == t.len()
 }
 
 #[cfg(test)]
@@ -432,6 +470,19 @@ mod parse_tests {
         assert!(parse(b"{").is_err());
         assert_eq!(parse(br#"["\ud800", "a\udc00b", "\ud83d\ude00", "\\ud800"]"#).unwrap(), json!(["\u{fffd}", "a\u{fffd}b", "\u{1f600}", "\\ud800"]));
         assert_eq!(parse(br#"{"a":1,"a":2}"#).unwrap(), json!({ "a": 2 }));
+    }
+
+    // A number too large for a double is read as null only when it is a number of JSON: what
+    // Rust would also read as a float, and JavaScript refuses, stays refused.
+    #[test]
+    fn a_number_that_is_not_json_is_not_read_for_being_large() {
+        for text in ["[01e999]", "[1.e999]", "[.5e999]", "[1e+-999]", "[-01e999]", "[1e999e1]", "[+1e999]", "[1e999.5]", "[00]", "{\"a\":1,\"unused\":01e999}"] {
+            assert!(parse(text.as_bytes()).is_err(), "{text}");
+        }
+        for text in ["[1e999]", "[-1E+999]", "[0.1e999]", "[10e400]"] {
+            assert!(parse(text.as_bytes()).is_ok_and(|v| v[0].is_null()), "{text}");
+        }
+        assert_eq!(parse(b"[-0e999, 123456789e999]").unwrap(), json!([-0.0, null]));
     }
 
     // A text serde_json refuses is patched and read again (`repair`). The patching once cut two

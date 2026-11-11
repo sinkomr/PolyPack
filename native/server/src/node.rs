@@ -202,12 +202,18 @@ const HEAD_BUFFER_BYTES: usize = 64 * 1024;
 /// What a connection says last, written as it is when the connection is given up (`hono::cut`).
 type LastWords = Arc<Mutex<Option<&'static [u8]>>>;
 
+/// The answers of a connection that hyper has taken whole and not yet written out: each stays
+/// counted as under way (`Writing`) until the connection has flushed, so that the stop does not
+/// take an answer that waits in hyper's buffer behind a full socket for one that has gone out.
+type Unflushed = Arc<Mutex<Vec<Writing>>>;
+
 /// A connection as hyper reads and writes it, with the last words of `Server::handle` when a
 /// request ends it: Node writes them to the socket itself and destroys it, and hyper has no such
 /// answer (one made through hyper would carry `content-length` and `date`).
 struct Wire {
     io: hyper_util::rt::TokioIo<tokio::net::TcpStream>,
     last_words: LastWords,
+    unflushed: Unflushed,
 }
 
 impl hyper::rt::Read for Wire {
@@ -222,7 +228,12 @@ impl hyper::rt::Write for Wire {
     }
 
     fn poll_flush(mut self: std::pin::Pin<&mut Self>, cx: &mut std::task::Context<'_>) -> std::task::Poll<std::io::Result<()>> {
-        std::pin::Pin::new(&mut self.io).poll_flush(cx)
+        let flushed = std::pin::Pin::new(&mut self.io).poll_flush(cx);
+        if let std::task::Poll::Ready(Ok(())) = flushed {
+            // hyper flushes the connection only once all it had buffered is with the socket
+            self.unflushed.lock().unwrap_or_else(|e| e.into_inner()).clear();
+        }
+        flushed
     }
 
     fn poll_shutdown(mut self: std::pin::Pin<&mut Self>, cx: &mut std::task::Context<'_>) -> std::task::Poll<std::io::Result<()>> {
@@ -277,10 +288,21 @@ impl Drop for Writing {
 }
 
 /// The body of an answer to such a request: the same body, counted until hyper has taken all of
-/// it or given it up.
+/// it and the connection has flushed (`Unflushed`), or until it is given up.
 struct Counted {
     body: axum::body::Body,
-    _writing: Writing,
+    writing: Option<Writing>,
+    unflushed: Unflushed,
+}
+
+impl Drop for Counted {
+    fn drop(&mut self) {
+        // taken by hyper, perhaps still in its buffer: the connection's next flush ends the count
+        // (and so does the end of the connection, which drops the list)
+        if let Some(writing) = self.writing.take() {
+            self.unflushed.lock().unwrap_or_else(|e| e.into_inner()).push(writing);
+        }
+    }
 }
 
 impl hyper::body::Body for Counted {
@@ -414,7 +436,7 @@ impl Server {
 
     /// One request of a connection: its answer, or the last words of the connection when the
     /// request ends it (`hono::cut`).
-    async fn handle(self: Arc<Self>, remote: SocketAddr, request: Request, limits: ConnLimits) -> Result<axum::response::Response, &'static [u8]> {
+    async fn handle(self: Arc<Self>, remote: SocketAddr, request: Request, limits: ConnLimits, unflushed: Unflushed) -> Result<axum::response::Response, &'static [u8]> {
         // every route that changes anything is a POST
         let writing = (request.method() == axum::http::Method::POST).then(|| Writing::begin(&self.writing));
         // counted first, then looked at: a request is either seen by the stop or not begun
@@ -423,7 +445,7 @@ impl Server {
         }
         let response = self.answer(remote, request, limits).await?;
         Ok(match writing {
-            Some(writing) => response.map(|body| axum::body::Body::new(Counted { body, _writing: writing })),
+            Some(writing) => response.map(|body| axum::body::Body::new(Counted { body, writing: Some(writing), unflushed })),
             None => response,
         })
     }
@@ -505,12 +527,13 @@ pub async fn serve(listener: tokio::net::TcpListener, server: Arc<Server>, limit
         let server = server.clone();
         tokio::spawn(async move {
             let last_words: LastWords = Arc::new(Mutex::new(None));
+            let unflushed: Unflushed = Arc::default();
             let service = {
-                let last_words = last_words.clone();
+                let (last_words, unflushed) = (last_words.clone(), unflushed.clone());
                 hyper::service::service_fn(move |request: hyper::Request<hyper::body::Incoming>| {
-                    let (server, last_words) = (server.clone(), last_words.clone());
+                    let (server, last_words, unflushed) = (server.clone(), last_words.clone(), unflushed.clone());
                     async move {
-                        match server.handle(remote, request.map(axum::body::Body::new), limits).await {
+                        match server.handle(remote, request.map(axum::body::Body::new), limits, unflushed).await {
                             Ok(response) => Ok(response),
                             Err(words) => {
                                 // hyper drops the connection for the error, and the Wire says the words as it goes
@@ -523,7 +546,7 @@ pub async fn serve(listener: tokio::net::TcpListener, server: Arc<Server>, limit
             };
             let mut http = hyper::server::conn::http1::Builder::new();
             http.timer(hyper_util::rt::TokioTimer::new()).header_read_timeout(limits.headers_timeout).max_headers(MAX_HEADERS).max_header_size(HEAD_BUFFER_BYTES.max(limits.max_header_size));
-            let connection = http.serve_connection(Wire { io: hyper_util::rt::TokioIo::new(stream), last_words: last_words.clone() }, service);
+            let connection = http.serve_connection(Wire { io: hyper_util::rt::TokioIo::new(stream), last_words: last_words.clone(), unflushed }, service);
             tokio::pin!(connection);
             if let Err(e) = connection.as_mut().await {
                 // hyper closes a connection whose head is late without a word; Node says 408 first
@@ -799,4 +822,41 @@ pub async fn main() {
     serve(listener, server, ConnLimits::default()).await;
     // the server is stopping (the task above ends the process)
     std::future::pending::<()>().await
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::sync::atomic::Ordering;
+
+    // An answer that hyper has taken whole may still wait in hyper's buffer behind a full socket.
+    // The stop once counted it as answered the moment hyper dropped its body, and the process
+    // could exit with it unsent; it now stays counted until the connection has flushed. (hyper
+    // flushes the connection, `Buffered::poll_flush`, only after writing out all it had buffered.)
+    #[tokio::test]
+    async fn an_answer_is_under_way_until_its_connection_has_flushed() {
+        let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let _client = tokio::net::TcpStream::connect(listener.local_addr().unwrap()).await.unwrap();
+        let (stream, _) = listener.accept().await.unwrap();
+        let count: Arc<std::sync::atomic::AtomicUsize> = Arc::default();
+        let unflushed: Unflushed = Arc::default();
+        let mut wire = Wire { io: hyper_util::rt::TokioIo::new(stream), last_words: Arc::default(), unflushed: unflushed.clone() };
+
+        let body = Counted { body: axum::body::Body::from("answer"), writing: Some(Writing::begin(&count)), unflushed: unflushed.clone() };
+        assert_eq!(count.load(Ordering::SeqCst), 1);
+        // hyper has taken the body: the answer is still under way
+        drop(body);
+        assert_eq!(count.load(Ordering::SeqCst), 1);
+        // and is not any more once the connection has flushed
+        std::future::poll_fn(|cx| hyper::rt::Write::poll_flush(std::pin::Pin::new(&mut wire), cx)).await.unwrap();
+        assert_eq!(count.load(Ordering::SeqCst), 0);
+
+        // an answer given up with its connection is not counted for ever
+        let body = Counted { body: axum::body::Body::from("answer"), writing: Some(Writing::begin(&count)), unflushed: unflushed.clone() };
+        drop(body);
+        assert_eq!(count.load(Ordering::SeqCst), 1);
+        drop(wire);
+        drop(unflushed);
+        assert_eq!(count.load(Ordering::SeqCst), 0);
+    }
 }

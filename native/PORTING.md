@@ -150,7 +150,14 @@ defect.
     (hyper drops them before the server sees the head) and do count there;
   - a head of more than 64 KiB in all, or of more than 2,000 headers, is refused by hyper itself,
     whose 431 also carries `content-length: 0` and `date`. Node reads the first 2,000 headers of
-    a request and drops the rest without a word.
+    a request and drops the rest without a word;
+  - a header that hyper joins or drops before the server sees the head is counted as hyper leaves
+    it (a `Content-Length` sent many times with one value counts once here; Node's parser refuses
+    a second one in any case);
+  - a request without a body to read (a GET) that names a body and does not send it: Node gives
+    the connection up when the 300 s are over, also in the middle of a live stream. Here the
+    body is not waited for, the answer is given, and the connection is closed after it; a live
+    stream goes on as long as any other.
 
   A request whose body does not arrive whole (a chunk size that is none, a connection closed
   before the length it named, the time above) is answered by no route and changes nothing, on
@@ -163,7 +170,8 @@ defect.
   comes now finds its connection closed, as it would after the exit), waits until every POST
   request under way has been answered, and exits then with status 0: after 25 to 33 ms under
   load, and after two seconds at most, when a request under way does not end (a body still being
-  sent, heavy checks in their queue). Open live streams are not waited for.
+  sent, heavy checks in their queue, a client that does not read its answer: an answer counts as
+  under way until the connection has written it out). Open live streams are not waited for.
 - **The repository's root** is the working directory of `polypack-server`; the TypeScript server
   finds it from the place of its own source file. `data/records.json`, the spaces' records
   (`data/<space>/records.json`, and the configurations kept apart in `data/<space>/configs/`),

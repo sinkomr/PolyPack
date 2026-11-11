@@ -24,15 +24,19 @@ const CHUNK: u64 = 64 * 1024;
 /// reading stops the reading of the file: what a stalled download holds is the chunk in hand and
 /// the connection's write buffer, whatever the size of the file. (The whole file in memory per
 /// answer, as it was once read, let a few hundred stalled downloads of the largest viewer page
-/// take gigabytes.) The stream ends early when the file does.
-fn file_stream(file: Option<std::fs::File>, start: u64, count: u64) -> BodyStream {
+/// take gigabytes.) The stream ends early when the file does, as the source's; a file that cannot
+/// be opened or read (removed since it was looked up, a failing disk) is an error of the stream,
+/// which ends the answer where it stands and the connection with it, compressed or not: never an
+/// answer that looks whole.
+fn file_stream(file: std::io::Result<std::fs::File>, start: u64, count: u64) -> BodyStream {
     struct Reading {
         file: Arc<std::fs::File>,
         at: u64,
         left: u64,
     }
-    let Some(file) = file else {
-        return Box::pin(stream::empty());
+    let file = match file {
+        Ok(file) => file,
+        Err(e) => return Box::pin(stream::once(async move { Err(e) })),
     };
     Box::pin(stream::unfold(Reading { file: Arc::new(file), at: start, left: count }, |mut r| async move {
         if r.left == 0 {
@@ -64,7 +68,10 @@ fn file_stream(file: Option<std::fs::File>, start: u64, count: u64) -> BodyStrea
                 r.left -= buf.len() as u64;
                 Some((Ok(Bytes::from(buf)), r))
             }
-            Err(_) => None,
+            Err(e) => {
+                r.left = 0;
+                Some((Err(e), r))
+            }
         }
     }))
 }
@@ -173,9 +180,9 @@ pub fn serve_static(root: &str, req: &Req) -> Result<Option<Res>, Thrown> {
         res.set("content-length", size.to_string());
         return Ok(Some(res));
     }
-    // The file is opened now and read as the answer is sent. One that cannot be opened, or that
-    // ends before the length the answer names, leaves that answer short (ResBody::Promised).
-    let open = || std::fs::File::open(Path::new(&path)).ok();
+    // The file is opened now and read as the answer is sent. One that ends before the length the
+    // answer names leaves that answer short (ResBody::Promised); one that cannot be opened ends it.
+    let open = || std::fs::File::open(Path::new(&path));
     if range.is_empty() {
         res.set("content-length", size.to_string());
         res.body = ResBody::Promised { stream: file_stream(open(), 0, size), bytes: size };
@@ -215,6 +222,19 @@ pub fn serve_static(root: &str, req: &Req) -> Result<Option<Res>, Thrown> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    // A file that cannot be opened once gave an empty stream: under gzip that was a whole, valid
+    // and empty answer with status 200. It is an error of the stream, and stays one through the
+    // compressor, so the answer ends with its connection.
+    #[tokio::test]
+    async fn a_file_that_cannot_be_opened_fails_the_answer_also_compressed() {
+        use futures_util::StreamExt;
+        let gone = || std::fs::File::open("/nonexistent/polypack/file");
+        let mut plain = file_stream(gone(), 0, 2000);
+        assert!(matches!(plain.next().await, Some(Err(_))));
+        let mut packed = crate::hono::compressed("gzip", file_stream(gone(), 0, 2000));
+        assert!(matches!(packed.next().await, Some(Err(_))));
+    }
 
     #[test]
     fn mime_types_by_extension() {

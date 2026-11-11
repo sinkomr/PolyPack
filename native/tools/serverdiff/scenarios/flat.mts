@@ -70,6 +70,10 @@ function submit(): Scenario {
   // (the Rust server once answered 500 to the first three)
   for (const text of ['{"x":"\\é"}', '{"N":4,"name":"\\€"}', '["\\😀"]', '{"x":"\\', '"\\u12', '{"name":"\\ud83d\\u"}', '[1e999,"\\é"]'])
     s.req("POST", "/api/submit", { text, headers: { "x-test-client-ip": "10.0.0.1" }, expect: 400 });
+  // a number that is too large and not a number of JSON either (a leading zero, no digit after the point): not JSON,
+  // also in a field the server does not read (the Rust server once read it as null and took the entry)
+  for (const text of [`{"N":4,"M":4,"P":16,"name":"zero","unused":01e999,"pieces":${JSON.stringify(grid(16, 4))}}`, "[1.e999]", '{"x":-01e999}'])
+    s.req("POST", "/api/submit", { text, headers: { "x-test-client-ip": "10.0.0.1" }, expect: 400 });
   // any content type is read as JSON; duplicate keys, escapes and whitespace are JSON's own
   s.req("POST", "/api/submit", { text: ` \n{"N":4,"M":4,"P":15,"P":16,"name":"dup\\u0041 \\ud83d\\ude00","pieces":${JSON.stringify(grid(16, 4))}}\r\n`, headers: { "content-type": "text/plain", "x-test-client-ip": "10.0.0.1" } });
   // numbers JSON.parse reads as infinite or loses digits of
