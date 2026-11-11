@@ -437,7 +437,8 @@ export function migrationScenarios(): Scenario[] {
   // a database with the tables of 2026-10 (tallies, meta, space entries) and no units epoch: converted once, space entries included
   const b = new Scenario("migrate-units", "databases of older versions", {
     about: "a database in the old units, with space entries: each class of problem converted by its factors, curved disks at K != 0 archived, unreadable rows left",
-    options: { limits: NOLIMIT, snapshotStartDelayMs: 300 },
+    // a second, so that the build falls in the wait after the start on a busy runner too (see flat-closed)
+    options: { limits: NOLIMIT, snapshotStartDelayMs: 1000 },
     env: { PIECES_MIGRATION_BATCH: "0", SNAPSHOT_DIR: "{tmp}/snap" },
     autostart: false,
   });
@@ -493,7 +494,7 @@ export function migrationScenarios(): Scenario[] {
       ...entries,
     ],
   });
-  b.add({ op: "dump" }).add({ op: "start" }).wait(1500);
+  b.add({ op: "dump" }).add({ op: "start" }).wait(2500);
   // the snapshot of such a database: entries of closed problems, of ids that are no problem and of unknown spaces are left out
   b.get("/api/snapshot", 200);
   for (const space of SPACE_NAMES) b.get(`/api/snapshot/space-${space}.json.gz`);

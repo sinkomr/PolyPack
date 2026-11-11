@@ -1,8 +1,32 @@
-# PolyPack as one container: the Node server, which also serves the built website.
-FROM node:24-slim
-WORKDIR /app
+# PolyPack as one container with the Rust server (native/server), which also serves the built
+# website. This is the image that is deployed (fly.toml builds ./Dockerfile). Dockerfile.node builds
+# the Node server it replaced, which reads the same database: docs/DEPLOY_FLY.md, "The Rust
+# server", says how to return to it. deploy/fly/image-smoke.sh builds and tries this image.
+#
+# Three stages: the server is compiled, the website is built, and the last stage holds only the
+# binary, the website and the record files the server reads.
 
-# Dependencies first, so that this layer is reused while only source files change.
+FROM rust:1-slim-bookworm AS server
+WORKDIR /src/native
+COPY native/Cargo.toml native/Cargo.lock ./
+COPY native/js js
+COPY native/flat flat
+COPY native/client client
+COPY native/curved curved
+COPY native/surface surface
+COPY native/sphere sphere
+COPY native/torus torus
+COPY native/boundary boundary
+COPY native/polyhedra polyhedra
+COPY native/balls balls
+COPY native/ndim ndim
+COPY native/spaces spaces
+COPY native/server server
+# --locked: the versions of Cargo.lock, nothing newer
+RUN cargo build --release --locked -p polypack-server
+
+FROM node:24-slim AS web
+WORKDIR /app
 COPY package.json package-lock.json ./
 COPY apps/server/package.json apps/server/
 COPY apps/web/package.json apps/web/
@@ -22,30 +46,45 @@ COPY packages/methods/package.json packages/methods/
 COPY packages/ndim/package.json packages/ndim/
 COPY packages/ndspace/package.json packages/ndspace/
 RUN npm ci --no-audit --no-fund
-
 COPY tsconfig.base.json ./
 COPY packages packages
 COPY apps apps
 COPY data/records.json data/records.json
-# the new spaces' research records (served by /api/spaces); their certificates and raw runs stay out
 COPY data/surface/records.json data/surface/records.json
 COPY data/curved/records.json data/curved/records.json
 COPY data/sphere/records.json data/sphere/records.json
 COPY data/torus/records.json data/torus/records.json
 COPY data/boundary/records.json data/boundary/records.json
 COPY data/polyhedra/records.json data/polyhedra/records.json
-# polyhedra configurations, one file per problem, read on demand (records.json is their index)
 COPY data/polyhedra/configs data/polyhedra/configs
-# the nD packings (4 to 10 dimensions): records.json is the index, one file per problem family in configs, read on demand
 COPY data/ndim/records.json data/ndim/records.json
 COPY data/ndim/configs data/ndim/configs
 RUN npm run build
 
-ENV NODE_ENV=production PORT=8080 HOST=0.0.0.0 DATABASE_PATH=/data/polypack.sqlite
+# node:24-slim rather than a bare Debian: the server itself needs no Node, but the operator's tools
+# run on this machine with it (deploy/fly/backup-to-mac.sh pipes a script into `node` here, and
+# apps/server/scripts/db-space.mjs measures and reclaims the database's space; both use only
+# node:sqlite). Same Debian release as the build stage, so the same C library.
+FROM node:24-slim
+# The server finds its files below its working directory, laid out as in the repository:
+# data/records.json, data/<space>/records.json, the configurations read on demand
+# (data/polyhedra/configs, data/ndim/configs) and the built website in apps/web/dist.
+WORKDIR /app
+COPY --from=server /src/native/target/release/polypack-server /app/polypack-server
+COPY --from=web /app/apps/web/dist apps/web/dist
+COPY apps/server/scripts apps/server/scripts
+COPY data/records.json data/records.json
+COPY data/surface/records.json data/surface/records.json
+COPY data/curved/records.json data/curved/records.json
+COPY data/sphere/records.json data/sphere/records.json
+COPY data/torus/records.json data/torus/records.json
+COPY data/boundary/records.json data/boundary/records.json
+COPY data/polyhedra/records.json data/polyhedra/records.json
+COPY data/polyhedra/configs data/polyhedra/configs
+COPY data/ndim/records.json data/ndim/records.json
+COPY data/ndim/configs data/ndim/configs
+
+ENV PORT=8080 HOST=0.0.0.0 DATABASE_PATH=/data/polypack.sqlite
 EXPOSE 8080
-# Node runs the server itself, as `npm run start` would from apps/server but without the npm and tsx
-# processes around it: on a 512 MB machine those took about 130 MB [CALC, measured in this image
-# under a 470 MB limit: 348 MB with npm, 217 MB without]. The server is then process 1 and handles
-# SIGTERM itself, so a deploy stops it cleanly.
-WORKDIR /app/apps/server
-CMD ["node", "--import", "tsx", "src/node.ts"]
+# The server is process 1 and handles SIGTERM itself, so a deploy stops it cleanly.
+CMD ["/app/polypack-server"]

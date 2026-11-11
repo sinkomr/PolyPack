@@ -118,9 +118,17 @@ jobs:
         env:
           POLYPACK_E2E_SERVER: rust
 
+  # The image that is deployed, built as Fly builds it and tried: the server starts, answers, takes
+  # an entry, keeps it over a restart and stops cleanly; the operator's tools run in it.
+  image:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - run: deploy/fly/image-smoke.sh
+
   # The live site is updated only from main, and only after every test job above has passed.
   deploy:
-    needs: [node, python, e2e, rust, e2e-rust]
+    needs: [node, python, e2e, rust, e2e-rust, image]
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
     concurrency: deploy

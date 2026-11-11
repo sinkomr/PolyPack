@@ -284,12 +284,20 @@ are not the server's to choose.
   N ms` (and the `ms` of its report), and of `[pieces] ... rows in N s of work`.
 - **L3.** What a server writes to stderr after it began to answer: only whether it wrote anything
   (see "What goes where").
+- **L4.** The order of the log lines written during a `burst` whose requests are under way
+  together (not one of `concurrency: 1`): they are compared as a set, in sorted order. Which of
+  two requests a server takes up first when both are waiting for it is the server's own: the
+  TypeScript server itself logged two edits of one burst in either order from run to run on a
+  busy machine, also when they were sent 15 ms apart, and a server with several threads is
+  allowed another order (`native/PORTING.md`, "Requests that are handled at the same time").
+  The answers of the burst are still compared each with its request, and what the requests left
+  behind by every later step.
 - Headers `date`, `connection`, `keep-alive`, `transfer-encoding`.
 - The order of the rows of a table without an integer key (`tallies`, `meta`, `holder_peaks`): no
   query of the server can see it.
 
 Nothing else is normalised. In particular ids, ranks, scores, fingerprints, ETags, the text of every
-message, and the order of log lines are compared as they are.
+message, and the order of log lines outside such a burst are compared as they are.
 
 ## Soundness
 
