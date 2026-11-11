@@ -5,6 +5,7 @@
 //! radius `padding`; scale 0 is a disk of radius `padding`, and a disk piece (n = 0) is a disk of
 //! diameter `scale` plus the padding.
 
+use crate::math;
 use crate::sep::Shape;
 use crate::shapes::{circumradius, container_inradius, inradius, Container, Pose, DISK_RADIUS};
 use std::f64::consts::PI;
@@ -27,7 +28,7 @@ pub fn pair_penetration(shape: &Shape, a: &Pose, b: &Pose, scale: f64, padding: 
     if n == 0 || scale == 0.0 {
         let dx = a.x - b.x;
         let dy = a.y - b.y;
-        let distance = dx.hypot(dy);
+        let distance = math::hypot(dx, dy);
         // coincident centres: a bounded subgradient that separates the pair
         let ux = if distance == 0.0 { 1.0 } else { dx / distance };
         let uy = if distance == 0.0 { 0.0 } else { dy / distance };
@@ -39,18 +40,18 @@ pub fn pair_penetration(shape: &Shape, a: &Pose, b: &Pose, scale: f64, padding: 
     let step = shape.step;
     let dx = b.x - a.x;
     let dy = b.y - a.y;
-    let d = dx.hypot(dy);
-    let phi = dy.atan2(dx);
+    let d = math::hypot(dx, dy);
+    let phi = math::atan2(dy, dx);
     // nearest edge normal of A to d and of B to -d (closed form of the 2N-axis maximum)
     let ka = ((phi - a.theta - shape.normal0) / step).round();
     let kb = ((phi + PI - b.theta - shape.normal0) / step).round();
     let ang_a = a.theta + shape.normal0 + ka * step;
     let ang_b = b.theta + shape.normal0 + kb * step;
-    let ga = d * (phi - ang_a).cos();
-    let gb = d * (phi + PI - ang_b).cos();
+    let ga = d * math::cos(phi - ang_a);
+    let gb = d * math::cos(phi + PI - ang_b);
     // the reach term r + R cos(delta) is the same for both passes (see Shape::contact_offset)
     let rel = a.theta - b.theta + PI + PI / n as f64;
-    let reach = r + big_r * shape.fold(rel).cos();
+    let reach = r + big_r * math::cos(shape.fold(rel));
     let (pass_a, ang, best) = if ga >= gb { (true, ang_a, ga - reach) } else { (false, ang_b, gb - reach) };
     if padding > 0.0 && best > 0.0 {
         if let Some(c) = padded_closest_pair(n, a, b, scale, padding) {
@@ -58,14 +59,14 @@ pub fn pair_penetration(shape: &Shape, a: &Pose, b: &Pose, scale: f64, padding: 
         }
     }
     let (p, q) = if pass_a { (a, b) } else { (b, a) };
-    let (ux, uy) = (ang.cos(), ang.sin());
+    let (ux, uy) = (math::cos(ang), math::sin(ang));
     let ddx = q.x - p.x;
     let ddy = q.y - p.y;
     let relq = ang + PI / 2.0 - q.theta;
     let vertex = (relq / step).round();
     let vertex_angle = q.theta + PI / 2.0 + vertex * step;
-    let vx = big_r * vertex_angle.cos();
-    let vy = big_r * vertex_angle.sin();
+    let vx = big_r * math::cos(vertex_angle);
+    let vy = big_r * math::sin(vertex_angle);
     let dp = [ux, uy, (ddx + vx) * uy - (ddy + vy) * ux];
     let dq = [-ux, -uy, vy * ux - vx * uy];
     let depth = if padding == 0.0 { -best } else { -best + 2.0 * padding };
@@ -87,11 +88,11 @@ fn padded_closest_pair(n: u32, a: &Pose, b: &Pose, scale: f64, padding: f64) -> 
     let mut vb = [0.0f64; 2 * 100];
     for k in 0..nv {
         let t = a.theta + PI / 2.0 + k as f64 * step;
-        va[2 * k] = big_r * t.cos();
-        va[2 * k + 1] = big_r * t.sin();
+        va[2 * k] = big_r * math::cos(t);
+        va[2 * k + 1] = big_r * math::sin(t);
         let t = b.theta + PI / 2.0 + k as f64 * step;
-        vb[2 * k] = big_r * t.cos();
-        vb[2 * k + 1] = big_r * t.sin();
+        vb[2 * k] = big_r * math::cos(t);
+        vb[2 * k + 1] = big_r * math::sin(t);
     }
     let dx = b.x - a.x;
     let dy = b.y - a.y;
@@ -196,13 +197,13 @@ pub fn visit_protrusions(
                 (pose.x, pose.y)
             } else {
                 let angle = a0 + vertex as f64 * step;
-                (pose.x + big_r * angle.cos(), pose.y + big_r * angle.sin())
+                (pose.x + big_r * math::cos(angle), pose.y + big_r * math::sin(angle))
             };
             let ox = vx - pose.x;
             let oy = vy - pose.y;
             let dx = vx - container.cx;
             let dy = vy - container.cy;
-            let distance = dx.hypot(dy);
+            let distance = math::hypot(dx, dy);
             let ux = if distance == 0.0 { 1.0 } else { dx / distance };
             let uy = if distance == 0.0 { 0.0 } else { dy / distance };
             visit(Protrusion {
@@ -226,13 +227,13 @@ pub fn visit_protrusions(
         for edge in 0..m as usize {
             // edge 0 is the bottom edge at phi = 0; edge j ends at container vertex j
             let angle = container.phi - PI / 2.0 + wall_step * edge as f64;
-            let (uy, ux) = angle.sin_cos();
+            let (uy, ux) = math::sin_cos(angle);
             let (vx, vy) = if n == 0 {
                 (pose.x, pose.y)
             } else {
                 let nearest = ((angle - a0) / step).round();
                 let va = a0 + nearest * step;
-                (pose.x + big_r * va.cos(), pose.y + big_r * va.sin())
+                (pose.x + big_r * math::cos(va), pose.y + big_r * math::sin(va))
             };
             let ox = vx - pose.x;
             let oy = vy - pose.y;
@@ -256,14 +257,14 @@ pub fn visit_protrusions(
     let mut wsin = [0.0f64; 100];
     for edge in 0..m as usize {
         let angle = container.phi - PI / 2.0 + wall_step * edge as f64;
-        let (s, c) = angle.sin_cos();
+        let (s, c) = math::sin_cos(angle);
         wcos[edge] = c;
         wsin[edge] = s;
     }
     for vertex in 0..n as usize {
         let angle = a0 + vertex as f64 * step;
-        let vx = pose.x + big_r * angle.cos();
-        let vy = pose.y + big_r * angle.sin();
+        let vx = pose.x + big_r * math::cos(angle);
+        let vy = pose.y + big_r * math::sin(angle);
         let ox = vx - pose.x;
         let oy = vy - pose.y;
         let dx = vx - container.cx;

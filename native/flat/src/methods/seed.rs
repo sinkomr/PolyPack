@@ -3,6 +3,7 @@
 //! rings, interleaved round-robin and each assessed. The record generators of the reference need
 //! an adjacent record and are not used by the volunteer engine.
 
+use crate::math;
 use crate::framework::Ctx;
 use crate::sep::piece_separation;
 use crate::shapes::{bounding_radius, circumradius, container_vertices, default_theta, inradius, piece_inradius, Config, Container, Pose, DISK_RADIUS};
@@ -76,15 +77,15 @@ pub struct Cell {
 }
 
 pub fn rotate(p: &Pose, angle: f64) -> Pose {
-    let (s, c) = angle.sin_cos();
+    let (s, c) = math::sin_cos(angle);
     Pose::new(c * p.x - s * p.y, s * p.x + c * p.y, p.theta + angle)
 }
 
 /// Side-one ice-ray cell of the pentagon double lattice (Kuperberg & Kuperberg 1990, see seed.md).
 fn pentagon_cell() -> Cell {
     let r = circumradius(5);
-    let x = r * (2.0 * PI / 5.0).sin();
-    let y = r * (2.0 * PI / 5.0).cos();
+    let x = r * math::sin(2.0 * PI / 5.0);
+    let y = r * math::cos(2.0 * PI / 5.0);
     Cell {
         a: [3.0 * x, 0.0],
         b: [0.0, r + inradius(5)],
@@ -111,7 +112,7 @@ fn base_cell(n: u32, hex: bool, theta: f64) -> Cell {
                 ],
             }
         };
-        let (s, c) = theta.sin_cos();
+        let (s, c) = math::sin_cos(theta);
         return Cell {
             a: [cell.a[0] * c, cell.a[0] * s],
             b: [cell.b[0] * c - cell.b[1] * s, cell.b[0] * s + cell.b[1] * c],
@@ -143,7 +144,7 @@ fn tight_scale(ctx: &mut Ctx, n: u32, cell: &Cell) -> Option<f64> {
                     }
                     let dx = i as f64 * cell.a[0] + j as f64 * cell.b[0] + b.x - a.x;
                     let dy = i as f64 * cell.a[1] + j as f64 * cell.b[1] + b.y - a.y;
-                    let distance = dx.hypot(dy);
+                    let distance = math::hypot(dx, dy);
                     shortest = shortest.min(distance);
                     vectors.push(V { dx, dy, ta: a.theta, tb: b.theta, distance });
                 }
@@ -267,7 +268,7 @@ fn ranker(n: u32, m: u32, theta: f64) -> impl Fn(f64, f64) -> f64 {
         (0..m)
             .map(|edge| {
                 let angle = -PI / 2.0 + 2.0 * PI * edge as f64 / m as f64;
-                let (ny, nx) = angle.sin_cos();
+                let (ny, nx) = math::sin_cos(angle);
                 let mut support = f64::NEG_INFINITY;
                 for k in (0..vertices.len()).step_by(2) {
                     support = support.max(nx * vertices[k] + ny * vertices[k + 1] + pad);
@@ -280,7 +281,7 @@ fn ranker(n: u32, m: u32, theta: f64) -> impl Fn(f64, f64) -> f64 {
         if m == 0 {
             let mut rank = 0.0f64;
             for k in (0..vertices.len()).step_by(2) {
-                rank = rank.max((x + vertices[k]).hypot(y + vertices[k + 1]) + pad);
+                rank = rank.max(math::hypot(x + vertices[k], y + vertices[k + 1]) + pad);
             }
             rank
         } else {
@@ -297,7 +298,7 @@ fn ranker(n: u32, m: u32, theta: f64) -> impl Fn(f64, f64) -> f64 {
 fn lattice_cut(ctx: &mut Ctx, cell: &Cell, scale: f64, angle: f64, offset: [f64; 2]) -> Option<Vec<Pose>> {
     let (n, m, p) = (ctx.problem.n, ctx.problem.m, ctx.problem.p);
     let extent = ((p as f64 / cell.motif.len() as f64).sqrt().ceil() as i64) + 3;
-    let (s, c) = angle.sin_cos();
+    let (s, c) = math::sin_cos(angle);
     let ranks: Vec<_> = cell.motif.iter().map(|q| ranker(n, m, q.theta + angle)).collect();
     let mut sites: Vec<(Pose, f64)> = Vec::new();
     for i in -extent..=extent {
@@ -599,26 +600,26 @@ impl Generator {
                             let theta = if n == 0 || n % m == 0 {
                                 default_theta(n) + ring_flip
                             } else {
-                                (if fraction == 0.0 { y.atan2(x) } else { normal }) - PI / 2.0 + ring_flip
+                                (if fraction == 0.0 { math::atan2(y, x) } else { normal }) - PI / 2.0 + ring_flip
                             };
                             return Pose::new(x, y, theta);
                         }
                         let phase = if (ring + if t % 4 == 2 { 1 } else { 0 }) % 2 == 0 { PI / count as f64 } else { 0.0 };
                         let angle = -PI / 2.0 + 2.0 * PI * i as f64 / count as f64 + phase;
                         Pose::new(
-                            angle.cos(),
-                            angle.sin(),
+                            math::cos(angle),
+                            math::sin(angle),
                             if n == 0 { 0.0 } else { angle - PI / 2.0 + if m == 0 { trial.orientation } else { ring_flip } },
                         )
                     })
                     .collect();
-                let norms: Vec<f64> = units.iter().map(|q| q.x.hypot(q.y)).collect();
+                let norms: Vec<f64> = units.iter().map(|q| math::hypot(q.x, q.y)).collect();
                 let low_norm = norms.iter().cloned().fold(f64::INFINITY, f64::min);
                 let high_norm = norms.iter().cloned().fold(f64::NEG_INFINITY, f64::max);
                 let mut min_distance = f64::INFINITY;
                 for i in 0..count {
                     for j in 0..i {
-                        min_distance = min_distance.min((units[i].x - units[j].x).hypot(units[i].y - units[j].y));
+                        min_distance = min_distance.min(math::hypot(units[i].x - units[j].x, units[i].y - units[j].y));
                     }
                 }
                 let make_ring = |scale: f64| -> Vec<Pose> { units.iter().map(|q| Pose::new(scale * q.x, scale * q.y, q.theta)).collect() };
@@ -691,7 +692,7 @@ pub fn congruence_signature(config: &Config, score: f64) -> (i64, u32, u32) {
     let mut distances: Vec<i64> = Vec::with_capacity(ps.len() * ps.len().saturating_sub(1) / 2);
     for i in 0..ps.len() {
         for j in 0..i {
-            distances.push(((ps[i].x - ps[j].x).hypot(ps[i].y - ps[j].y) / 1e-7).round() as i64);
+            distances.push((math::hypot(ps[i].x - ps[j].x, ps[i].y - ps[j].y) / 1e-7).round() as i64);
         }
     }
     distances.sort_unstable();

@@ -17,12 +17,13 @@
 //! starts from earlier pipeline stages does not exist in a single run; the restart pool holds the
 //! supplied start and the automatic seed result.
 
+use crate::math;
 use super::common::{restore, scatter, PairTester, Strategy};
 use super::lbfgs::{Lbfgs, Options, Status};
 use super::penalty_method::{self, pack_state, unpack_into, Cap, Descent, Meter, PenaltyObjective, Submit};
 use super::seed::congruence_signature;
 use super::{fill, params_of, Method};
-use crate::enclose::{auto_orient, enclose, Encloser};
+use crate::enclose::{auto_orient_fast as auto_orient, enclose_fast as enclose, Encloser};
 use crate::framework::{Ctx, Eval, SubRun};
 use crate::penalty::visit_protrusions;
 use crate::rng::Rng;
@@ -223,7 +224,7 @@ fn swap_orientations(config: &Config, rng: &mut Rng) -> Config {
     let mut pairs: Vec<(u32, u32)> = Vec::new();
     for i in 0..count {
         for j in i + 1..count {
-            if (nf * (config.pieces[i].theta - config.pieces[j].theta) / 2.0).sin().abs() > 1e-9 {
+            if math::sin(nf * (config.pieces[i].theta - config.pieces[j].theta) / 2.0).abs() > 1e-9 {
                 pairs.push((i as u32, j as u32));
             }
         }
@@ -244,7 +245,7 @@ fn rotate_cluster(config: &Config, rng: &mut Rng, radius: f64, rotation: f64) ->
     let mut result = config.clone();
     let pivot = config.pieces[floor_below(rng, config.pieces.len())];
     let reach = radius * 2.0 * bounding_radius(config.n);
-    let ids: Vec<usize> = (0..config.pieces.len()).filter(|&i| (config.pieces[i].x - pivot.x).hypot(config.pieces[i].y - pivot.y) <= reach).collect();
+    let ids: Vec<usize> = (0..config.pieces.len()).filter(|&i| math::hypot(config.pieces[i].x - pivot.x, config.pieces[i].y - pivot.y) <= reach).collect();
     if ids.len() < 2 {
         return result;
     }
@@ -252,7 +253,7 @@ fn rotate_cluster(config: &Config, rng: &mut Rng, radius: f64, rotation: f64) ->
     let cx = ids.iter().map(|&i| config.pieces[i].x).sum::<f64>() / count;
     let cy = ids.iter().map(|&i| config.pieces[i].y).sum::<f64>() / count;
     let turn = rotation * (2.0 * rng.next() - 1.0);
-    let (s, c) = turn.sin_cos();
+    let (s, c) = math::sin_cos(turn);
     let mut moved = Vec::with_capacity(ids.len());
     for &i in &ids {
         let p = config.pieces[i];
@@ -288,7 +289,7 @@ fn reinsertion(ctx: &mut Ctx, config: &Config, removed: usize, trials: u32) -> C
         return result;
     }
     let container = enclose(n, &config.pieces, m, config.phi);
-    let reach = if m == 0 { container.size / 2.0 } else { container.size / (2.0 * (PI / m as f64).sin()) };
+    let reach = if m == 0 { container.size / 2.0 } else { container.size / (2.0 * math::sin(PI / m as f64)) };
     let (lo_x, hi_x) = (bounded(container.cx - reach), bounded(container.cx + reach));
     let (lo_y, hi_y) = (bounded(container.cy - reach), bounded(container.cy + reach));
     let shape = Shape::new(n);
@@ -319,8 +320,8 @@ fn reinsertion(ctx: &mut Ctx, config: &Config, removed: usize, trials: u32) -> C
             order.clear();
             order.extend(0..fixed.len());
             order.sort_by(|&a, &b| {
-                let da = (fixed[a].x - x).hypot(fixed[a].y - y);
-                let db = (fixed[b].x - x).hypot(fixed[b].y - y);
+                let da = math::hypot(fixed[a].x - x, fixed[a].y - y);
+                let db = math::hypot(fixed[b].x - x, fixed[b].y - y);
                 da.partial_cmp(&db).unwrap_or(std::cmp::Ordering::Equal)
             });
             for &k in order.iter().take(4) {
@@ -333,7 +334,7 @@ fn reinsertion(ctx: &mut Ctx, config: &Config, removed: usize, trials: u32) -> C
         }
         unique.clear();
         for &theta in &angles {
-            if unique.iter().any(|&a| n == 0 || (n as f64 * (theta - a) / 2.0).sin().abs() < 1e-9) {
+            if unique.iter().any(|&a| n == 0 || math::sin(n as f64 * (theta - a) / 2.0).abs() < 1e-9) {
                 continue;
             }
             unique.push(theta);
@@ -384,7 +385,7 @@ fn reinsertion(ctx: &mut Ctx, config: &Config, removed: usize, trials: u32) -> C
 /// Piece symmetry matters: exchanging equivalent angles is still an exact no-op.
 fn same_packing(a: &Config, b: &Config) -> bool {
     a.pieces.iter().zip(b.pieces.iter()).all(|(p, q)| {
-        (p.x - q.x).abs() < 1e-12 && (p.y - q.y).abs() < 1e-12 && (a.n == 0 || (a.n as f64 * (p.theta - q.theta) / 2.0).sin().abs() < 1e-9)
+        (p.x - q.x).abs() < 1e-12 && (p.y - q.y).abs() < 1e-12 && (a.n == 0 || math::sin(a.n as f64 * (p.theta - q.theta) / 2.0).abs() < 1e-9)
     })
 }
 
@@ -456,7 +457,7 @@ fn peel_layer(ctx: &mut Ctx, config: &Config) -> Config {
     let m = config.m;
     let container = enclose(n, &config.pieces, m, config.phi);
     let direction = if m == 0 { 2.0 * PI * ctx.rng.next() } else { container.phi - PI / 2.0 + 2.0 * PI * floor_below(&mut ctx.rng, m as usize) as f64 / m as f64 };
-    let (ny, nx) = direction.sin_cos();
+    let (ny, nx) = math::sin_cos(direction);
     let depth = |x: f64, y: f64| (x - container.cx) * nx + (y - container.cy) * ny;
     let half = piece_inradius(n);
     let outer = config.pieces.iter().map(|p| depth(p.x, p.y)).fold(f64::NEG_INFINITY, f64::max);
@@ -497,7 +498,7 @@ fn peel_layer(ctx: &mut Ctx, config: &Config) -> Config {
                     return result;
                 }
                 let normal = if n == 0 { PI * e as f64 / 3.0 } else { q.theta + PI / 2.0 + PI / n as f64 + 2.0 * PI * e as f64 / n as f64 };
-                let pose = Pose::new(q.x + 2.0 * half * normal.cos(), q.y + 2.0 * half * normal.sin(), if n == 0 { 0.0 } else { wrap_angle(q.theta + flip) });
+                let pose = Pose::new(q.x + 2.0 * half * math::cos(normal), q.y + 2.0 * half * math::sin(normal), if n == 0 { 0.0 } else { wrap_angle(q.theta + flip) });
                 if depth(pose.x, pose.y) > outer - 2.0 * half + 1e-9 {
                     continue;
                 }
@@ -568,8 +569,8 @@ fn cross_cleave(ctx: &mut Ctx, config: &Config) -> Config {
         a1 = normal(j1);
         a2 = normal(j2);
     }
-    let u1 = (a1.cos(), a1.sin());
-    let u2 = (a2.cos(), a2.sin());
+    let u1 = (math::cos(a1), math::sin(a1));
+    let u2 = (math::cos(a2), math::sin(a2));
     let mut encloser = Encloser::new(n, m);
     let mut rest: Vec<Pose> = Vec::with_capacity(count);
     let mut sizes = Vec::with_capacity(count);
@@ -591,7 +592,7 @@ fn cross_cleave(ctx: &mut Ctx, config: &Config) -> Config {
     let owner = config.pieces[others[floor_below(&mut ctx.rng, others.len())]];
     let corner = if n == 0 { 2.0 * PI * ctx.rng.next() } else { owner.theta + PI / 2.0 + 2.0 * PI * floor_below(&mut ctx.rng, n as usize) as f64 / n as f64 };
     let reach = bounding_radius(n);
-    let (xx, xy) = (owner.x + reach * corner.cos(), owner.y + reach * corner.sin());
+    let (xx, xy) = (owner.x + reach * math::cos(corner), owner.y + reach * math::sin(corner));
     let delta = reach * (0.75 + 0.5 * ctx.rng.next());
     for &i in &others {
         let p = &mut result.pieces[i];
@@ -659,7 +660,7 @@ fn refine_aligned(ctx: &mut Ctx, meter: Meter, start: &Config, tolerance: f64) {
     }
     let container = enclose(n, &start.pieces, m, start.phi);
     let period = 2.0 * PI / n as f64;
-    let (s, c) = container.phi.sin_cos();
+    let (s, c) = math::sin_cos(container.phi);
     let mut pieces = Vec::with_capacity(np);
     for p in &start.pieces {
         let theta = p.theta - container.phi;
@@ -781,7 +782,7 @@ fn metropolis(current: f64, candidate: f64, temperature: f64, rng: &mut Rng) -> 
     if temperature <= 0.0 {
         return false;
     }
-    rng.next() < (-(candidate - current) / temperature).exp()
+    rng.next() < math::exp(-(candidate - current) / temperature)
 }
 
 fn choose_operator(base: &[f64; OPERATORS], rate: &[f64; OPERATORS], floor: f64, rng: &mut Rng) -> usize {
@@ -1019,7 +1020,7 @@ pub fn execute(ctx: &mut Ctx) {
         let r = p.adaptation_rate;
         rate[operator] = (1.0 - r) * rate[operator] + r * if improved { 1.0 } else { 0.0 };
         if operator == KICK && raw.map_or(true, |x| (x - previous).abs() > IMPROVEMENT_THRESHOLD) {
-            let step = (r * (if accepted { 1.0 } else { 0.0 } - p.target_acceptance)).exp();
+            let step = math::exp(r * (if accepted { 1.0 } else { 0.0 } - p.target_acceptance));
             kick_magnitude = (kick_magnitude * step).min(10.0).max(0.001);
         }
         if let (Some(c), Some(x)) = (&candidate, raw) {
@@ -1173,8 +1174,8 @@ mod tests {
         assert!(changed.len() >= 2);
         for &i in &changed {
             for &j in &changed {
-                let d0 = (config.pieces[i].x - config.pieces[j].x).hypot(config.pieces[i].y - config.pieces[j].y);
-                let d1 = (turned.pieces[i].x - turned.pieces[j].x).hypot(turned.pieces[i].y - turned.pieces[j].y);
+                let d0 = math::hypot(config.pieces[i].x - config.pieces[j].x, config.pieces[i].y - config.pieces[j].y);
+                let d1 = math::hypot(turned.pieces[i].x - turned.pieces[j].x, turned.pieces[i].y - turned.pieces[j].y);
                 assert!((d0 - d1).abs() < 1e-12);
             }
         }

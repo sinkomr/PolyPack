@@ -1,6 +1,8 @@
 //! Seeded randomness. Every decision of a search draws from one of these streams, never from a
 //! clock, so the same seed and the same evaluation budget give the same result.
 
+use crate::math;
+
 /// Mulberry32: the generator of the reference solver, uniform draws in [0, 1) from a u32 state.
 #[derive(Clone, Debug)]
 pub struct Rng {
@@ -46,7 +48,7 @@ impl Rng {
         while u == 0.0 {
             u = self.next();
         }
-        (-2.0 * u.ln()).sqrt() * (2.0 * std::f64::consts::PI * self.next()).cos()
+        (-2.0f64 * math::log(u)).sqrt() * math::cos(2.0 * std::f64::consts::PI * self.next())
     }
 }
 
@@ -60,14 +62,14 @@ pub fn mix_seed(a: u32, b: u32) -> u32 {
 
 fn normal(rng: &mut Rng) -> f64 {
     // Box-Muller; 1 - u keeps the logarithm finite
-    (-2.0 * (1.0 - rng.next()).ln()).sqrt() * (2.0 * std::f64::consts::PI * rng.next()).cos()
+    (-2.0f64 * math::log(1.0 - rng.next())).sqrt() * math::cos(2.0 * std::f64::consts::PI * rng.next())
 }
 
 /// Gamma(shape, 1) by Marsaglia and Tsang's squeeze, with the usual boost for shape < 1.
 pub fn gamma(rng: &mut Rng, shape: f64) -> f64 {
     if shape < 1.0 {
         let g = gamma(rng, shape + 1.0);
-        return g * rng.next().powf(1.0 / shape);
+        return g * math::pow(rng.next(), 1.0 / shape);
     }
     let d = shape - 1.0 / 3.0;
     let c = 1.0 / (9.0 * d).sqrt();
@@ -83,7 +85,7 @@ pub fn gamma(rng: &mut Rng, shape: f64) -> f64 {
         }
         v = v * v * v;
         let u = rng.next();
-        if u < 1.0 - 0.0331 * x * x * x * x || u.ln() < 0.5 * x * x + d * (1.0 - v + v.ln()) {
+        if u < 1.0 - 0.0331 * x * x * x * x || math::log(u) < 0.5 * x * x + d * (1.0 - v + math::log(v)) {
             return d * v;
         }
     }

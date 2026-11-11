@@ -12,10 +12,11 @@
 //! Multipliers live in dense arrays keyed by integer constraint ids (a pair i < j is i P + j, a
 //! wall index k of piece i is i W + k) with lists of the non-zero ones, so a lookup is one load.
 
+use crate::math;
 use super::common::{restore, scatter, PairTester, Strategy};
 use super::lbfgs::{Lbfgs, Objective, Options, Status};
 use super::{fill, params_of, Method};
-use crate::enclose::enclose;
+use crate::enclose::enclose_fast as enclose;
 use crate::framework::{Ctx, Eval};
 use crate::grid::NeighborGrid;
 use crate::penalty::{pair_penetration, visit_protrusions};
@@ -229,7 +230,7 @@ impl Geometry {
             let big_r = circumradius(self.n) * scale;
             let step = 2.0 * PI / self.n as f64;
             for k in 0..self.n as usize {
-                let (s, c) = (k as f64 * step).sin_cos();
+                let (s, c) = math::sin_cos(k as f64 * step);
                 self.vertex_c[k] = big_r * c;
                 self.vertex_s[k] = big_r * s;
             }
@@ -287,7 +288,7 @@ impl Geometry {
         let wall_step = 2.0 * PI / m as f64;
         for j in 0..m as usize {
             let angle = container.phi - PI / 2.0 + wall_step * j as f64;
-            let (s, c) = angle.sin_cos();
+            let (s, c) = math::sin_cos(angle);
             self.wall_cos[j] = c;
             self.wall_sin[j] = s;
             self.wall_angle[j] = angle;
@@ -298,7 +299,7 @@ impl Geometry {
         for i in 0..p {
             let pose = &self.poses[i];
             let a0 = pose.theta + PI / 2.0;
-            let (sa, ca) = a0.sin_cos();
+            let (sa, ca) = math::sin_cos(a0);
             for edge in 0..m as usize {
                 let (ux, uy) = (self.wall_cos[edge], self.wall_sin[edge]);
                 // the support vertex is the one nearest in angle to the wall normal
@@ -794,7 +795,7 @@ mod tests {
         let reach = 2.0 * (bounding_radius(n) * scale + padding);
         for i in 0..p {
             for j in i + 1..p {
-                if (poses[i].x - poses[j].x).hypot(poses[i].y - poses[j].y) > reach {
+                if math::hypot(poses[i].x - poses[j].x, poses[i].y - poses[j].y) > reach {
                     continue;
                 }
                 let pp = pair_penetration(&shape, &poses[i], &poses[j], scale, padding);

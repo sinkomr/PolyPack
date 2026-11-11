@@ -18,6 +18,7 @@
 //! A soft piece is its polygon core scaled by gamma (1 - tau) about the centre and dilated by a
 //! disk of radius gamma tau rho (rho the inradius). Only legalised true shapes are ever scored.
 
+use crate::math;
 use super::common::{adopt, dilate, restore, scatter, PairTester, Strategy, COORD_LIMIT};
 use super::params_of;
 use crate::framework::Ctx;
@@ -370,10 +371,10 @@ impl Dynamics {
             normal0: if n == 0 { 0.0 } else { PI / 2.0 + PI / n as f64 },
             big_r1: if n == 0 { 0.0 } else { circumradius(n) },
             r1: if n == 0 { 0.0 } else { inradius(n) },
-            base_cos: (0..n).map(|k| (PI / 2.0 + k as f64 * 2.0 * PI / n as f64).cos()).collect(),
-            base_sin: (0..n).map(|k| (PI / 2.0 + k as f64 * 2.0 * PI / n as f64).sin()).collect(),
-            wall_cos: (0..m).map(|e| (-PI / 2.0 + (2.0 * PI / m as f64) * e as f64).cos()).collect(),
-            wall_sin: (0..m).map(|e| (-PI / 2.0 + (2.0 * PI / m as f64) * e as f64).sin()).collect(),
+            base_cos: (0..n).map(|k| math::cos(PI / 2.0 + k as f64 * 2.0 * PI / n as f64)).collect(),
+            base_sin: (0..n).map(|k| math::sin(PI / 2.0 + k as f64 * 2.0 * PI / n as f64)).collect(),
+            wall_cos: (0..m).map(|e| math::cos(-PI / 2.0 + (2.0 * PI / m as f64) * e as f64)).collect(),
+            wall_sin: (0..m).map(|e| math::sin(-PI / 2.0 + (2.0 * PI / m as f64) * e as f64)).collect(),
             vtx: vec![0.0; if n == 0 { 0 } else { 2 * n as usize * p }],
             rs: 0.0,
         }
@@ -398,19 +399,19 @@ impl Dynamics {
         let (n, m, p) = (self.n, self.m, self.p);
         let size = (fill * p as f64 * piece_area(n) / container_area(m, 1.0)).sqrt();
         self.l = size * self.unit;
-        let half = if m == 0 { size / 2.0 } else { size / (2.0 * (PI / m as f64).sin()) };
+        let half = if m == 0 { size / 2.0 } else { size / (2.0 * math::sin(PI / m as f64)) };
         let margin = bounding_radius(n);
         // outward wall normals at phi = 0 (edge 0 is the bottom edge)
         let normals: Vec<(f64, f64)> = (0..m as usize)
             .map(|edge| {
                 let angle = -PI / 2.0 + 2.0 * PI * edge as f64 / m as f64;
-                (angle.cos(), angle.sin())
+                (math::cos(angle), math::sin(angle))
             })
             .collect();
         let apothem = self.apothem;
         let inside = |x: f64, y: f64, clearance: f64| -> bool {
             if m == 0 {
-                return x.hypot(y) < apothem * size - clearance;
+                return math::hypot(x, y) < apothem * size - clearance;
             }
             for &(ux, uy) in &normals {
                 if x * ux + y * uy > apothem * size - clearance {
@@ -506,7 +507,7 @@ impl Dynamics {
         let n = self.n as usize;
         self.rs = self.big_r1 * s;
         for (i, q) in self.poses.iter().enumerate() {
-            let (sn, cs) = q.theta.sin_cos();
+            let (sn, cs) = math::sin_cos(q.theta);
             let out = &mut self.vtx[2 * n * i..2 * n * (i + 1)];
             for k in 0..n {
                 let (bc, bs) = (self.base_cos[k], self.base_sin[k]);
@@ -527,18 +528,18 @@ impl Dynamics {
         let (a, b) = (&self.poses[i], &self.poses[j]);
         let dx = b.x - a.x;
         let dy = b.y - a.y;
-        let d = dx.hypot(dy);
-        let phi = dy.atan2(dx);
+        let d = math::hypot(dx, dy);
+        let phi = math::atan2(dy, dx);
         let step = self.step;
         let ka = ((phi - a.theta - self.normal0) / step).round();
         let kb = ((phi + PI - b.theta - self.normal0) / step).round();
         let ang_a = a.theta + self.normal0 + ka * step;
         let ang_b = b.theta + self.normal0 + kb * step;
-        let ga = d * (phi - ang_a).cos();
-        let gb = d * (phi + PI - ang_b).cos();
+        let ga = d * math::cos(phi - ang_a);
+        let gb = d * math::cos(phi + PI - ang_b);
         // the reach term r + R cos(delta) is the same for both passes
         let rel = a.theta - b.theta + PI + PI / self.nf;
-        let reach = self.r1 * s + self.big_r1 * s * (rel - step * (rel / step).round()).cos();
+        let reach = self.r1 * s + self.big_r1 * s * math::cos(rel - step * (rel / step).round());
         let (pass_a, ang, best) = if ga >= gb { (true, ang_a, ga - reach) } else { (false, ang_b, gb - reach) };
         if pad > 0.0 && best > 0.0 {
             if best >= 2.0 * pad {
@@ -549,7 +550,7 @@ impl Dynamics {
             }
         }
         let (p, q, qi) = if pass_a { (a, b, j) } else { (b, a, i) };
-        let (uy, ux) = ang.sin_cos();
+        let (uy, ux) = math::sin_cos(ang);
         let ddx = q.x - p.x;
         let ddy = q.y - p.y;
         // the vertex of q nearest the direction of u
@@ -684,7 +685,7 @@ impl Dynamics {
         let mut visited = 0.0;
         for i in 0..self.p {
             let pose = self.poses[i];
-            if pose.x.hypot(pose.y) <= clear {
+            if math::hypot(pose.x, pose.y) <= clear {
                 continue;
             }
             visited += 1.0;
@@ -704,7 +705,7 @@ impl Dynamics {
                     let dx = pose.x + ox;
                     let dy = pose.y + oy;
                     if m == 0 {
-                        let distance = dx.hypot(dy);
+                        let distance = math::hypot(dx, dy);
                         let (ux, uy) = if distance == 0.0 { (1.0, 0.0) } else { (dx / distance, dy / distance) };
                         let depth = distance + soft.padding - wall;
                         if depth > 0.0 {
@@ -722,7 +723,7 @@ impl Dynamics {
                 }
             } else if m == 0 {
                 // a circle piece or a pure inscribed disk: one constraint, with its radius
-                let distance = pose.x.hypot(pose.y);
+                let distance = math::hypot(pose.x, pose.y);
                 let (ux, uy) = if distance == 0.0 { (1.0, 0.0) } else { (pose.x / distance, pose.y / distance) };
                 let depth = distance + one - wall;
                 if depth > 0.0 {
@@ -760,7 +761,7 @@ impl Dynamics {
             self.vx[i] = MOMENTUM * self.vx[i] - POSE_RATE * self.gx[i];
             self.vy[i] = MOMENTUM * self.vy[i] - POSE_RATE * self.gy[i];
             self.vt[i] = MOMENTUM * self.vt[i] - POSE_RATE * self.gt[i];
-            let speed = self.vx[i].hypot(self.vy[i]);
+            let speed = math::hypot(self.vx[i], self.vy[i]);
             if speed > cap {
                 self.vx[i] *= cap / speed;
                 self.vy[i] *= cap / speed;
@@ -811,14 +812,14 @@ fn legalise_fast(config: &Config, grid: &mut NeighborGrid, tester: &mut PairTest
     let critical = |a: &Pose, b: &Pose| -> f64 {
         let dx = b.x - a.x;
         let dy = b.y - a.y;
-        let d = dx.hypot(dy);
+        let d = math::hypot(dx, dy);
         if shape.n == 0 {
             return 2.0 * crate::shapes::DISK_RADIUS / d;
         }
-        let phi = dy.atan2(dx);
+        let phi = math::atan2(dy, dx);
         let alpha_a = shape.fold(phi - a.theta - shape.normal0);
         let alpha_b = shape.fold(phi + PI - b.theta - shape.normal0);
-        shape.contact_offset(a.theta, b.theta) / (d * alpha_a.min(alpha_b).cos())
+        shape.contact_offset(a.theta, b.theta) / (d * math::cos(alpha_a.min(alpha_b)))
     };
     let mut reach = two_r;
     let mut factor = 0.0f64;
@@ -979,7 +980,7 @@ pub fn execute(ctx: &mut Ctx) {
             } else {
                 let (g, t) = path_shape(path, 1.0, n, tau0, gamma0);
                 soft = soft_shape(n, g, t);
-                strength = pressure * 10f64.powf(-4.0 * (done - plan.compress - plan.morph) as f64 / plan.settle as f64);
+                strength = pressure * math::pow(10f64, -4.0 * (done - plan.compress - plan.morph) as f64 / plan.settle as f64);
             }
             state.work = 0.0;
             let report = state.gradient(&soft);
@@ -1019,7 +1020,7 @@ mod tests {
         let mut size_gradient = 0.0;
         for i in 0..d.p {
             for j in i + 1..d.p {
-                let dist = (d.poses[i].x - d.poses[j].x).hypot(d.poses[i].y - d.poses[j].y);
+                let dist = math::hypot(d.poses[i].x - d.poses[j].x, d.poses[i].y - d.poses[j].y);
                 if dist > 2.0 * one {
                     continue;
                 }
@@ -1078,7 +1079,7 @@ mod tests {
                     let legal = legalise_fast(&config, &mut grid, &mut tester).expect("a factor");
                     assert!(!tester.any_below(&legal.pieces, 0.0), "n={n} p={p}: overlap left");
                     // the factor is the smallest: a hair less than it overlaps somewhere
-                    let distance = |v: &[Pose]| (v[1].x - v[0].x).hypot(v[1].y - v[0].y);
+                    let distance = |v: &[Pose]| math::hypot(v[1].x - v[0].x, v[1].y - v[0].y);
                     let factor = distance(&legal.pieces) / distance(&config.pieces);
                     let probe = dilate(&config, factor * (1.0 - 1e-7));
                     assert!(tester.any_below(&probe.pieces, 0.0), "n={n} p={p}: not tight (factor {factor})");

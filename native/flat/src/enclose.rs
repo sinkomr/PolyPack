@@ -1,8 +1,21 @@
 //! The smallest enclosing container of an arrangement at a given orientation, and the search for
-//! the orientation that minimises it. Ported from packages/geometry/src/enclose.ts with the same
-//! algorithms (monotone-chain hull, the exact dual of the enclosing LP, Welzl's circle), so that a
-//! score computed here is the server's up to the last bits of the trigonometric functions.
+//! the orientation that minimises it.
+//!
+//! The functions named after packages/geometry/src/enclose.ts (`convex_hull`, `extreme_points`,
+//! `enclosing_polygon`, `enclosing_circle`, `enclose_set`, `enclose`, `auto_orient_set`,
+//! `auto_orient`) are its port, operation for operation: the monotone-chain hull, the dual of the
+//! enclosing LP solved by enumerating its bases, Welzl's circle. A score computed with them is the
+//! server's, up to the last place of a sine.
+//!
+//! The search calls an enclosing container millions of times, and for it the same file holds a
+//! faster solver that is NOT the source's: [`PolygonEncloser`] and [`Encloser`], with the
+//! `*_fast` functions, find the LP's optimum by an active-set ascent instead of the enumeration
+//! (M^3 / 24 bases for a many-sided container). The two agree to about 1e-14 relative and give the
+//! same double except on ties; only the search uses the fast one.
 
+use crate::math;
+use std::cell::RefCell;
+use std::rc::Rc;
 use crate::shapes::{circumradius, inradius, piece_vertices_into, Container, Pose, DISK_RADIUS};
 use std::f64::consts::PI;
 
@@ -14,7 +27,10 @@ pub struct PointSet {
     pub pad: f64,
 }
 
-/// Sign-correct cross product (a - o) x (b - o). When both products round to zero the factors are
+/// 2 ** 600, exactly.
+const TWO_600: f64 = f64::from_bits((1023 + 600) << 52);
+
+/// enclose.ts: the `cross` of convexHull. Sign-correct cross product (a - o) x (b - o). When both products round to zero the factors are
 /// rescaled by 2^600 each, so an underflowed product of two non-zero factors keeps its sign
 /// (a point that is not on the segment is not dropped).
 #[inline]
@@ -28,12 +44,16 @@ fn cross(pts: &[f64], o: usize, a: usize, b: usize) -> f64 {
     if p != 0.0 || q != 0.0 {
         return p - q;
     }
-    let s = 2f64.powi(600);
+    let s = TWO_600;
     let scaled = |u: f64, v: f64| if u == 0.0 || v == 0.0 { 0.0 } else { u * s * (v * s) };
     scaled(ax, by) - scaled(ay, bx)
 }
 
-/// Convex hull by Andrew's monotone chain: counter-clockwise, collinear points dropped.
+/// enclose.ts: convexHull. Convex hull by Andrew's monotone chain: flat counter-clockwise points,
+/// collinear points dropped. The points are sorted by x, then y, with a stable sort, as the
+/// source's comparator `x_a - x_b || y_a - y_b` orders finite coordinates. (For a coordinate that
+/// is not a number the source's order is whatever V8's sort makes of an inconsistent comparator;
+/// `parse_config` admits finite coordinates only.)
 pub fn convex_hull(pts: &[f64]) -> Vec<f64> {
     let n = pts.len() / 2;
     if n <= 2 {
@@ -74,7 +94,8 @@ pub fn convex_hull(pts: &[f64]) -> Vec<f64> {
     out
 }
 
-/// Hull points and padding that determine every enclosing container of the arrangement.
+/// enclose.ts: extremePoints. Hull points and padding that determine every enclosing container of
+/// the arrangement.
 pub fn extreme_points(n: u32, poses: &[Pose], scale: f64) -> PointSet {
     if n == 0 {
         let mut c = Vec::with_capacity(2 * poses.len());
@@ -92,14 +113,15 @@ pub fn extreme_points(n: u32, poses: &[Pose], scale: f64) -> PointSet {
     PointSet { pts: convex_hull(&all), pad: 0.0 }
 }
 
-/// Support values h_j of the point set along the M outward edge normals of the container.
+/// enclose.ts: supports. Support values h_j of the point set along the M outward edge normals of
+/// the container.
 fn supports(set: &PointSet, m: u32, phi: f64, h: &mut [f64]) {
     let step = 2.0 * PI / m as f64;
     for j in 0..m as usize {
         // normal j belongs to the edge ending at vertex j; j = 0 is the bottom edge at phi = 0
         let ang = phi - PI / 2.0 + j as f64 * step;
-        let ux = ang.cos();
-        let uy = ang.sin();
+        let ux = math::cos(ang);
+        let uy = math::sin(ang);
         let mut best = f64::NEG_INFINITY;
         let pts = &set.pts;
         let mut i = 0;
@@ -114,8 +136,25 @@ fn supports(set: &PointSet, m: u32, phi: f64, h: &mut [f64]) {
     }
 }
 
-fn sine_table(m: u32) -> Vec<f64> {
-    (0..=m).map(|d| (2.0 * PI * d as f64 / m as f64).sin()).collect()
+thread_local! {
+    /// enclose.ts: sineTables, per thread.
+    static SINE_TABLES: RefCell<Vec<Option<Rc<[f64]>>>> = const { RefCell::new(Vec::new()) };
+}
+
+/// enclose.ts: sineTable. sin(2 pi d / M) for d = 0..=M, kept per M (up to 1024 sides; the server
+/// admits 100).
+fn sine_table(m: u32) -> Rc<[f64]> {
+    let make = || -> Rc<[f64]> { (0..=m).map(|d| math::sin((2.0 * PI * d as f64) / m as f64)).collect() };
+    if m > 1024 {
+        return make();
+    }
+    SINE_TABLES.with(|tables| {
+        let mut tables = tables.borrow_mut();
+        if tables.len() <= m as usize {
+            tables.resize(m as usize + 1, None);
+        }
+        tables[m as usize].get_or_insert_with(make).clone()
+    })
 }
 
 #[derive(Clone, Copy, Debug)]
@@ -127,7 +166,7 @@ struct DualOptimum {
     k: Option<usize>,
 }
 
-/// Exact solution of the enclosing LP  min a  s.t.  h_j <= a + c . u_j  for all j, through its dual
+/// enclose.ts: solveDual. Exact solution of the enclosing LP  min a  s.t.  h_j <= a + c . u_j  for all j, through its dual
 ///   max sum(lambda_j h_j)  s.t.  sum(lambda_j u_j) = 0, sum(lambda_j) = 1, lambda >= 0.
 /// A basic dual solution has at most three non-zero weights, so the optimum is the best of the
 /// antipodal pairs (M even), (h_i + h_j) / 2, and of the triples whose normals positively span the
@@ -227,7 +266,7 @@ fn best_basis(h: &[f64], m: usize, s: &[f64], set: &[usize]) -> DualOptimum {
     }
 }
 
-/// The same optimum as `solve_dual` by a dual active-set ascent: from a spanning triple, the wall
+/// NOT in the source; the search's solver. The same optimum as `solve_dual` by a dual active-set ascent: from a spanning triple, the wall
 /// most violated at the basis's centre (or, for an antipodal pair, the two walls that empty the
 /// segment of its centres) joins the basis, and the best basis of those few walls replaces it.
 /// The value of the small LP rises strictly at every step, so no basis returns; it ends when no
@@ -310,11 +349,83 @@ fn solve_dual_fast(h: &[f64], m: usize, s: &[f64], cu: &[f64], su: &[f64]) -> Du
     solve_dual(h, m, s)
 }
 
-/// Reusable work space for the enclosing polygon of one container shape M.
+/// enclose.ts: minApothem. Apothem of the smallest enclosing regular M-gon at orientation phi.
+fn min_apothem(set: &PointSet, m: u32, phi: f64, h: &mut [f64], sines: &[f64]) -> f64 {
+    supports(set, m, phi, h);
+    solve_dual(h, m as usize, sines).a
+}
+
+/// enclose.ts: enclosingPolygon. Smallest enclosing regular M-gon (M >= 3) at fixed orientation
+/// phi.
+pub fn enclosing_polygon(set: &PointSet, m: u32, phi: f64) -> Container {
+    if set.pts.is_empty() {
+        return Container { m, cx: 0.0, cy: 0.0, phi, size: 0.0 };
+    }
+    let mut h = vec![0.0; m as usize];
+    supports(set, m, phi, &mut h);
+    polygon_from_supports(&h, m, phi)
+}
+
+/// enclose.ts: polygonFromSupports. The smallest regular M-gon at orientation phi from the
+/// supports h along its edge normals.
+fn polygon_from_supports(h: &[f64], m: u32, phi: f64) -> Container {
+    let sines = sine_table(m);
+    polygon_from_dual(h, m, phi, solve_dual(h, m as usize, &sines))
+}
+
+/// The body of polygonFromSupports after its call of solveDual: the centre and the side from the
+/// optimal basis.
+fn polygon_from_dual(h: &[f64], m: u32, phi: f64, optimum: DualOptimum) -> Container {
+    let DualOptimum { a, i, j, k } = optimum;
+    let count = m as usize;
+    let step = (2.0 * PI) / m as f64;
+    let ang = |n: usize| phi - PI / 2.0 + n as f64 * step;
+    let uix = math::cos(ang(i));
+    let uiy = math::sin(ang(i));
+    let bi = h[i] - a;
+    let (cx, cy);
+    if k.is_some() {
+        // Three active constraints fix the centre; solve the two equations c . u = h - a for i and j.
+        let ujx = math::cos(ang(j));
+        let ujy = math::sin(ang(j));
+        let bj = h[j] - a;
+        let det = uix * ujy - uiy * ujx;
+        cx = (bi * ujy - bj * uiy) / det;
+        cy = (uix * bj - ujx * bi) / det;
+    } else {
+        // Two opposite edges are tight, so the centre lies on the line c = bi u_i + t w with w
+        // perpendicular to u_i. The other constraints bound t to an interval; take its midpoint.
+        let wx = -uiy;
+        let wy = uix;
+        let mut lo = f64::NEG_INFINITY;
+        let mut hi = f64::INFINITY;
+        for n in 0..count {
+            if n == i || n == j {
+                continue;
+            }
+            let ux = math::cos(ang(n));
+            let uy = math::sin(ang(n));
+            let g = wx * ux + wy * uy;
+            let rhs = h[n] - a - bi * (uix * ux + uiy * uy);
+            if g > 1e-12 {
+                lo = math::max(lo, rhs / g);
+            } else if g < -1e-12 {
+                hi = math::min(hi, rhs / g);
+            }
+        }
+        let t = (lo + hi) / 2.0;
+        cx = bi * uix + t * wx;
+        cy = bi * uiy + t * wy;
+    }
+    Container { m, cx, cy, phi, size: 2.0 * a * math::tan(PI / m as f64) }
+}
+
+/// NOT in the source; the search's solver. Reusable work space for the enclosing polygon of one
+/// container shape M, with the active-set dual ([`solve_dual_fast`]).
 #[derive(Clone, Debug)]
 pub struct PolygonEncloser {
     pub m: u32,
-    sines: Vec<f64>,
+    sines: Rc<[f64]>,
     h: Vec<f64>,
     /// Wall normals at phi = 0 (the LP is the same in the container's own frame).
     cu: Vec<f64>,
@@ -328,8 +439,8 @@ impl PolygonEncloser {
             m,
             sines: sine_table(m),
             h: vec![0.0; m as usize],
-            cu: angles.iter().map(|a| a.cos()).collect(),
-            su: angles.iter().map(|a| a.sin()).collect(),
+            cu: angles.iter().map(|&a| math::cos(a)).collect(),
+            su: angles.iter().map(|&a| math::sin(a)).collect(),
         }
     }
 
@@ -346,63 +457,20 @@ impl PolygonEncloser {
             return Container { m: self.m, cx: 0.0, cy: 0.0, phi, size: 0.0 };
         }
         supports(set, self.m, phi, &mut self.h);
-        let h = std::mem::take(&mut self.h);
-        let c = self.from_supports(&h, phi);
-        self.h = h;
-        c
+        self.from_supports(&self.h, phi)
     }
 
     /// The smallest regular M-gon at orientation phi from the supports h along its edge normals.
     pub fn from_supports(&self, h: &[f64], phi: f64) -> Container {
-        let m = self.m as usize;
-        let DualOptimum { a, i, j, k } = solve_dual_fast(h, m, &self.sines, &self.cu, &self.su);
-        let step = 2.0 * PI / m as f64;
-        let ang = |n: usize| phi - PI / 2.0 + n as f64 * step;
-        let uix = ang(i).cos();
-        let uiy = ang(i).sin();
-        let bi = h[i] - a;
-        let (cx, cy);
-        if k.is_some() {
-            // Three active constraints fix the centre; solve c . u = h - a for i and j.
-            let ujx = ang(j).cos();
-            let ujy = ang(j).sin();
-            let bj = h[j] - a;
-            let det = uix * ujy - uiy * ujx;
-            cx = (bi * ujy - bj * uiy) / det;
-            cy = (uix * bj - ujx * bi) / det;
-        } else {
-            // Two opposite edges are tight: the centre lies on c = bi u_i + t w, w perpendicular to
-            // u_i; the other constraints bound t to an interval, whose midpoint is taken.
-            let wx = -uiy;
-            let wy = uix;
-            let mut lo = f64::NEG_INFINITY;
-            let mut hi = f64::INFINITY;
-            for n in 0..m {
-                if n == i || n == j {
-                    continue;
-                }
-                let ux = ang(n).cos();
-                let uy = ang(n).sin();
-                let g = wx * ux + wy * uy;
-                let rhs = h[n] - a - bi * (uix * ux + uiy * uy);
-                if g > 1e-12 {
-                    lo = lo.max(rhs / g);
-                } else if g < -1e-12 {
-                    hi = hi.min(rhs / g);
-                }
-            }
-            let t = (lo + hi) / 2.0;
-            cx = bi * uix + t * wx;
-            cy = bi * uiy + t * wy;
-        }
-        Container { m: self.m, cx, cy, phi, size: 2.0 * a * (PI / m as f64).tan() }
+        polygon_from_dual(h, self.m, phi, solve_dual_fast(h, self.m as usize, &self.sines, &self.cu, &self.su))
     }
 }
 
-/// Deterministic shuffle, so that client and server visit points in the same order.
+/// enclose.ts: shuffledOrder. Deterministic shuffle, so that client and server visit points in the
+/// same order.
 fn shuffled_order(n: usize) -> Vec<u32> {
     let mut order: Vec<u32> = (0..n as u32).collect();
-    let mut seed: u32 = 0x9e3779b9;
+    let mut seed: u32 = 0x9e37_79b9;
     for i in (1..n).rev() {
         seed = seed.wrapping_mul(1664525).wrapping_add(1013904223);
         let j = (seed % (i as u32 + 1)) as usize;
@@ -411,7 +479,8 @@ fn shuffled_order(n: usize) -> Vec<u32> {
     order
 }
 
-/// Smallest enclosing circle of the point set (Welzl's algorithm, iterative); size is the diameter.
+/// enclose.ts: enclosingCircle. Smallest enclosing circle of the point set (Welzl's algorithm,
+/// iterative form); its size is the diameter.
 pub fn enclosing_circle(set: &PointSet) -> Container {
     let pts = &set.pts;
     let n = pts.len() / 2;
@@ -425,7 +494,7 @@ pub fn enclosing_circle(set: &PointSet) -> Container {
     let mut cy = y(0);
     let mut r = 0.0f64;
     // relative slack so that points on the boundary do not retrigger a rebuild
-    let outside = |i: usize, cx: f64, cy: f64, r: f64| (x(i) - cx).hypot(y(i) - cy) > r * (1.0 + 1e-13) + 1e-15;
+    let outside = |i: usize, cx: f64, cy: f64, r: f64| math::hypot(x(i) - cx, y(i) - cy) > r * (1.0 + 1e-13) + 1e-15;
     for i in 1..n {
         if !outside(i, cx, cy, r) {
             continue;
@@ -437,11 +506,13 @@ pub fn enclosing_circle(set: &PointSet) -> Container {
             if !outside(j, cx, cy, r) {
                 continue;
             }
+            // from2
             cx = (x(i) + x(j)) / 2.0;
             cy = (y(i) + y(j)) / 2.0;
-            r = (x(i) - x(j)).hypot(y(i) - y(j)) / 2.0;
+            r = math::hypot(x(i) - x(j), y(i) - y(j)) / 2.0;
             for k in 0..j {
                 if outside(k, cx, cy, r) {
+                    // from3
                     let bx = x(j) - x(i);
                     let by = y(j) - y(i);
                     let dx = x(k) - x(i);
@@ -456,7 +527,7 @@ pub fn enclosing_circle(set: &PointSet) -> Container {
                     let uy = (bx * d2 - dx * b2) / det;
                     cx = x(i) + ux;
                     cy = y(i) + uy;
-                    r = ux.hypot(uy);
+                    r = math::hypot(ux, uy);
                 }
             }
         }
@@ -464,8 +535,18 @@ pub fn enclosing_circle(set: &PointSet) -> Container {
     Container { m: 0, cx, cy, phi: 0.0, size: 2.0 * (r + set.pad) }
 }
 
-/// Smallest enclosing container of shape M at orientation phi (phi is ignored for circles).
+/// enclose.ts: encloseSet. Smallest enclosing container of shape M at orientation phi (phi is
+/// ignored for circles).
 pub fn enclose_set(set: &PointSet, m: u32, phi: f64) -> Container {
+    if m == 0 {
+        enclosing_circle(set)
+    } else {
+        enclosing_polygon(set, m, phi)
+    }
+}
+
+/// NOT in the source: [`enclose_set`] with the search's solver.
+pub fn enclose_set_fast(set: &PointSet, m: u32, phi: f64) -> Container {
     if m == 0 {
         enclosing_circle(set)
     } else {
@@ -473,10 +554,14 @@ pub fn enclose_set(set: &PointSet, m: u32, phi: f64) -> Container {
     }
 }
 
-const EPS: f64 = 1.0 / 9007199254740992.0; // 2^-53
+/// enclose.ts: EPS. Unit roundoff of a double, 2 ** -53.
+const EPS: f64 = 1.0 / 9007199254740992.0;
+/// enclose.ts: MAX_CANDIDATES. Most candidate pieces along one normal before candidate_supports
+/// leaves the support to the hull.
 const MAX_CANDIDATES: usize = 8;
 
-/// The supports the hull of all the vertices gives, found from the vertices of a few candidate
+/// enclose.ts: candidateSupports (its Map of vertices is the buffer `verts` with the flags `have`).
+/// The supports the hull of all the vertices gives, the same doubles, found from the vertices of a few candidate
 /// pieces (polygon pieces and container only); false when that cannot be vouched for.
 ///
 /// Along a normal u a piece reaches at most c.u + R and at least c.u + r, so only pieces whose
@@ -489,7 +574,7 @@ fn candidate_supports(n: u32, poses: &[Pose], m: u32, phi: f64, h: &mut [f64], v
     let r = inradius(n);
     let mut max_abs = 0.0f64;
     for p in poses {
-        max_abs = max_abs.max(p.x.abs()).max(p.y.abs());
+        max_abs = math::max(math::max(max_abs, p.x.abs()), p.y.abs());
     }
     let c = max_abs + big_r;
     let reach = big_r - r + 1e-12 * c;
@@ -501,8 +586,8 @@ fn candidate_supports(n: u32, poses: &[Pose], m: u32, phi: f64, h: &mut [f64], v
     have.resize(poses.len(), false);
     for j in 0..m as usize {
         let ang = phi - PI / 2.0 + j as f64 * step;
-        let ux = ang.cos();
-        let uy = ang.sin();
+        let ux = math::cos(ang);
+        let uy = math::sin(ang);
         let mut top = f64::NEG_INFINITY;
         for p in poses {
             let d = p.x * ux + p.y * uy;
@@ -550,20 +635,29 @@ fn candidate_supports(n: u32, poses: &[Pose], m: u32, phi: f64, h: &mut [f64], v
     true
 }
 
-/// Smallest enclosing container of the pieces at orientation phi (the server's score routine).
+/// enclose.ts: enclose. Smallest enclosing container of N-gon (or circle) pieces at the given
+/// poses: the server's score routine. For polygon pieces in a polygon container the supports come
+/// from a few candidate pieces (candidate_supports), the same doubles as from the hull of all N P
+/// vertices at a small part of the cost; the hull is built only when they cannot be vouched for.
 pub fn enclose(n: u32, poses: &[Pose], m: u32, phi: f64) -> Container {
     if n >= 3 && m >= 3 && !poses.is_empty() {
         let mut h = vec![0.0; m as usize];
         let mut verts = Vec::new();
         let mut have = Vec::new();
         if candidate_supports(n, poses, m, phi, &mut h, &mut verts, &mut have) {
-            return PolygonEncloser::new(m).from_supports(&h, phi);
+            return polygon_from_supports(&h, m, phi);
         }
     }
     enclose_set(&extreme_points(n, poses, 1.0), m, phi)
 }
 
-/// Reusable form of [`enclose`] for the search: keeps its buffers between calls.
+/// NOT in the source: [`enclose`] with the search's solver.
+pub fn enclose_fast(n: u32, poses: &[Pose], m: u32, phi: f64) -> Container {
+    Encloser::new(n, m).enclose(poses, phi)
+}
+
+/// NOT in the source: the reusable form of [`enclose_fast`] for the search, which keeps its
+/// buffers between calls.
 #[derive(Clone, Debug)]
 pub struct Encloser {
     pub n: u32,
@@ -601,33 +695,94 @@ impl Encloser {
     }
 }
 
-const GOLD: f64 = 0.6180339887498949; // (sqrt(5) - 1) / 2
+/// The two things auto-orientation asks of an LP solver.
+trait OrientationSolver {
+    fn min_apothem(&mut self, set: &PointSet, phi: f64) -> f64;
+    fn enclosing_polygon(&mut self, set: &PointSet, phi: f64) -> Container;
+}
 
-/// Container orientation minimising the size over one period [0, 2 pi / M): a uniform sample of
-/// about 4 (H + M) points (at least 256), the lowest local minima (up to 8) refined by
-/// golden-section search, and phi0 and 0 always considered. A search, not a proof.
+/// The source's solver: `minApothem` and `enclosingPolygon` with the enumerating dual.
+struct SourceSolver {
+    m: u32,
+    sines: Rc<[f64]>,
+    h: Vec<f64>,
+}
+
+impl OrientationSolver for SourceSolver {
+    fn min_apothem(&mut self, set: &PointSet, phi: f64) -> f64 {
+        min_apothem(set, self.m, phi, &mut self.h, &self.sines)
+    }
+    fn enclosing_polygon(&mut self, set: &PointSet, phi: f64) -> Container {
+        enclosing_polygon(set, self.m, phi)
+    }
+}
+
+impl OrientationSolver for PolygonEncloser {
+    fn min_apothem(&mut self, set: &PointSet, phi: f64) -> f64 {
+        PolygonEncloser::min_apothem(self, set, phi)
+    }
+    fn enclosing_polygon(&mut self, set: &PointSet, phi: f64) -> Container {
+        self.enclose(set, phi)
+    }
+}
+
+/// enclose.ts: autoOrientSet. Container orientation that minimises the size, searched over one
+/// period [0, 2 pi / M).
+///
+/// Method: s(phi) is continuous, piecewise smooth and not convex. Its breakpoints come from a
+/// change of supporting hull vertex (about H in total over one period, H = hull size) or a
+/// change of active edges (order M). So:
+///   1. sample uniformly at about 4 (H + M) points, at least 256;
+///   2. take the lowest local minima of the samples (up to 8);
+///   3. refine each by golden-section search between its two neighbours.
+/// phi0 (the current orientation) and phi = 0 are always candidates, so the result is never
+/// worse than either. This is a search and not a proof of the global minimum over phi.
+/// For large M the sample count is capped to bound the cost.
 pub fn auto_orient_set(set: &PointSet, m: u32, phi0: f64) -> Container {
     if m == 0 || set.pts.is_empty() {
         return enclose_set(set, m, 0.0);
     }
-    let mut enc = PolygonEncloser::new(m);
-    let period = 2.0 * PI / m as f64;
-    let wrap = |phi: f64| ((phi % period) + period) % period;
+    let mut solver = SourceSolver { m, sines: sine_table(m), h: vec![0.0; m as usize] };
+    auto_orient_with(&mut solver, set, m, phi0)
+}
+
+/// NOT in the source: [`auto_orient_set`] with the search's solver.
+pub fn auto_orient_set_fast(set: &PointSet, m: u32, phi0: f64) -> Container {
+    if m == 0 || set.pts.is_empty() {
+        return enclose_set_fast(set, m, 0.0);
+    }
+    auto_orient_with(&mut PolygonEncloser::new(m), set, m, phi0)
+}
+
+/// The body of autoOrientSet for a polygon container and a set that is not empty.
+fn auto_orient_with<S: OrientationSolver>(solver: &mut S, set: &PointSet, m: u32, phi0: f64) -> Container {
+    // enclose.ts: GOLD
+    let gold = (5.0f64.sqrt() - 1.0) / 2.0;
     let mf = m as f64;
-    let triples = mf * (mf - 1.0) * (mf - 2.0) / 6.0;
-    let want = 256f64.max(4.0 * (set.pts.len() as f64 / 2.0 + mf));
-    let n = 256f64.max(want.min(2048.0).min((5e7 / triples).floor())) as usize;
+    let period = (2.0 * PI) / mf;
+    let wrap = |phi: f64| ((phi % period) + period) % period;
+
+    let triples = (mf * (mf - 1.0) * (mf - 2.0)) / 6.0;
+    let want = math::max(256.0, 4.0 * (set.pts.len() as f64 / 2.0 + mf));
+    let n = math::max(256.0, math::min(math::min(want, 2048.0), (5e7 / triples).floor())) as usize;
     let dphi = period / n as f64;
     let mut vals = vec![0.0; n];
     for (i, v) in vals.iter_mut().enumerate() {
-        *v = enc.min_apothem(set, i as f64 * dphi);
+        *v = solver.min_apothem(set, i as f64 * dphi);
     }
-    let mut minima: Vec<usize> = (0..n)
-        .filter(|&i| vals[i] <= vals[(i + n - 1) % n] && vals[i] <= vals[(i + 1) % n])
-        .collect();
-    minima.sort_by(|&p, &q| vals[p].partial_cmp(&vals[q]).unwrap_or(std::cmp::Ordering::Equal));
+
+    let mut minima: Vec<usize> = Vec::new();
+    for i in 0..n {
+        if vals[i] <= vals[(i + n - 1) % n] && vals[i] <= vals[(i + 1) % n] {
+            minima.push(i);
+        }
+    }
+    // the source's comparator is the difference of the values; a difference that is not a number
+    // counts as equal, and the sort is stable
+    minima.sort_by(|&p, &q| (vals[p] - vals[q]).partial_cmp(&0.0).unwrap_or(std::cmp::Ordering::Equal));
+
     let mut best_phi = wrap(phi0);
-    let mut best_val = enc.min_apothem(set, best_phi);
+    let mut best_val = solver.min_apothem(set, best_phi);
     let consider = |phi: f64, val: f64, best_phi: &mut f64, best_val: &mut f64| {
         if val < *best_val {
             *best_val = val;
@@ -638,35 +793,35 @@ pub fn auto_orient_set(set: &PointSet, m: u32, phi0: f64) -> Container {
     for &i in minima.iter().take(8) {
         let mut lo = (i as f64 - 1.0) * dphi;
         let mut hi = (i as f64 + 1.0) * dphi;
-        let mut x1 = hi - GOLD * (hi - lo);
-        let mut x2 = lo + GOLD * (hi - lo);
-        let mut f1 = enc.min_apothem(set, x1);
-        let mut f2 = enc.min_apothem(set, x2);
+        let mut x1 = hi - gold * (hi - lo);
+        let mut x2 = lo + gold * (hi - lo);
+        let mut f1 = solver.min_apothem(set, x1);
+        let mut f2 = solver.min_apothem(set, x2);
         while hi - lo > 1e-13 {
             if f1 < f2 {
                 hi = x2;
                 x2 = x1;
                 f2 = f1;
-                x1 = hi - GOLD * (hi - lo);
-                f1 = enc.min_apothem(set, x1);
+                x1 = hi - gold * (hi - lo);
+                f1 = solver.min_apothem(set, x1);
             } else {
                 lo = x1;
                 x1 = x2;
                 f1 = f2;
-                x2 = lo + GOLD * (hi - lo);
-                f2 = enc.min_apothem(set, x2);
+                x2 = lo + gold * (hi - lo);
+                f2 = solver.min_apothem(set, x2);
             }
         }
         consider(i as f64 * dphi, vals[i], &mut best_phi, &mut best_val);
         let mid = (lo + hi) / 2.0;
-        let fm = enc.min_apothem(set, mid);
-        consider(mid, fm, &mut best_phi, &mut best_val);
+        let at_mid = solver.min_apothem(set, mid);
+        consider(mid, at_mid, &mut best_phi, &mut best_val);
     }
-    // The search compares apothems; the side is computed afterwards and can round one step
+    // The search compares apothems; the side length is computed afterwards and can round one step
     // differently, so the guaranteed candidates are compared again on the returned size.
-    let mut result = enc.enclose(set, best_phi);
+    let mut result = solver.enclosing_polygon(set, best_phi);
     for phi in [wrap(phi0), 0.0] {
-        let c = enc.enclose(set, phi);
+        let c = solver.enclosing_polygon(set, phi);
         if c.size < result.size {
             result = c;
         }
@@ -674,9 +829,14 @@ pub fn auto_orient_set(set: &PointSet, m: u32, phi0: f64) -> Container {
     result
 }
 
-/// Auto-orientation for pieces given as poses.
+/// enclose.ts: autoOrient. Auto-orient for pieces given as poses.
 pub fn auto_orient(n: u32, poses: &[Pose], m: u32, phi0: f64) -> Container {
     auto_orient_set(&extreme_points(n, poses, 1.0), m, phi0)
+}
+
+/// NOT in the source: [`auto_orient`] with the search's solver.
+pub fn auto_orient_fast(n: u32, poses: &[Pose], m: u32, phi0: f64) -> Container {
+    auto_orient_set_fast(&extreme_points(n, poses, 1.0), m, phi0)
 }
 
 #[cfg(test)]

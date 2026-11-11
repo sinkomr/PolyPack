@@ -1,4 +1,4 @@
-//! Signed separation of two congruent pieces by the separating-axis theorem (SAT).
+//! The closed-form separation of two congruent pieces that the search uses.
 //!
 //! sep > 0: the pieces are disjoint (for polygons a lower bound on their distance, exact for face
 //! contact); sep < 0: they overlap and -sep is the penetration depth. (nx, ny) is the unit
@@ -6,144 +6,18 @@
 //!
 //! Two kernels compute the same quantity:
 //!
-//! - [`regular_polygon_separation`] and [`pair_separation`] follow the reference arithmetic of
-//!   the server (packages/geometry/src/overlap.ts) operation for operation, so that the validator
+//! - the reference kernels of [`crate::overlap`] (re-exported here: `regular_polygon_separation`,
+//!   `pair_separation`, `piece_separation`, `circle_separation`) follow the arithmetic of the
+//!   server (packages/geometry/src/overlap.ts) operation for operation, so that the validator
 //!   decides as the server does;
 //! - [`Shape::sep`] is the closed form used by the search: for two congruent regular N-gons the
 //!   reach of B along any edge normal of A is the same, so the 2N axes reduce to the edge normal
 //!   of each piece nearest the line of centres (see the derivation there).
 
-use crate::shapes::{bounding_radius, circumradius, inradius, piece_inradius, Pose, DISK_RADIUS};
+use crate::math;
+pub use crate::overlap::{circle_separation, pair_separation, piece_separation, regular_polygon_separation, Contact};
+use crate::shapes::{bounding_radius, piece_inradius, Pose, DISK_RADIUS};
 use std::f64::consts::PI;
-
-#[derive(Clone, Copy, Debug, PartialEq)]
-pub struct Contact {
-    pub sep: f64,
-    pub nx: f64,
-    pub ny: f64,
-}
-
-/// cos of the angular distance from `rel` to the nearest multiple of `step`.
-#[inline]
-fn cos_to_nearest_vertex(rel: f64, step: f64) -> f64 {
-    let mut t = rel % step;
-    if t < 0.0 {
-        t += step;
-    }
-    if t > step / 2.0 {
-        t = step - t;
-    }
-    t.cos()
-}
-
-/// Separating-axis test for two congruent regular N-gons, as the reference computes it.
-///
-/// Along an edge normal u of A, A reaches exactly its inradius r. B reaches R cos(delta) toward A,
-/// delta being the angle between -u and B's nearest vertex direction (the support function of a
-/// regular polygon), so the gap along u is (cB - cA) . u - r - R cos(delta).
-pub fn regular_polygon_separation(n: u32, a: &Pose, b: &Pose, scale: f64) -> Contact {
-    let big_r = circumradius(n) * scale;
-    let r = inradius(n) * scale;
-    let nf = n as f64;
-    let step = 2.0 * PI / nf;
-    let dx = b.x - a.x;
-    let dy = b.y - a.y;
-    let mut best = f64::NEG_INFINITY;
-    let mut nx = 1.0;
-    let mut ny = 0.0;
-    for k in 0..n {
-        // edge normals bisect consecutive vertex directions
-        let ang_a = a.theta + PI / 2.0 + PI / nf + k as f64 * step;
-        let (sa, ca) = ang_a.sin_cos();
-        let sep = dx * ca + dy * sa - r - big_r * cos_to_nearest_vertex(ang_a + PI / 2.0 - b.theta, step);
-        if sep > best {
-            best = sep;
-            nx = -ca;
-            ny = -sa;
-        }
-        let ang_b = b.theta + PI / 2.0 + PI / nf + k as f64 * step;
-        let (sb, cb) = ang_b.sin_cos();
-        let sep = -(dx * cb + dy * sb) - r - big_r * cos_to_nearest_vertex(ang_b + PI / 2.0 - a.theta, step);
-        if sep > best {
-            best = sep;
-            nx = cb;
-            ny = sb;
-        }
-    }
-    Contact { sep: best, nx, ny }
-}
-
-/// Circle-circle separation from the centre distance; exact in both signs.
-pub fn circle_separation(a: &Pose, b: &Pose, scale: f64) -> Contact {
-    let dx = a.x - b.x;
-    let dy = a.y - b.y;
-    let d = dx.hypot(dy);
-    if d == 0.0 {
-        return Contact { sep: -2.0 * DISK_RADIUS * scale, nx: 1.0, ny: 0.0 };
-    }
-    Contact { sep: d - 2.0 * DISK_RADIUS * scale, nx: dx / d, ny: dy / d }
-}
-
-/// Separation of two congruent pieces (n = 0 for disks), reference arithmetic.
-pub fn piece_separation(n: u32, a: &Pose, b: &Pose, scale: f64) -> Contact {
-    if n == 0 {
-        circle_separation(a, b, scale)
-    } else {
-        regular_polygon_separation(n, a, b, scale)
-    }
-}
-
-const PRUNE_FROM_N: u32 = 12;
-const PRUNE_MAX_THETA: f64 = 1000.0;
-
-/// `regular_polygon_separation(..).sep` from far fewer axes for many-sided pieces, the same value
-/// (the reference's pairSeparation). Each candidate gap is at most |d| cos(alpha) - 2r, alpha the
-/// angle between the axis and the line of centres; axes are visited outward from the nearest one
-/// on both pieces until no remaining axis can reach the best gap (with a 1e-11 (|d| + R) margin
-/// for rounding).
-pub fn pair_separation(n: u32, a: &Pose, b: &Pose, scale: f64) -> f64 {
-    if n == 0 {
-        return circle_separation(a, b, scale).sep;
-    }
-    if n < PRUNE_FROM_N || !(a.theta.abs() <= PRUNE_MAX_THETA && b.theta.abs() <= PRUNE_MAX_THETA) {
-        return regular_polygon_separation(n, a, b, scale).sep;
-    }
-    let big_r = circumradius(n) * scale;
-    let r = inradius(n) * scale;
-    let nf = n as f64;
-    let step = 2.0 * PI / nf;
-    let dx = b.x - a.x;
-    let dy = b.y - a.y;
-    let gap_a = |k: i64| -> f64 {
-        let ang = a.theta + PI / 2.0 + PI / nf + k as f64 * step;
-        dx * ang.cos() + dy * ang.sin() - r - big_r * cos_to_nearest_vertex(ang + PI / 2.0 - b.theta, step)
-    };
-    let gap_b = |k: i64| -> f64 {
-        let ang = b.theta + PI / 2.0 + PI / nf + k as f64 * step;
-        -(dx * ang.cos() + dy * ang.sin()) - r - big_r * cos_to_nearest_vertex(ang + PI / 2.0 - a.theta, step)
-    };
-    let ni = n as i64;
-    let index = |k: i64| ((k % ni) + ni) % ni;
-    let toward_b = dy.atan2(dx);
-    let ka = ((toward_b - (a.theta + PI / 2.0 + PI / nf)) / step).round() as i64;
-    let kb = ((toward_b + PI - (b.theta + PI / 2.0 + PI / nf)) / step).round() as i64;
-    let mut best = gap_a(index(ka)).max(gap_b(index(kb)));
-    let dist = dx.hypot(dy);
-    let margin = 1e-11 * (dist + big_r);
-    let mut s = 1i64;
-    while (s as f64) <= nf / 2.0 {
-        if dist * ((s as f64 - 0.5) * step).cos() - 2.0 * r < best - margin {
-            break;
-        }
-        best = best
-            .max(gap_a(index(ka + s)))
-            .max(gap_a(index(ka - s)))
-            .max(gap_b(index(kb + s)))
-            .max(gap_b(index(kb - s)));
-        s += 1;
-    }
-    best
-}
 
 /// Distance of `x` to the nearest multiple of `step`, in [0, step / 2], by rounding the quotient
 /// (fast; exact up to the rounding of x - k step).
@@ -185,7 +59,7 @@ impl Shape {
         if self.n == 0 {
             2.0 * DISK_RADIUS + t
         } else {
-            (self.r + self.big_r + t) / (PI / self.n as f64).cos()
+            (self.r + self.big_r + t) / math::cos(PI / self.n as f64)
         }
     }
 
@@ -207,7 +81,7 @@ impl Shape {
         // rel = ta - tb + pi + pi/n; pi + pi/n is a multiple of step plus step/2 for even n and a
         // multiple of step for odd n.
         let rel = ta - tb + PI + PI / self.n as f64;
-        self.r + self.big_r * self.fold(rel).cos()
+        self.r + self.big_r * math::cos(self.fold(rel))
     }
 
     /// Signed separation of two congruent pieces by the closed form of the SAT:
@@ -219,13 +93,13 @@ impl Shape {
         let dx = b.x - a.x;
         let dy = b.y - a.y;
         if self.n == 0 {
-            return dx.hypot(dy) - 2.0 * DISK_RADIUS;
+            return math::hypot(dx, dy) - 2.0 * DISK_RADIUS;
         }
-        let d = dx.hypot(dy);
-        let phi = dy.atan2(dx);
+        let d = math::hypot(dx, dy);
+        let phi = math::atan2(dy, dx);
         let alpha_a = self.fold(phi - a.theta - self.normal0);
         let alpha_b = self.fold(phi + PI - b.theta - self.normal0);
-        d * alpha_a.min(alpha_b).cos() - self.contact_offset(a.theta, b.theta)
+        d * math::cos(alpha_a.min(alpha_b)) - self.contact_offset(a.theta, b.theta)
     }
 
     /// Separation and the unit direction in which moving A increases it (the normal of the
@@ -235,29 +109,29 @@ impl Shape {
         let dx = b.x - a.x;
         let dy = b.y - a.y;
         if self.n == 0 {
-            let d = dx.hypot(dy);
+            let d = math::hypot(dx, dy);
             if d == 0.0 {
                 return Contact { sep: -2.0 * DISK_RADIUS, nx: 1.0, ny: 0.0 };
             }
             return Contact { sep: d - 2.0 * DISK_RADIUS, nx: -dx / d, ny: -dy / d };
         }
-        let d = dx.hypot(dy);
-        let phi = dy.atan2(dx);
+        let d = math::hypot(dx, dy);
+        let phi = math::atan2(dy, dx);
         let step = self.step;
         // nearest edge normal of A to d, and of B to -d
         let ka = ((phi - a.theta - self.normal0) / step).round();
         let kb = ((phi + PI - b.theta - self.normal0) / step).round();
         let ua = a.theta + self.normal0 + ka * step;
         let ub = b.theta + self.normal0 + kb * step;
-        let ga = d * (phi - ua).cos();
-        let gb = d * (phi + PI - ub).cos();
+        let ga = d * math::cos(phi - ua);
+        let gb = d * math::cos(phi + PI - ub);
         let off = self.contact_offset(a.theta, b.theta);
         if ga >= gb {
             // A's normal points from A toward B: A retreats along -u
-            Contact { sep: ga - off, nx: -ua.cos(), ny: -ua.sin() }
+            Contact { sep: ga - off, nx: -math::cos(ua), ny: -math::sin(ua) }
         } else {
             // B's normal pushes A along +u
-            Contact { sep: gb - off, nx: ub.cos(), ny: ub.sin() }
+            Contact { sep: gb - off, nx: math::cos(ub), ny: math::sin(ub) }
         }
     }
 }

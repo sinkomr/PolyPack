@@ -8,6 +8,7 @@
 //! search explores (ruins a region, repairs just below the current size), and after repeated
 //! failed explorations restarts from random poses near the best size.
 
+use crate::math;
 use super::common::{adopt, legalise, restore, scatter, shuffle, PairTester, Strategy};
 use crate::framework::Ctx;
 use crate::rng::Rng;
@@ -121,10 +122,10 @@ impl Kernel {
             big_r: bounding_radius(n),
             r: piece_inradius(n),
             step,
-            base_cos: base.iter().map(|a| a.cos()).collect(),
-            base_sin: base.iter().map(|a| a.sin()).collect(),
-            wall_cos: walls.iter().map(|a| a.cos()).collect(),
-            wall_sin: walls.iter().map(|a| a.sin()).collect(),
+            base_cos: base.iter().map(|&a| math::cos(a)).collect(),
+            base_sin: base.iter().map(|&a| math::sin(a)).collect(),
+            wall_cos: walls.iter().map(|&a| math::cos(a)).collect(),
+            wall_sin: walls.iter().map(|&a| math::sin(a)).collect(),
             wall_angle: walls,
         }
     }
@@ -132,7 +133,7 @@ impl Kernel {
     /// Edge normals of a piece at angle theta, [ux0, uy0, ux1, uy1, ...].
     #[inline]
     fn normals(&self, theta: f64, out: &mut [f64]) {
-        let (s, c) = theta.sin_cos();
+        let (s, c) = math::sin_cos(theta);
         for k in 0..self.n as usize {
             out[2 * k] = c * self.base_cos[k] - s * self.base_sin[k];
             out[2 * k + 1] = s * self.base_cos[k] + c * self.base_sin[k];
@@ -146,12 +147,12 @@ impl Kernel {
         let dx = xb - xa;
         let dy = yb - ya;
         if self.n == 0 {
-            let d = 2.0 * self.big_r - dx.hypot(dy);
+            let d = 2.0 * self.big_r - math::hypot(dx, dy);
             return if d > 0.0 { d } else { 0.0 };
         }
         let n = self.n as usize;
         let extra = PI + PI / self.n as f64;
-        let ca = self.r + self.big_r * offset(ta - tb + extra, self.step).cos();
+        let ca = self.r + self.big_r * math::cos(offset(ta - tb + extra, self.step));
         let mut best = f64::NEG_INFINITY;
         for k in 0..n {
             let s = dx * ua[2 * k] + dy * ua[2 * k + 1] - ca;
@@ -162,7 +163,7 @@ impl Kernel {
                 best = s;
             }
         }
-        let cb = self.r + self.big_r * offset(tb - ta + extra, self.step).cos();
+        let cb = self.r + self.big_r * math::cos(offset(tb - ta + extra, self.step));
         for k in 0..n {
             let s = -(dx * ub[2 * k] + dy * ub[2 * k + 1]) - cb;
             if s >= 0.0 {
@@ -184,7 +185,7 @@ impl Kernel {
         let dx = xb - xa;
         let dy = yb - ya;
         if self.n == 0 {
-            let distance = dx.hypot(dy);
+            let distance = math::hypot(dx, dy);
             // coincident centres: a bounded subgradient that separates them
             let ux = if distance == 0.0 { 1.0 } else { -dx / distance };
             let uy = if distance == 0.0 { 0.0 } else { -dy / distance };
@@ -196,8 +197,8 @@ impl Kernel {
         let extra = PI + PI / self.n as f64;
         let rel_a = ta - tb + extra;
         let rel_b = tb - ta + extra;
-        let ca = self.r + self.big_r * offset(rel_a, step).cos();
-        let cb = self.r + self.big_r * offset(rel_b, step).cos();
+        let ca = self.r + self.big_r * math::cos(offset(rel_a, step));
+        let cb = self.r + self.big_r * math::cos(offset(rel_b, step));
         let mut best = f64::NEG_INFINITY;
         let mut pass = 0;
         let mut edge = 0;
@@ -225,8 +226,8 @@ impl Kernel {
         let rel = (if pass == 0 { rel_a } else { rel_b }) + edge as f64 * step;
         let vertex = (rel / step).round();
         let vertex_angle = qt + PI / 2.0 + vertex * step;
-        let vx = self.big_r * vertex_angle.cos();
-        let vy = self.big_r * vertex_angle.sin();
+        let vx = self.big_r * math::cos(vertex_angle);
+        let vy = self.big_r * math::sin(vertex_angle);
         let (ddx, ddy) = if pass == 0 { (dx, dy) } else { (-dx, -dy) };
         let pt = (ddx + vx) * uy - (ddy + vy) * ux;
         let qtheta = vy * ux - vx * uy;
@@ -247,7 +248,7 @@ impl Kernel {
         // radius of the circle container, or the apothem of a polygon container
         let limit = size * container_inradius(m);
         if m == 0 {
-            let distance = x.hypot(y);
+            let distance = math::hypot(x, y);
             if distance + big_r <= limit {
                 return w;
             }
@@ -255,14 +256,14 @@ impl Kernel {
             if n != 0 {
                 // the vertex nearest in angle to the centre's direction is the furthest one
                 let a0 = theta + PI / 2.0;
-                let vertex = (((if distance == 0.0 { 0.0 } else { y.atan2(x) }) - a0) / step).round();
+                let vertex = (((if distance == 0.0 { 0.0 } else { math::atan2(y, x) }) - a0) / step).round();
                 let angle = a0 + vertex * step;
-                ox = big_r * angle.cos();
-                oy = big_r * angle.sin();
+                ox = big_r * math::cos(angle);
+                oy = big_r * math::sin(angle);
                 px += ox;
                 py += oy;
             }
-            let reach = px.hypot(py);
+            let reach = math::hypot(px, py);
             let depth = reach + if n == 0 { DISK_RADIUS } else { 0.0 } - limit;
             if !(depth > 0.0) {
                 return w;
@@ -291,8 +292,8 @@ impl Kernel {
             } else {
                 let vertex = ((self.wall_angle[j] - a0) / step).round();
                 let angle = a0 + vertex * step;
-                let ox = big_r * angle.cos();
-                let oy = big_r * angle.sin();
+                let ox = big_r * math::cos(angle);
+                let oy = big_r * math::sin(angle);
                 (h + ox * wx + oy * wy - limit, ox, oy)
             };
             if !(depth > 0.0) {
@@ -433,7 +434,7 @@ impl RepairState {
     fn set_size(&mut self, size: f64) {
         self.size = size;
         // half-width of the container's bounding box: its circumradius (radius for a circle)
-        let half = if self.m == 0 { size / 2.0 } else { size / (2.0 * (PI / self.m as f64).sin()) };
+        let half = if self.m == 0 { size / 2.0 } else { size / (2.0 * math::sin(PI / self.m as f64)) };
         self.cell_size = 2.0 * self.big_r;
         let g = ((2.0 * (half + self.big_r)) / self.cell_size).ceil();
         self.g = if g.is_finite() { (g as i64).clamp(1, 256) } else { 256 };
@@ -876,10 +877,10 @@ impl RepairState {
         if self.m == 0 {
             let radius = (self.apothem * s - self.rin).max(0.0) * rng.next().sqrt();
             let angle = 2.0 * PI * rng.next();
-            return (radius * angle.cos(), radius * angle.sin());
+            return (radius * math::cos(angle), radius * math::sin(angle));
         }
         let limit = (self.apothem * s - self.rin).max(0.0);
-        let half = limit / (PI / self.m as f64).cos();
+        let half = limit / math::cos(PI / self.m as f64);
         // rejection from the bounding square of the shrunken polygon; acceptance above 0.4
         for _ in 0..64 {
             let x = (2.0 * rng.next() - 1.0) * half;
@@ -909,7 +910,7 @@ impl RepairState {
         }
         let u = rng.next();
         if u < 0.4 {
-            let wall = if m == 0 { y.atan2(x) + PI / 2.0 } else { 2.0 * PI * (rng.next() * m as f64).floor() / m as f64 };
+            let wall = if m == 0 { math::atan2(y, x) + PI / 2.0 } else { 2.0 * PI * (rng.next() * m as f64).floor() / m as f64 };
             return wall - PI - PI / n as f64 + (period / 4.0) * (rng.next() * 4.0).floor();
         }
         if u < 0.6 && self.p > 1 {
@@ -1040,7 +1041,7 @@ impl RepairState {
         let p = self.p;
         let k = count.clamp(1, p);
         let centre = self.poses[(rng.next() * p as f64) as usize];
-        let dist = |q: &Pose| (q.x - centre.x).hypot(q.y - centre.y);
+        let dist = |q: &Pose| math::hypot(q.x - centre.x, q.y - centre.y);
         let mut order: Vec<usize> = (0..p).collect();
         order.sort_by(|&a, &b| dist(&self.poses[a]).partial_cmp(&dist(&self.poses[b])).unwrap_or(std::cmp::Ordering::Equal).then(a.cmp(&b)));
         let chosen: Vec<usize> = order[..k].to_vec();
@@ -1053,7 +1054,7 @@ impl RepairState {
             }
             // a turn by up to half the symmetry period either way (any angle for disks)
             let alpha = (rng.next() - 0.5) * if self.n == 0 { 2.0 * PI } else { self.period };
-            let (s, c) = alpha.sin_cos();
+            let (s, c) = math::sin_cos(alpha);
             for &i in &chosen {
                 let q = self.poses[i];
                 let (dx, dy) = (q.x - mx, q.y - my);
@@ -1066,7 +1067,7 @@ impl RepairState {
             let mut cand = (0.0, 0.0);
             for _ in 0..32 {
                 cand = self.sample_centre(rng);
-                if (cand.0 - centre.x).hypot(cand.1 - centre.y) <= radius {
+                if math::hypot(cand.0 - centre.x, cand.1 - centre.y) <= radius {
                     break;
                 }
             }
@@ -1150,7 +1151,7 @@ impl RepairState {
             // cap the largest move
             let mut largest = 0.0f64;
             for i in 0..p {
-                largest = largest.max(self.direction[3 * i].hypot(self.direction[3 * i + 1]) / cap_move);
+                largest = largest.max(math::hypot(self.direction[3 * i], self.direction[3 * i + 1]) / cap_move);
                 if self.n != 0 {
                     largest = largest.max(self.direction[3 * i + 2].abs() / 0.25);
                 }
@@ -1535,7 +1536,7 @@ pub fn execute(ctx: &mut Ctx) {
         state.scale_centres(1.0 - r);
         state.reset_weights();
         if exploring {
-            let count = (params.max_ruin * p as f64).max(1.0).powf(ctx.rng.next()).round().max(1.0) as usize;
+            let count = math::pow((params.max_ruin * p as f64).max(1.0), ctx.rng.next()).round().max(1.0) as usize;
             state.ruin(count, &mut ctx.rng);
         }
         let patience = if exploring { params.explore_patience } else { params.patience };

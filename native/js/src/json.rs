@@ -117,10 +117,11 @@ mod tests {
 /// whatever the message is).
 ///
 /// Three inputs that JavaScript reads and this does not read the same way; none is a
-/// configuration anyone sends, and each is refused or rejected by both servers:
+/// configuration anyone sends:
 ///  - a number too large for a double (`1e400`) is `Infinity` in JavaScript; here it becomes
 ///    `null`, which every reader of a number rejects with the same message as a non-finite number;
-///  - a string with a lone surrogate escape (`"\ud800"`) is invalid here;
+///  - half a surrogate pair escaped in a string (`"\ud800"`) stays half a pair in JavaScript until
+///    the text is stored, when SQLite's UTF-8 makes it U+FFFD; here it is U+FFFD from the start;
 ///  - nesting deeper than 128 levels is invalid here.
 pub fn parse(bytes: &[u8]) -> Result<serde_json::Value, String> {
     let text = String::from_utf8_lossy(bytes);
@@ -128,18 +129,29 @@ pub fn parse(bytes: &[u8]) -> Result<serde_json::Value, String> {
     match serde_json::from_str::<serde_json::Value>(text) {
         Ok(v) => Ok(v),
         Err(e) => {
-            if e.to_string().starts_with("number out of range") {
-                let patched = null_out_overflowing_numbers(text);
-                serde_json::from_str::<serde_json::Value>(&patched).map_err(|e| e.to_string())
-            } else {
+            // the slow path: the two repairs above, then one more try
+            let patched = repair(text);
+            if patched == text {
                 Err(e.to_string())
+            } else {
+                serde_json::from_str::<serde_json::Value>(&patched).map_err(|e| e.to_string())
             }
         }
     }
 }
 
-/// The text with every number token that overflows a double replaced by `null`.
-fn null_out_overflowing_numbers(text: &str) -> String {
+/// The value of a `\uXXXX` escape starting at byte `i` (the backslash), if there is one.
+fn escape_at(b: &[u8], i: usize) -> Option<u32> {
+    if i + 6 <= b.len() && b[i] == b'\\' && b[i + 1] == b'u' {
+        std::str::from_utf8(&b[i + 2..i + 6]).ok().and_then(|h| u32::from_str_radix(h, 16).ok())
+    } else {
+        None
+    }
+}
+
+/// The text with every number token that overflows a double replaced by `null`, and every escaped
+/// half of a surrogate pair replaced by the escape of U+FFFD.
+fn repair(text: &str) -> String {
     let b = text.as_bytes();
     let mut out = String::with_capacity(text.len());
     let mut i = 0;
@@ -149,6 +161,20 @@ fn null_out_overflowing_numbers(text: &str) -> String {
         if in_string {
             // copy the string through, escapes included
             if c == b'\\' && i + 1 < b.len() {
+                if let Some(u) = escape_at(b, i) {
+                    let low_follows = matches!(escape_at(b, i + 6), Some(0xdc00..=0xdfff));
+                    if (0xd800..=0xdbff).contains(&u) && low_follows {
+                        out.push_str(&text[i..i + 12]);
+                        i += 12;
+                    } else if (0xd800..=0xdfff).contains(&u) {
+                        out.push_str("\\ufffd");
+                        i += 6;
+                    } else {
+                        out.push_str(&text[i..i + 6]);
+                        i += 6;
+                    }
+                    continue;
+                }
                 out.push_str(&text[i..i + 2]);
                 i += 2;
                 continue;
@@ -198,6 +224,7 @@ mod parse_tests {
         assert_eq!(parse(b"\xef\xbb\xbf[1]").unwrap(), json!([1]));
         assert_eq!(parse(b"\"a\xffb\"").unwrap(), json!("a\u{fffd}b"));
         assert!(parse(b"{").is_err());
+        assert_eq!(parse(br#"["\ud800", "a\udc00b", "\ud83d\ude00", "\\ud800"]"#).unwrap(), json!(["\u{fffd}", "a\u{fffd}b", "\u{1f600}", "\\ud800"]));
         assert_eq!(parse(br#"{"a":1,"a":2}"#).unwrap(), json!({ "a": 2 }));
     }
 }

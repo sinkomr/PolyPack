@@ -13,9 +13,10 @@
 //! repaired by a uniform shrink of the pieces; larger ones end the run. See
 //! docs/methods/ls_growth.md.
 
+use crate::math;
 use super::common::{restore, scatter, PairTester, Strategy, COORD_LIMIT};
 use super::{params_of, Method};
-use crate::enclose::enclose;
+use crate::enclose::enclose_fast as enclose;
 use crate::framework::Ctx;
 use crate::grid::NeighborGrid;
 use crate::penalty::visit_protrusions;
@@ -344,17 +345,17 @@ const FAILED: Advance = Advance { dt: 0.0, collision: false, failed: true };
 fn pair_sep(shape: &Shape, a: &Pose, b: &Pose) -> f64 {
     let dx = b.x - a.x;
     let dy = b.y - a.y;
-    let d = dx.hypot(dy);
+    let d = math::hypot(dx, dy);
     if shape.n == 0 {
         return d - 2.0 * DISK_RADIUS;
     }
     let step = shape.step;
     let near = |x: f64| (x - step * (x / step).round()).abs();
-    let phi = dy.atan2(dx);
+    let phi = math::atan2(dy, dx);
     let alpha_a = near(phi - a.theta - shape.normal0);
     let alpha_b = near(phi + PI - b.theta - shape.normal0);
     let rel = a.theta - b.theta + PI + PI / shape.n as f64;
-    d * alpha_a.min(alpha_b).cos() - (shape.r + shape.big_r * near(rel).cos())
+    d * math::cos(alpha_a.min(alpha_b)) - (shape.r + shape.big_r * math::cos(near(rel)))
 }
 
 /// First pair of unit-coordinate poses with negative separation.
@@ -433,12 +434,12 @@ impl Growth {
         for _ in 0..p {
             let angle = 2.0 * PI * rng.next();
             let omega = if n == 0 { 0.0 } else { angular_speed * (2.0 * rng.next() - 1.0) };
-            vel.push(Vel { x: speed * angle.cos(), y: speed * angle.sin(), omega });
+            vel.push(Vel { x: speed * math::cos(angle), y: speed * math::sin(angle), omega });
         }
         let initial_energy = vel.iter().map(|v| v.x * v.x + v.y * v.y).sum();
         let wall_angle: Vec<f64> = (0..m as usize).map(|edge| container.phi - PI / 2.0 + (2.0 * PI * edge as f64) / m as f64).collect();
-        let wall_cos: Vec<f64> = wall_angle.iter().map(|a| a.cos()).collect();
-        let wall_sin: Vec<f64> = wall_angle.iter().map(|a| a.sin()).collect();
+        let wall_cos: Vec<f64> = wall_angle.iter().map(|&a| math::cos(a)).collect();
+        let wall_sin: Vec<f64> = wall_angle.iter().map(|&a| math::sin(a)).collect();
         Growth {
             n,
             m,
@@ -514,7 +515,7 @@ impl Growth {
         let skip = reach_in - bounding_radius(n) - 1e-12 * reach_in.max(1.0);
         let unit_container = self.unit_container(scale);
         for (i, q) in self.unit.iter().enumerate() {
-            if q.x.hypot(q.y) <= skip {
+            if math::hypot(q.x, q.y) <= skip {
                 continue;
             }
             if n == 0 && self.m != 0 {
@@ -531,7 +532,7 @@ impl Growth {
                 for e in 0..self.wall_angle.len() {
                     let rel = self.wall_angle[e] - a0;
                     let near = rel - step * (rel / step).round();
-                    let depth = q.x * self.wall_cos[e] + q.y * self.wall_sin[e] + self.shape.big_r * near.cos() - reach_in;
+                    let depth = q.x * self.wall_cos[e] + q.y * self.wall_sin[e] + self.shape.big_r * math::cos(near) - reach_in;
                     if !(depth <= 0.0) {
                         return Some((i, self.wall_cos[e], self.wall_sin[e]));
                     }
@@ -599,7 +600,7 @@ impl Growth {
         let p = self.pieces.len();
         let mut vmax = 0.0f64;
         for v in &self.vel {
-            vmax = vmax.max(v.x.hypot(v.y));
+            vmax = vmax.max(math::hypot(v.x, v.y));
         }
         // a disk piece scaled by `scale` has radius DISK_RADIUS * scale, growing at DISK_RADIUS * growth
         let radius = self.scale * DISK_RADIUS;
@@ -678,13 +679,13 @@ impl Growth {
         if event.j >= 0 {
             let j = event.j as usize;
             let (p, q) = (self.pieces[i], self.pieces[j]);
-            let distance = (p.x - q.x).hypot(p.y - q.y);
+            let distance = math::hypot(p.x - q.x, p.y - q.y);
             let (a, b) = two_mut(&mut self.vel, i, j);
             collide_discs(a, b, (p.x - q.x) / distance, (p.y - q.y) / distance, self.growth * DISK_RADIUS);
         } else {
             let p = self.pieces[i];
             let (nx, ny) = if self.m == 0 {
-                let distance = p.x.hypot(p.y);
+                let distance = math::hypot(p.x, p.y);
                 if distance == 0.0 {
                     (1.0, 0.0)
                 } else {
@@ -697,7 +698,7 @@ impl Growth {
             let closing = v.x * nx + v.y * ny + self.growth * DISK_RADIUS;
             // tangency to a curved wall has outward second-order motion; a zero normal impulse
             // cannot resolve it, so create microscopic room for the next event
-            if self.m == 0 && closing.abs() <= 1e-14 * 1f64.max(v.x.hypot(v.y)) {
+            if self.m == 0 && closing.abs() <= 1e-14 * 1f64.max(math::hypot(v.x, v.y)) {
                 self.scale *= 1.0 - 2e-14;
                 self.repairs += 1;
             }
@@ -721,7 +722,7 @@ impl Growth {
         let radius = bounding_radius(self.n);
         let mut fastest = f64::NEG_INFINITY;
         for v in &self.vel {
-            fastest = fastest.max(v.x.hypot(v.y) + radius * self.scale * v.omega.abs());
+            fastest = fastest.max(math::hypot(v.x, v.y) + radius * self.scale * v.omega.abs());
         }
         let closing = fastest + radius * self.growth;
         let dt = max_step.min((0.025 * radius * self.scale) / closing);
@@ -837,7 +838,7 @@ fn random_loose(ctx: &mut Ctx, work: &mut Work, timed: bool, reserve: f64) -> Lo
     let fallback = scatter(problem, || ctx.rng.next());
     let mut bx = strict_enclose(&fallback, fallback.phi);
     bx.size *= 1.3;
-    let reach = if m == 0 { bx.size / 2.0 } else { bx.size / (2.0 * (PI / m as f64).sin()) };
+    let reach = if m == 0 { bx.size / 2.0 } else { bx.size / (2.0 * math::sin(PI / m as f64)) };
     let shape = Shape::new(n);
     // placed pieces in a cell grid of side twice the bounding radius: a new piece can only meet
     // the 3x3 block around it

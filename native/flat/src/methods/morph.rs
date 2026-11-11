@@ -9,11 +9,12 @@
 //! analytic penalty solve (or Monte Carlo); only true-shape arrangements, restored by uniform
 //! expansion, are assessed.
 
+use crate::math;
 use super::common::{dilate, restore, scatter, PairTester, Strategy};
 use super::lbfgs::{Lbfgs, Options, Status};
 use super::penalty_method::{pack_state, unpack_into, Cap, Descent, PenaltyObjective, Submit};
 use super::{fill, params_of, Method};
-use crate::enclose::{convex_hull, enclose_set, extreme_points, PointSet};
+use crate::enclose::{convex_hull, enclose_set_fast as enclose_set, extreme_points, PointSet};
 use crate::framework::Ctx;
 use crate::penalty::{pair_penetration, visit_protrusions};
 use crate::shapes::{bounding_radius, circumradius, container_inradius, inradius, Config, Container, Pose, MAX_COORD};
@@ -131,10 +132,10 @@ fn rounded_shape(n: u32, t: f64, inscribed: bool) -> MorphShape {
 /// theta + pi/4 under the vertex-up convention. Uniform polar angles: the boundary speed is at
 /// most 1 for every p >= 2, so the polygon lies within pi/K (Hausdorff) of the curve.
 fn super_rel(theta: f64, p: f64, count: usize, out: &mut [f64]) {
-    let (s, c) = (theta + PI / 4.0).sin_cos();
+    let (s, c) = math::sin_cos(theta + PI / 4.0);
     for k in 0..count {
-        let (uy, ux) = (2.0 * PI * k as f64 / count as f64).sin_cos();
-        let radius = 0.5 / (ux.abs().powf(p) + uy.abs().powf(p)).powf(1.0 / p);
+        let (uy, ux) = math::sin_cos(2.0 * PI * k as f64 / count as f64);
+        let radius = 0.5 / math::pow(math::pow(ux.abs(), p) + math::pow(uy.abs(), p), 1.0 / p);
         let (x, y) = (radius * ux, radius * uy);
         out[2 * k] = c * x - s * y;
         out[2 * k + 1] = s * x + c * y;
@@ -155,7 +156,7 @@ fn polygon_gap(a: &[f64], apos: (f64, f64), b: &[f64], bpos: (f64, f64)) -> f64 
             let (px, py) = (p[2 * i], p[2 * i + 1]);
             let ex = p[2 * j] - px;
             let ey = p[2 * j + 1] - py;
-            let len = ex.hypot(ey);
+            let len = math::hypot(ex, ey);
             // outward normal of a counter-clockwise edge
             let ux = ey / len;
             let uy = -ex / len;
@@ -329,13 +330,13 @@ impl Morph {
             let dx = rel[2 * k] + pose.x - container.cx;
             let dy = rel[2 * k + 1] + pose.y - container.cy;
             if container.m == 0 {
-                if dx.hypot(dy) > container.size * apothem {
+                if math::hypot(dx, dy) > container.size * apothem {
                     return false;
                 }
             } else {
                 for edge in 0..container.m {
                     let a = container.phi - PI / 2.0 + 2.0 * PI * edge as f64 / container.m as f64;
-                    if dx * a.cos() + dy * a.sin() > container.size * apothem {
+                    if dx * math::cos(a) + dy * math::sin(a) > container.size * apothem {
                         return false;
                     }
                 }
@@ -495,7 +496,7 @@ impl Morph {
                         continue;
                     }
                     let q = &config.pieces[j];
-                    if (trial.x - q.x).hypot(trial.y - q.y) > far {
+                    if math::hypot(trial.x - q.x, trial.y - q.y) > far {
                         continue;
                     }
                     let gap = if shape.p.is_some() {
@@ -544,7 +545,7 @@ impl Morph {
                 break;
             }
             if sweep % 10 == 9 {
-                let gain = (accepted as f64 / np as f64 - 0.3).exp();
+                let gain = math::exp(accepted as f64 / np as f64 - 0.3);
                 step = (step * gain).min(0.5).max(1e-7);
                 angle_step = (angle_step * gain).min(0.5).max(1e-7);
             }
@@ -647,7 +648,7 @@ pub fn execute(ctx: &mut Ctx) {
     let mut schedule: VecDeque<f64> = if n == 0 {
         VecDeque::from(vec![1.0])
     } else {
-        (0..stages).map(|j| (j as f64 / (stages - 1) as f64).powf(params.spacing)).collect()
+        (0..stages).map(|j| math::pow(j as f64 / (stages - 1) as f64, params.spacing)).collect()
     };
     let mut objective = PenaltyObjective::new(n, m, np, 1.0, 0.0, true);
     let mut solver = Lbfgs::new();
@@ -668,11 +669,11 @@ pub fn execute(ctx: &mut Ctx) {
         }
         let mut shape = rounded_shape(n, t, params.family == "inscribed");
         if n == 4 && params.path == "superellipse" && t < 1.0 {
-            let last_finite = if stages > 2 { ((stages - 2) as f64 / (stages - 1) as f64).powf(params.spacing) } else { 1.0 };
+            let last_finite = if stages > 2 { math::pow((stages - 2) as f64 / (stages - 1) as f64, params.spacing) } else { 1.0 };
             shape = MorphShape {
                 scale: 1.0,
                 padding: 0.0,
-                p: Some(2.0 * (params.max_exponent / 2.0).powf(1f64.min(t / last_finite))),
+                p: Some(2.0 * math::pow(params.max_exponent / 2.0, 1f64.min(t / last_finite))),
                 vertices: 8 * (params.vertices as usize).div_ceil(8),
             };
         }
@@ -740,11 +741,11 @@ mod tests {
         let mut v = vec![0.0; 128];
         super_rel(0.7, 2.0, 64, &mut v);
         for k in 0..64 {
-            assert!((v[2 * k].hypot(v[2 * k + 1]) - 0.5).abs() < 1e-12);
+            assert!((math::hypot(v[2 * k], v[2 * k + 1]) - 0.5).abs() < 1e-12);
         }
         super_rel(0.0, 128.0, 64, &mut v);
         // unrotated, the axes are at pi/4: the vertices of the unit square lie on the diagonals
-        let far = (0..64).map(|k| v[2 * k].hypot(v[2 * k + 1])).fold(0.0, f64::max);
+        let far = (0..64).map(|k| math::hypot(v[2 * k], v[2 * k + 1])).fold(0.0, f64::max);
         assert!(far > 0.70 && far < 0.7072);
     }
 

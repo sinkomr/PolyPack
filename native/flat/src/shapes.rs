@@ -1,4 +1,5 @@
-//! Shapes and conventions (PROMPT.md Section 2, docs/ARCHITECTURE.md):
+//! Shapes and conventions; port of packages/geometry/src/shapes.ts (PROMPT.md Section 2,
+//! docs/ARCHITECTURE.md):
 //!
 //! - a polygon piece is a regular N-gon of side 1; N = 0 is a disk of diameter 1;
 //! - an unrotated piece points a vertex straight up: vertex k sits at angle
@@ -7,14 +8,20 @@
 //!   phi - pi/2 + pi/M + 2 pi k / M; M = 0 is a circle container;
 //! - the score is the container side for a polygon container and the diameter for a circle;
 //! - angles are radians.
+//!
+//! `Problem`, `Config` and `default_theta` are the search's own and have no counterpart in
+//! shapes.ts.
 
+use crate::math;
 use std::f64::consts::PI;
 
-/// Position and orientation of one piece; theta is ignored for disks.
-#[derive(Clone, Copy, Debug, Default, PartialEq)]
+/// shapes.ts: Pose. Position and orientation of one piece; theta is in radians and ignored for disks.
+#[derive(Clone, Copy, Debug, Default, PartialEq, serde::Deserialize)]
 pub struct Pose {
     pub x: f64,
     pub y: f64,
+    /// Absent in JSON: 0.
+    #[serde(default)]
     pub theta: f64,
 }
 
@@ -24,7 +31,7 @@ impl Pose {
     }
 }
 
-/// An enclosing container. `size` is the side for a polygon container and the diameter for a
+/// shapes.ts: Container. An enclosing container. `size` is the side for a polygon container and the diameter for a
 /// circle container (m = 0).
 #[derive(Clone, Copy, Debug, Default, PartialEq)]
 pub struct Container {
@@ -35,31 +42,49 @@ pub struct Container {
     pub size: f64,
 }
 
-/// Radius of a disk piece: disks have diameter 1.
+/// shapes.ts: DISK_RADIUS. Radius of a disk piece (N = 0): disk pieces have diameter 1.
 pub const DISK_RADIUS: f64 = 0.5;
+/// shapes.ts: MAX_SIDES.
 pub const MAX_SIDES: u32 = 100;
+/// shapes.ts: MAX_PIECES.
 pub const MAX_PIECES: usize = 500;
-/// Largest |x| or |y| of a piece centre the server accepts.
+/// shapes.ts: MAX_COORD. Largest |x| or |y| of a piece centre the server accepts.
 pub const MAX_COORD: f64 = 1e6;
 
-/// 0 (circle) or 3..=100 sides.
+/// shapes.ts: isShapeCode, for a count already known to be a whole number: 0 (circle) or 3..=100
+/// sides.
 pub fn is_shape_code(n: u32) -> bool {
     n == 0 || (3..=MAX_SIDES).contains(&n)
 }
 
-/// Circumradius of a regular n-gon of side 1.
+/// shapes.ts: isShapeCode, for any JavaScript number (a query parameter read with `Number(...)`,
+/// say): a whole number that is 0 or from 3 to MAX_SIDES. -0 is a shape code, as in the source.
+pub fn is_shape_code_number(n: f64) -> bool {
+    n.is_finite() && n.trunc() == n && (n == 0.0 || (n >= 3.0 && n <= MAX_SIDES as f64))
+}
+
+/// shapes.ts: isShapeCode, for a JSON value: a number that is a shape code. The shape as an
+/// integer when it is one.
+pub fn shape_code(v: &serde_json::Value) -> Option<u32> {
+    match v.as_f64() {
+        Some(n) if v.is_number() && is_shape_code_number(n) => Some(n as u32),
+        _ => None,
+    }
+}
+
+/// shapes.ts: circumradius. Circumradius of a regular n-gon of side 1.
 #[inline]
 pub fn circumradius(n: u32) -> f64 {
-    1.0 / (2.0 * (PI / n as f64).sin())
+    1.0 / (2.0 * math::sin(PI / n as f64))
 }
 
-/// Inradius (apothem) of a regular n-gon of side 1.
+/// shapes.ts: inradius. Inradius (apothem) of a regular n-gon of side 1.
 #[inline]
 pub fn inradius(n: u32) -> f64 {
-    1.0 / (2.0 * (PI / n as f64).tan())
+    1.0 / (2.0 * math::tan(PI / n as f64))
 }
 
-/// Inradius of a piece: the polygon's apothem, or the disk radius.
+/// shapes.ts: pieceInradius. Inradius of a piece: the polygon's apothem, or the disk radius.
 #[inline]
 pub fn piece_inradius(n: u32) -> f64 {
     if n == 0 {
@@ -69,7 +94,7 @@ pub fn piece_inradius(n: u32) -> f64 {
     }
 }
 
-/// Apothem of a container of size 1: the polygon apothem, or 1/2 for a circle (size is the diameter).
+/// shapes.ts: containerInradius. Apothem of a container of size 1: the polygon apothem, or 1/2 for a circle (size is the diameter).
 #[inline]
 pub fn container_inradius(m: u32) -> f64 {
     if m == 0 {
@@ -79,7 +104,7 @@ pub fn container_inradius(m: u32) -> f64 {
     }
 }
 
-/// Radius of the smallest circle about the piece centre containing the piece.
+/// shapes.ts: boundingRadius. Radius of the smallest circle about the piece centre containing the piece.
 #[inline]
 pub fn bounding_radius(n: u32) -> f64 {
     if n == 0 {
@@ -89,23 +114,25 @@ pub fn bounding_radius(n: u32) -> f64 {
     }
 }
 
+/// shapes.ts: pieceArea.
 pub fn piece_area(n: u32) -> f64 {
     if n == 0 {
         PI * DISK_RADIUS * DISK_RADIUS
     } else {
-        n as f64 / (4.0 * (PI / n as f64).tan())
+        n as f64 / (4.0 * math::tan(PI / n as f64))
     }
 }
 
+/// shapes.ts: containerArea.
 pub fn container_area(m: u32, size: f64) -> f64 {
     if m == 0 {
         PI * size * size / 4.0
     } else {
-        m as f64 * size * size / (4.0 * (PI / m as f64).tan())
+        m as f64 * size * size / (4.0 * math::tan(PI / m as f64))
     }
 }
 
-/// Vertices of a piece as [x0, y0, x1, y1, ...], counter-clockwise; `scale` shrinks or grows the
+/// shapes.ts: pieceVertices (with `out`). Vertices of a piece as [x0, y0, x1, y1, ...], counter-clockwise; `scale` shrinks or grows the
 /// piece about its centre (the strict verifier shrinks by 1 - 1e-8).
 pub fn piece_vertices_into(n: u32, pose: &Pose, scale: f64, out: &mut [f64]) {
     let r = circumradius(n) * scale;
@@ -113,39 +140,40 @@ pub fn piece_vertices_into(n: u32, pose: &Pose, scale: f64, out: &mut [f64]) {
     let a0 = pose.theta + PI / 2.0;
     for k in 0..n as usize {
         let a = a0 + k as f64 * step;
-        out[2 * k] = pose.x + r * a.cos();
-        out[2 * k + 1] = pose.y + r * a.sin();
+        out[2 * k] = pose.x + r * math::cos(a);
+        out[2 * k + 1] = pose.y + r * math::sin(a);
     }
 }
 
+/// shapes.ts: pieceVertices.
 pub fn piece_vertices(n: u32, pose: &Pose, scale: f64) -> Vec<f64> {
     let mut v = vec![0.0; 2 * n as usize];
     piece_vertices_into(n, pose, scale, &mut v);
     v
 }
 
-/// Vertices of a polygon container, counter-clockwise (phi = 0: horizontal bottom edge).
+/// shapes.ts: containerVertices. Vertices of a polygon container, counter-clockwise (phi = 0: horizontal bottom edge).
 pub fn container_vertices(c: &Container) -> Vec<f64> {
     let m = c.m as usize;
     let mut v = vec![0.0; 2 * m];
-    let r = c.size / (2.0 * (PI / c.m as f64).sin());
+    let r = c.size / (2.0 * math::sin(PI / c.m as f64));
     let a0 = c.phi - PI / 2.0 + PI / c.m as f64;
     let step = 2.0 * PI / c.m as f64;
     for k in 0..m {
         let a = a0 + k as f64 * step;
-        v[2 * k] = c.cx + r * a.cos();
-        v[2 * k + 1] = c.cy + r * a.sin();
+        v[2 * k] = c.cx + r * math::cos(a);
+        v[2 * k + 1] = c.cy + r * math::sin(a);
     }
     v
 }
 
-/// Area lower bound on the container size: P times the piece area fits in the container.
+/// shapes.ts: areaLowerBound. Area lower bound on the container size (side or diameter): P times the piece area fits in the container.
 pub fn area_lower_bound(n: u32, m: u32, p: usize) -> f64 {
     let total = p as f64 * piece_area(n);
     if m == 0 {
         2.0 * (total / PI).sqrt()
     } else {
-        (total * 4.0 * (PI / m as f64).tan() / m as f64).sqrt()
+        (total * 4.0 * math::tan(PI / m as f64) / m as f64).sqrt()
     }
 }
 

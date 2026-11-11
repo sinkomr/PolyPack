@@ -2,6 +2,7 @@
 //! legalisation, and zero-tolerance overlap tests (penalty/restoration.ts, harden/legalise.ts,
 //! morph/shapes.ts `dilate`).
 
+use crate::math;
 use crate::framework::Ctx;
 use crate::grid::NeighborGrid;
 use crate::sep::Shape;
@@ -67,8 +68,8 @@ impl PairTester {
             reach: 2.0 * bounding_radius(n),
             nn,
             cached: n != 0 && n <= CACHED_NORMALS_UP_TO,
-            base_cos: angles.iter().map(|a| a.cos()).collect(),
-            base_sin: angles.iter().map(|a| a.sin()).collect(),
+            base_cos: angles.iter().map(|&a| math::cos(a)).collect(),
+            base_sin: angles.iter().map(|&a| math::sin(a)).collect(),
             normals: Vec::new(),
             thetas: Vec::new(),
         }
@@ -91,7 +92,7 @@ impl PairTester {
                 continue;
             }
             self.thetas[i] = bits;
-            let (s, c) = p.theta.sin_cos();
+            let (s, c) = math::sin_cos(p.theta);
             let out = &mut self.normals[2 * nn * i..2 * nn * (i + 1)];
             for k in 0..nn {
                 out[2 * k] = c * self.base_cos[k] - s * self.base_sin[k];
@@ -267,12 +268,12 @@ pub fn restore(
             }
             let (i, j) = (i as usize, j as usize);
             let (a, b) = (config.pieces[i], config.pieces[j]);
-            if (a.x - b.x).hypot(a.y - b.y) >= 1e-8 * reach {
+            if math::hypot(a.x - b.x, a.y - b.y) >= 1e-8 * reach {
                 continue;
             }
             let angle = 2.0 * PI * ctx.rng.next();
-            let dx = (reach / 2.0 + 2e-12) * angle.cos();
-            let dy = (reach / 2.0 + 2e-12) * angle.sin();
+            let dx = (reach / 2.0 + 2e-12) * math::cos(angle);
+            let dy = (reach / 2.0 + 2e-12) * math::sin(angle);
             config.pieces[i].x += dx;
             config.pieces[i].y += dy;
             config.pieces[j].x -= dx;
@@ -327,10 +328,10 @@ pub fn restore(
                 let delta = (-c.sep + 2e-12) / 2.0;
                 let (mut nx, mut ny) = (c.nx, c.ny);
                 let (a, b) = (config.pieces[i], config.pieces[j]);
-                if use_random && (a.x - b.x).hypot(a.y - b.y) < 1e-8 * reach {
+                if use_random && math::hypot(a.x - b.x, a.y - b.y) < 1e-8 * reach {
                     let angle = 2.0 * PI * ctx.rng.next();
-                    nx = angle.cos();
-                    ny = angle.sin();
+                    nx = math::cos(angle);
+                    ny = math::sin(angle);
                 }
                 config.pieces[i].x += delta * nx;
                 config.pieces[i].y += delta * ny;
@@ -471,9 +472,9 @@ pub fn legalise(ctx: &mut Ctx, config: &Config, tester: &mut PairTester) -> Opti
 /// the container size.
 pub fn adopt(config: &Config) -> (Vec<Pose>, f64) {
     let phi = if config.m == 0 { 0.0 } else { config.phi };
-    let bx = crate::enclose::enclose(config.n, &config.pieces, config.m, phi);
-    let c = (-bx.phi).cos();
-    let s = (-bx.phi).sin();
+    let bx = crate::enclose::enclose_fast(config.n, &config.pieces, config.m, phi);
+    let c = math::cos(-bx.phi);
+    let s = math::sin(-bx.phi);
     let pieces = config
         .pieces
         .iter()

@@ -12,7 +12,7 @@
 //! non-strict best and is never replaced by one, whatever the scores.
 
 use crate::clock::{Clock, ClockKind};
-use crate::enclose::{auto_orient_set, extreme_points, Encloser, PolygonEncloser};
+use crate::enclose::{auto_orient_set_fast as auto_orient_set, extreme_points, Encloser, PolygonEncloser};
 use crate::grid::NeighborGrid;
 use crate::methods::{self, Method};
 use crate::rng::Rng;

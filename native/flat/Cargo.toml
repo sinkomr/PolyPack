@@ -9,6 +9,8 @@ description = "Flat 2D packing geometry, validation and search methods for PolyP
 name = "polypack_flat"
 
 [dependencies]
+# JavaScript's Math functions and number formats: the same doubles on every platform
+polypack-js = { path = "../js" }
 serde = { version = "1", features = ["derive"] }
 # float_roundtrip: numbers read from JSON are the exact doubles the reference wrote
 serde_json = { version = "1", features = ["float_roundtrip"] }

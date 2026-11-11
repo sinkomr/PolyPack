@@ -1,5 +1,8 @@
-//! The server's acceptance rule for flat packings (packages/geometry/src/config.ts `parseConfig`,
-//! `evaluate` and `strictVerify`, as apps/server/src/app.ts applies them to POST /api/submit):
+//! What the volunteer client checks before it offers a packing to the server.
+//!
+//! The server's rule itself is the port in [`crate::config`] (`parse_config`, `evaluate`,
+//! `strict_verify`), [`crate::overlap`] and [`crate::enclose`]; this module re-exports it under
+//! the names the client and the examples use, and adds the client's own, stricter check:
 //!
 //! - N and M are 0 or 3..=100, P is 1..=500, every piece has finite x, y, theta with |x|, |y| at
 //!   most 1e6, container_phi is finite;
@@ -15,22 +18,17 @@
 //! and checks them with [`server_check`] first, which errs on the strict side by a further
 //! rounding margin.
 
-use crate::enclose::{auto_orient_set, enclose, enclose_set, extreme_points};
+pub use crate::config::{strict_verify, Evaluation, StrictResult};
+use crate::config::{evaluate_parts, EvaluateOptions};
+use crate::enclose::enclose;
 use crate::grid::NeighborGrid;
+pub use crate::overlap::{find_overlaps, Overlap, TOL};
+pub use crate::protocol::{improves_on, SCORE_TIE};
 use crate::sep::pair_separation;
 use crate::shapes::{bounding_radius, is_shape_code, Config, Container, Pose, MAX_COORD, MAX_PIECES};
 
-/// Penetration the server tolerates (piece units).
-pub const TOL: f64 = 1e-9;
-/// Relative score difference below which two entries count as equally good.
-pub const SCORE_TIE: f64 = 1e-9;
 /// Penetration above which a configuration is not strict (search results must not rely on TOL).
 pub const STRICT_TOLERANCE: f64 = 1e-12;
-
-/// True when `score` is better than `leader` by more than the tie tolerance.
-pub fn improves_on(score: f64, leader: f64) -> bool {
-    score < leader * (1.0 - SCORE_TIE)
-}
 
 /// The strict margin of a configuration: STRICT_TOLERANCE, widened by four units in the last
 /// place of the largest coordinate far from the origin.
@@ -42,37 +40,8 @@ pub fn strict_tolerance(pieces: &[Pose]) -> f64 {
     STRICT_TOLERANCE + 4.0 * f64::EPSILON * reach
 }
 
-#[derive(Clone, Copy, Debug, PartialEq)]
-pub struct Overlap {
-    pub i: usize,
-    pub j: usize,
-    /// negative; -sep is the penetration depth
-    pub sep: f64,
-}
-
-/// All pairs whose separation (reference kernel, at `scale`) is below -tol; at most `limit`.
-pub fn find_overlaps(n: u32, poses: &[Pose], tol: f64, scale: f64, limit: usize) -> Vec<Overlap> {
-    let mut out = Vec::new();
-    if limit == 0 {
-        return out;
-    }
-    let reach = 2.0 * bounding_radius(n) * scale;
-    let mut grid = NeighborGrid::new();
-    grid.build(poses, reach);
-    grid.for_each_pair(poses, |i, j| {
-        let sep = pair_separation(n, &poses[i], &poses[j], scale);
-        if sep < -tol {
-            out.push(Overlap { i, j, sep });
-            if out.len() >= limit {
-                return false;
-            }
-        }
-        true
-    });
-    out
-}
-
-/// Shape and range checks of the server's parseConfig (geometry excluded).
+/// The range checks of the server's parseConfig for a configuration already held as numbers (the
+/// search's own candidates); untrusted JSON goes through [`crate::config::parse_config`].
 pub fn parse_errors(n: u32, m: u32, p: usize, pieces: &[Pose], phi: f64) -> Vec<String> {
     let mut errors = Vec::new();
     if !is_shape_code(n) {
@@ -104,87 +73,15 @@ pub fn parse_errors(n: u32, m: u32, p: usize, pieces: &[Pose], phi: f64) -> Vec<
     errors
 }
 
-#[derive(Clone, Debug)]
-pub struct Evaluation {
-    pub valid: bool,
-    pub reasons: Vec<String>,
-    pub overlaps: Vec<Overlap>,
-    pub container: Option<Container>,
-    pub score: Option<f64>,
-}
-
-/// The server's evaluate(config, {autoOrient, maxOverlaps, stopWhenInvalid}).
+/// The server's evaluate(config, {autoOrient, maxOverlaps, stopWhenInvalid}) for the search's
+/// `Config` (`max_overlaps` of `usize::MAX`: no limit). See [`crate::config::evaluate`].
 pub fn evaluate(config: &Config, p: usize, auto_orient: bool, max_overlaps: usize, stop_when_invalid: bool) -> Evaluation {
-    let mut reasons = Vec::new();
-    if config.pieces.len() != p {
-        reasons.push(format!("expected exactly {p} pieces, got {}", config.pieces.len()));
-    }
-    let overlaps = find_overlaps(config.n, &config.pieces, TOL, 1.0, max_overlaps);
-    if !overlaps.is_empty() {
-        let worst = overlaps.iter().fold(overlaps[0], |a, b| if b.sep < a.sep { *b } else { a });
-        let count = if overlaps.len() >= max_overlaps {
-            format!("at least {}", overlaps.len())
-        } else {
-            format!("{}", overlaps.len())
-        };
-        reasons.push(format!(
-            "{count} overlapping pair(s); deepest found is pieces {} and {}, penetration {:.3e} (tolerance {TOL:e})",
-            worst.i, worst.j, -worst.sep
-        ));
-    }
-    if stop_when_invalid && !reasons.is_empty() {
-        return Evaluation { valid: false, reasons, overlaps, container: None, score: None };
-    }
-    let mut container = None;
-    if !config.pieces.is_empty() && auto_orient && config.m != 0 {
-        let set = extreme_points(config.n, &config.pieces, 1.0);
-        let mut c = enclose_set(&set, config.m, config.phi);
-        let best = auto_orient_set(&set, config.m, config.phi);
-        if best.size < c.size {
-            c = best;
-        }
-        container = Some(c);
-    } else if !config.pieces.is_empty() {
-        container = Some(enclose(config.n, &config.pieces, config.m, config.phi));
-    }
-    Evaluation { valid: reasons.is_empty(), reasons, overlaps, score: container.map(|c| c.size), container }
-}
-
-#[derive(Clone, Debug, PartialEq)]
-pub struct StrictResult {
-    pub ok: bool,
-    /// Container size certified by the shrink test: size / (1 - eps).
-    pub certified_size: f64,
-    pub eps: f64,
-    pub reason: Option<String>,
-}
-
-/// The shrink test for submissions that beat the literature: every piece shrunk by (1 - eps)
-/// about its centre must be strictly separated and fit strictly inside a container of the same
-/// shape and orientation smaller than the given one.
-pub fn strict_verify(n: u32, pieces: &[Pose], container: &Container, eps: f64) -> StrictResult {
-    let scale = 1.0 - eps;
-    let certified_size = container.size / scale;
-    // tol = -MIN_VALUE: a separation of exactly zero is a touching pair, not strictly separated
-    let touching = find_overlaps(n, pieces, -f64::from_bits(1), scale, usize::MAX);
-    if !touching.is_empty() {
-        return StrictResult {
-            ok: false,
-            certified_size,
-            eps,
-            reason: Some(format!("{} pair(s) not strictly separated after shrinking", touching.len())),
-        };
-    }
-    let shrunk = enclose_set(&extreme_points(n, pieces, scale), container.m, container.phi);
-    if !(shrunk.size < container.size) {
-        return StrictResult {
-            ok: false,
-            certified_size,
-            eps,
-            reason: Some("shrunk pieces do not fit strictly inside the container".to_string()),
-        };
-    }
-    StrictResult { ok: true, certified_size, eps, reason: None }
+    let opts = EvaluateOptions {
+        auto_orient,
+        max_overlaps: if max_overlaps == usize::MAX { None } else { Some(max_overlaps) },
+        stop_when_invalid,
+    };
+    evaluate_parts(config.n, config.m, p, &config.pieces, config.phi, &opts)
 }
 
 /// What the client checks before it offers a packing to the server.

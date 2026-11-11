@@ -6,6 +6,7 @@
 //! shrinks (or passes the Metropolis test at a positive temperature). Every move type adapts its
 //! amplitude toward a target acceptance rate.
 
+use crate::math;
 use super::common::{restore, PairTester, Strategy};
 use crate::enclose::Encloser;
 use crate::framework::Ctx;
@@ -201,7 +202,7 @@ impl State {
     /// Size the grid to the current container (with a margin) and insert every piece.
     fn rebuild(&mut self) {
         let c = self.container;
-        let half = if c.m == 0 { c.size / 2.0 } else { c.size / (2.0 * (PI / c.m as f64).sin()) };
+        let half = if c.m == 0 { c.size / 2.0 } else { c.size / (2.0 * math::sin(PI / c.m as f64)) };
         let half = half + 2.0 * self.reach;
         let g = ((2.0 * half / self.reach).ceil()).clamp(1.0, 512.0);
         self.g = if g.is_finite() { g as i64 } else { 512 };
@@ -331,13 +332,13 @@ fn inside(n: u32, pose: &Pose, c: &Container) -> bool {
     let dx = pose.x - c.cx;
     let dy = pose.y - c.cy;
     if c.m == 0 {
-        if dx.hypot(dy) + reach <= c.size * 0.5 * (1.0 - 1e-12) {
+        if math::hypot(dx, dy) + reach <= c.size * 0.5 * (1.0 - 1e-12) {
             return true;
         }
     } else {
         // inside the inscribed circle by more than the reach
         let apothem = c.size * container_inradius(c.m);
-        if dx.hypot(dy) + reach <= apothem * (1.0 - 1e-12) {
+        if math::hypot(dx, dy) + reach <= apothem * (1.0 - 1e-12) {
             return true;
         }
     }
@@ -359,21 +360,21 @@ fn feasible(n: u32, pieces: &[Pose], c: &Container, tester: &mut PairTester) -> 
 /// The size is the energy: shrinking is always accepted, growth with probability
 /// exp(-(after - before) / T).
 fn accept_size(before: f64, after: f64, temperature: f64, rng: &mut crate::rng::Rng) -> bool {
-    after <= before || (temperature > 0.0 && rng.next() < (-(after - before) / temperature).exp())
+    after <= before || (temperature > 0.0 && rng.next() < math::exp(-(after - before) / temperature))
 }
 
 fn adapt_step(step: f64, rate: f64, target: f64, gain: f64, maximum: f64) -> f64 {
     if gain == 0.0 {
         return step;
     }
-    (step * (gain * (rate - target)).exp()).clamp(MIN_STEP, maximum)
+    (step * math::exp(gain * (rate - target))).clamp(MIN_STEP, maximum)
 }
 
 /// Strain of the centres only (applied to the vertices it would deform the pieces): balanced
 /// (compression along an axis with reciprocal expansion across it), uniaxial, sector (a radial
 /// contraction restricted to a half-plane or sector) or radial.
 fn collective_trial(pieces: &[Pose], c: &Container, kind: Kind, amplitude: f64, angle: f64, half_width: f64, out: &mut Vec<Pose>) {
-    let (uy, ux) = angle.sin_cos();
+    let (uy, ux) = math::sin_cos(angle);
     let along = 1.0 - amplitude;
     let across = if kind == Kind::Balanced { 1.0 / along } else { 1.0 };
     out.clear();
@@ -382,7 +383,7 @@ fn collective_trial(pieces: &[Pose], c: &Container, kind: Kind, amplitude: f64, 
         let y = q.y - c.cy;
         let a = x * ux + y * uy;
         let b = -x * uy + y * ux;
-        if kind == Kind::Sector && a < x.hypot(y) * half_width.cos() {
+        if kind == Kind::Sector && a < math::hypot(x, y) * math::cos(half_width) {
             out.push(*q);
             continue;
         }

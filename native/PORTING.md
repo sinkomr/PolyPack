@@ -65,7 +65,9 @@ defect.
 - **Numbers computed with sine, cosine and the other transcendental functions** can differ in
   their last digits (see above).
 - **Three kinds of request body** are read differently (`polypack_js::json::parse`): a number too
-  large for a double, a string with a lone surrogate escape, and nesting deeper than 128 levels.
+  large for a double is read as `null` (JavaScript: `Infinity`; both are refused where a number is
+  wanted), an escaped half of a surrogate pair becomes U+FFFD at once (JavaScript: when the text
+  is stored), and nesting deeper than 128 levels is invalid JSON.
 
 ## Comparing a port with its source
 
@@ -87,6 +89,12 @@ replaced by a placeholder, and the numbers agree to 1e-6 relative or 1e-12 absol
 depth is a difference of nearly equal numbers, so it keeps fewer digits than its inputs). It counts
 separately the cases that are identical byte for byte. A difference of any other kind is a defect of
 the port until it is explained.
+
+Two more classes are counted and listed, never hidden, and each case in them is verified from the
+data by the compare tool: a **tie** (two pairs equally deep, two axes or orientations equally good,
+to 1e-12: the message may name the other one), and a number equal **at the scale of its inputs**
+(a container centre of pieces at coordinates of 1e6 agrees to 1e-15 of those coordinates, not of
+itself).
 
 A few dozen cases with the TypeScript's verdicts are kept in `native/<family>/tests/fixtures/`, so
 that `cargo test` checks the port without Node.
