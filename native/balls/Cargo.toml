@@ -10,6 +10,8 @@ name = "polypack_balls"
 
 [dependencies]
 polypack-js = { path = "../js" }
+# packages/balls builds on packages/polyhedra: its solids, its catalogue of names and its separating-axis test
+polypack-polyhedra = { path = "../polyhedra" }
 serde = { version = "1", features = ["derive"] }
 # float_roundtrip: numbers read from JSON are the exact doubles JavaScript reads
 serde_json = { version = "1", features = ["float_roundtrip"] }
