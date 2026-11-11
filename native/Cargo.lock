@@ -662,6 +662,7 @@ name = "polypack-js"
 version = "0.1.0"
 dependencies = [
  "libm",
+ "pxfm",
  "serde",
  "serde_json",
 ]
@@ -720,7 +721,16 @@ dependencies = [
 name = "polypack-spaces"
 version = "0.1.0"
 dependencies = [
+ "polypack-balls",
+ "polypack-boundary",
+ "polypack-curved",
+ "polypack-flat",
  "polypack-js",
+ "polypack-ndim",
+ "polypack-polyhedra",
+ "polypack-sphere",
+ "polypack-surface",
+ "polypack-torus",
  "serde",
  "serde_json",
 ]
@@ -769,6 +779,12 @@ checksum = "985e7ec9bb745e6ce6535b544d84d6cd6f7ad8bd711c398938ae983b91a766d9"
 dependencies = [
  "unicode-ident",
 ]
+
+[[package]]
+name = "pxfm"
+version = "0.1.30"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "d55d956fa96f5ec02be2e13af0e20391a5aa83d6a074e3ad368959d0fab299ea"
 
 [[package]]
 name = "quote"

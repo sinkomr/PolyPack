@@ -14,11 +14,7 @@ fn shortest(x: f64) -> (String, i32) {
     // A cheap test first. x = m * 2^e with m odd. For e < 0 its exact decimal expansion ends at the
     // digit 10^e, so it has exp - e + 1 significant digits; a halfway value has exactly k + 1. For
     // e >= 0, x is a whole number, and below 2^53 its shortest digits are all of its digits.
-    let bits = x.to_bits();
-    let raw_exp = ((bits >> 52) & 0x7ff) as i64;
-    let frac = bits & ((1u64 << 52) - 1);
-    let (mant, e2) = if raw_exp == 0 { (frac, -1074i64) } else { (frac | (1u64 << 52), raw_exp - 1075) };
-    let e2 = e2 + mant.trailing_zeros() as i64;
+    let e2 = odd_exponent(x);
     let may_tie = if e2 < 0 { exp as i64 - e2 + 1 == k as i64 + 1 } else { x >= 9007199254740992.0 };
     if !may_tie {
         return (digits, exp);
@@ -40,6 +36,48 @@ fn shortest(x: f64) -> (String, i32) {
         }
     }
     (digits, exp)
+}
+
+/// The exponent e of x = m * 2^e with m odd (x finite and positive).
+fn odd_exponent(x: f64) -> i64 {
+    let bits = x.to_bits();
+    let raw_exp = ((bits >> 52) & 0x7ff) as i64;
+    let frac = bits & ((1u64 << 52) - 1);
+    let (mant, e2) = if raw_exp == 0 { (frac, -1074i64) } else { (frac | (1u64 << 52), raw_exp - 1075) };
+    e2 + mant.trailing_zeros() as i64
+}
+
+/// The first `keep` significant digits of a finite positive `a`, rounded half up as JavaScript
+/// rounds (Rust rounds an exact half to even), and the decimal exponent of the first digit.
+///
+/// Rust's own `{:.Ne}` is exact and differs from JavaScript only when `a` is exactly halfway, which
+/// needs its exact expansion to have `keep + 1` significant digits. That count is known from the
+/// binary exponent (see `shortest`), so the exact expansion is computed only when it can matter.
+fn rounded(a: f64, keep: usize) -> (Vec<u8>, i32) {
+    let text = format!("{:.*e}", keep - 1, a);
+    let (mant, exp) = text.split_once('e').expect("exponent");
+    let exp: i32 = exp.parse().expect("exponent");
+    let e2 = odd_exponent(a);
+    let want = keep as i64 + 1;
+    let may_tie = if e2 < 0 {
+        // the printed exponent is the true one, or one more when the rounding carried
+        let sig = exp as i64 - e2 + 1;
+        sig == want || sig - 1 == want
+    } else if a < 9007199254740992.0 {
+        let mut n = a as u64;
+        while n % 10 == 0 {
+            n /= 10;
+        }
+        n.to_string().len() as i64 == want
+    } else {
+        true
+    };
+    if !may_tie {
+        return (mant.bytes().filter(|c| *c != b'.').map(|c| c - b'0').collect(), exp);
+    }
+    let (ex, e) = exact(a);
+    let (r, carry) = round_digits(&ex, keep);
+    (r, if carry { e + 1 } else { e })
 }
 
 /// "1234" as "1.234".
@@ -171,9 +209,8 @@ pub fn exponential(x: f64, d: Option<usize>) -> String {
             if a == 0.0 {
                 ("0".repeat(d + 1), 0)
             } else {
-                let (ex, e) = exact(a);
-                let (r, carry) = round_digits(&ex, d + 1);
-                (digit_string(&r), if carry { e + 1 } else { e })
+                let (r, e) = rounded(a, d + 1);
+                (digit_string(&r), e)
             }
         }
     };
@@ -192,6 +229,12 @@ pub fn fixed(x: f64, d: usize) -> String {
     let a = x.abs();
     let text = if a == 0.0 {
         if d == 0 { "0".to_string() } else { format!("0.{}", "0".repeat(d)) }
+    } else if {
+        // an exact half at the last kept digit needs exactly d + 1 digits after the point
+        let e2 = odd_exponent(a);
+        !(e2 < 0 && -e2 == d as i64 + 1)
+    } {
+        format!("{:.*}", d, a)
     } else {
         let (ex, e) = exact(a);
         // digits before the decimal point: e + 1 (when positive); kept digits: e + 1 + d
@@ -247,9 +290,7 @@ pub fn precision(x: f64, p: usize) -> String {
     let (digits, e) = if a == 0.0 {
         (vec![0u8; p], 0)
     } else {
-        let (ex, e) = exact(a);
-        let (r, carry) = round_digits(&ex, p);
-        (r, if carry { e + 1 } else { e })
+        rounded(a, p)
     };
     let ds = digit_string(&digits);
     let body = if e < -6 || e >= p as i32 {
