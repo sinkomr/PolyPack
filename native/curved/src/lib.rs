@@ -3,11 +3,29 @@
 //! (hyperbolic K < 0, Euclidean K = 0, spherical K > 0). Problem ids `curved/<K>/<N>/<M>/<P>`.
 //!
 //! The crate is the native port of `packages/curved` and of the curved job of
-//! `packages/spaces/src/search/run.ts`:
+//! `packages/spaces/src/search/run.ts`. It serves two programs.
+//!
+//! The Rust server, which must answer as the TypeScript server does (native/PORTING.md). What
+//! `packages/spaces` and `apps/server` import from `@polypack/curved` and `@polypack/curved/bound`:
+//!  - [`validation_steps`]: the float validator (`validationSteps` of validate.ts), a line-by-line
+//!    port with the TypeScript's verdict, reasons and numbers;
+//!  - [`container_circumradius`], [`piece_exists`] (shapes.ts);
+//!  - [`curved_max_p`], [`curved_bound_of`], [`curved_why_not`], [`CURVED_MAX_P`] (bound.ts);
+//!  - [`CurvedConfig`], the type of a parsed configuration.
+//!
+//! Modules `kfun`, `shapes`, `geom` (space.ts), `problem`, `evaluate`, `bound` and `validate` are
+//! these ports, each function named after its source. They are compared with the TypeScript, case
+//! by case, by `native/tools/curved-ref.mts`, `examples/curveddiff.rs` and
+//! `native/tools/curved-compare.mjs`, and `tests/fixtures.rs` holds a sample of that comparison.
+//!
+//! The volunteer search client:
 //!  - [`CurvedProblem`]: ids as the API writes them;
-//!  - [`CurvedConfig`]: configurations as the API sends and takes them (serde);
 //!  - [`check_config`]: the server's rule for an entry (validateSpaceSubmission), erring strict;
 //!  - [`run_job`]: one seeded search job with an evaluation and CPU-time budget and a stop flag.
+//!
+//! The search (modules `eval`, `search`, `polish`, `job`, the solvers) shares `kfun`, `shapes`,
+//! `geom` and `problem` with the validator; its seeded results are reproducible, and those modules
+//! compute the same doubles as before the validator was audited against the TypeScript.
 //!
 //! The geometry (homogeneous model, lifted coordinates, exponential-coordinate poses) is described
 //! in docs/spaces/CURVED.md; each module names the TypeScript file it follows.
@@ -45,6 +63,7 @@ mod basis;
 pub mod bound;
 mod dual_lp;
 mod eval;
+pub mod evaluate;
 pub mod geom;
 pub mod job;
 pub mod kfun;
@@ -57,6 +76,9 @@ mod search;
 pub mod shapes;
 pub mod validate;
 
+pub use bound::{curved_bound_of, curved_max_p, curved_why_not, CURVED_MAX_P};
 pub use job::{run_job, run_job_with, Budget, JobOptions, JobOutcome, Termination};
 pub use problem::{format_curvature, CurvedConfig, CurvedProblem, IdError, Pose, Space};
+pub use shapes::{container_circumradius, piece_exists};
 pub use validate::{check_config, Rule, Verdict};
+pub use validate::{validate, validation_steps, ValidationContact, ValidationOptions, ValidationResult};

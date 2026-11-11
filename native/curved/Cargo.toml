@@ -12,9 +12,14 @@ name = "polypack_curved"
 path = "src/lib.rs"
 
 [dependencies]
+# JavaScript's Math and number formats: the validator is a port of packages/curved and must give
+# the server's verdicts and messages (native/PORTING.md)
+polypack-js = { path = "../js" }
 serde = { version = "1", features = ["derive"] }
 # fdlibm-derived transcendental functions in pure Rust: the same results on every platform, so a
-# seeded job gives the same packing on macOS, Linux and Windows, ARM and x86
+# seeded job gives the same packing on macOS, Linux and Windows, ARM and x86. The search modules
+# (eval, rng, search) call it directly; the validator's modules go through polypack_js::math,
+# whose transcendental functions are these same ones.
 libm = "0.2"
 
 [target.'cfg(unix)'.dependencies]

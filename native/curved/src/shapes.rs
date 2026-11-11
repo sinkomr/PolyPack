@@ -6,9 +6,11 @@
 //! where alpha is the interior angle. For K = 0 these are the Euclidean formulas.
 
 use crate::kfun::{asn_k, atn_k, cs_k, sn_k, tn_k, vs_k};
+use polypack_js::math;
 use std::f64::consts::PI;
 
-/// Radius of a disk piece (N = 0): disks have diameter 1. Polygon pieces have side 1.
+/// Radius of a disk piece (N = 0): disks have diameter 1. Polygon pieces have side 1
+/// (DISK_RADIUS of packages/geometry/src/shapes.ts, re-exported by packages/curved/src/shapes.ts).
 pub const DISK_RADIUS: f64 = 0.5;
 
 #[derive(Clone, Copy, Debug, PartialEq)]
@@ -32,6 +34,7 @@ pub struct PieceGeometry {
 /// On the sphere of radius 1/sqrt K a convex regular N-gon with circumradius R < pi/(2 sqrt K) has
 /// sin(sqrt K a/2) = sin(sqrt K R) sin(pi/N), so its side a ranges over (0, 2 pi/(N sqrt K)): a unit
 /// N-gon exists iff sqrt K < 2 pi/N (perimeter N below 2 pi/sqrt K).
+/// (packages/curved/src/shapes.ts: pieceExists)
 pub fn piece_exists(n: u32, k: f64) -> bool {
     if n == 0 {
         return !(k > 0.0) || DISK_RADIUS < PI / (2.0 * k.sqrt());
@@ -39,20 +42,24 @@ pub fn piece_exists(n: u32, k: f64) -> bool {
     if !(k > 0.0) {
         return true;
     }
-    k.sqrt() * (n as f64) < 2.0 * PI && k.sqrt() * sn_k(k, 0.5) < libm::sin(PI / n as f64)
+    k.sqrt() * (n as f64) < 2.0 * PI && k.sqrt() * sn_k(k, 0.5) < math::sin(PI / n as f64)
 }
 
 /// Area of a right triangle with legs a and b: tan(|K| A / 2) = |K| tn_K(a/2) tn_K(b/2).
+/// (packages/curved/src/shapes.ts: rightTriangleArea)
 fn right_triangle_area(k: f64, a: f64, b: f64) -> f64 {
     let p = tn_k(k, a / 2.0) * tn_k(k, b / 2.0);
     let z = k.abs() * p;
     if z < 1e-8 {
         return 2.0 * p * (1.0 - (z * z) / 3.0);
     }
-    (2.0 * libm::atan(z)) / k.abs()
+    (2.0 * math::atan(z)) / k.abs()
 }
 
-/// The unit piece of code N at curvature K, or None when it does not exist.
+/// The unit piece of code N at curvature K, or None when it does not exist (the TypeScript throws
+/// RangeError(`no unit piece N=${N} at K=${K}`) there; every caller the server reaches asks
+/// pieceExists first, so the throw is never seen).
+/// (packages/curved/src/shapes.ts: pieceGeometry)
 pub fn piece_geometry(n: u32, k: f64) -> Option<PieceGeometry> {
     if !piece_exists(n, k) {
         return None;
@@ -72,11 +79,11 @@ pub fn piece_geometry(n: u32, k: f64) -> Option<PieceGeometry> {
         });
     }
     let nf = n as f64;
-    let sn_r = sn_k(k, 0.5) / libm::sin(PI / nf);
+    let sn_r = sn_k(k, 0.5) / math::sin(PI / nf);
     let r = asn_k(k, sn_r);
-    let sn_rho = tn_k(k, 0.5) / libm::tan(PI / nf);
+    let sn_rho = tn_k(k, 0.5) / math::tan(PI / nf);
     let rho = asn_k(k, sn_rho);
-    let alpha = 2.0 * libm::asin(libm::cos(PI / nf) / cs_k(k, 0.5));
+    let alpha = 2.0 * math::asin(math::cos(PI / nf) / cs_k(k, 0.5));
     Some(PieceGeometry {
         n,
         k,
@@ -92,6 +99,7 @@ pub fn piece_geometry(n: u32, k: f64) -> Option<PieceGeometry> {
 }
 
 /// Largest admissible container size: infinity except K > 0, where the container stays in an open hemisphere.
+/// (packages/curved/src/shapes.ts: maxContainerSize)
 pub fn max_container_size(m: u32, k: f64) -> f64 {
     if !(k > 0.0) {
         return f64::INFINITY;
@@ -105,15 +113,17 @@ pub fn max_container_size(m: u32, k: f64) -> f64 {
 }
 
 /// Apothem h of the ideal regular M-gon (K < 0): sn_K(h) = 1 / (sqrt(-K) tan(pi/M)). Infinity otherwise.
+/// (packages/curved/src/shapes.ts: idealApothem)
 pub fn ideal_apothem(m: u32, k: f64) -> f64 {
     if !(k < 0.0) || m == 0 {
         return f64::INFINITY;
     }
-    asn_k(k, 1.0 / ((-k).sqrt() * libm::tan(PI / m as f64)))
+    asn_k(k, 1.0 / ((-k).sqrt() * math::tan(PI / m as f64)))
 }
 
 /// Upper limit of the container variable t (apothem, or radius for a disk): the hemisphere at
 /// K > 0, the ideal M-gon at K < 0.
+/// (packages/curved/src/shapes.ts: maxApothem)
 pub fn max_apothem(m: u32, k: f64) -> f64 {
     if k > 0.0 {
         return PI / (2.0 * k.sqrt());
@@ -126,30 +136,34 @@ pub fn max_apothem(m: u32, k: f64) -> f64 {
 
 /// Container variable t: the apothem h for polygon containers, the radius r = s / 2 for disk
 /// containers (a disk container's size s is its diameter).
+/// (packages/curved/src/shapes.ts: apothemFromSide)
 pub fn apothem_from_side(m: u32, k: f64, s: f64) -> f64 {
     if m == 0 {
         return s / 2.0;
     }
-    asn_k(k, tn_k(k, s / 2.0) / libm::tan(PI / m as f64))
+    asn_k(k, tn_k(k, s / 2.0) / math::tan(PI / m as f64))
 }
 
 /// Inverse of apothem_from_side; infinity at or beyond the ideal apothem (K < 0).
+/// (packages/curved/src/shapes.ts: sideFromApothem)
 pub fn side_from_apothem(m: u32, k: f64, h: f64) -> f64 {
     if m == 0 {
         return 2.0 * h;
     }
-    2.0 * atn_k(k, sn_k(k, h) * libm::tan(PI / m as f64))
+    2.0 * atn_k(k, sn_k(k, h) * math::tan(PI / m as f64))
 }
 
 /// Circumradius of a regular M-gon container with side s (radius s / 2 of a disk container).
+/// (packages/curved/src/shapes.ts: containerCircumradius)
 pub fn container_circumradius(m: u32, k: f64, s: f64) -> f64 {
     if m == 0 {
         return s / 2.0;
     }
-    asn_k(k, sn_k(k, s / 2.0) / libm::sin(PI / m as f64))
+    asn_k(k, sn_k(k, s / 2.0) / math::sin(PI / m as f64))
 }
 
 /// Area of a regular M-gon of side s (or disk of diameter s for M = 0) at curvature K.
+/// (packages/curved/src/shapes.ts: containerArea)
 pub fn container_area(m: u32, k: f64, s: f64) -> f64 {
     if m == 0 {
         return 2.0 * PI * vs_k(k, s / 2.0);
@@ -159,16 +173,19 @@ pub fn container_area(m: u32, k: f64, s: f64) -> f64 {
 }
 
 /// Outward unit normal angle of container wall k (wall 0 is the bottom edge).
+/// (packages/curved/src/shapes.ts: wallAngle)
 pub fn wall_angle(m: u32, k: u32) -> f64 {
     -PI / 2.0 + (2.0 * PI * k as f64) / m as f64
 }
 
 /// Outward normal angle of edge e of the standard piece (vertex 0 straight up).
+/// (packages/curved/src/shapes.ts: pieceEdgeAngle)
 pub fn piece_edge_angle(n: u32, e: u32) -> f64 {
     PI / 2.0 + PI / n as f64 + (2.0 * PI * e as f64) / n as f64
 }
 
 /// Direction of vertex k of the standard piece.
+/// (packages/curved/src/shapes.ts: pieceVertexAngle)
 pub fn piece_vertex_angle(n: u32, k: u32) -> f64 {
     PI / 2.0 + (2.0 * PI * k as f64) / n as f64
 }

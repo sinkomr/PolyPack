@@ -11,11 +11,13 @@
 //! At K = 0 this is PolyPack's Euclidean pose. The container is centred at O with a horizontal
 //! bottom edge: wall k has outward normal angle -pi/2 + 2 pi k / M at distance h (apothem) from O.
 
-use crate::bound::{curved_bound, curved_max_p, CURVED_MAX_P};
+use crate::bound::{curved_bound_of, curved_max_p, CURVED_MAX_P};
 use crate::geom::{line_covector, polar_point, LPoint};
 use crate::shapes::{
-    max_apothem, piece_edge_angle, piece_exists, piece_geometry, piece_vertex_angle, wall_angle, PieceGeometry,
+    apothem_from_side, max_apothem, piece_edge_angle, piece_exists, piece_geometry, piece_vertex_angle, wall_angle,
+    PieceGeometry,
 };
+use polypack_js::fmt as jsfmt;
 use serde::{Deserialize, Serialize};
 use std::fmt;
 
@@ -101,24 +103,25 @@ impl CurvedConfig {
 
 /// K as the curved records and ids write it: an integer as an integer ("1", "-1"), any other value
 /// as Python's repr of the binary64 number ("1.225778283313099", "1e-06"): the shortest digits that
-/// round-trip, fixed notation for decimal exponents -4 <= e < 16, else d.ddde-XX.
+/// round-trip, fixed notation for decimal exponents -4 <= e < 16, else d.ddde-XX
+/// (packages/spaces/src/ids.ts: formatCurvature; None where the TypeScript throws for a K that is not finite).
 pub fn format_curvature(k: f64) -> Option<String> {
     if !k.is_finite() {
         return None;
     }
-    if k == 0.0 {
+    if k == 0.0 && k.is_sign_negative() {
         return Some("0".to_string());
     }
     if k.fract() == 0.0 && k.abs() < 1e16 {
-        return Some(format!("{}", k as i64));
+        return Some(jsfmt::num(k));
     }
-    // shortest round-trip digits in exponent form, e.g. "1.5e-6" or "-1e16"
-    let text = format!("{:e}", k);
+    // K.toExponential(): the shortest round-trip digits in exponent form, e.g. "1.5e-6" or "-1e+16"
+    let text = jsfmt::exponential(k, None);
     let (mantissa, exp) = text.split_once('e')?;
     let e: i32 = exp.parse().ok()?;
+    // Python's repr uses fixed notation for decimal exponents -4 <= e < 16, where it agrees with String()
     if (-4..16).contains(&e) {
-        // fixed notation with the same shortest digits (Rust's Display never uses an exponent)
-        return Some(format!("{}", k));
+        return Some(jsfmt::num(k));
     }
     let sign = if e < 0 { '-' } else { '+' };
     Some(format!("{mantissa}e{sign}{:02}", e.abs()))
@@ -217,13 +220,13 @@ impl CurvedProblem {
     /// True when the problem can exist: the unit piece exists at K and some container below the
     /// admissible limit holds P pieces by the area and containment bounds (curvedMaxP).
     pub fn exists(&self) -> bool {
-        curved_max_p(self.k, self.n, self.m, self.p.max(1)) >= self.p
+        curved_max_p(self.k, self.n as f64, self.m as f64, self.p.max(1) as f64) >= self.p as f64
     }
 
     /// The problem's lower bound on the score (the server's bound when the problem has no
     /// research record), or None when the problem cannot exist.
     pub fn lower_bound(&self) -> Option<f64> {
-        curved_bound(self.k, self.n, self.m, self.p)
+        curved_bound_of(self.k, self.n, self.m, self.p)
     }
 }
 
@@ -245,8 +248,10 @@ pub struct Space {
 }
 
 impl Space {
-    /// The space of (K, N, M), or a reason when the shapes are not valid or the unit piece does
-    /// not exist at K (makeSpace).
+    /// The space of (K, N, M), or the message of the RangeError the TypeScript throws when the
+    /// shapes are not valid or the unit piece does not exist at K (packages/curved/src/problem.ts:
+    /// makeSpace). The TypeScript keeps the last 512 spaces in a cache; a space is a function of
+    /// (K, N, M) alone, so the cache changes no result and is not ported.
     pub fn new(k: f64, n: u32, m: u32) -> Result<Space, String> {
         if !k.is_finite() {
             return Err("K must be finite".into());
@@ -257,16 +262,18 @@ impl Space {
         if !(m == 0 || (3..=100).contains(&m)) {
             return Err("bad M".into());
         }
+        let no_piece = || format!("no unit piece N={n} exists at K={}", jsfmt::num(k));
         if !piece_exists(n, k) {
-            return Err(format!("no unit piece N={n} exists at K={k}"));
+            return Err(no_piece());
         }
-        let piece = piece_geometry(n, k).ok_or_else(|| format!("no unit piece N={n} exists at K={k}"))?;
-        let vertices = (0..n)
-            .map(|v| polar_point(k, piece.r, piece_vertex_angle(n, v)))
-            .collect();
-        let edges = (0..n)
-            .map(|e| line_covector(k, piece.rho, piece_edge_angle(n, e)))
-            .collect();
+        let piece = piece_geometry(n, k).ok_or_else(no_piece)?;
+        // one loop in the source: vertex k, then edge k
+        let mut vertices = Vec::with_capacity(n as usize);
+        let mut edges = Vec::with_capacity(n as usize);
+        for v in 0..n {
+            vertices.push(polar_point(k, piece.r, piece_vertex_angle(n, v)));
+            edges.push(line_covector(k, piece.rho, piece_edge_angle(n, v)));
+        }
         let wall_angles = (0..m).map(|w| wall_angle(m, w)).collect();
         Ok(Space {
             k,
@@ -283,6 +290,17 @@ impl Space {
     pub fn of(problem: &CurvedProblem) -> Result<Space, String> {
         Space::new(problem.k, problem.n, problem.m)
     }
+}
+
+/// Container variable t (apothem h or radius r) from the size (packages/curved/src/problem.ts: containerT).
+pub fn container_t(space: &Space, size: f64) -> f64 {
+    apothem_from_side(space.m, space.k, size)
+}
+
+/// packages/curved/src/problem.ts: isFinitePose. A `Pose` is always an object with three numbers,
+/// so only their finiteness is left to test.
+pub fn is_finite_pose(p: &Pose) -> bool {
+    p.x.is_finite() && p.y.is_finite() && p.theta.is_finite()
 }
 
 #[cfg(test)]
@@ -305,6 +323,11 @@ mod tests {
             (1e16, "1e+16"),
             (1.2345678901234568e17, "1.2345678901234568e+17"),
             (1e21, "1e+21"),
+            (-0.0, "0"),
+            (5e-324, "5e-324"),
+            (1.5e-7, "1.5e-07"),
+            (123456789012345680.0, "1.2345678901234568e+17"),
+            (0.1 + 0.2, "0.30000000000000004"),
         ];
         for (k, text) in cases {
             assert_eq!(format_curvature(k).unwrap(), text);
