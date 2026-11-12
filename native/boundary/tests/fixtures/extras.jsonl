@@ -1,0 +1,963 @@
+{"id":0,"fn":"constants","out":{"MAX_S":10000,"MAX_P":9999,"CONTAINERS":["tesseract","5cell","16cell","24cell","120cell","600cell","5cube","6cube","7cube","8cube","9cube","10cube","5simplex","6simplex","7simplex","8simplex","9simplex","10simplex","5orthoplex","6orthoplex","7orthoplex","8orthoplex","9orthoplex","10orthoplex","5demicube","6demicube","7demicube","8demicube","9demicube","10demicube"],"PIECES":["ball","cube","tetrahedron","octahedron","dodecahedron","icosahedron"],"POLYTOPES":["tesseract","5cell","16cell","24cell","120cell","600cell"],"CONTAINER_PIECES":[["ball","cube","tetrahedron","octahedron","dodecahedron","icosahedron"],["ball","cube","tetrahedron","octahedron","dodecahedron","icosahedron"],["ball","cube","tetrahedron","octahedron","dodecahedron","icosahedron"],["ball","cube","tetrahedron","octahedron","dodecahedron","icosahedron"],["ball","cube","tetrahedron","octahedron","dodecahedron","icosahedron"],["ball","cube","tetrahedron","octahedron","dodecahedron","icosahedron"],["ball","cube"],["ball","cube"],["ball","cube"],["ball","cube"],["ball","cube"],["ball","cube"],["ball"],["ball"],["ball"],["ball"],["ball"],["ball"],["ball"],["ball"],["ball"],["ball"],["ball"],["ball"],["ball"],["ball"],["ball"],["ball"],["ball"],["ball"]],"CONTAINER_MAX_P":[16,24,24,24,24,24,160,384,400,400,400,400,24,24,24,24,24,24,24,24,24,24,24,24,24,24,24,24,24,24]}}
+{"id":1,"fn":"domainInfo","out":"{\"id\":\"boundary/<polytope>/<piece>/<P>\",\"fields\":[{\"key\":\"polytope\",\"label\":\"Polytope\",\"values\":[\"tesseract\",\"5cell\",\"16cell\",\"24cell\",\"120cell\",\"600cell\",\"5cube\",\"6cube\",\"7cube\",\"8cube\",\"9cube\",\"10cube\",\"5simplex\",\"6simplex\",\"7simplex\",\"8simplex\",\"9simplex\",\"10simplex\",\"5orthoplex\",\"6orthoplex\",\"7orthoplex\",\"8orthoplex\",\"9orthoplex\",\"10orthoplex\",\"5demicube\",\"6demicube\",\"7demicube\",\"8demicube\",\"9demicube\",\"10demicube\"],\"titles\":{\"5cube\":\"5-cube\",\"6cube\":\"6-cube\",\"7cube\":\"7-cube\",\"8cube\":\"8-cube\",\"9cube\":\"9-cube\",\"10cube\":\"10-cube\",\"5simplex\":\"5-simplex\",\"6simplex\":\"6-simplex\",\"7simplex\":\"7-simplex\",\"8simplex\":\"8-simplex\",\"9simplex\":\"9-simplex\",\"10simplex\":\"10-simplex\",\"5orthoplex\":\"5-orthoplex\",\"6orthoplex\":\"6-orthoplex\",\"7orthoplex\":\"7-orthoplex\",\"8orthoplex\":\"8-orthoplex\",\"9orthoplex\":\"9-orthoplex\",\"10orthoplex\":\"10-orthoplex\",\"5demicube\":\"5-demicube\",\"6demicube\":\"6-demicube\",\"7demicube\":\"7-demicube\",\"8demicube\":\"8-demicube\",\"9demicube\":\"9-demicube\",\"10demicube\":\"10-demicube\",\"tesseract\":\"Tesseract\",\"5cell\":\"5-cell\",\"16cell\":\"16-cell\",\"24cell\":\"24-cell\",\"120cell\":\"120-cell\",\"600cell\":\"600-cell\"}},{\"key\":\"piece\",\"label\":\"Piece\",\"values\":[\"ball\",\"cube\",\"tetrahedron\",\"octahedron\",\"dodecahedron\",\"icosahedron\"],\"titles\":{\"ball\":\"Balls\",\"cube\":\"Cubes\",\"tetrahedron\":\"Tetrahedra\",\"octahedron\":\"Octahedra\",\"dodecahedron\":\"Dodecahedra\",\"icosahedron\":\"Icosahedra\"},\"dependent\":{\"on\":\"polytope\",\"values\":{\"tesseract\":[\"ball\",\"cube\",\"tetrahedron\",\"octahedron\",\"dodecahedron\",\"icosahedron\"],\"5cell\":[\"ball\",\"cube\",\"tetrahedron\",\"octahedron\",\"dodecahedron\",\"icosahedron\"],\"16cell\":[\"ball\",\"cube\",\"tetrahedron\",\"octahedron\",\"dodecahedron\",\"icosahedron\"],\"24cell\":[\"ball\",\"cube\",\"tetrahedron\",\"octahedron\",\"dodecahedron\",\"icosahedron\"],\"120cell\":[\"ball\",\"cube\",\"tetrahedron\",\"octahedron\",\"dodecahedron\",\"icosahedron\"],\"600cell\":[\"ball\",\"cube\",\"tetrahedron\",\"octahedron\",\"dodecahedron\",\"icosahedron\"],\"5cube\":[\"ball\",\"cube\"],\"6cube\":[\"ball\",\"cube\"],\"7cube\":[\"ball\",\"cube\"],\"8cube\":[\"ball\",\"cube\"],\"9cube\":[\"ball\",\"cube\"],\"10cube\":[\"ball\",\"cube\"],\"5simplex\":[\"ball\"],\"6simplex\":[\"ball\"],\"7simplex\":[\"ball\"],\"8simplex\":[\"ball\"],\"9simplex\":[\"ball\"],\"10simplex\":[\"ball\"],\"5orthoplex\":[\"ball\"],\"6orthoplex\":[\"ball\"],\"7orthoplex\":[\"ball\"],\"8orthoplex\":[\"ball\"],\"9orthoplex\":[\"ball\"],\"10orthoplex\":[\"ball\"],\"5demicube\":[\"ball\"],\"6demicube\":[\"ball\"],\"7demicube\":[\"ball\"],\"8demicube\":[\"ball\"],\"9demicube\":[\"ball\"],\"10demicube\":[\"ball\"]}}},{\"key\":\"P\",\"label\":\"Pieces (P)\",\"min\":1,\"max\":400,\"dependent\":{\"on\":\"polytope\",\"ranges\":{\"tesseract\":[1,16],\"5cell\":[1,24],\"16cell\":[1,24],\"24cell\":[1,24],\"120cell\":[1,24],\"600cell\":[1,24],\"5cube\":[1,160],\"6cube\":[1,384],\"7cube\":[1,400],\"8cube\":[1,400],\"9cube\":[1,400],\"10cube\":[1,400],\"5simplex\":[1,24],\"6simplex\":[1,24],\"7simplex\":[1,24],\"8simplex\":[1,24],\"9simplex\":[1,24],\"10simplex\":[1,24],\"5orthoplex\":[1,24],\"6orthoplex\":[1,24],\"7orthoplex\":[1,24],\"8orthoplex\":[1,24],\"9orthoplex\":[1,24],\"10orthoplex\":[1,24],\"5demicube\":[1,24],\"6demicube\":[1,24],\"7demicube\":[1,24],\"8demicube\":[1,24],\"9demicube\":[1,24],\"10demicube\":[1,24]}}}],\"problems\":5536}"}
+{"id":2,"fn":"sample","limit":0,"out":[]}
+{"id":3,"fn":"sample","limit":1,"out":["boundary/tesseract/ball/1"]}
+{"id":4,"fn":"sample","limit":7,"out":["boundary/tesseract/ball/1","boundary/tesseract/cube/1","boundary/tesseract/tetrahedron/1","boundary/tesseract/octahedron/1","boundary/tesseract/dodecahedron/1","boundary/tesseract/icosahedron/1","boundary/5cell/ball/1"]}
+{"id":5,"fn":"sample","limit":100,"out":["boundary/tesseract/ball/1","boundary/tesseract/cube/1","boundary/tesseract/tetrahedron/1","boundary/tesseract/octahedron/1","boundary/tesseract/dodecahedron/1","boundary/tesseract/icosahedron/1","boundary/5cell/ball/1","boundary/5cell/cube/1","boundary/5cell/tetrahedron/1","boundary/5cell/octahedron/1","boundary/5cell/dodecahedron/1","boundary/5cell/icosahedron/1","boundary/16cell/ball/1","boundary/16cell/cube/1","boundary/16cell/tetrahedron/1","boundary/16cell/octahedron/1","boundary/16cell/dodecahedron/1","boundary/16cell/icosahedron/1","boundary/24cell/ball/1","boundary/24cell/cube/1","boundary/24cell/tetrahedron/1","boundary/24cell/octahedron/1","boundary/24cell/dodecahedron/1","boundary/24cell/icosahedron/1","boundary/120cell/ball/1","boundary/120cell/cube/1","boundary/120cell/tetrahedron/1","boundary/120cell/octahedron/1","boundary/120cell/dodecahedron/1","boundary/120cell/icosahedron/1","boundary/600cell/ball/1","boundary/600cell/cube/1","boundary/600cell/tetrahedron/1","boundary/600cell/octahedron/1","boundary/600cell/dodecahedron/1","boundary/600cell/icosahedron/1","boundary/5cube/ball/1","boundary/5cube/cube/1","boundary/6cube/ball/1","boundary/6cube/cube/1","boundary/7cube/ball/1","boundary/7cube/cube/1","boundary/8cube/ball/1","boundary/8cube/cube/1","boundary/9cube/ball/1","boundary/9cube/cube/1","boundary/10cube/ball/1","boundary/10cube/cube/1","boundary/5simplex/ball/1","boundary/6simplex/ball/1","boundary/7simplex/ball/1","boundary/8simplex/ball/1","boundary/9simplex/ball/1","boundary/10simplex/ball/1","boundary/5orthoplex/ball/1","boundary/6orthoplex/ball/1","boundary/7orthoplex/ball/1","boundary/8orthoplex/ball/1","boundary/9orthoplex/ball/1","boundary/10orthoplex/ball/1","boundary/5demicube/ball/1","boundary/6demicube/ball/1","boundary/7demicube/ball/1","boundary/8demicube/ball/1","boundary/9demicube/ball/1","boundary/10demicube/ball/1","boundary/tesseract/ball/2","boundary/tesseract/cube/2","boundary/tesseract/tetrahedron/2","boundary/tesseract/octahedron/2","boundary/tesseract/dodecahedron/2","boundary/tesseract/icosahedron/2","boundary/5cell/ball/2","boundary/5cell/cube/2","boundary/5cell/tetrahedron/2","boundary/5cell/octahedron/2","boundary/5cell/dodecahedron/2","boundary/5cell/icosahedron/2","boundary/16cell/ball/2","boundary/16cell/cube/2","boundary/16cell/tetrahedron/2","boundary/16cell/octahedron/2","boundary/16cell/dodecahedron/2","boundary/16cell/icosahedron/2","boundary/24cell/ball/2","boundary/24cell/cube/2","boundary/24cell/tetrahedron/2","boundary/24cell/octahedron/2","boundary/24cell/dodecahedron/2","boundary/24cell/icosahedron/2","boundary/120cell/ball/2","boundary/120cell/cube/2","boundary/120cell/tetrahedron/2","boundary/120cell/octahedron/2","boundary/120cell/dodecahedron/2","boundary/120cell/icosahedron/2","boundary/600cell/ball/2","boundary/600cell/cube/2","boundary/600cell/tetrahedron/2","boundary/600cell/octahedron/2"]}
+{"id":8,"fn":"cells","name":"tesseract","out":8}
+{"id":9,"fn":"cells","name":"5cell","out":5}
+{"id":10,"fn":"cells","name":"16cell","out":16}
+{"id":11,"fn":"cells","name":"24cell","out":24}
+{"id":12,"fn":"cells","name":"120cell","out":120}
+{"id":13,"fn":"cells","name":"600cell","out":600}
+{"id":14,"fn":"cells","name":"5cube","out":{"throw":"unknown polytope 5cube"}}
+{"id":15,"fn":"cells","name":"nope","out":{"throw":"unknown polytope nope"}}
+{"id":16,"fn":"cells","name":"","out":{"throw":"unknown polytope "}}
+{"id":17,"fn":"highDimShape","name":"tesseract","out":null}
+{"id":18,"fn":"highDimShape","name":"5cell","out":null}
+{"id":19,"fn":"highDimShape","name":"16cell","out":null}
+{"id":20,"fn":"highDimShape","name":"24cell","out":null}
+{"id":21,"fn":"highDimShape","name":"120cell","out":null}
+{"id":22,"fn":"highDimShape","name":"600cell","out":null}
+{"id":23,"fn":"highDimShape","name":"5cube","out":{"cells":10,"dimU":4}}
+{"id":24,"fn":"highDimShape","name":"6cube","out":{"cells":12,"dimU":5}}
+{"id":25,"fn":"highDimShape","name":"7cube","out":{"cells":14,"dimU":6}}
+{"id":26,"fn":"highDimShape","name":"8cube","out":{"cells":16,"dimU":7}}
+{"id":27,"fn":"highDimShape","name":"9cube","out":{"cells":18,"dimU":8}}
+{"id":28,"fn":"highDimShape","name":"10cube","out":{"cells":20,"dimU":9}}
+{"id":29,"fn":"highDimShape","name":"5simplex","out":{"cells":6,"dimU":4}}
+{"id":30,"fn":"highDimShape","name":"6simplex","out":{"cells":7,"dimU":5}}
+{"id":31,"fn":"highDimShape","name":"7simplex","out":{"cells":8,"dimU":6}}
+{"id":32,"fn":"highDimShape","name":"8simplex","out":{"cells":9,"dimU":7}}
+{"id":33,"fn":"highDimShape","name":"9simplex","out":{"cells":10,"dimU":8}}
+{"id":34,"fn":"highDimShape","name":"10simplex","out":{"cells":11,"dimU":9}}
+{"id":35,"fn":"highDimShape","name":"5orthoplex","out":{"cells":32,"dimU":4}}
+{"id":36,"fn":"highDimShape","name":"6orthoplex","out":{"cells":64,"dimU":5}}
+{"id":37,"fn":"highDimShape","name":"7orthoplex","out":{"cells":128,"dimU":6}}
+{"id":38,"fn":"highDimShape","name":"8orthoplex","out":{"cells":256,"dimU":7}}
+{"id":39,"fn":"highDimShape","name":"9orthoplex","out":{"cells":512,"dimU":8}}
+{"id":40,"fn":"highDimShape","name":"10orthoplex","out":{"cells":1024,"dimU":9}}
+{"id":41,"fn":"highDimShape","name":"5demicube","out":{"cells":26,"dimU":4}}
+{"id":42,"fn":"highDimShape","name":"6demicube","out":{"cells":44,"dimU":5}}
+{"id":43,"fn":"highDimShape","name":"7demicube","out":{"cells":78,"dimU":6}}
+{"id":44,"fn":"highDimShape","name":"8demicube","out":{"cells":144,"dimU":7}}
+{"id":45,"fn":"highDimShape","name":"9demicube","out":{"cells":274,"dimU":8}}
+{"id":46,"fn":"highDimShape","name":"10demicube","out":{"cells":532,"dimU":9}}
+{"id":47,"fn":"highDimShape","name":"4cube","out":null}
+{"id":48,"fn":"highDimShape","name":"11cube","out":null}
+{"id":49,"fn":"highDimShape","name":"11simplex","out":null}
+{"id":50,"fn":"highDimShape","name":"4demicube","out":null}
+{"id":51,"fn":"highDimShape","name":"cube","out":null}
+{"id":52,"fn":"highDimShape","name":"tesseract ","out":null}
+{"id":53,"fn":"highDimShape","name":"5Cube","out":null}
+{"id":54,"fn":"highDimShape","name":"","out":null}
+{"id":55,"fn":"parseBoundaryId","arg":"boundary/tesseract/ball/20","out":{"polytope":"tesseract","piece":"ball","P":20}}
+{"id":56,"fn":"parseBoundaryId","arg":"boundary/tesseract/cube/20","out":{"polytope":"tesseract","piece":"cube","P":20}}
+{"id":57,"fn":"parseBoundaryId","arg":"boundary/tesseract/tetrahedron/3","out":{"polytope":"tesseract","piece":"tetrahedron","P":3}}
+{"id":58,"fn":"parseBoundaryId","arg":"boundary/tesseract/octahedron/2","out":{"polytope":"tesseract","piece":"octahedron","P":2}}
+{"id":59,"fn":"parseBoundaryId","arg":"boundary/tesseract/dodecahedron/4","out":{"polytope":"tesseract","piece":"dodecahedron","P":4}}
+{"id":60,"fn":"parseBoundaryId","arg":"boundary/tesseract/icosahedron/3","out":{"polytope":"tesseract","piece":"icosahedron","P":3}}
+{"id":61,"fn":"parseBoundaryId","arg":"boundary/5cell/ball/16","out":{"polytope":"5cell","piece":"ball","P":16}}
+{"id":62,"fn":"parseBoundaryId","arg":"boundary/5cell/cube/16","out":{"polytope":"5cell","piece":"cube","P":16}}
+{"id":63,"fn":"parseBoundaryId","arg":"boundary/5cell/tetrahedron/23","out":{"polytope":"5cell","piece":"tetrahedron","P":23}}
+{"id":64,"fn":"parseBoundaryId","arg":"boundary/5cell/octahedron/22","out":{"polytope":"5cell","piece":"octahedron","P":22}}
+{"id":65,"fn":"parseBoundaryId","arg":"boundary/5cell/dodecahedron/24","out":{"polytope":"5cell","piece":"dodecahedron","P":24}}
+{"id":66,"fn":"parseBoundaryId","arg":"boundary/5cell/icosahedron/23","out":{"polytope":"5cell","piece":"icosahedron","P":23}}
+{"id":67,"fn":"parseBoundaryId","arg":"boundary/16cell/ball/23","out":{"polytope":"16cell","piece":"ball","P":23}}
+{"id":68,"fn":"parseBoundaryId","arg":"boundary/16cell/cube/23","out":{"polytope":"16cell","piece":"cube","P":23}}
+{"id":69,"fn":"parseBoundaryId","arg":"boundary/16cell/tetrahedron/6","out":{"polytope":"16cell","piece":"tetrahedron","P":6}}
+{"id":70,"fn":"parseBoundaryId","arg":"boundary/16cell/octahedron/5","out":{"polytope":"16cell","piece":"octahedron","P":5}}
+{"id":71,"fn":"parseBoundaryId","arg":"boundary/16cell/dodecahedron/7","out":{"polytope":"16cell","piece":"dodecahedron","P":7}}
+{"id":72,"fn":"parseBoundaryId","arg":"boundary/16cell/icosahedron/6","out":{"polytope":"16cell","piece":"icosahedron","P":6}}
+{"id":73,"fn":"parseBoundaryId","arg":"boundary/24cell/ball/23","out":{"polytope":"24cell","piece":"ball","P":23}}
+{"id":74,"fn":"parseBoundaryId","arg":"boundary/24cell/cube/23","out":{"polytope":"24cell","piece":"cube","P":23}}
+{"id":75,"fn":"parseBoundaryId","arg":"boundary/24cell/tetrahedron/6","out":{"polytope":"24cell","piece":"tetrahedron","P":6}}
+{"id":76,"fn":"parseBoundaryId","arg":"boundary/24cell/octahedron/5","out":{"polytope":"24cell","piece":"octahedron","P":5}}
+{"id":77,"fn":"parseBoundaryId","arg":"boundary/24cell/dodecahedron/7","out":{"polytope":"24cell","piece":"dodecahedron","P":7}}
+{"id":78,"fn":"parseBoundaryId","arg":"boundary/24cell/icosahedron/6","out":{"polytope":"24cell","piece":"icosahedron","P":6}}
+{"id":79,"fn":"parseBoundaryId","arg":"boundary/120cell/ball/6","out":{"polytope":"120cell","piece":"ball","P":6}}
+{"id":80,"fn":"parseBoundaryId","arg":"boundary/120cell/cube/6","out":{"polytope":"120cell","piece":"cube","P":6}}
+{"id":81,"fn":"parseBoundaryId","arg":"boundary/120cell/tetrahedron/13","out":{"polytope":"120cell","piece":"tetrahedron","P":13}}
+{"id":82,"fn":"parseBoundaryId","arg":"boundary/120cell/octahedron/12","out":{"polytope":"120cell","piece":"octahedron","P":12}}
+{"id":83,"fn":"parseBoundaryId","arg":"boundary/120cell/dodecahedron/14","out":{"polytope":"120cell","piece":"dodecahedron","P":14}}
+{"id":84,"fn":"parseBoundaryId","arg":"boundary/120cell/icosahedron/13","out":{"polytope":"120cell","piece":"icosahedron","P":13}}
+{"id":85,"fn":"parseBoundaryId","arg":"boundary/600cell/ball/6","out":{"polytope":"600cell","piece":"ball","P":6}}
+{"id":86,"fn":"parseBoundaryId","arg":"boundary/600cell/cube/6","out":{"polytope":"600cell","piece":"cube","P":6}}
+{"id":87,"fn":"parseBoundaryId","arg":"boundary/600cell/tetrahedron/13","out":{"polytope":"600cell","piece":"tetrahedron","P":13}}
+{"id":88,"fn":"parseBoundaryId","arg":"boundary/600cell/octahedron/12","out":{"polytope":"600cell","piece":"octahedron","P":12}}
+{"id":89,"fn":"parseBoundaryId","arg":"boundary/600cell/dodecahedron/14","out":{"polytope":"600cell","piece":"dodecahedron","P":14}}
+{"id":90,"fn":"parseBoundaryId","arg":"boundary/600cell/icosahedron/13","out":{"polytope":"600cell","piece":"icosahedron","P":13}}
+{"id":91,"fn":"parseBoundaryId","arg":"boundary/5cube/ball/16","out":{"polytope":"5cube","piece":"ball","P":16}}
+{"id":92,"fn":"parseBoundaryId","arg":"boundary/5cube/cube/16","out":{"polytope":"5cube","piece":"cube","P":16}}
+{"id":93,"fn":"parseBoundaryId","arg":"boundary/5cube/tetrahedron/23","out":"The 5cube takes ball and cube problems only, not \"tetrahedron\"."}
+{"id":94,"fn":"parseBoundaryId","arg":"boundary/5cube/octahedron/22","out":"The 5cube takes ball and cube problems only, not \"octahedron\"."}
+{"id":95,"fn":"parseBoundaryId","arg":"boundary/5cube/dodecahedron/24","out":"The 5cube takes ball and cube problems only, not \"dodecahedron\"."}
+{"id":96,"fn":"parseBoundaryId","arg":"boundary/5cube/icosahedron/23","out":"The 5cube takes ball and cube problems only, not \"icosahedron\"."}
+{"id":97,"fn":"parseBoundaryId","arg":"boundary/6cube/ball/16","out":{"polytope":"6cube","piece":"ball","P":16}}
+{"id":98,"fn":"parseBoundaryId","arg":"boundary/6cube/cube/16","out":{"polytope":"6cube","piece":"cube","P":16}}
+{"id":99,"fn":"parseBoundaryId","arg":"boundary/6cube/tetrahedron/23","out":"The 6cube takes ball and cube problems only, not \"tetrahedron\"."}
+{"id":100,"fn":"parseBoundaryId","arg":"boundary/6cube/octahedron/22","out":"The 6cube takes ball and cube problems only, not \"octahedron\"."}
+{"id":101,"fn":"parseBoundaryId","arg":"boundary/6cube/dodecahedron/24","out":"The 6cube takes ball and cube problems only, not \"dodecahedron\"."}
+{"id":102,"fn":"parseBoundaryId","arg":"boundary/6cube/icosahedron/23","out":"The 6cube takes ball and cube problems only, not \"icosahedron\"."}
+{"id":103,"fn":"parseBoundaryId","arg":"boundary/7cube/ball/16","out":{"polytope":"7cube","piece":"ball","P":16}}
+{"id":104,"fn":"parseBoundaryId","arg":"boundary/7cube/cube/16","out":{"polytope":"7cube","piece":"cube","P":16}}
+{"id":105,"fn":"parseBoundaryId","arg":"boundary/7cube/tetrahedron/23","out":"The 7cube takes ball and cube problems only, not \"tetrahedron\"."}
+{"id":106,"fn":"parseBoundaryId","arg":"boundary/7cube/octahedron/22","out":"The 7cube takes ball and cube problems only, not \"octahedron\"."}
+{"id":107,"fn":"parseBoundaryId","arg":"boundary/7cube/dodecahedron/24","out":"The 7cube takes ball and cube problems only, not \"dodecahedron\"."}
+{"id":108,"fn":"parseBoundaryId","arg":"boundary/7cube/icosahedron/23","out":"The 7cube takes ball and cube problems only, not \"icosahedron\"."}
+{"id":109,"fn":"parseBoundaryId","arg":"boundary/8cube/ball/16","out":{"polytope":"8cube","piece":"ball","P":16}}
+{"id":110,"fn":"parseBoundaryId","arg":"boundary/8cube/cube/16","out":{"polytope":"8cube","piece":"cube","P":16}}
+{"id":111,"fn":"parseBoundaryId","arg":"boundary/8cube/tetrahedron/23","out":"The 8cube takes ball and cube problems only, not \"tetrahedron\"."}
+{"id":112,"fn":"parseBoundaryId","arg":"boundary/8cube/octahedron/22","out":"The 8cube takes ball and cube problems only, not \"octahedron\"."}
+{"id":113,"fn":"parseBoundaryId","arg":"boundary/8cube/dodecahedron/24","out":"The 8cube takes ball and cube problems only, not \"dodecahedron\"."}
+{"id":114,"fn":"parseBoundaryId","arg":"boundary/8cube/icosahedron/23","out":"The 8cube takes ball and cube problems only, not \"icosahedron\"."}
+{"id":115,"fn":"parseBoundaryId","arg":"boundary/9cube/ball/16","out":{"polytope":"9cube","piece":"ball","P":16}}
+{"id":116,"fn":"parseBoundaryId","arg":"boundary/9cube/cube/16","out":{"polytope":"9cube","piece":"cube","P":16}}
+{"id":117,"fn":"parseBoundaryId","arg":"boundary/9cube/tetrahedron/23","out":"The 9cube takes ball and cube problems only, not \"tetrahedron\"."}
+{"id":118,"fn":"parseBoundaryId","arg":"boundary/9cube/octahedron/22","out":"The 9cube takes ball and cube problems only, not \"octahedron\"."}
+{"id":119,"fn":"parseBoundaryId","arg":"boundary/9cube/dodecahedron/24","out":"The 9cube takes ball and cube problems only, not \"dodecahedron\"."}
+{"id":120,"fn":"parseBoundaryId","arg":"boundary/9cube/icosahedron/23","out":"The 9cube takes ball and cube problems only, not \"icosahedron\"."}
+{"id":121,"fn":"parseBoundaryId","arg":"boundary/10cube/ball/23","out":{"polytope":"10cube","piece":"ball","P":23}}
+{"id":122,"fn":"parseBoundaryId","arg":"boundary/10cube/cube/23","out":{"polytope":"10cube","piece":"cube","P":23}}
+{"id":123,"fn":"parseBoundaryId","arg":"boundary/10cube/tetrahedron/6","out":"The 10cube takes ball and cube problems only, not \"tetrahedron\"."}
+{"id":124,"fn":"parseBoundaryId","arg":"boundary/10cube/octahedron/5","out":"The 10cube takes ball and cube problems only, not \"octahedron\"."}
+{"id":125,"fn":"parseBoundaryId","arg":"boundary/10cube/dodecahedron/7","out":"The 10cube takes ball and cube problems only, not \"dodecahedron\"."}
+{"id":126,"fn":"parseBoundaryId","arg":"boundary/10cube/icosahedron/6","out":"The 10cube takes ball and cube problems only, not \"icosahedron\"."}
+{"id":127,"fn":"parseBoundaryId","arg":"boundary/5simplex/ball/13","out":{"polytope":"5simplex","piece":"ball","P":13}}
+{"id":128,"fn":"parseBoundaryId","arg":"boundary/5simplex/cube/13","out":"The 5simplex takes ball problems only, not \"cube\"."}
+{"id":129,"fn":"parseBoundaryId","arg":"boundary/5simplex/tetrahedron/20","out":"The 5simplex takes ball problems only, not \"tetrahedron\"."}
+{"id":130,"fn":"parseBoundaryId","arg":"boundary/5simplex/octahedron/19","out":"The 5simplex takes ball problems only, not \"octahedron\"."}
+{"id":131,"fn":"parseBoundaryId","arg":"boundary/5simplex/dodecahedron/21","out":"The 5simplex takes ball problems only, not \"dodecahedron\"."}
+{"id":132,"fn":"parseBoundaryId","arg":"boundary/5simplex/icosahedron/20","out":"The 5simplex takes ball problems only, not \"icosahedron\"."}
+{"id":133,"fn":"parseBoundaryId","arg":"boundary/6simplex/ball/13","out":{"polytope":"6simplex","piece":"ball","P":13}}
+{"id":134,"fn":"parseBoundaryId","arg":"boundary/6simplex/cube/13","out":"The 6simplex takes ball problems only, not \"cube\"."}
+{"id":135,"fn":"parseBoundaryId","arg":"boundary/6simplex/tetrahedron/20","out":"The 6simplex takes ball problems only, not \"tetrahedron\"."}
+{"id":136,"fn":"parseBoundaryId","arg":"boundary/6simplex/octahedron/19","out":"The 6simplex takes ball problems only, not \"octahedron\"."}
+{"id":137,"fn":"parseBoundaryId","arg":"boundary/6simplex/dodecahedron/21","out":"The 6simplex takes ball problems only, not \"dodecahedron\"."}
+{"id":138,"fn":"parseBoundaryId","arg":"boundary/6simplex/icosahedron/20","out":"The 6simplex takes ball problems only, not \"icosahedron\"."}
+{"id":139,"fn":"parseBoundaryId","arg":"boundary/7simplex/ball/13","out":{"polytope":"7simplex","piece":"ball","P":13}}
+{"id":140,"fn":"parseBoundaryId","arg":"boundary/7simplex/cube/13","out":"The 7simplex takes ball problems only, not \"cube\"."}
+{"id":141,"fn":"parseBoundaryId","arg":"boundary/7simplex/tetrahedron/20","out":"The 7simplex takes ball problems only, not \"tetrahedron\"."}
+{"id":142,"fn":"parseBoundaryId","arg":"boundary/7simplex/octahedron/19","out":"The 7simplex takes ball problems only, not \"octahedron\"."}
+{"id":143,"fn":"parseBoundaryId","arg":"boundary/7simplex/dodecahedron/21","out":"The 7simplex takes ball problems only, not \"dodecahedron\"."}
+{"id":144,"fn":"parseBoundaryId","arg":"boundary/7simplex/icosahedron/20","out":"The 7simplex takes ball problems only, not \"icosahedron\"."}
+{"id":145,"fn":"parseBoundaryId","arg":"boundary/8simplex/ball/13","out":{"polytope":"8simplex","piece":"ball","P":13}}
+{"id":146,"fn":"parseBoundaryId","arg":"boundary/8simplex/cube/13","out":"The 8simplex takes ball problems only, not \"cube\"."}
+{"id":147,"fn":"parseBoundaryId","arg":"boundary/8simplex/tetrahedron/20","out":"The 8simplex takes ball problems only, not \"tetrahedron\"."}
+{"id":148,"fn":"parseBoundaryId","arg":"boundary/8simplex/octahedron/19","out":"The 8simplex takes ball problems only, not \"octahedron\"."}
+{"id":149,"fn":"parseBoundaryId","arg":"boundary/8simplex/dodecahedron/21","out":"The 8simplex takes ball problems only, not \"dodecahedron\"."}
+{"id":150,"fn":"parseBoundaryId","arg":"boundary/8simplex/icosahedron/20","out":"The 8simplex takes ball problems only, not \"icosahedron\"."}
+{"id":151,"fn":"parseBoundaryId","arg":"boundary/9simplex/ball/13","out":{"polytope":"9simplex","piece":"ball","P":13}}
+{"id":152,"fn":"parseBoundaryId","arg":"boundary/9simplex/cube/13","out":"The 9simplex takes ball problems only, not \"cube\"."}
+{"id":153,"fn":"parseBoundaryId","arg":"boundary/9simplex/tetrahedron/20","out":"The 9simplex takes ball problems only, not \"tetrahedron\"."}
+{"id":154,"fn":"parseBoundaryId","arg":"boundary/9simplex/octahedron/19","out":"The 9simplex takes ball problems only, not \"octahedron\"."}
+{"id":155,"fn":"parseBoundaryId","arg":"boundary/9simplex/dodecahedron/21","out":"The 9simplex takes ball problems only, not \"dodecahedron\"."}
+{"id":156,"fn":"parseBoundaryId","arg":"boundary/9simplex/icosahedron/20","out":"The 9simplex takes ball problems only, not \"icosahedron\"."}
+{"id":157,"fn":"parseBoundaryId","arg":"boundary/10simplex/ball/20","out":{"polytope":"10simplex","piece":"ball","P":20}}
+{"id":158,"fn":"parseBoundaryId","arg":"boundary/10simplex/cube/20","out":"The 10simplex takes ball problems only, not \"cube\"."}
+{"id":159,"fn":"parseBoundaryId","arg":"boundary/10simplex/tetrahedron/3","out":"The 10simplex takes ball problems only, not \"tetrahedron\"."}
+{"id":160,"fn":"parseBoundaryId","arg":"boundary/10simplex/octahedron/2","out":"The 10simplex takes ball problems only, not \"octahedron\"."}
+{"id":161,"fn":"parseBoundaryId","arg":"boundary/10simplex/dodecahedron/4","out":"The 10simplex takes ball problems only, not \"dodecahedron\"."}
+{"id":162,"fn":"parseBoundaryId","arg":"boundary/10simplex/icosahedron/3","out":"The 10simplex takes ball problems only, not \"icosahedron\"."}
+{"id":163,"fn":"parseBoundaryId","arg":"boundary/5orthoplex/ball/3","out":{"polytope":"5orthoplex","piece":"ball","P":3}}
+{"id":164,"fn":"parseBoundaryId","arg":"boundary/5orthoplex/cube/3","out":"The 5orthoplex takes ball problems only, not \"cube\"."}
+{"id":165,"fn":"parseBoundaryId","arg":"boundary/5orthoplex/tetrahedron/10","out":"The 5orthoplex takes ball problems only, not \"tetrahedron\"."}
+{"id":166,"fn":"parseBoundaryId","arg":"boundary/5orthoplex/octahedron/9","out":"The 5orthoplex takes ball problems only, not \"octahedron\"."}
+{"id":167,"fn":"parseBoundaryId","arg":"boundary/5orthoplex/dodecahedron/11","out":"The 5orthoplex takes ball problems only, not \"dodecahedron\"."}
+{"id":168,"fn":"parseBoundaryId","arg":"boundary/5orthoplex/icosahedron/10","out":"The 5orthoplex takes ball problems only, not \"icosahedron\"."}
+{"id":169,"fn":"parseBoundaryId","arg":"boundary/6orthoplex/ball/3","out":{"polytope":"6orthoplex","piece":"ball","P":3}}
+{"id":170,"fn":"parseBoundaryId","arg":"boundary/6orthoplex/cube/3","out":"The 6orthoplex takes ball problems only, not \"cube\"."}
+{"id":171,"fn":"parseBoundaryId","arg":"boundary/6orthoplex/tetrahedron/10","out":"The 6orthoplex takes ball problems only, not \"tetrahedron\"."}
+{"id":172,"fn":"parseBoundaryId","arg":"boundary/6orthoplex/octahedron/9","out":"The 6orthoplex takes ball problems only, not \"octahedron\"."}
+{"id":173,"fn":"parseBoundaryId","arg":"boundary/6orthoplex/dodecahedron/11","out":"The 6orthoplex takes ball problems only, not \"dodecahedron\"."}
+{"id":174,"fn":"parseBoundaryId","arg":"boundary/6orthoplex/icosahedron/10","out":"The 6orthoplex takes ball problems only, not \"icosahedron\"."}
+{"id":175,"fn":"parseBoundaryId","arg":"boundary/7orthoplex/ball/3","out":{"polytope":"7orthoplex","piece":"ball","P":3}}
+{"id":176,"fn":"parseBoundaryId","arg":"boundary/7orthoplex/cube/3","out":"The 7orthoplex takes ball problems only, not \"cube\"."}
+{"id":177,"fn":"parseBoundaryId","arg":"boundary/7orthoplex/tetrahedron/10","out":"The 7orthoplex takes ball problems only, not \"tetrahedron\"."}
+{"id":178,"fn":"parseBoundaryId","arg":"boundary/7orthoplex/octahedron/9","out":"The 7orthoplex takes ball problems only, not \"octahedron\"."}
+{"id":179,"fn":"parseBoundaryId","arg":"boundary/7orthoplex/dodecahedron/11","out":"The 7orthoplex takes ball problems only, not \"dodecahedron\"."}
+{"id":180,"fn":"parseBoundaryId","arg":"boundary/7orthoplex/icosahedron/10","out":"The 7orthoplex takes ball problems only, not \"icosahedron\"."}
+{"id":181,"fn":"parseBoundaryId","arg":"boundary/8orthoplex/ball/3","out":{"polytope":"8orthoplex","piece":"ball","P":3}}
+{"id":182,"fn":"parseBoundaryId","arg":"boundary/8orthoplex/cube/3","out":"The 8orthoplex takes ball problems only, not \"cube\"."}
+{"id":183,"fn":"parseBoundaryId","arg":"boundary/8orthoplex/tetrahedron/10","out":"The 8orthoplex takes ball problems only, not \"tetrahedron\"."}
+{"id":184,"fn":"parseBoundaryId","arg":"boundary/8orthoplex/octahedron/9","out":"The 8orthoplex takes ball problems only, not \"octahedron\"."}
+{"id":185,"fn":"parseBoundaryId","arg":"boundary/8orthoplex/dodecahedron/11","out":"The 8orthoplex takes ball problems only, not \"dodecahedron\"."}
+{"id":186,"fn":"parseBoundaryId","arg":"boundary/8orthoplex/icosahedron/10","out":"The 8orthoplex takes ball problems only, not \"icosahedron\"."}
+{"id":187,"fn":"parseBoundaryId","arg":"boundary/9orthoplex/ball/3","out":{"polytope":"9orthoplex","piece":"ball","P":3}}
+{"id":188,"fn":"parseBoundaryId","arg":"boundary/9orthoplex/cube/3","out":"The 9orthoplex takes ball problems only, not \"cube\"."}
+{"id":189,"fn":"parseBoundaryId","arg":"boundary/9orthoplex/tetrahedron/10","out":"The 9orthoplex takes ball problems only, not \"tetrahedron\"."}
+{"id":190,"fn":"parseBoundaryId","arg":"boundary/9orthoplex/octahedron/9","out":"The 9orthoplex takes ball problems only, not \"octahedron\"."}
+{"id":191,"fn":"parseBoundaryId","arg":"boundary/9orthoplex/dodecahedron/11","out":"The 9orthoplex takes ball problems only, not \"dodecahedron\"."}
+{"id":192,"fn":"parseBoundaryId","arg":"boundary/9orthoplex/icosahedron/10","out":"The 9orthoplex takes ball problems only, not \"icosahedron\"."}
+{"id":193,"fn":"parseBoundaryId","arg":"boundary/10orthoplex/ball/10","out":{"polytope":"10orthoplex","piece":"ball","P":10}}
+{"id":194,"fn":"parseBoundaryId","arg":"boundary/10orthoplex/cube/10","out":"The 10orthoplex takes ball problems only, not \"cube\"."}
+{"id":195,"fn":"parseBoundaryId","arg":"boundary/10orthoplex/tetrahedron/17","out":"The 10orthoplex takes ball problems only, not \"tetrahedron\"."}
+{"id":196,"fn":"parseBoundaryId","arg":"boundary/10orthoplex/octahedron/16","out":"The 10orthoplex takes ball problems only, not \"octahedron\"."}
+{"id":197,"fn":"parseBoundaryId","arg":"boundary/10orthoplex/dodecahedron/18","out":"The 10orthoplex takes ball problems only, not \"dodecahedron\"."}
+{"id":198,"fn":"parseBoundaryId","arg":"boundary/10orthoplex/icosahedron/17","out":"The 10orthoplex takes ball problems only, not \"icosahedron\"."}
+{"id":199,"fn":"parseBoundaryId","arg":"boundary/5demicube/ball/20","out":{"polytope":"5demicube","piece":"ball","P":20}}
+{"id":200,"fn":"parseBoundaryId","arg":"boundary/5demicube/cube/20","out":"The 5demicube takes ball problems only, not \"cube\"."}
+{"id":201,"fn":"parseBoundaryId","arg":"boundary/5demicube/tetrahedron/3","out":"The 5demicube takes ball problems only, not \"tetrahedron\"."}
+{"id":202,"fn":"parseBoundaryId","arg":"boundary/5demicube/octahedron/2","out":"The 5demicube takes ball problems only, not \"octahedron\"."}
+{"id":203,"fn":"parseBoundaryId","arg":"boundary/5demicube/dodecahedron/4","out":"The 5demicube takes ball problems only, not \"dodecahedron\"."}
+{"id":204,"fn":"parseBoundaryId","arg":"boundary/5demicube/icosahedron/3","out":"The 5demicube takes ball problems only, not \"icosahedron\"."}
+{"id":205,"fn":"parseBoundaryId","arg":"boundary/6demicube/ball/20","out":{"polytope":"6demicube","piece":"ball","P":20}}
+{"id":206,"fn":"parseBoundaryId","arg":"boundary/6demicube/cube/20","out":"The 6demicube takes ball problems only, not \"cube\"."}
+{"id":207,"fn":"parseBoundaryId","arg":"boundary/6demicube/tetrahedron/3","out":"The 6demicube takes ball problems only, not \"tetrahedron\"."}
+{"id":208,"fn":"parseBoundaryId","arg":"boundary/6demicube/octahedron/2","out":"The 6demicube takes ball problems only, not \"octahedron\"."}
+{"id":209,"fn":"parseBoundaryId","arg":"boundary/6demicube/dodecahedron/4","out":"The 6demicube takes ball problems only, not \"dodecahedron\"."}
+{"id":210,"fn":"parseBoundaryId","arg":"boundary/6demicube/icosahedron/3","out":"The 6demicube takes ball problems only, not \"icosahedron\"."}
+{"id":211,"fn":"parseBoundaryId","arg":"boundary/7demicube/ball/20","out":{"polytope":"7demicube","piece":"ball","P":20}}
+{"id":212,"fn":"parseBoundaryId","arg":"boundary/7demicube/cube/20","out":"The 7demicube takes ball problems only, not \"cube\"."}
+{"id":213,"fn":"parseBoundaryId","arg":"boundary/7demicube/tetrahedron/3","out":"The 7demicube takes ball problems only, not \"tetrahedron\"."}
+{"id":214,"fn":"parseBoundaryId","arg":"boundary/7demicube/octahedron/2","out":"The 7demicube takes ball problems only, not \"octahedron\"."}
+{"id":215,"fn":"parseBoundaryId","arg":"boundary/7demicube/dodecahedron/4","out":"The 7demicube takes ball problems only, not \"dodecahedron\"."}
+{"id":216,"fn":"parseBoundaryId","arg":"boundary/7demicube/icosahedron/3","out":"The 7demicube takes ball problems only, not \"icosahedron\"."}
+{"id":217,"fn":"parseBoundaryId","arg":"boundary/8demicube/ball/20","out":{"polytope":"8demicube","piece":"ball","P":20}}
+{"id":218,"fn":"parseBoundaryId","arg":"boundary/8demicube/cube/20","out":"The 8demicube takes ball problems only, not \"cube\"."}
+{"id":219,"fn":"parseBoundaryId","arg":"boundary/8demicube/tetrahedron/3","out":"The 8demicube takes ball problems only, not \"tetrahedron\"."}
+{"id":220,"fn":"parseBoundaryId","arg":"boundary/8demicube/octahedron/2","out":"The 8demicube takes ball problems only, not \"octahedron\"."}
+{"id":221,"fn":"parseBoundaryId","arg":"boundary/8demicube/dodecahedron/4","out":"The 8demicube takes ball problems only, not \"dodecahedron\"."}
+{"id":222,"fn":"parseBoundaryId","arg":"boundary/8demicube/icosahedron/3","out":"The 8demicube takes ball problems only, not \"icosahedron\"."}
+{"id":223,"fn":"parseBoundaryId","arg":"boundary/9demicube/ball/20","out":{"polytope":"9demicube","piece":"ball","P":20}}
+{"id":224,"fn":"parseBoundaryId","arg":"boundary/9demicube/cube/20","out":"The 9demicube takes ball problems only, not \"cube\"."}
+{"id":225,"fn":"parseBoundaryId","arg":"boundary/9demicube/tetrahedron/3","out":"The 9demicube takes ball problems only, not \"tetrahedron\"."}
+{"id":226,"fn":"parseBoundaryId","arg":"boundary/9demicube/octahedron/2","out":"The 9demicube takes ball problems only, not \"octahedron\"."}
+{"id":227,"fn":"parseBoundaryId","arg":"boundary/9demicube/dodecahedron/4","out":"The 9demicube takes ball problems only, not \"dodecahedron\"."}
+{"id":228,"fn":"parseBoundaryId","arg":"boundary/9demicube/icosahedron/3","out":"The 9demicube takes ball problems only, not \"icosahedron\"."}
+{"id":229,"fn":"parseBoundaryId","arg":"boundary/10demicube/ball/3","out":{"polytope":"10demicube","piece":"ball","P":3}}
+{"id":230,"fn":"parseBoundaryId","arg":"boundary/10demicube/cube/3","out":"The 10demicube takes ball problems only, not \"cube\"."}
+{"id":231,"fn":"parseBoundaryId","arg":"boundary/10demicube/tetrahedron/10","out":"The 10demicube takes ball problems only, not \"tetrahedron\"."}
+{"id":232,"fn":"parseBoundaryId","arg":"boundary/10demicube/octahedron/9","out":"The 10demicube takes ball problems only, not \"octahedron\"."}
+{"id":233,"fn":"parseBoundaryId","arg":"boundary/10demicube/dodecahedron/11","out":"The 10demicube takes ball problems only, not \"dodecahedron\"."}
+{"id":234,"fn":"parseBoundaryId","arg":"boundary/10demicube/icosahedron/10","out":"The 10demicube takes ball problems only, not \"icosahedron\"."}
+{"id":235,"fn":"parseBoundaryId","arg":"boundary/tesseract/ball/9","out":{"polytope":"tesseract","piece":"ball","P":9}}
+{"id":236,"fn":"parseBoundaryId","arg":"boundary/tesseract/ball/9999","out":{"polytope":"tesseract","piece":"ball","P":9999}}
+{"id":237,"fn":"parseBoundaryId","arg":"boundary/tesseract/ball/10000","out":"The piece count \"10000\" must be a whole number from 1 to 9999, written without leading zeros."}
+{"id":238,"fn":"parseBoundaryId","arg":"boundary/tesseract/ball/0","out":"The piece count \"0\" must be a whole number from 1 to 9999, written without leading zeros."}
+{"id":239,"fn":"parseBoundaryId","arg":"boundary/tesseract/ball/01","out":"The piece count \"01\" must be a whole number from 1 to 9999, written without leading zeros."}
+{"id":240,"fn":"parseBoundaryId","arg":"boundary/tesseract/ball/+1","out":"The piece count \"+1\" must be a whole number from 1 to 9999, written without leading zeros."}
+{"id":241,"fn":"parseBoundaryId","arg":"boundary/tesseract/ball/-1","out":"The piece count \"-1\" must be a whole number from 1 to 9999, written without leading zeros."}
+{"id":242,"fn":"parseBoundaryId","arg":"boundary/tesseract/ball/1.0","out":"The piece count \"1.0\" must be a whole number from 1 to 9999, written without leading zeros."}
+{"id":243,"fn":"parseBoundaryId","arg":"boundary/tesseract/ball/1e3","out":"The piece count \"1e3\" must be a whole number from 1 to 9999, written without leading zeros."}
+{"id":244,"fn":"parseBoundaryId","arg":"boundary/tesseract/ball/","out":"The piece count \"\" must be a whole number from 1 to 9999, written without leading zeros."}
+{"id":245,"fn":"parseBoundaryId","arg":"boundary/tesseract/ball/ 9","out":"The piece count \" 9\" must be a whole number from 1 to 9999, written without leading zeros."}
+{"id":246,"fn":"parseBoundaryId","arg":"boundary/tesseract/ball/9\n","out":"The piece count \"9\n\" must be a whole number from 1 to 9999, written without leading zeros."}
+{"id":247,"fn":"parseBoundaryId","arg":"boundary/tesseract/ball","out":"\"boundary/tesseract/ball\" is not of the form boundary/<polytope>/<piece>/<P>."}
+{"id":248,"fn":"parseBoundaryId","arg":"boundary/tesseract/ball/9/1","out":"\"boundary/tesseract/ball/9/1\" is not of the form boundary/<polytope>/<piece>/<P>."}
+{"id":249,"fn":"parseBoundaryId","arg":"Boundary/tesseract/ball/9","out":"\"Boundary/tesseract/ball/9\" is not of the form boundary/<polytope>/<piece>/<P>."}
+{"id":250,"fn":"parseBoundaryId","arg":"surface/tesseract/ball/9","out":"\"surface/tesseract/ball/9\" is not of the form boundary/<polytope>/<piece>/<P>."}
+{"id":251,"fn":"parseBoundaryId","arg":"boundary//ball/9","out":"Unknown polytope \"\"."}
+{"id":252,"fn":"parseBoundaryId","arg":"boundary/Tesseract/ball/9","out":"Unknown polytope \"Tesseract\"."}
+{"id":253,"fn":"parseBoundaryId","arg":"boundary/tesseract/Ball/9","out":"Unknown piece \"Ball\"."}
+{"id":254,"fn":"parseBoundaryId","arg":"boundary/tesseract/sphere/9","out":"Unknown piece \"sphere\"."}
+{"id":255,"fn":"parseBoundaryId","arg":"boundary/8cell/ball/9","out":"Unknown polytope \"8cell\"."}
+{"id":256,"fn":"parseBoundaryId","arg":"boundary/5cube/tetrahedron/3","out":"The 5cube takes ball and cube problems only, not \"tetrahedron\"."}
+{"id":257,"fn":"parseBoundaryId","arg":"boundary/9simplex/cube/3","out":"The 9simplex takes ball problems only, not \"cube\"."}
+{"id":258,"fn":"parseBoundaryId","arg":"boundary/10demicube/icosahedron/24","out":"The 10demicube takes ball problems only, not \"icosahedron\"."}
+{"id":259,"fn":"parseBoundaryId","arg":"boundary/tesseract/ball/١","out":"The piece count \"١\" must be a whole number from 1 to 9999, written without leading zeros."}
+{"id":260,"fn":"parseBoundaryId","arg":"","out":"\"\" is not of the form boundary/<polytope>/<piece>/<P>."}
+{"id":261,"fn":"parseBoundaryId","arg":"/","out":"\"/\" is not of the form boundary/<polytope>/<piece>/<P>."}
+{"id":262,"fn":"parseBoundaryId","arg":"///","out":"\"///\" is not of the form boundary/<polytope>/<piece>/<P>."}
+{"id":263,"fn":"parseBoundaryId","arg":"boundary/tesseract/ball/400","out":{"polytope":"tesseract","piece":"ball","P":400}}
+{"id":264,"fn":"parseBoundaryId","arg":"boundary/7cube/cube/400","out":{"polytope":"7cube","piece":"cube","P":400}}
+{"id":265,"fn":"parseBoundaryId","arg":"boundary/11cube/ball/1","out":"Unknown polytope \"11cube\"."}
+{"id":266,"fn":"parseBoundaryId","arg":"boundary/4simplex/ball/1","out":"Unknown polytope \"4simplex\"."}
+{"id":267,"fn":"bound","polytope":"tesseract","piece":"ball","P":0,"out":null}
+{"id":269,"fn":"checkMs","polytope":"tesseract","piece":"ball","P":1,"out":{"ms":0.3,"heavy":false}}
+{"id":292,"fn":"bound","polytope":"tesseract","piece":"ball","P":13,"out":{"value":0.9475831494514223,"label":"[CALC] larger of the volume bound (P pi/6 <= 8 s^3) and one ball (1/sqrt 2: the centre is 1/2 from every edge)"}}
+{"id":295,"fn":"checkMs","polytope":"tesseract","piece":"ball","P":14,"out":{"ms":4.2,"heavy":false}}
+{"id":317,"fn":"bound","polytope":"tesseract","piece":"cube","P":8,"out":{"value":1,"label":"[CALC] larger of the volume bound (P <= 8 s^3) and one cube (1/sqrt 2)"}}
+{"id":322,"fn":"checkMs","polytope":"tesseract","piece":"cube","P":10,"out":{"ms":3,"heavy":false}}
+{"id":342,"fn":"bound","polytope":"tesseract","piece":"tetrahedron","P":3,"out":{"value":0.3535533905932734,"label":"[CALC] volume: the developed tetrahedrons have disjoint interiors, so P V <= V_boundary s^3, V the piece's volume"}}
+{"id":349,"fn":"checkMs","polytope":"tesseract","piece":"tetrahedron","P":6,"out":{"ms":24,"heavy":false}}
+{"id":368,"fn":"bound","polytope":"tesseract","piece":"tetrahedron","P":16,"out":{"value":0.6177146705271318,"label":"[CALC] volume: the developed tetrahedrons have disjoint interiors, so P V <= V_boundary s^3, V the piece's volume"}}
+{"id":376,"fn":"checkMs","polytope":"tesseract","piece":"octahedron","P":2,"out":{"ms":8,"heavy":false}}
+{"id":393,"fn":"bound","polytope":"tesseract","piece":"octahedron","P":11,"out":{"value":0.865430400969929,"label":"[CALC] volume: the developed octahedrons have disjoint interiors, so P V <= V_boundary s^3, V the piece's volume"}}
+{"id":402,"fn":"checkMs","polytope":"tesseract","piece":"octahedron","P":15,"out":{"ms":60,"heavy":true}}
+{"id":418,"fn":"bound","polytope":"tesseract","piece":"dodecahedron","P":6,"out":{"value":1.7912475537291623,"label":"[CALC] volume: the developed dodecahedrons have disjoint interiors, so P V <= V_boundary s^3, V the piece's volume"}}
+{"id":429,"fn":"checkMs","polytope":"tesseract","piece":"dodecahedron","P":11,"out":{"ms":44,"heavy":false}}
+{"id":443,"fn":"bound","polytope":"tesseract","piece":"icosahedron","P":1,"out":{"value":1.0688079002834319,"label":"[CALC] one piece: it contains its inscribed ball, whose centre must be at distance >= the inradius from the edges, and every point of a cell lies within s rho of the cell's edges, rho the distance from a cell's centre to them"}}
+{"id":456,"fn":"checkMs","polytope":"tesseract","piece":"icosahedron","P":7,"out":{"ms":28,"heavy":false}}
+{"id":469,"fn":"bound","polytope":"tesseract","piece":"icosahedron","P":14,"out":{"value":1.5629461956632176,"label":"[CALC] volume: the developed icosahedrons have disjoint interiors, so P V <= V_boundary s^3, V the piece's volume"}}
+{"id":483,"fn":"checkMs","polytope":"5cell","piece":"ball","P":3,"out":{"ms":3,"heavy":false}}
+{"id":494,"fn":"bound","polytope":"5cell","piece":"ball","P":9,"out":{"value":1.9997657466208345,"label":"[CALC] volume: the developed balls have disjoint interiors, so P pi/6 <= V s^3, V the volume of the boundary at unit edge"}}
+{"id":509,"fn":"checkMs","polytope":"5cell","piece":"ball","P":16,"out":{"ms":16,"heavy":false}}
+{"id":520,"fn":"bound","polytope":"5cell","piece":"ball","P":22,"out":{"value":2.6938444557045105,"label":"[CALC] volume: the developed balls have disjoint interiors, so P pi/6 <= V s^3, V the volume of the boundary at unit edge"}}
+{"id":536,"fn":"checkMs","polytope":"5cell","piece":"cube","P":4,"out":{"ms":24,"heavy":false}}
+{"id":545,"fn":"bound","polytope":"5cell","piece":"cube","P":9,"out":{"value":2.4811113252000796,"label":"[CALC] volume: the developed cubes have disjoint interiors, so P V <= V_boundary s^3, V the piece's volume"}}
+{"id":562,"fn":"checkMs","polytope":"5cell","piece":"cube","P":17,"out":{"ms":102,"heavy":true}}
+{"id":571,"fn":"bound","polytope":"5cell","piece":"cube","P":22,"out":{"value":3.34225546100584,"label":"[CALC] volume: the developed cubes have disjoint interiors, so P V <= V_boundary s^3, V the piece's volume"}}
+{"id":589,"fn":"checkMs","polytope":"5cell","piece":"tetrahedron","P":5,"out":{"ms":30,"heavy":false}}
+{"id":596,"fn":"bound","polytope":"5cell","piece":"tetrahedron","P":9,"out":{"value":1.2164403991146788,"label":"[CALC] volume: the developed tetrahedrons have disjoint interiors, so P V <= V_boundary s^3, V the piece's volume"}}
+{"id":615,"fn":"checkMs","polytope":"5cell","piece":"tetrahedron","P":18,"out":{"ms":108,"heavy":true}}
+{"id":622,"fn":"bound","polytope":"5cell","piece":"tetrahedron","P":22,"out":{"value":1.63864254120129,"label":"[CALC] volume: the developed tetrahedrons have disjoint interiors, so P V <= V_boundary s^3, V the piece's volume"}}
+{"id":642,"fn":"checkMs","polytope":"5cell","piece":"octahedron","P":6,"out":{"ms":36,"heavy":false}}
+{"id":647,"fn":"bound","polytope":"5cell","piece":"octahedron","P":9,"out":{"value":1.9309787692112577,"label":"[CALC] volume: the developed octahedrons have disjoint interiors, so P V <= V_boundary s^3, V the piece's volume"}}
+{"id":668,"fn":"checkMs","polytope":"5cell","piece":"octahedron","P":19,"out":{"ms":114,"heavy":true}}
+{"id":673,"fn":"bound","polytope":"5cell","piece":"octahedron","P":22,"out":{"value":2.6011828937027714,"label":"[CALC] volume: the developed octahedrons have disjoint interiors, so P V <= V_boundary s^3, V the piece's volume"}}
+{"id":695,"fn":"checkMs","polytope":"5cell","piece":"dodecahedron","P":7,"out":{"ms":42,"heavy":false}}
+{"id":698,"fn":"bound","polytope":"5cell","piece":"dodecahedron","P":9,"out":{"value":4.891568131829452,"label":"[CALC] volume: the developed dodecahedrons have disjoint interiors, so P V <= V_boundary s^3, V the piece's volume"}}
+{"id":721,"fn":"checkMs","polytope":"5cell","piece":"dodecahedron","P":20,"out":{"ms":120,"heavy":true}}
+{"id":724,"fn":"bound","polytope":"5cell","piece":"dodecahedron","P":22,"out":{"value":6.589333632649768,"label":"[CALC] volume: the developed dodecahedrons have disjoint interiors, so P V <= V_boundary s^3, V the piece's volume"}}
+{"id":748,"fn":"checkMs","polytope":"5cell","piece":"icosahedron","P":8,"out":{"ms":48,"heavy":false}}
+{"id":749,"fn":"bound","polytope":"5cell","piece":"icosahedron","P":9,"out":{"value":3.2179374341335176,"label":"[CALC] volume: the developed icosahedrons have disjoint interiors, so P V <= V_boundary s^3, V the piece's volume"}}
+{"id":774,"fn":"checkMs","polytope":"5cell","piece":"icosahedron","P":21,"out":{"ms":126,"heavy":true}}
+{"id":775,"fn":"bound","polytope":"5cell","piece":"icosahedron","P":22,"out":{"value":4.334819180892885,"label":"[CALC] volume: the developed icosahedrons have disjoint interiors, so P V <= V_boundary s^3, V the piece's volume"}}
+{"id":800,"fn":"bound","polytope":"16cell","piece":"ball","P":9,"out":{"value":1.4142135623730938,"label":"[CALC] one ball: its centre must be at distance >= 1/2 from the edges, and every point of a cell lies within s rho of the cell's edges, rho the distance from a cell's centre to them"}}
+{"id":801,"fn":"checkMs","polytope":"16cell","piece":"ball","P":9,"out":{"ms":7.2,"heavy":false}}
+{"id":826,"fn":"bound","polytope":"16cell","piece":"ball","P":22,"out":{"value":1.8280547117327102,"label":"[CALC] volume: the developed balls have disjoint interiors, so P pi/6 <= V s^3, V the volume of the boundary at unit edge"}}
+{"id":827,"fn":"checkMs","polytope":"16cell","piece":"ball","P":22,"out":{"ms":17.6,"heavy":false}}
+{"id":851,"fn":"bound","polytope":"16cell","piece":"cube","P":9,"out":{"value":1.6836930724640575,"label":"[CALC] volume: the developed cubes have disjoint interiors, so P V <= V_boundary s^3, V the piece's volume"}}
+{"id":854,"fn":"checkMs","polytope":"16cell","piece":"cube","P":10,"out":{"ms":50,"heavy":true}}
+{"id":877,"fn":"bound","polytope":"16cell","piece":"cube","P":22,"out":{"value":2.2680692756286955,"label":"[CALC] volume: the developed cubes have disjoint interiors, so P V <= V_boundary s^3, V the piece's volume"}}
+{"id":880,"fn":"checkMs","polytope":"16cell","piece":"cube","P":23,"out":{"ms":115,"heavy":true}}
+{"id":902,"fn":"bound","polytope":"16cell","piece":"tetrahedron","P":9,"out":{"value":0.8254818122236558,"label":"[CALC] volume: the developed tetrahedrons have disjoint interiors, so P V <= V_boundary s^3, V the piece's volume"}}
+{"id":907,"fn":"checkMs","polytope":"16cell","piece":"tetrahedron","P":11,"out":{"ms":55,"heavy":true}}
+{"id":928,"fn":"bound","polytope":"16cell","piece":"tetrahedron","P":22,"out":{"value":1.1119900452846565,"label":"[CALC] volume: the developed tetrahedrons have disjoint interiors, so P V <= V_boundary s^3, V the piece's volume"}}
+{"id":933,"fn":"checkMs","polytope":"16cell","piece":"tetrahedron","P":24,"out":{"ms":120,"heavy":true}}
+{"id":953,"fn":"bound","polytope":"16cell","piece":"octahedron","P":9,"out":{"value":1.3103706971044469,"label":"[CALC] volume: the developed octahedrons have disjoint interiors, so P V <= V_boundary s^3, V the piece's volume"}}
+{"id":960,"fn":"checkMs","polytope":"16cell","piece":"octahedron","P":12,"out":{"ms":60,"heavy":true}}
+{"id":979,"fn":"bound","polytope":"16cell","piece":"octahedron","P":22,"out":{"value":1.7651741676630297,"label":"[CALC] volume: the developed octahedrons have disjoint interiors, so P V <= V_boundary s^3, V the piece's volume"}}
+{"id":986,"fn":"checkMs","polytope":"16cell","piece":"octahedron","P":25,"out":{"ms":125,"heavy":true}}
+{"id":1004,"fn":"bound","polytope":"16cell","piece":"dodecahedron","P":9,"out":{"value":3.3194396774530253,"label":"[CALC] volume: the developed dodecahedrons have disjoint interiors, so P V <= V_boundary s^3, V the piece's volume"}}
+{"id":1013,"fn":"checkMs","polytope":"16cell","piece":"dodecahedron","P":13,"out":{"ms":65,"heavy":true}}
+{"id":1030,"fn":"bound","polytope":"16cell","piece":"dodecahedron","P":22,"out":{"value":4.4715508235214605,"label":"[CALC] volume: the developed dodecahedrons have disjoint interiors, so P V <= V_boundary s^3, V the piece's volume"}}
+{"id":1040,"fn":"checkMs","polytope":"16cell","piece":"icosahedron","P":1,"out":{"ms":5,"heavy":false}}
+{"id":1055,"fn":"bound","polytope":"16cell","piece":"icosahedron","P":9,"out":{"value":2.183706515078058,"label":"[CALC] volume: the developed icosahedrons have disjoint interiors, so P V <= V_boundary s^3, V the piece's volume"}}
+{"id":1066,"fn":"checkMs","polytope":"16cell","piece":"icosahedron","P":14,"out":{"ms":70,"heavy":true}}
+{"id":1081,"fn":"bound","polytope":"16cell","piece":"icosahedron","P":22,"out":{"value":2.941627387342287,"label":"[CALC] volume: the developed icosahedrons have disjoint interiors, so P V <= V_boundary s^3, V the piece's volume"}}
+{"id":1093,"fn":"checkMs","polytope":"24cell","piece":"ball","P":2,"out":{"ms":4.6,"heavy":false}}
+{"id":1106,"fn":"bound","polytope":"24cell","piece":"ball","P":9,"out":{"value":0.999999999999999,"label":"[CALC] one ball: its centre must be at distance >= 1/2 from the edges, and every point of a cell lies within s rho of the cell's edges, rho the distance from a cell's centre to them"}}
+{"id":1119,"fn":"checkMs","polytope":"24cell","piece":"ball","P":15,"out":{"ms":34.5,"heavy":false}}
+{"id":1132,"fn":"bound","polytope":"24cell","piece":"ball","P":22,"out":{"value":1.0060172775234077,"label":"[CALC] volume: the developed balls have disjoint interiors, so P pi/6 <= V s^3, V the volume of the boundary at unit edge"}}
+{"id":1146,"fn":"checkMs","polytope":"24cell","piece":"cube","P":3,"out":{"ms":12,"heavy":false}}
+{"id":1157,"fn":"bound","polytope":"24cell","piece":"cube","P":9,"out":{"value":0.999999999999999,"label":"[CALC] one piece: it contains its inscribed ball, whose centre must be at distance >= the inradius from the edges, and every point of a cell lies within s rho of the cell's edges, rho the distance from a cell's centre to them"}}
+{"id":1172,"fn":"checkMs","polytope":"24cell","piece":"cube","P":16,"out":{"ms":64,"heavy":true}}
+{"id":1183,"fn":"bound","polytope":"24cell","piece":"cube","P":22,"out":{"value":1.248166623929848,"label":"[CALC] volume: the developed cubes have disjoint interiors, so P V <= V_boundary s^3, V the piece's volume"}}
+{"id":1199,"fn":"checkMs","polytope":"24cell","piece":"tetrahedron","P":4,"out":{"ms":16,"heavy":false}}
+{"id":1208,"fn":"bound","polytope":"24cell","piece":"tetrahedron","P":9,"out":{"value":0.4542801482080344,"label":"[CALC] volume: the developed tetrahedrons have disjoint interiors, so P V <= V_boundary s^3, V the piece's volume"}}
+{"id":1225,"fn":"checkMs","polytope":"24cell","piece":"tetrahedron","P":17,"out":{"ms":68,"heavy":true}}
+{"id":1234,"fn":"bound","polytope":"24cell","piece":"tetrahedron","P":22,"out":{"value":0.6119517051708294,"label":"[CALC] volume: the developed tetrahedrons have disjoint interiors, so P V <= V_boundary s^3, V the piece's volume"}}
+{"id":1252,"fn":"checkMs","polytope":"24cell","piece":"octahedron","P":5,"out":{"ms":20,"heavy":false}}
+{"id":1259,"fn":"bound","polytope":"24cell","piece":"octahedron","P":9,"out":{"value":0.8164965809277253,"label":"[CALC] one piece: it contains its inscribed ball, whose centre must be at distance >= the inradius from the edges, and every point of a cell lies within s rho of the cell's edges, rho the distance from a cell's centre to them"}}
+{"id":1278,"fn":"checkMs","polytope":"24cell","piece":"octahedron","P":18,"out":{"ms":72,"heavy":true}}
+{"id":1285,"fn":"bound","polytope":"24cell","piece":"octahedron","P":22,"out":{"value":0.9714127805419084,"label":"[CALC] volume: the developed octahedrons have disjoint interiors, so P V <= V_boundary s^3, V the piece's volume"}}
+{"id":1305,"fn":"checkMs","polytope":"24cell","piece":"dodecahedron","P":6,"out":{"ms":24,"heavy":false}}
+{"id":1310,"fn":"bound","polytope":"24cell","piece":"dodecahedron","P":9,"out":{"value":2.2270327288232115,"label":"[CALC] one piece: it contains its inscribed ball, whose centre must be at distance >= the inradius from the edges, and every point of a cell lies within s rho of the cell's edges, rho the distance from a cell's centre to them"}}
+{"id":1331,"fn":"checkMs","polytope":"24cell","piece":"dodecahedron","P":19,"out":{"ms":76,"heavy":true}}
+{"id":1336,"fn":"bound","polytope":"24cell","piece":"dodecahedron","P":22,"out":{"value":2.4607892515004526,"label":"[CALC] volume: the developed dodecahedrons have disjoint interiors, so P V <= V_boundary s^3, V the piece's volume"}}
+{"id":1358,"fn":"checkMs","polytope":"24cell","piece":"icosahedron","P":7,"out":{"ms":28,"heavy":false}}
+{"id":1361,"fn":"bound","polytope":"24cell","piece":"icosahedron","P":9,"out":{"value":1.51152262815234,"label":"[CALC] one piece: it contains its inscribed ball, whose centre must be at distance >= the inradius from the edges, and every point of a cell lies within s rho of the cell's edges, rho the distance from a cell's centre to them"}}
+{"id":1384,"fn":"checkMs","polytope":"24cell","piece":"icosahedron","P":20,"out":{"ms":80,"heavy":true}}
+{"id":1387,"fn":"bound","polytope":"24cell","piece":"icosahedron","P":22,"out":{"value":1.6188399377267013,"label":"[CALC] volume: the developed icosahedrons have disjoint interiors, so P V <= V_boundary s^3, V the piece's volume"}}
+{"id":1411,"fn":"checkMs","polytope":"120cell","piece":"ball","P":8,"out":{"ms":96,"heavy":true}}
+{"id":1412,"fn":"bound","polytope":"120cell","piece":"ball","P":9,"out":{"value":0.38196601125010476,"label":"[CALC] one ball: its centre must be at distance >= 1/2 from the edges, and every point of a cell lies within s rho of the cell's edges, rho the distance from a cell's centre to them"}}
+{"id":1437,"fn":"checkMs","polytope":"120cell","piece":"ball","P":21,"out":{"ms":252,"heavy":true}}
+{"id":1438,"fn":"bound","polytope":"120cell","piece":"ball","P":22,"out":{"value":0.38196601125010476,"label":"[CALC] one ball: its centre must be at distance >= 1/2 from the edges, and every point of a cell lies within s rho of the cell's edges, rho the distance from a cell's centre to them"}}
+{"id":1463,"fn":"bound","polytope":"120cell","piece":"cube","P":9,"out":{"value":0.38196601125010476,"label":"[CALC] one piece: it contains its inscribed ball, whose centre must be at distance >= the inradius from the edges, and every point of a cell lies within s rho of the cell's edges, rho the distance from a cell's centre to them"}}
+{"id":1464,"fn":"checkMs","polytope":"120cell","piece":"cube","P":9,"out":{"ms":99,"heavy":true}}
+{"id":1489,"fn":"bound","polytope":"120cell","piece":"cube","P":22,"out":{"value":0.38196601125010476,"label":"[CALC] one piece: it contains its inscribed ball, whose centre must be at distance >= the inradius from the edges, and every point of a cell lies within s rho of the cell's edges, rho the distance from a cell's centre to them"}}
+{"id":1490,"fn":"checkMs","polytope":"120cell","piece":"cube","P":22,"out":{"ms":242,"heavy":true}}
+{"id":1514,"fn":"bound","polytope":"120cell","piece":"tetrahedron","P":9,"out":{"value":0.1559369711081559,"label":"[CALC] one piece: it contains its inscribed ball, whose centre must be at distance >= the inradius from the edges, and every point of a cell lies within s rho of the cell's edges, rho the distance from a cell's centre to them"}}
+{"id":1517,"fn":"checkMs","polytope":"120cell","piece":"tetrahedron","P":10,"out":{"ms":110,"heavy":true}}
+{"id":1540,"fn":"bound","polytope":"120cell","piece":"tetrahedron","P":22,"out":{"value":0.1559369711081559,"label":"[CALC] one piece: it contains its inscribed ball, whose centre must be at distance >= the inradius from the edges, and every point of a cell lies within s rho of the cell's edges, rho the distance from a cell's centre to them"}}
+{"id":1543,"fn":"checkMs","polytope":"120cell","piece":"tetrahedron","P":23,"out":{"ms":253,"heavy":true}}
+{"id":1565,"fn":"bound","polytope":"120cell","piece":"octahedron","P":9,"out":{"value":0.3118739422163119,"label":"[CALC] one piece: it contains its inscribed ball, whose centre must be at distance >= the inradius from the edges, and every point of a cell lies within s rho of the cell's edges, rho the distance from a cell's centre to them"}}
+{"id":1570,"fn":"checkMs","polytope":"120cell","piece":"octahedron","P":11,"out":{"ms":121,"heavy":true}}
+{"id":1591,"fn":"bound","polytope":"120cell","piece":"octahedron","P":22,"out":{"value":0.3118739422163119,"label":"[CALC] one piece: it contains its inscribed ball, whose centre must be at distance >= the inradius from the edges, and every point of a cell lies within s rho of the cell's edges, rho the distance from a cell's centre to them"}}
+{"id":1596,"fn":"checkMs","polytope":"120cell","piece":"octahedron","P":24,"out":{"ms":264,"heavy":true}}
+{"id":1616,"fn":"bound","polytope":"120cell","piece":"dodecahedron","P":9,"out":{"value":0.8506508083520391,"label":"[CALC] one piece: it contains its inscribed ball, whose centre must be at distance >= the inradius from the edges, and every point of a cell lies within s rho of the cell's edges, rho the distance from a cell's centre to them"}}
+{"id":1623,"fn":"checkMs","polytope":"120cell","piece":"dodecahedron","P":12,"out":{"ms":132,"heavy":true}}
+{"id":1642,"fn":"bound","polytope":"120cell","piece":"dodecahedron","P":22,"out":{"value":0.8506508083520391,"label":"[CALC] one piece: it contains its inscribed ball, whose centre must be at distance >= the inradius from the edges, and every point of a cell lies within s rho of the cell's edges, rho the distance from a cell's centre to them"}}
+{"id":1649,"fn":"checkMs","polytope":"120cell","piece":"dodecahedron","P":25,"out":{"ms":275,"heavy":true}}
+{"id":1667,"fn":"bound","polytope":"120cell","piece":"icosahedron","P":9,"out":{"value":0.5773502691896252,"label":"[CALC] one piece: it contains its inscribed ball, whose centre must be at distance >= the inradius from the edges, and every point of a cell lies within s rho of the cell's edges, rho the distance from a cell's centre to them"}}
+{"id":1676,"fn":"checkMs","polytope":"120cell","piece":"icosahedron","P":13,"out":{"ms":143,"heavy":true}}
+{"id":1693,"fn":"bound","polytope":"120cell","piece":"icosahedron","P":22,"out":{"value":0.5773502691896252,"label":"[CALC] one piece: it contains its inscribed ball, whose centre must be at distance >= the inradius from the edges, and every point of a cell lies within s rho of the cell's edges, rho the distance from a cell's centre to them"}}
+{"id":1703,"fn":"checkMs","polytope":"600cell","piece":"ball","P":1,"out":{"ms":2,"heavy":false}}
+{"id":1718,"fn":"bound","polytope":"600cell","piece":"ball","P":9,"out":{"value":1.4142135623730938,"label":"[CALC] one ball: its centre must be at distance >= 1/2 from the edges, and every point of a cell lies within s rho of the cell's edges, rho the distance from a cell's centre to them"}}
+{"id":1729,"fn":"checkMs","polytope":"600cell","piece":"ball","P":14,"out":{"ms":28,"heavy":false}}
+{"id":1744,"fn":"bound","polytope":"600cell","piece":"ball","P":22,"out":{"value":1.4142135623730938,"label":"[CALC] one ball: its centre must be at distance >= 1/2 from the edges, and every point of a cell lies within s rho of the cell's edges, rho the distance from a cell's centre to them"}}
+{"id":1756,"fn":"checkMs","polytope":"600cell","piece":"cube","P":2,"out":{"ms":4,"heavy":false}}
+{"id":1769,"fn":"bound","polytope":"600cell","piece":"cube","P":9,"out":{"value":1.4142135623730938,"label":"[CALC] one piece: it contains its inscribed ball, whose centre must be at distance >= the inradius from the edges, and every point of a cell lies within s rho of the cell's edges, rho the distance from a cell's centre to them"}}
+{"id":1782,"fn":"checkMs","polytope":"600cell","piece":"cube","P":15,"out":{"ms":30,"heavy":false}}
+{"id":1795,"fn":"bound","polytope":"600cell","piece":"cube","P":22,"out":{"value":1.4142135623730938,"label":"[CALC] one piece: it contains its inscribed ball, whose centre must be at distance >= the inradius from the edges, and every point of a cell lies within s rho of the cell's edges, rho the distance from a cell's centre to them"}}
+{"id":1809,"fn":"checkMs","polytope":"600cell","piece":"tetrahedron","P":3,"out":{"ms":6,"heavy":false}}
+{"id":1820,"fn":"bound","polytope":"600cell","piece":"tetrahedron","P":9,"out":{"value":0.5773502691896252,"label":"[CALC] one piece: it contains its inscribed ball, whose centre must be at distance >= the inradius from the edges, and every point of a cell lies within s rho of the cell's edges, rho the distance from a cell's centre to them"}}
+{"id":1835,"fn":"checkMs","polytope":"600cell","piece":"tetrahedron","P":16,"out":{"ms":32,"heavy":false}}
+{"id":1846,"fn":"bound","polytope":"600cell","piece":"tetrahedron","P":22,"out":{"value":0.5773502691896252,"label":"[CALC] one piece: it contains its inscribed ball, whose centre must be at distance >= the inradius from the edges, and every point of a cell lies within s rho of the cell's edges, rho the distance from a cell's centre to them"}}
+{"id":1862,"fn":"checkMs","polytope":"600cell","piece":"octahedron","P":4,"out":{"ms":8,"heavy":false}}
+{"id":1871,"fn":"bound","polytope":"600cell","piece":"octahedron","P":9,"out":{"value":1.1547005383792506,"label":"[CALC] one piece: it contains its inscribed ball, whose centre must be at distance >= the inradius from the edges, and every point of a cell lies within s rho of the cell's edges, rho the distance from a cell's centre to them"}}
+{"id":1888,"fn":"checkMs","polytope":"600cell","piece":"octahedron","P":17,"out":{"ms":34,"heavy":false}}
+{"id":1897,"fn":"bound","polytope":"600cell","piece":"octahedron","P":22,"out":{"value":1.1547005383792506,"label":"[CALC] one piece: it contains its inscribed ball, whose centre must be at distance >= the inradius from the edges, and every point of a cell lies within s rho of the cell's edges, rho the distance from a cell's centre to them"}}
+{"id":1915,"fn":"checkMs","polytope":"600cell","piece":"dodecahedron","P":5,"out":{"ms":10,"heavy":false}}
+{"id":1922,"fn":"bound","polytope":"600cell","piece":"dodecahedron","P":9,"out":{"value":3.149499888950549,"label":"[CALC] one piece: it contains its inscribed ball, whose centre must be at distance >= the inradius from the edges, and every point of a cell lies within s rho of the cell's edges, rho the distance from a cell's centre to them"}}
+{"id":1941,"fn":"checkMs","polytope":"600cell","piece":"dodecahedron","P":18,"out":{"ms":36,"heavy":false}}
+{"id":1948,"fn":"bound","polytope":"600cell","piece":"dodecahedron","P":22,"out":{"value":3.149499888950549,"label":"[CALC] one piece: it contains its inscribed ball, whose centre must be at distance >= the inradius from the edges, and every point of a cell lies within s rho of the cell's edges, rho the distance from a cell's centre to them"}}
+{"id":1968,"fn":"checkMs","polytope":"600cell","piece":"icosahedron","P":6,"out":{"ms":12,"heavy":false}}
+{"id":1973,"fn":"bound","polytope":"600cell","piece":"icosahedron","P":9,"out":{"value":2.1376158005668637,"label":"[CALC] one piece: it contains its inscribed ball, whose centre must be at distance >= the inradius from the edges, and every point of a cell lies within s rho of the cell's edges, rho the distance from a cell's centre to them"}}
+{"id":1994,"fn":"checkMs","polytope":"600cell","piece":"icosahedron","P":19,"out":{"ms":38,"heavy":false}}
+{"id":1999,"fn":"bound","polytope":"600cell","piece":"icosahedron","P":22,"out":{"value":2.1376158005668637,"label":"[CALC] one piece: it contains its inscribed ball, whose centre must be at distance >= the inradius from the edges, and every point of a cell lies within s rho of the cell's edges, rho the distance from a cell's centre to them"}}
+{"id":2021,"fn":"checkMs","polytope":"5cube","piece":"ball","P":21,"out":{"ms":6.3,"heavy":false}}
+{"id":2024,"fn":"bound","polytope":"5cube","piece":"ball","P":55,"out":{"value":1.141242966905728,"label":"[CALC] larger of the volume bound (P balls of diameter 1 have at most the (d-1)-volume 2d s^(d-1) of the boundary) and one ball (1/sqrt 2: the centre is 1/2 from every (d-3)-face, and no point is farther than s/sqrt 2)"}}
+{"id":2047,"fn":"checkMs","polytope":"5cube","piece":"ball","P":401,"out":{"ms":120.3,"heavy":true}}
+{"id":2049,"fn":"bound","polytope":"5cube","piece":"cube","P":1,"out":{"value":1,"label":"[CALC] larger of the volume bound (P <= 2d s^(d-1)) and one cube (1: with s < 1 it crosses every axis of its cell)"}}
+{"id":2074,"fn":"checkMs","polytope":"5cube","piece":"cube","P":161,"out":{"ms":3.22,"heavy":false}}
+{"id":2075,"fn":"bound","polytope":"5cube","piece":"cube","P":233,"out":null}
+{"id":2095,"fn":"bound","polytope":"5cube","piece":"tetrahedron","P":13,"out":null}
+{"id":2108,"fn":"bound","polytope":"5cube","piece":"tetrahedron","P":400,"out":null}
+{"id":2121,"fn":"bound","polytope":"5cube","piece":"octahedron","P":144,"out":null}
+{"id":2134,"fn":"bound","polytope":"5cube","piece":"dodecahedron","P":3,"out":null}
+{"id":2147,"fn":"bound","polytope":"5cube","piece":"dodecahedron","P":384,"out":null}
+{"id":2160,"fn":"bound","polytope":"5cube","piece":"icosahedron","P":34,"out":null}
+{"id":2173,"fn":"bound","polytope":"6cube","piece":"ball","P":0,"out":null}
+{"id":2185,"fn":"checkMs","polytope":"6cube","piece":"ball","P":13,"out":{"ms":4.55,"heavy":false}}
+{"id":2198,"fn":"bound","polytope":"6cube","piece":"ball","P":161,"out":{"value":1.171544056220972,"label":"[CALC] larger of the volume bound (P balls of diameter 1 have at most the (d-1)-volume 2d s^(d-1) of the boundary) and one ball (1/sqrt 2: the centre is 1/2 from every (d-3)-face, and no point is farther than s/sqrt 2)"}}
+{"id":2211,"fn":"checkMs","polytope":"6cube","piece":"ball","P":400,"out":{"ms":140,"heavy":true}}
+{"id":2223,"fn":"bound","polytope":"6cube","piece":"cube","P":8,"out":{"value":1,"label":"[CALC] larger of the volume bound (P <= 2d s^(d-1)) and one cube (1: with s < 1 it crosses every axis of its cell)"}}
+{"id":2238,"fn":"checkMs","polytope":"6cube","piece":"cube","P":160,"out":{"ms":3.2,"heavy":false}}
+{"id":2249,"fn":"bound","polytope":"6cube","piece":"cube","P":399,"out":null}
+{"id":2265,"fn":"bound","polytope":"6cube","piece":"tetrahedron","P":89,"out":null}
+{"id":2278,"fn":"bound","polytope":"6cube","piece":"octahedron","P":2,"out":null}
+{"id":2291,"fn":"bound","polytope":"6cube","piece":"octahedron","P":377,"out":null}
+{"id":2304,"fn":"bound","polytope":"6cube","piece":"dodecahedron","P":21,"out":null}
+{"id":2317,"fn":"bound","polytope":"6cube","piece":"dodecahedron","P":401,"out":null}
+{"id":2330,"fn":"bound","polytope":"6cube","piece":"icosahedron","P":160,"out":null}
+{"id":2346,"fn":"bound","polytope":"7cube","piece":"ball","P":5,"out":{"value":0.7071067811865475,"label":"[CALC] larger of the volume bound (P balls of diameter 1 have at most the (d-1)-volume 2d s^(d-1) of the boundary) and one ball (1/sqrt 2: the centre is 1/2 from every (d-3)-face, and no point is farther than s/sqrt 2)"}}
+{"id":2349,"fn":"checkMs","polytope":"7cube","piece":"ball","P":8,"out":{"ms":4,"heavy":false}}
+{"id":2372,"fn":"bound","polytope":"7cube","piece":"ball","P":385,"out":{"value":1.1421991902073756,"label":"[CALC] larger of the volume bound (P balls of diameter 1 have at most the (d-1)-volume 2d s^(d-1) of the boundary) and one ball (1/sqrt 2: the centre is 1/2 from every (d-3)-face, and no point is farther than s/sqrt 2)"}}
+{"id":2375,"fn":"checkMs","polytope":"7cube","piece":"ball","P":399,"out":{"ms":199.5,"heavy":true}}
+{"id":2397,"fn":"bound","polytope":"7cube","piece":"cube","P":55,"out":{"value":1.256143076458699,"label":"[CALC] larger of the volume bound (P <= 2d s^(d-1)) and one cube (1: with s < 1 it crosses every axis of its cell)"}}
+{"id":2402,"fn":"checkMs","polytope":"7cube","piece":"cube","P":144,"out":{"ms":2.88,"heavy":false}}
+{"id":2422,"fn":"bound","polytope":"7cube","piece":"tetrahedron","P":1,"out":null}
+{"id":2435,"fn":"bound","polytope":"7cube","piece":"tetrahedron","P":233,"out":null}
+{"id":2448,"fn":"bound","polytope":"7cube","piece":"octahedron","P":13,"out":null}
+{"id":2461,"fn":"bound","polytope":"7cube","piece":"octahedron","P":400,"out":null}
+{"id":2474,"fn":"bound","polytope":"7cube","piece":"dodecahedron","P":144,"out":null}
+{"id":2487,"fn":"bound","polytope":"7cube","piece":"icosahedron","P":3,"out":null}
+{"id":2500,"fn":"bound","polytope":"7cube","piece":"icosahedron","P":384,"out":null}
+{"id":2513,"fn":"checkMs","polytope":"8cube","piece":"ball","P":5,"out":{"ms":3,"heavy":false}}
+{"id":2520,"fn":"bound","polytope":"8cube","piece":"ball","P":34,"out":{"value":0.7071067811865475,"label":"[CALC] larger of the volume bound (P balls of diameter 1 have at most the (d-1)-volume 2d s^(d-1) of the boundary) and one ball (1/sqrt 2: the centre is 1/2 from every (d-3)-face, and no point is farther than s/sqrt 2)"}}
+{"id":2539,"fn":"checkMs","polytope":"8cube","piece":"ball","P":385,"out":{"ms":231,"heavy":true}}
+{"id":2546,"fn":"bound","polytope":"8cube","piece":"cube","P":0,"out":null}
+{"id":2566,"fn":"checkMs","polytope":"8cube","piece":"cube","P":89,"out":{"ms":1.78,"heavy":false}}
+{"id":2571,"fn":"bound","polytope":"8cube","piece":"cube","P":161,"out":{"value":1.3907328050584313,"label":"[CALC] larger of the volume bound (P <= 2d s^(d-1)) and one cube (1: with s < 1 it crosses every axis of its cell)"}}
+{"id":2592,"fn":"bound","polytope":"8cube","piece":"tetrahedron","P":8,"out":null}
+{"id":2605,"fn":"bound","polytope":"8cube","piece":"tetrahedron","P":399,"out":null}
+{"id":2618,"fn":"bound","polytope":"8cube","piece":"octahedron","P":89,"out":null}
+{"id":2631,"fn":"bound","polytope":"8cube","piece":"dodecahedron","P":2,"out":null}
+{"id":2644,"fn":"bound","polytope":"8cube","piece":"dodecahedron","P":377,"out":null}
+{"id":2657,"fn":"bound","polytope":"8cube","piece":"icosahedron","P":21,"out":null}
+{"id":2670,"fn":"bound","polytope":"8cube","piece":"icosahedron","P":401,"out":null}
+{"id":2677,"fn":"checkMs","polytope":"9cube","piece":"ball","P":3,"out":{"ms":3,"heavy":false}}
+{"id":2694,"fn":"bound","polytope":"9cube","piece":"ball","P":160,"out":{"value":0.7827525122511865,"label":"[CALC] larger of the volume bound (P balls of diameter 1 have at most the (d-1)-volume 2d s^(d-1) of the boundary) and one ball (1/sqrt 2: the centre is 1/2 from every (d-3)-face, and no point is farther than s/sqrt 2)"}}
+{"id":2703,"fn":"checkMs","polytope":"9cube","piece":"ball","P":384,"out":{"ms":384,"heavy":true}}
+{"id":2719,"fn":"bound","polytope":"9cube","piece":"cube","P":5,"out":{"value":1,"label":"[CALC] larger of the volume bound (P <= 2d s^(d-1)) and one cube (1: with s < 1 it crosses every axis of its cell)"}}
+{"id":2730,"fn":"checkMs","polytope":"9cube","piece":"cube","P":55,"out":{"ms":1.1,"heavy":false}}
+{"id":2745,"fn":"bound","polytope":"9cube","piece":"cube","P":385,"out":{"value":1.4664711653938,"label":"[CALC] larger of the volume bound (P <= 2d s^(d-1)) and one cube (1: with s < 1 it crosses every axis of its cell)"}}
+{"id":2762,"fn":"bound","polytope":"9cube","piece":"tetrahedron","P":55,"out":null}
+{"id":2775,"fn":"bound","polytope":"9cube","piece":"octahedron","P":1,"out":null}
+{"id":2788,"fn":"bound","polytope":"9cube","piece":"octahedron","P":233,"out":null}
+{"id":2801,"fn":"bound","polytope":"9cube","piece":"dodecahedron","P":13,"out":null}
+{"id":2814,"fn":"bound","polytope":"9cube","piece":"dodecahedron","P":400,"out":null}
+{"id":2827,"fn":"bound","polytope":"9cube","piece":"icosahedron","P":144,"out":null}
+{"id":2841,"fn":"checkMs","polytope":"10cube","piece":"ball","P":2,"out":{"ms":3,"heavy":false}}
+{"id":2842,"fn":"bound","polytope":"10cube","piece":"ball","P":3,"out":{"value":0.7071067811865475,"label":"[CALC] larger of the volume bound (P balls of diameter 1 have at most the (d-1)-volume 2d s^(d-1) of the boundary) and one ball (1/sqrt 2: the centre is 1/2 from every (d-3)-face, and no point is farther than s/sqrt 2)"}}
+{"id":2867,"fn":"checkMs","polytope":"10cube","piece":"ball","P":377,"out":{"ms":565.5,"heavy":true}}
+{"id":2868,"fn":"bound","polytope":"10cube","piece":"ball","P":384,"out":{"value":0.7927748806528411,"label":"[CALC] larger of the volume bound (P balls of diameter 1 have at most the (d-1)-volume 2d s^(d-1) of the boundary) and one ball (1/sqrt 2: the centre is 1/2 from every (d-3)-face, and no point is farther than s/sqrt 2)"}}
+{"id":2893,"fn":"bound","polytope":"10cube","piece":"cube","P":34,"out":{"value":1.0607314258596148,"label":"[CALC] larger of the volume bound (P <= 2d s^(d-1)) and one cube (1: with s < 1 it crosses every axis of its cell)"}}
+{"id":2894,"fn":"checkMs","polytope":"10cube","piece":"cube","P":34,"out":{"ms":0.68,"heavy":false}}
+{"id":2919,"fn":"bound","polytope":"10cube","piece":"tetrahedron","P":0,"out":null}
+{"id":2932,"fn":"bound","polytope":"10cube","piece":"tetrahedron","P":161,"out":null}
+{"id":2945,"fn":"bound","polytope":"10cube","piece":"octahedron","P":8,"out":null}
+{"id":2958,"fn":"bound","polytope":"10cube","piece":"octahedron","P":399,"out":null}
+{"id":2971,"fn":"bound","polytope":"10cube","piece":"dodecahedron","P":89,"out":null}
+{"id":2984,"fn":"bound","polytope":"10cube","piece":"icosahedron","P":2,"out":null}
+{"id":2997,"fn":"bound","polytope":"10cube","piece":"icosahedron","P":377,"out":null}
+{"id":3005,"fn":"checkMs","polytope":"5simplex","piece":"ball","P":1,"out":{"ms":0.3,"heavy":false}}
+{"id":3016,"fn":"bound","polytope":"5simplex","piece":"ball","P":7,"out":{"value":1.9825342409798423,"label":"[CALC] volume: the P balls of radius 1/2 are Euclidean balls (the centre is 1/2 from the hinges) with disjoint interiors, so P V_(d-1) 2^-(d-1) <= s^(d-1) times the boundary's (d-1)-volume at unit edge"}}
+{"id":3031,"fn":"checkMs","polytope":"5simplex","piece":"ball","P":14,"out":{"ms":4.2,"heavy":false}}
+{"id":3042,"fn":"bound","polytope":"5simplex","piece":"ball","P":20,"out":{"value":2.577529745062832,"label":"[CALC] volume: the P balls of radius 1/2 are Euclidean balls (the centre is 1/2 from the hinges) with disjoint interiors, so P V_(d-1) 2^-(d-1) <= s^(d-1) times the boundary's (d-1)-volume at unit edge"}}
+{"id":3061,"fn":"bound","polytope":"5simplex","piece":"cube","P":7,"out":null}
+{"id":3074,"fn":"bound","polytope":"5simplex","piece":"cube","P":20,"out":null}
+{"id":3087,"fn":"bound","polytope":"5simplex","piece":"tetrahedron","P":7,"out":null}
+{"id":3100,"fn":"bound","polytope":"5simplex","piece":"tetrahedron","P":20,"out":null}
+{"id":3113,"fn":"bound","polytope":"5simplex","piece":"octahedron","P":7,"out":null}
+{"id":3126,"fn":"bound","polytope":"5simplex","piece":"octahedron","P":20,"out":null}
+{"id":3139,"fn":"bound","polytope":"5simplex","piece":"dodecahedron","P":7,"out":null}
+{"id":3152,"fn":"bound","polytope":"5simplex","piece":"dodecahedron","P":20,"out":null}
+{"id":3165,"fn":"bound","polytope":"5simplex","piece":"icosahedron","P":7,"out":null}
+{"id":3178,"fn":"bound","polytope":"5simplex","piece":"icosahedron","P":20,"out":null}
+{"id":3188,"fn":"checkMs","polytope":"6simplex","piece":"ball","P":2,"out":{"ms":0.6,"heavy":false}}
+{"id":3197,"fn":"bound","polytope":"6simplex","piece":"ball","P":7,"out":{"value":2.449489742783178,"label":"[CALC] one ball: its centre must be 1/2 from every (d-3)-face, and every point of a cell lies within rho of a (d-3)-face of the cell, rho the largest distance from the cell's centre to one"}}
+{"id":3214,"fn":"checkMs","polytope":"6simplex","piece":"ball","P":15,"out":{"ms":4.5,"heavy":false}}
+{"id":3223,"fn":"bound","polytope":"6simplex","piece":"ball","P":20,"out":{"value":2.6482087252643614,"label":"[CALC] volume: the P balls of radius 1/2 are Euclidean balls (the centre is 1/2 from the hinges) with disjoint interiors, so P V_(d-1) 2^-(d-1) <= s^(d-1) times the boundary's (d-1)-volume at unit edge"}}
+{"id":3242,"fn":"bound","polytope":"6simplex","piece":"cube","P":7,"out":null}
+{"id":3255,"fn":"bound","polytope":"6simplex","piece":"cube","P":20,"out":null}
+{"id":3268,"fn":"bound","polytope":"6simplex","piece":"tetrahedron","P":7,"out":null}
+{"id":3281,"fn":"bound","polytope":"6simplex","piece":"tetrahedron","P":20,"out":null}
+{"id":3294,"fn":"bound","polytope":"6simplex","piece":"octahedron","P":7,"out":null}
+{"id":3307,"fn":"bound","polytope":"6simplex","piece":"octahedron","P":20,"out":null}
+{"id":3320,"fn":"bound","polytope":"6simplex","piece":"dodecahedron","P":7,"out":null}
+{"id":3333,"fn":"bound","polytope":"6simplex","piece":"dodecahedron","P":20,"out":null}
+{"id":3346,"fn":"bound","polytope":"6simplex","piece":"icosahedron","P":7,"out":null}
+{"id":3359,"fn":"bound","polytope":"6simplex","piece":"icosahedron","P":20,"out":null}
+{"id":3371,"fn":"checkMs","polytope":"7simplex","piece":"ball","P":3,"out":{"ms":0.8999999999999999,"heavy":false}}
+{"id":3378,"fn":"bound","polytope":"7simplex","piece":"ball","P":7,"out":{"value":2.9580398915498076,"label":"[CALC] one ball: its centre must be 1/2 from every (d-3)-face, and every point of a cell lies within rho of a (d-3)-face of the cell, rho the largest distance from the cell's centre to one"}}
+{"id":3397,"fn":"checkMs","polytope":"7simplex","piece":"ball","P":16,"out":{"ms":4.8,"heavy":false}}
+{"id":3404,"fn":"bound","polytope":"7simplex","piece":"ball","P":20,"out":{"value":2.9580398915498076,"label":"[CALC] one ball: its centre must be 1/2 from every (d-3)-face, and every point of a cell lies within rho of a (d-3)-face of the cell, rho the largest distance from the cell's centre to one"}}
+{"id":3423,"fn":"bound","polytope":"7simplex","piece":"cube","P":7,"out":null}
+{"id":3436,"fn":"bound","polytope":"7simplex","piece":"cube","P":20,"out":null}
+{"id":3449,"fn":"bound","polytope":"7simplex","piece":"tetrahedron","P":7,"out":null}
+{"id":3462,"fn":"bound","polytope":"7simplex","piece":"tetrahedron","P":20,"out":null}
+{"id":3475,"fn":"bound","polytope":"7simplex","piece":"octahedron","P":7,"out":null}
+{"id":3488,"fn":"bound","polytope":"7simplex","piece":"octahedron","P":20,"out":null}
+{"id":3501,"fn":"bound","polytope":"7simplex","piece":"dodecahedron","P":7,"out":null}
+{"id":3514,"fn":"bound","polytope":"7simplex","piece":"dodecahedron","P":20,"out":null}
+{"id":3527,"fn":"bound","polytope":"7simplex","piece":"icosahedron","P":7,"out":null}
+{"id":3540,"fn":"bound","polytope":"7simplex","piece":"icosahedron","P":20,"out":null}
+{"id":3554,"fn":"checkMs","polytope":"8simplex","piece":"ball","P":4,"out":{"ms":1.2,"heavy":false}}
+{"id":3559,"fn":"bound","polytope":"8simplex","piece":"ball","P":7,"out":{"value":3.4641016151377544,"label":"[CALC] one ball: its centre must be 1/2 from every (d-3)-face, and every point of a cell lies within rho of a (d-3)-face of the cell, rho the largest distance from the cell's centre to one"}}
+{"id":3580,"fn":"checkMs","polytope":"8simplex","piece":"ball","P":17,"out":{"ms":5.1,"heavy":false}}
+{"id":3585,"fn":"bound","polytope":"8simplex","piece":"ball","P":20,"out":{"value":3.4641016151377544,"label":"[CALC] one ball: its centre must be 1/2 from every (d-3)-face, and every point of a cell lies within rho of a (d-3)-face of the cell, rho the largest distance from the cell's centre to one"}}
+{"id":3604,"fn":"bound","polytope":"8simplex","piece":"cube","P":7,"out":null}
+{"id":3617,"fn":"bound","polytope":"8simplex","piece":"cube","P":20,"out":null}
+{"id":3630,"fn":"bound","polytope":"8simplex","piece":"tetrahedron","P":7,"out":null}
+{"id":3643,"fn":"bound","polytope":"8simplex","piece":"tetrahedron","P":20,"out":null}
+{"id":3656,"fn":"bound","polytope":"8simplex","piece":"octahedron","P":7,"out":null}
+{"id":3669,"fn":"bound","polytope":"8simplex","piece":"octahedron","P":20,"out":null}
+{"id":3682,"fn":"bound","polytope":"8simplex","piece":"dodecahedron","P":7,"out":null}
+{"id":3695,"fn":"bound","polytope":"8simplex","piece":"dodecahedron","P":20,"out":null}
+{"id":3708,"fn":"bound","polytope":"8simplex","piece":"icosahedron","P":7,"out":null}
+{"id":3721,"fn":"bound","polytope":"8simplex","piece":"icosahedron","P":20,"out":null}
+{"id":3737,"fn":"checkMs","polytope":"9simplex","piece":"ball","P":5,"out":{"ms":1.5,"heavy":false}}
+{"id":3740,"fn":"bound","polytope":"9simplex","piece":"ball","P":7,"out":{"value":3.9686269665968856,"label":"[CALC] one ball: its centre must be 1/2 from every (d-3)-face, and every point of a cell lies within rho of a (d-3)-face of the cell, rho the largest distance from the cell's centre to one"}}
+{"id":3763,"fn":"checkMs","polytope":"9simplex","piece":"ball","P":18,"out":{"ms":5.3999999999999995,"heavy":false}}
+{"id":3766,"fn":"bound","polytope":"9simplex","piece":"ball","P":20,"out":{"value":3.9686269665968856,"label":"[CALC] one ball: its centre must be 1/2 from every (d-3)-face, and every point of a cell lies within rho of a (d-3)-face of the cell, rho the largest distance from the cell's centre to one"}}
+{"id":3785,"fn":"bound","polytope":"9simplex","piece":"cube","P":7,"out":null}
+{"id":3798,"fn":"bound","polytope":"9simplex","piece":"cube","P":20,"out":null}
+{"id":3811,"fn":"bound","polytope":"9simplex","piece":"tetrahedron","P":7,"out":null}
+{"id":3824,"fn":"bound","polytope":"9simplex","piece":"tetrahedron","P":20,"out":null}
+{"id":3837,"fn":"bound","polytope":"9simplex","piece":"octahedron","P":7,"out":null}
+{"id":3850,"fn":"bound","polytope":"9simplex","piece":"octahedron","P":20,"out":null}
+{"id":3863,"fn":"bound","polytope":"9simplex","piece":"dodecahedron","P":7,"out":null}
+{"id":3876,"fn":"bound","polytope":"9simplex","piece":"dodecahedron","P":20,"out":null}
+{"id":3889,"fn":"bound","polytope":"9simplex","piece":"icosahedron","P":7,"out":null}
+{"id":3902,"fn":"bound","polytope":"9simplex","piece":"icosahedron","P":20,"out":null}
+{"id":3920,"fn":"checkMs","polytope":"10simplex","piece":"ball","P":6,"out":{"ms":1.7999999999999998,"heavy":false}}
+{"id":3921,"fn":"bound","polytope":"10simplex","piece":"ball","P":7,"out":{"value":4.472135954999579,"label":"[CALC] one ball: its centre must be 1/2 from every (d-3)-face, and every point of a cell lies within rho of a (d-3)-face of the cell, rho the largest distance from the cell's centre to one"}}
+{"id":3946,"fn":"checkMs","polytope":"10simplex","piece":"ball","P":19,"out":{"ms":5.7,"heavy":false}}
+{"id":3947,"fn":"bound","polytope":"10simplex","piece":"ball","P":20,"out":{"value":4.472135954999579,"label":"[CALC] one ball: its centre must be 1/2 from every (d-3)-face, and every point of a cell lies within rho of a (d-3)-face of the cell, rho the largest distance from the cell's centre to one"}}
+{"id":3966,"fn":"bound","polytope":"10simplex","piece":"cube","P":7,"out":null}
+{"id":3979,"fn":"bound","polytope":"10simplex","piece":"cube","P":20,"out":null}
+{"id":3992,"fn":"bound","polytope":"10simplex","piece":"tetrahedron","P":7,"out":null}
+{"id":4005,"fn":"bound","polytope":"10simplex","piece":"tetrahedron","P":20,"out":null}
+{"id":4018,"fn":"bound","polytope":"10simplex","piece":"octahedron","P":7,"out":null}
+{"id":4031,"fn":"bound","polytope":"10simplex","piece":"octahedron","P":20,"out":null}
+{"id":4044,"fn":"bound","polytope":"10simplex","piece":"dodecahedron","P":7,"out":null}
+{"id":4057,"fn":"bound","polytope":"10simplex","piece":"dodecahedron","P":20,"out":null}
+{"id":4070,"fn":"bound","polytope":"10simplex","piece":"icosahedron","P":7,"out":null}
+{"id":4083,"fn":"bound","polytope":"10simplex","piece":"icosahedron","P":20,"out":null}
+{"id":4102,"fn":"bound","polytope":"5orthoplex","piece":"ball","P":7,"out":{"value":1.9364916731037083,"label":"[CALC] one ball: its centre must be 1/2 from every (d-3)-face, and every point of a cell lies within rho of a (d-3)-face of the cell, rho the largest distance from the cell's centre to one"}}
+{"id":4103,"fn":"checkMs","polytope":"5orthoplex","piece":"ball","P":7,"out":{"ms":2.1,"heavy":false}}
+{"id":4128,"fn":"bound","polytope":"5orthoplex","piece":"ball","P":20,"out":{"value":1.9364916731037083,"label":"[CALC] one ball: its centre must be 1/2 from every (d-3)-face, and every point of a cell lies within rho of a (d-3)-face of the cell, rho the largest distance from the cell's centre to one"}}
+{"id":4129,"fn":"checkMs","polytope":"5orthoplex","piece":"ball","P":20,"out":{"ms":6,"heavy":false}}
+{"id":4147,"fn":"bound","polytope":"5orthoplex","piece":"cube","P":7,"out":null}
+{"id":4160,"fn":"bound","polytope":"5orthoplex","piece":"cube","P":20,"out":null}
+{"id":4173,"fn":"bound","polytope":"5orthoplex","piece":"tetrahedron","P":7,"out":null}
+{"id":4186,"fn":"bound","polytope":"5orthoplex","piece":"tetrahedron","P":20,"out":null}
+{"id":4199,"fn":"bound","polytope":"5orthoplex","piece":"octahedron","P":7,"out":null}
+{"id":4212,"fn":"bound","polytope":"5orthoplex","piece":"octahedron","P":20,"out":null}
+{"id":4225,"fn":"bound","polytope":"5orthoplex","piece":"dodecahedron","P":7,"out":null}
+{"id":4238,"fn":"bound","polytope":"5orthoplex","piece":"dodecahedron","P":20,"out":null}
+{"id":4251,"fn":"bound","polytope":"5orthoplex","piece":"icosahedron","P":7,"out":null}
+{"id":4264,"fn":"bound","polytope":"5orthoplex","piece":"icosahedron","P":20,"out":null}
+{"id":4283,"fn":"bound","polytope":"6orthoplex","piece":"ball","P":7,"out":{"value":2.449489742783178,"label":"[CALC] one ball: its centre must be 1/2 from every (d-3)-face, and every point of a cell lies within rho of a (d-3)-face of the cell, rho the largest distance from the cell's centre to one"}}
+{"id":4286,"fn":"checkMs","polytope":"6orthoplex","piece":"ball","P":8,"out":{"ms":2.4,"heavy":false}}
+{"id":4309,"fn":"bound","polytope":"6orthoplex","piece":"ball","P":20,"out":{"value":2.449489742783178,"label":"[CALC] one ball: its centre must be 1/2 from every (d-3)-face, and every point of a cell lies within rho of a (d-3)-face of the cell, rho the largest distance from the cell's centre to one"}}
+{"id":4312,"fn":"checkMs","polytope":"6orthoplex","piece":"ball","P":21,"out":{"ms":6.3,"heavy":false}}
+{"id":4328,"fn":"bound","polytope":"6orthoplex","piece":"cube","P":7,"out":null}
+{"id":4341,"fn":"bound","polytope":"6orthoplex","piece":"cube","P":20,"out":null}
+{"id":4354,"fn":"bound","polytope":"6orthoplex","piece":"tetrahedron","P":7,"out":null}
+{"id":4367,"fn":"bound","polytope":"6orthoplex","piece":"tetrahedron","P":20,"out":null}
+{"id":4380,"fn":"bound","polytope":"6orthoplex","piece":"octahedron","P":7,"out":null}
+{"id":4393,"fn":"bound","polytope":"6orthoplex","piece":"octahedron","P":20,"out":null}
+{"id":4406,"fn":"bound","polytope":"6orthoplex","piece":"dodecahedron","P":7,"out":null}
+{"id":4419,"fn":"bound","polytope":"6orthoplex","piece":"dodecahedron","P":20,"out":null}
+{"id":4432,"fn":"bound","polytope":"6orthoplex","piece":"icosahedron","P":7,"out":null}
+{"id":4445,"fn":"bound","polytope":"6orthoplex","piece":"icosahedron","P":20,"out":null}
+{"id":4464,"fn":"bound","polytope":"7orthoplex","piece":"ball","P":7,"out":{"value":2.9580398915498076,"label":"[CALC] one ball: its centre must be 1/2 from every (d-3)-face, and every point of a cell lies within rho of a (d-3)-face of the cell, rho the largest distance from the cell's centre to one"}}
+{"id":4469,"fn":"checkMs","polytope":"7orthoplex","piece":"ball","P":9,"out":{"ms":2.6999999999999997,"heavy":false}}
+{"id":4490,"fn":"bound","polytope":"7orthoplex","piece":"ball","P":20,"out":{"value":2.9580398915498076,"label":"[CALC] one ball: its centre must be 1/2 from every (d-3)-face, and every point of a cell lies within rho of a (d-3)-face of the cell, rho the largest distance from the cell's centre to one"}}
+{"id":4495,"fn":"checkMs","polytope":"7orthoplex","piece":"ball","P":22,"out":{"ms":6.6,"heavy":false}}
+{"id":4509,"fn":"bound","polytope":"7orthoplex","piece":"cube","P":7,"out":null}
+{"id":4522,"fn":"bound","polytope":"7orthoplex","piece":"cube","P":20,"out":null}
+{"id":4535,"fn":"bound","polytope":"7orthoplex","piece":"tetrahedron","P":7,"out":null}
+{"id":4548,"fn":"bound","polytope":"7orthoplex","piece":"tetrahedron","P":20,"out":null}
+{"id":4561,"fn":"bound","polytope":"7orthoplex","piece":"octahedron","P":7,"out":null}
+{"id":4574,"fn":"bound","polytope":"7orthoplex","piece":"octahedron","P":20,"out":null}
+{"id":4587,"fn":"bound","polytope":"7orthoplex","piece":"dodecahedron","P":7,"out":null}
+{"id":4600,"fn":"bound","polytope":"7orthoplex","piece":"dodecahedron","P":20,"out":null}
+{"id":4613,"fn":"bound","polytope":"7orthoplex","piece":"icosahedron","P":7,"out":null}
+{"id":4626,"fn":"bound","polytope":"7orthoplex","piece":"icosahedron","P":20,"out":null}
+{"id":4645,"fn":"bound","polytope":"8orthoplex","piece":"ball","P":7,"out":{"value":3.4641016151377544,"label":"[CALC] one ball: its centre must be 1/2 from every (d-3)-face, and every point of a cell lies within rho of a (d-3)-face of the cell, rho the largest distance from the cell's centre to one"}}
+{"id":4652,"fn":"checkMs","polytope":"8orthoplex","piece":"ball","P":10,"out":{"ms":3,"heavy":false}}
+{"id":4671,"fn":"bound","polytope":"8orthoplex","piece":"ball","P":20,"out":{"value":3.4641016151377544,"label":"[CALC] one ball: its centre must be 1/2 from every (d-3)-face, and every point of a cell lies within rho of a (d-3)-face of the cell, rho the largest distance from the cell's centre to one"}}
+{"id":4678,"fn":"checkMs","polytope":"8orthoplex","piece":"ball","P":23,"out":{"ms":6.8999999999999995,"heavy":false}}
+{"id":4690,"fn":"bound","polytope":"8orthoplex","piece":"cube","P":7,"out":null}
+{"id":4703,"fn":"bound","polytope":"8orthoplex","piece":"cube","P":20,"out":null}
+{"id":4716,"fn":"bound","polytope":"8orthoplex","piece":"tetrahedron","P":7,"out":null}
+{"id":4729,"fn":"bound","polytope":"8orthoplex","piece":"tetrahedron","P":20,"out":null}
+{"id":4742,"fn":"bound","polytope":"8orthoplex","piece":"octahedron","P":7,"out":null}
+{"id":4755,"fn":"bound","polytope":"8orthoplex","piece":"octahedron","P":20,"out":null}
+{"id":4768,"fn":"bound","polytope":"8orthoplex","piece":"dodecahedron","P":7,"out":null}
+{"id":4781,"fn":"bound","polytope":"8orthoplex","piece":"dodecahedron","P":20,"out":null}
+{"id":4794,"fn":"bound","polytope":"8orthoplex","piece":"icosahedron","P":7,"out":null}
+{"id":4807,"fn":"bound","polytope":"8orthoplex","piece":"icosahedron","P":20,"out":null}
+{"id":4826,"fn":"bound","polytope":"9orthoplex","piece":"ball","P":7,"out":{"value":3.9686269665968856,"label":"[CALC] one ball: its centre must be 1/2 from every (d-3)-face, and every point of a cell lies within rho of a (d-3)-face of the cell, rho the largest distance from the cell's centre to one"}}
+{"id":4835,"fn":"checkMs","polytope":"9orthoplex","piece":"ball","P":11,"out":{"ms":3.3,"heavy":false}}
+{"id":4852,"fn":"bound","polytope":"9orthoplex","piece":"ball","P":20,"out":{"value":3.9686269665968856,"label":"[CALC] one ball: its centre must be 1/2 from every (d-3)-face, and every point of a cell lies within rho of a (d-3)-face of the cell, rho the largest distance from the cell's centre to one"}}
+{"id":4861,"fn":"checkMs","polytope":"9orthoplex","piece":"ball","P":24,"out":{"ms":7.199999999999999,"heavy":false}}
+{"id":4871,"fn":"bound","polytope":"9orthoplex","piece":"cube","P":7,"out":null}
+{"id":4884,"fn":"bound","polytope":"9orthoplex","piece":"cube","P":20,"out":null}
+{"id":4897,"fn":"bound","polytope":"9orthoplex","piece":"tetrahedron","P":7,"out":null}
+{"id":4910,"fn":"bound","polytope":"9orthoplex","piece":"tetrahedron","P":20,"out":null}
+{"id":4923,"fn":"bound","polytope":"9orthoplex","piece":"octahedron","P":7,"out":null}
+{"id":4936,"fn":"bound","polytope":"9orthoplex","piece":"octahedron","P":20,"out":null}
+{"id":4949,"fn":"bound","polytope":"9orthoplex","piece":"dodecahedron","P":7,"out":null}
+{"id":4962,"fn":"bound","polytope":"9orthoplex","piece":"dodecahedron","P":20,"out":null}
+{"id":4975,"fn":"bound","polytope":"9orthoplex","piece":"icosahedron","P":7,"out":null}
+{"id":4988,"fn":"bound","polytope":"9orthoplex","piece":"icosahedron","P":20,"out":null}
+{"id":5007,"fn":"bound","polytope":"10orthoplex","piece":"ball","P":7,"out":{"value":4.472135954999579,"label":"[CALC] one ball: its centre must be 1/2 from every (d-3)-face, and every point of a cell lies within rho of a (d-3)-face of the cell, rho the largest distance from the cell's centre to one"}}
+{"id":5018,"fn":"checkMs","polytope":"10orthoplex","piece":"ball","P":12,"out":{"ms":3.5999999999999996,"heavy":false}}
+{"id":5033,"fn":"bound","polytope":"10orthoplex","piece":"ball","P":20,"out":{"value":4.472135954999579,"label":"[CALC] one ball: its centre must be 1/2 from every (d-3)-face, and every point of a cell lies within rho of a (d-3)-face of the cell, rho the largest distance from the cell's centre to one"}}
+{"id":5044,"fn":"checkMs","polytope":"10orthoplex","piece":"ball","P":25,"out":{"ms":7.5,"heavy":false}}
+{"id":5052,"fn":"bound","polytope":"10orthoplex","piece":"cube","P":7,"out":null}
+{"id":5065,"fn":"bound","polytope":"10orthoplex","piece":"cube","P":20,"out":null}
+{"id":5078,"fn":"bound","polytope":"10orthoplex","piece":"tetrahedron","P":7,"out":null}
+{"id":5091,"fn":"bound","polytope":"10orthoplex","piece":"tetrahedron","P":20,"out":null}
+{"id":5104,"fn":"bound","polytope":"10orthoplex","piece":"octahedron","P":7,"out":null}
+{"id":5117,"fn":"bound","polytope":"10orthoplex","piece":"octahedron","P":20,"out":null}
+{"id":5130,"fn":"bound","polytope":"10orthoplex","piece":"dodecahedron","P":7,"out":null}
+{"id":5143,"fn":"bound","polytope":"10orthoplex","piece":"dodecahedron","P":20,"out":null}
+{"id":5156,"fn":"bound","polytope":"10orthoplex","piece":"icosahedron","P":7,"out":null}
+{"id":5169,"fn":"bound","polytope":"10orthoplex","piece":"icosahedron","P":20,"out":null}
+{"id":5188,"fn":"bound","polytope":"5demicube","piece":"ball","P":7,"out":{"value":1.224744871391589,"label":"[CALC] one ball: its centre must be 1/2 from every (d-3)-face, and every point of a cell lies within rho of a (d-3)-face of the cell, rho the largest distance from the cell's centre to one"}}
+{"id":5201,"fn":"checkMs","polytope":"5demicube","piece":"ball","P":13,"out":{"ms":3.9,"heavy":false}}
+{"id":5214,"fn":"bound","polytope":"5demicube","piece":"ball","P":20,"out":{"value":1.3187797898789435,"label":"[CALC] volume: the P balls of radius 1/2 are Euclidean balls (the centre is 1/2 from the hinges) with disjoint interiors, so P V_(d-1) 2^-(d-1) <= s^(d-1) times the boundary's (d-1)-volume at unit edge"}}
+{"id":5233,"fn":"bound","polytope":"5demicube","piece":"cube","P":7,"out":null}
+{"id":5246,"fn":"bound","polytope":"5demicube","piece":"cube","P":20,"out":null}
+{"id":5259,"fn":"bound","polytope":"5demicube","piece":"tetrahedron","P":7,"out":null}
+{"id":5272,"fn":"bound","polytope":"5demicube","piece":"tetrahedron","P":20,"out":null}
+{"id":5285,"fn":"bound","polytope":"5demicube","piece":"octahedron","P":7,"out":null}
+{"id":5298,"fn":"bound","polytope":"5demicube","piece":"octahedron","P":20,"out":null}
+{"id":5311,"fn":"bound","polytope":"5demicube","piece":"dodecahedron","P":7,"out":null}
+{"id":5324,"fn":"bound","polytope":"5demicube","piece":"dodecahedron","P":20,"out":null}
+{"id":5337,"fn":"bound","polytope":"5demicube","piece":"icosahedron","P":7,"out":null}
+{"id":5350,"fn":"bound","polytope":"5demicube","piece":"icosahedron","P":20,"out":null}
+{"id":5358,"fn":"checkMs","polytope":"6demicube","piece":"ball","P":1,"out":{"ms":17,"heavy":false}}
+{"id":5369,"fn":"bound","polytope":"6demicube","piece":"ball","P":7,"out":{"value":1,"label":"[CALC] one ball: its centre must be 1/2 from every (d-3)-face, and every point of a cell lies within rho of a (d-3)-face of the cell, rho the largest distance from the cell's centre to one"}}
+{"id":5384,"fn":"checkMs","polytope":"6demicube","piece":"ball","P":14,"out":{"ms":238,"heavy":true}}
+{"id":5395,"fn":"bound","polytope":"6demicube","piece":"ball","P":20,"out":{"value":1.1098214434398523,"label":"[CALC] volume: the P balls of radius 1/2 are Euclidean balls (the centre is 1/2 from the hinges) with disjoint interiors, so P V_(d-1) 2^-(d-1) <= s^(d-1) times the boundary's (d-1)-volume at unit edge"}}
+{"id":5414,"fn":"bound","polytope":"6demicube","piece":"cube","P":7,"out":null}
+{"id":5427,"fn":"bound","polytope":"6demicube","piece":"cube","P":20,"out":null}
+{"id":5440,"fn":"bound","polytope":"6demicube","piece":"tetrahedron","P":7,"out":null}
+{"id":5453,"fn":"bound","polytope":"6demicube","piece":"tetrahedron","P":20,"out":null}
+{"id":5466,"fn":"bound","polytope":"6demicube","piece":"octahedron","P":7,"out":null}
+{"id":5479,"fn":"bound","polytope":"6demicube","piece":"octahedron","P":20,"out":null}
+{"id":5492,"fn":"bound","polytope":"6demicube","piece":"dodecahedron","P":7,"out":null}
+{"id":5505,"fn":"bound","polytope":"6demicube","piece":"dodecahedron","P":20,"out":null}
+{"id":5518,"fn":"bound","polytope":"6demicube","piece":"icosahedron","P":7,"out":null}
+{"id":5531,"fn":"bound","polytope":"6demicube","piece":"icosahedron","P":20,"out":null}
+{"id":5541,"fn":"checkMs","polytope":"7demicube","piece":"ball","P":2,"out":{"ms":60,"heavy":true}}
+{"id":5550,"fn":"bound","polytope":"7demicube","piece":"ball","P":7,"out":{"value":0.8451542547285166,"label":"[CALC] one ball: its centre must be 1/2 from every (d-3)-face, and every point of a cell lies within rho of a (d-3)-face of the cell, rho the largest distance from the cell's centre to one"}}
+{"id":5567,"fn":"checkMs","polytope":"7demicube","piece":"ball","P":15,"out":{"ms":450,"heavy":true}}
+{"id":5576,"fn":"bound","polytope":"7demicube","piece":"ball","P":20,"out":{"value":0.9913210411640796,"label":"[CALC] volume: the P balls of radius 1/2 are Euclidean balls (the centre is 1/2 from the hinges) with disjoint interiors, so P V_(d-1) 2^-(d-1) <= s^(d-1) times the boundary's (d-1)-volume at unit edge"}}
+{"id":5595,"fn":"bound","polytope":"7demicube","piece":"cube","P":7,"out":null}
+{"id":5608,"fn":"bound","polytope":"7demicube","piece":"cube","P":20,"out":null}
+{"id":5621,"fn":"bound","polytope":"7demicube","piece":"tetrahedron","P":7,"out":null}
+{"id":5634,"fn":"bound","polytope":"7demicube","piece":"tetrahedron","P":20,"out":null}
+{"id":5647,"fn":"bound","polytope":"7demicube","piece":"octahedron","P":7,"out":null}
+{"id":5660,"fn":"bound","polytope":"7demicube","piece":"octahedron","P":20,"out":null}
+{"id":5673,"fn":"bound","polytope":"7demicube","piece":"dodecahedron","P":7,"out":null}
+{"id":5686,"fn":"bound","polytope":"7demicube","piece":"dodecahedron","P":20,"out":null}
+{"id":5699,"fn":"bound","polytope":"7demicube","piece":"icosahedron","P":7,"out":null}
+{"id":5712,"fn":"bound","polytope":"7demicube","piece":"icosahedron","P":20,"out":null}
+{"id":5724,"fn":"checkMs","polytope":"8demicube","piece":"ball","P":3,"out":{"ms":375,"heavy":true}}
+{"id":5731,"fn":"bound","polytope":"8demicube","piece":"ball","P":7,"out":{"value":0.785321689010123,"label":"[CALC] volume: the P balls of radius 1/2 are Euclidean balls (the centre is 1/2 from the hinges) with disjoint interiors, so P V_(d-1) 2^-(d-1) <= s^(d-1) times the boundary's (d-1)-volume at unit edge"}}
+{"id":5750,"fn":"checkMs","polytope":"8demicube","piece":"ball","P":16,"out":{"ms":2000,"heavy":true}}
+{"id":5757,"fn":"bound","polytope":"8demicube","piece":"ball","P":20,"out":{"value":0.9123904449963431,"label":"[CALC] volume: the P balls of radius 1/2 are Euclidean balls (the centre is 1/2 from the hinges) with disjoint interiors, so P V_(d-1) 2^-(d-1) <= s^(d-1) times the boundary's (d-1)-volume at unit edge"}}
+{"id":5776,"fn":"bound","polytope":"8demicube","piece":"cube","P":7,"out":null}
+{"id":5789,"fn":"bound","polytope":"8demicube","piece":"cube","P":20,"out":null}
+{"id":5802,"fn":"bound","polytope":"8demicube","piece":"tetrahedron","P":7,"out":null}
+{"id":5815,"fn":"bound","polytope":"8demicube","piece":"tetrahedron","P":20,"out":null}
+{"id":5828,"fn":"bound","polytope":"8demicube","piece":"octahedron","P":7,"out":null}
+{"id":5841,"fn":"bound","polytope":"8demicube","piece":"octahedron","P":20,"out":null}
+{"id":5854,"fn":"bound","polytope":"8demicube","piece":"dodecahedron","P":7,"out":null}
+{"id":5867,"fn":"bound","polytope":"8demicube","piece":"dodecahedron","P":20,"out":null}
+{"id":5880,"fn":"bound","polytope":"8demicube","piece":"icosahedron","P":7,"out":null}
+{"id":5893,"fn":"bound","polytope":"8demicube","piece":"icosahedron","P":20,"out":null}
+{"id":5907,"fn":"checkMs","polytope":"9demicube","piece":"ball","P":4,"out":{"ms":8,"heavy":false}}
+{"id":5912,"fn":"bound","polytope":"9demicube","piece":"ball","P":7,"out":{"value":0.7488188004867192,"label":"[CALC] volume: the P balls of radius 1/2 are Euclidean balls (the centre is 1/2 from the hinges) with disjoint interiors, so P V_(d-1) 2^-(d-1) <= s^(d-1) times the boundary's (d-1)-volume at unit edge"}}
+{"id":5933,"fn":"checkMs","polytope":"9demicube","piece":"ball","P":17,"out":{"ms":34,"heavy":false}}
+{"id":5938,"fn":"bound","polytope":"9demicube","piece":"ball","P":20,"out":{"value":0.8538237560982029,"label":"[CALC] volume: the P balls of radius 1/2 are Euclidean balls (the centre is 1/2 from the hinges) with disjoint interiors, so P V_(d-1) 2^-(d-1) <= s^(d-1) times the boundary's (d-1)-volume at unit edge"}}
+{"id":5957,"fn":"bound","polytope":"9demicube","piece":"cube","P":7,"out":null}
+{"id":5970,"fn":"bound","polytope":"9demicube","piece":"cube","P":20,"out":null}
+{"id":5983,"fn":"bound","polytope":"9demicube","piece":"tetrahedron","P":7,"out":null}
+{"id":5996,"fn":"bound","polytope":"9demicube","piece":"tetrahedron","P":20,"out":null}
+{"id":6009,"fn":"bound","polytope":"9demicube","piece":"octahedron","P":7,"out":null}
+{"id":6022,"fn":"bound","polytope":"9demicube","piece":"octahedron","P":20,"out":null}
+{"id":6035,"fn":"bound","polytope":"9demicube","piece":"dodecahedron","P":7,"out":null}
+{"id":6048,"fn":"bound","polytope":"9demicube","piece":"dodecahedron","P":20,"out":null}
+{"id":6061,"fn":"bound","polytope":"9demicube","piece":"icosahedron","P":7,"out":null}
+{"id":6074,"fn":"bound","polytope":"9demicube","piece":"icosahedron","P":20,"out":null}
+{"id":6090,"fn":"checkMs","polytope":"10demicube","piece":"ball","P":5,"out":{"ms":25,"heavy":false}}
+{"id":6093,"fn":"bound","polytope":"10demicube","piece":"ball","P":7,"out":{"value":0.7185219336039416,"label":"[CALC] volume: the P balls of radius 1/2 are Euclidean balls (the centre is 1/2 from the hinges) with disjoint interiors, so P V_(d-1) 2^-(d-1) <= s^(d-1) times the boundary's (d-1)-volume at unit edge"}}
+{"id":6116,"fn":"checkMs","polytope":"10demicube","piece":"ball","P":18,"out":{"ms":90,"heavy":true}}
+{"id":6119,"fn":"bound","polytope":"10demicube","piece":"ball","P":20,"out":{"value":0.8074193183200504,"label":"[CALC] volume: the P balls of radius 1/2 are Euclidean balls (the centre is 1/2 from the hinges) with disjoint interiors, so P V_(d-1) 2^-(d-1) <= s^(d-1) times the boundary's (d-1)-volume at unit edge"}}
+{"id":6138,"fn":"bound","polytope":"10demicube","piece":"cube","P":7,"out":null}
+{"id":6151,"fn":"bound","polytope":"10demicube","piece":"cube","P":20,"out":null}
+{"id":6164,"fn":"bound","polytope":"10demicube","piece":"tetrahedron","P":7,"out":null}
+{"id":6177,"fn":"bound","polytope":"10demicube","piece":"tetrahedron","P":20,"out":null}
+{"id":6190,"fn":"bound","polytope":"10demicube","piece":"octahedron","P":7,"out":null}
+{"id":6203,"fn":"bound","polytope":"10demicube","piece":"octahedron","P":20,"out":null}
+{"id":6216,"fn":"bound","polytope":"10demicube","piece":"dodecahedron","P":7,"out":null}
+{"id":6229,"fn":"bound","polytope":"10demicube","piece":"dodecahedron","P":20,"out":null}
+{"id":6242,"fn":"bound","polytope":"10demicube","piece":"icosahedron","P":7,"out":null}
+{"id":6255,"fn":"bound","polytope":"10demicube","piece":"icosahedron","P":20,"out":null}
+{"id":6266,"fn":"ballBounds","polytope":"tesseract","P":1,"out":{"volume":0.402997988504117,"onePiece":0.7071067811865468,"value":0.7071067811865468,"kind":"one piece"}}
+{"id":6267,"fn":"pieceBounds","polytope":"tesseract","piece":"tetrahedron","P":1,"out":{"volume":0.24514022945273972,"onePiece":0.28867513459481253,"value":0.28867513459481253,"kind":"one piece"}}
+{"id":6282,"fn":"pieceBounds","polytope":"tesseract","piece":"dodecahedron","P":3,"out":{"volume":1.4217141255625683,"onePiece":1.5747499444752744,"value":1.5747499444752744,"kind":"one piece"}}
+{"id":6298,"fn":"pieceBounds","polytope":"tesseract","piece":"cube","P":6,"out":{"volume":0.908560296416069,"onePiece":0.7071067811865468,"value":0.908560296416069,"kind":"volume"}}
+{"id":6313,"fn":"pieceBounds","polytope":"tesseract","piece":"icosahedron","P":8,"out":{"volume":1.2969742233851662,"onePiece":1.0688079002834319,"value":1.2969742233851662,"kind":"volume"}}
+{"id":6329,"fn":"pieceBounds","polytope":"tesseract","piece":"octahedron","P":11,"out":{"volume":0.865430400969929,"onePiece":0.5773502691896252,"value":0.865430400969929,"kind":"volume"}}
+{"id":6344,"fn":"ballBounds","polytope":"tesseract","P":14,"out":{"volume":0.9712824844713758,"onePiece":0.7071067811865468,"value":0.9712824844713758,"kind":"volume"}}
+{"id":6345,"fn":"pieceBounds","polytope":"tesseract","piece":"tetrahedron","P":14,"out":{"volume":0.5908228276536616,"onePiece":0.28867513459481253,"value":0.5908228276536616,"kind":"volume"}}
+{"id":6360,"fn":"pieceBounds","polytope":"tesseract","piece":"dodecahedron","P":16,"out":{"volume":2.483963373062218,"onePiece":1.5747499444752744,"value":2.483963373062218,"kind":"volume"}}
+{"id":6376,"fn":"pieceBounds","polytope":"tesseract","piece":"cube","P":19,"out":{"volume":1.334200824360971,"onePiece":0.7071067811865468,"value":1.334200824360971,"kind":"volume"}}
+{"id":6391,"fn":"pieceBounds","polytope":"tesseract","piece":"icosahedron","P":21,"out":{"volume":1.7891267705202318,"onePiece":1.0688079002834319,"value":1.7891267705202318,"kind":"volume"}}
+{"id":6407,"fn":"pieceBounds","polytope":"tesseract","piece":"octahedron","P":24,"out":{"volume":1.122462048309372,"onePiece":0.5773502691896252,"value":1.122462048309372,"kind":"volume"}}
+{"id":6422,"fn":"ballBounds","polytope":"tesseract","P":27,"out":{"volume":1.2089939655123512,"onePiece":0.7071067811865468,"value":1.2089939655123512,"kind":"volume"}}
+{"id":6423,"fn":"pieceBounds","polytope":"tesseract","piece":"tetrahedron","P":27,"out":{"volume":0.7354206883582192,"onePiece":0.28867513459481253,"value":0.7354206883582192,"kind":"volume"}}
+{"id":6438,"fn":"pieceBounds","polytope":"tesseract","piece":"dodecahedron","P":29,"out":{"volume":3.02857169744215,"onePiece":1.5747499444752744,"value":3.02857169744215,"kind":"volume"}}
+{"id":6454,"fn":"pieceBounds","polytope":"tesseract","piece":"cube","P":32,"out":{"volume":1.5874010519681978,"onePiece":0.7071067811865468,"value":1.5874010519681978,"kind":"volume"}}
+{"id":6469,"fn":"pieceBounds","polytope":"tesseract","piece":"icosahedron","P":34,"out":{"volume":2.100846500015642,"onePiece":1.0688079002834319,"value":2.100846500015642,"kind":"volume"}}
+{"id":6485,"fn":"pieceBounds","polytope":"tesseract","piece":"octahedron","P":37,"out":{"volume":1.2966870096631542,"onePiece":0.5773502691896252,"value":1.2966870096631542,"kind":"volume"}}
+{"id":6500,"fn":"ballBounds","polytope":"tesseract","P":40,"out":{"volume":1.3782337338022643,"onePiece":0.7071067811865468,"value":1.3782337338022643,"kind":"volume"}}
+{"id":6501,"fn":"pieceBounds","polytope":"tesseract","piece":"tetrahedron","P":40,"out":{"volume":0.8383677918539826,"onePiece":0.28867513459481253,"value":0.8383677918539826,"kind":"volume"}}
+{"id":6516,"fn":"pieceBounds","polytope":"tesseract","piece":"dodecahedron","P":42,"out":{"volume":3.426533301593275,"onePiece":1.5747499444752744,"value":3.426533301593275,"kind":"volume"}}
+{"id":6532,"fn":"pieceBounds","polytope":"tesseract","piece":"cube","P":45,"out":{"volume":1.7784466522450295,"onePiece":0.7071067811865468,"value":1.7784466522450295,"kind":"volume"}}
+{"id":6547,"fn":"pieceBounds","polytope":"tesseract","piece":"icosahedron","P":47,"out":{"volume":2.340277201310009,"onePiece":1.0688079002834319,"value":2.340277201310009,"kind":"volume"}}
+{"id":6563,"fn":"pieceBounds","polytope":"tesseract","piece":"octahedron","P":50,"out":{"volume":1.4335887585387665,"onePiece":0.5773502691896252,"value":1.4335887585387665,"kind":"volume"}}
+{"id":6578,"fn":"ballBounds","polytope":"tesseract","P":53,"out":{"volume":1.513775603197762,"onePiece":0.7071067811865468,"value":1.513775603197762,"kind":"volume"}}
+{"id":6579,"fn":"pieceBounds","polytope":"tesseract","piece":"tetrahedron","P":53,"out":{"volume":0.9208167516798111,"onePiece":0.28867513459481253,"value":0.9208167516798111,"kind":"volume"}}
+{"id":6594,"fn":"pieceBounds","polytope":"tesseract","piece":"dodecahedron","P":55,"out":{"volume":3.7488041900785487,"onePiece":1.5747499444752744,"value":3.7488041900785487,"kind":"volume"}}
+{"id":6610,"fn":"pieceBounds","polytope":"tesseract","piece":"cube","P":58,"out":{"volume":1.9354383203138963,"onePiece":0.7071067811865468,"value":1.9354383203138963,"kind":"volume"}}
+{"id":6625,"fn":"pieceBounds","polytope":"tesseract","piece":"icosahedron","P":60,"out":{"volume":2.5387412092803525,"onePiece":1.0688079002834319,"value":2.5387412092803525,"kind":"volume"}}
+{"id":6641,"fn":"pieceBounds","polytope":"tesseract","piece":"octahedron","P":63,"out":{"volume":1.5483938410754998,"onePiece":0.5773502691896252,"value":1.5483938410754998,"kind":"volume"}}
+{"id":6656,"fn":"ballBounds","polytope":"5cell","P":2,"out":{"volume":1.2112718396750193,"onePiece":1.4142135623730938,"value":1.4142135623730938,"kind":"one piece"}}
+{"id":6657,"fn":"pieceBounds","polytope":"5cell","piece":"tetrahedron","P":2,"out":{"volume":0.7368062997280764,"onePiece":0.5773502691896252,"value":0.7368062997280764,"kind":"volume"}}
+{"id":6672,"fn":"pieceBounds","polytope":"5cell","piece":"dodecahedron","P":4,"out":{"volume":3.7329651392834453,"onePiece":3.149499888950549,"value":3.7329651392834453,"kind":"volume"}}
+{"id":6688,"fn":"pieceBounds","polytope":"5cell","piece":"cube","P":7,"out":{"volume":2.281732673129167,"onePiece":1.4142135623730938,"value":2.281732673129167,"kind":"volume"}}
+{"id":6703,"fn":"pieceBounds","polytope":"5cell","piece":"icosahedron","P":9,"out":{"volume":3.2179374341335176,"onePiece":2.1376158005668637,"value":3.2179374341335176,"kind":"volume"}}
+{"id":6719,"fn":"pieceBounds","polytope":"5cell","piece":"octahedron","P":12,"out":{"volume":2.12531713836522,"onePiece":1.1547005383792506,"value":2.12531713836522,"kind":"volume"}}
+{"id":6734,"fn":"ballBounds","polytope":"5cell","P":15,"out":{"volume":2.3709844649014062,"onePiece":1.4142135623730938,"value":2.3709844649014062,"kind":"volume"}}
+{"id":6735,"fn":"pieceBounds","polytope":"5cell","piece":"tetrahedron","P":15,"out":{"volume":1.4422495703074067,"onePiece":0.5773502691896252,"value":1.4422495703074067,"kind":"volume"}}
+{"id":6750,"fn":"pieceBounds","polytope":"5cell","piece":"dodecahedron","P":17,"out":{"volume":6.0466789594900465,"onePiece":3.149499888950549,"value":6.0466789594900465,"kind":"volume"}}
+{"id":6766,"fn":"pieceBounds","polytope":"5cell","piece":"cube","P":20,"out":{"volume":3.2377408137211297,"onePiece":1.4142135623730938,"value":3.2377408137211297,"kind":"volume"}}
+{"id":6781,"fn":"pieceBounds","polytope":"5cell","piece":"icosahedron","P":22,"out":{"volume":4.334819180892885,"onePiece":2.1376158005668637,"value":4.334819180892885,"kind":"volume"}}
+{"id":6797,"fn":"pieceBounds","polytope":"5cell","piece":"octahedron","P":25,"out":{"volume":2.714417616594904,"onePiece":1.1547005383792506,"value":2.714417616594904,"kind":"volume"}}
+{"id":6812,"fn":"ballBounds","polytope":"5cell","P":28,"out":{"volume":2.9193374542060466,"onePiece":1.4142135623730938,"value":2.9193374542060466,"kind":"volume"}}
+{"id":6813,"fn":"pieceBounds","polytope":"5cell","piece":"tetrahedron","P":28,"out":{"volume":1.7758080034851995,"onePiece":0.5773502691896252,"value":1.7758080034851995,"kind":"volume"}}
+{"id":6828,"fn":"pieceBounds","polytope":"5cell","piece":"dodecahedron","P":30,"out":{"volume":7.30703221469609,"onePiece":3.149499888950549,"value":7.30703221469609,"kind":"volume"}}
+{"id":6844,"fn":"pieceBounds","polytope":"5cell","piece":"cube","P":33,"out":{"volume":3.8259274284650373,"onePiece":1.4142135623730938,"value":3.8259274284650373,"kind":"volume"}}
+{"id":6859,"fn":"pieceBounds","polytope":"5cell","piece":"icosahedron","P":35,"out":{"volume":5.060414687348976,"onePiece":2.1376158005668637,"value":5.060414687348976,"kind":"volume"}}
+{"id":6875,"fn":"pieceBounds","polytope":"5cell","piece":"octahedron","P":38,"out":{"volume":3.1209815014157667,"onePiece":1.1547005383792506,"value":3.1209815014157667,"kind":"volume"}}
+{"id":6890,"fn":"ballBounds","polytope":"5cell","P":41,"out":{"volume":3.3150715600045024,"onePiece":1.4142135623730938,"value":3.3150715600045024,"kind":"volume"}}
+{"id":6891,"fn":"pieceBounds","polytope":"5cell","piece":"tetrahedron","P":41,"out":{"volume":2.0165296752181017,"onePiece":0.5773502691896252,"value":2.0165296752181017,"kind":"volume"}}
+{"id":6906,"fn":"pieceBounds","polytope":"5cell","piece":"dodecahedron","P":43,"out":{"volume":8.238663324710252,"onePiece":3.149499888950549,"value":8.238663324710252,"kind":"volume"}}
+{"id":6922,"fn":"pieceBounds","polytope":"5cell","piece":"cube","P":46,"out":{"volume":4.2738376949003705,"onePiece":1.4142135623730938,"value":4.2738376949003705,"kind":"volume"}}
+{"id":6937,"fn":"pieceBounds","polytope":"5cell","piece":"icosahedron","P":48,"out":{"volume":5.622254558405383,"onePiece":2.1376158005668637,"value":5.622254558405383,"kind":"volume"}}
+{"id":6953,"fn":"pieceBounds","polytope":"5cell","piece":"octahedron","P":51,"out":{"volume":3.442601241452629,"onePiece":1.1547005383792506,"value":3.442601241452629,"kind":"volume"}}
+{"id":6968,"fn":"ballBounds","polytope":"5cell","P":54,"out":{"volume":3.6338155190250574,"onePiece":1.4142135623730938,"value":3.6338155190250574,"kind":"volume"}}
+{"id":6969,"fn":"pieceBounds","polytope":"5cell","piece":"tetrahedron","P":54,"out":{"volume":2.2104188991842295,"onePiece":0.5773502691896252,"value":2.2104188991842295,"kind":"volume"}}
+{"id":6984,"fn":"pieceBounds","polytope":"5cell","piece":"dodecahedron","P":56,"out":{"volume":8.996977052879805,"onePiece":3.149499888950549,"value":8.996977052879805,"kind":"volume"}}
+{"id":7000,"fn":"pieceBounds","polytope":"5cell","piece":"cube","P":59,"out":{"volume":4.643542432926967,"onePiece":1.4142135623730938,"value":4.643542432926967,"kind":"volume"}}
+{"id":7015,"fn":"pieceBounds","polytope":"5cell","piece":"icosahedron","P":61,"out":{"volume":6.08985152640627,"onePiece":2.1376158005668637,"value":6.08985152640627,"kind":"volume"}}
+{"id":7031,"fn":"pieceBounds","polytope":"5cell","piece":"octahedron","P":64,"out":{"volume":3.71327106689022,"onePiece":1.1547005383792506,"value":3.71327106689022,"kind":"volume"}}
+{"id":7046,"fn":"ballBounds","polytope":"16cell","P":3,"out":{"volume":0.9409258084461877,"onePiece":1.4142135623730938,"value":1.4142135623730938,"kind":"one piece"}}
+{"id":7047,"fn":"pieceBounds","polytope":"16cell","piece":"tetrahedron","P":3,"out":{"volume":0.5723571212766653,"onePiece":0.5773502691896252,"value":0.5773502691896252,"kind":"one piece"}}
+{"id":7062,"fn":"pieceBounds","polytope":"16cell","piece":"dodecahedron","P":5,"out":{"volume":2.728814070848764,"onePiece":3.149499888950549,"value":3.149499888950549,"kind":"one piece"}}
+{"id":7078,"fn":"pieceBounds","polytope":"16cell","piece":"cube","P":8,"out":{"volume":1.6188704068605648,"onePiece":1.4142135623730938,"value":1.6188704068605648,"kind":"volume"}}
+{"id":7093,"fn":"pieceBounds","polytope":"16cell","piece":"icosahedron","P":10,"out":{"volume":2.261761289037921,"onePiece":2.1376158005668637,"value":2.261761289037921,"kind":"volume"}}
+{"id":7109,"fn":"pieceBounds","polytope":"16cell","piece":"octahedron","P":13,"out":{"volume":1.4812480342036838,"onePiece":1.1547005383792506,"value":1.4812480342036838,"kind":"volume"}}
+{"id":7124,"fn":"ballBounds","polytope":"16cell","P":16,"out":{"volume":1.6439488100495965,"onePiece":1.4142135623730938,"value":1.6439488100495965,"kind":"volume"}}
+{"id":7125,"fn":"pieceBounds","polytope":"16cell","piece":"tetrahedron","P":16,"out":{"volume":0.9999999999999989,"onePiece":0.5773502691896252,"value":0.9999999999999989,"kind":"volume"}}
+{"id":7140,"fn":"pieceBounds","polytope":"16cell","piece":"dodecahedron","P":18,"out":{"volume":4.182231923479314,"onePiece":3.149499888950549,"value":4.182231923479314,"kind":"volume"}}
+{"id":7156,"fn":"pieceBounds","polytope":"16cell","piece":"cube","P":21,"out":{"volume":2.233170351957777,"onePiece":1.4142135623730938,"value":2.233170351957777,"kind":"volume"}}
+{"id":7171,"fn":"pieceBounds","polytope":"16cell","piece":"icosahedron","P":23,"out":{"volume":2.9855387475710695,"onePiece":2.1376158005668637,"value":2.9855387475710695,"kind":"volume"}}
+{"id":7187,"fn":"pieceBounds","polytope":"16cell","piece":"octahedron","P":26,"out":{"volume":1.8662555784086223,"onePiece":1.1547005383792506,"value":1.8662555784086223,"kind":"volume"}}
+{"id":7202,"fn":"ballBounds","polytope":"16cell","P":29,"out":{"volume":2.004384159667398,"onePiece":1.4142135623730938,"value":2.004384159667398,"kind":"volume"}}
+{"id":7203,"fn":"pieceBounds","polytope":"16cell","piece":"tetrahedron","P":29,"out":{"volume":1.219249740268327,"onePiece":0.5773502691896252,"value":1.219249740268327,"kind":"volume"}}
+{"id":7218,"fn":"pieceBounds","polytope":"16cell","piece":"dodecahedron","P":31,"out":{"volume":5.013078542302119,"onePiece":3.149499888950549,"value":5.013078542302119,"kind":"volume"}}
+{"id":7234,"fn":"pieceBounds","polytope":"16cell","piece":"cube","P":34,"out":{"volume":2.6222558374021836,"onePiece":1.4142135623730938,"value":2.6222558374021836,"kind":"volume"}}
+{"id":7249,"fn":"pieceBounds","polytope":"16cell","piece":"icosahedron","P":36,"out":{"volume":3.46641801922472,"onePiece":2.1376158005668637,"value":3.46641801922472,"kind":"volume"}}
+{"id":7265,"fn":"pieceBounds","polytope":"16cell","piece":"octahedron","P":39,"out":{"volume":2.136329340848956,"onePiece":1.1547005383792506,"value":2.136329340848956,"kind":"volume"}}
+{"id":7280,"fn":"ballBounds","polytope":"16cell","P":42,"out":{"volume":2.2677650583894033,"onePiece":1.4142135623730938,"value":2.2677650583894033,"kind":"volume"}}
+{"id":7281,"fn":"pieceBounds","polytope":"16cell","piece":"tetrahedron","P":42,"out":{"volume":1.3794620881905588,"onePiece":0.5773502691896252,"value":1.3794620881905588,"kind":"volume"}}
+{"id":7296,"fn":"pieceBounds","polytope":"16cell","piece":"dodecahedron","P":44,"out":{"volume":5.633801008229443,"onePiece":3.149499888950549,"value":5.633801008229443,"kind":"volume"}}
+{"id":7312,"fn":"pieceBounds","polytope":"16cell","piece":"cube","P":47,"out":{"volume":2.921110872321573,"onePiece":1.4142135623730938,"value":2.921110872321573,"kind":"volume"}}
+{"id":7327,"fn":"pieceBounds","polytope":"16cell","piece":"icosahedron","P":49,"out":{"volume":3.841599858180382,"onePiece":2.1376158005668637,"value":3.841599858180382,"kind":"volume"}}
+{"id":7343,"fn":"pieceBounds","polytope":"16cell","piece":"octahedron","P":52,"out":{"volume":2.351334687720755,"onePiece":1.1547005383792506,"value":2.351334687720755,"kind":"volume"}}
+{"id":7358,"fn":"ballBounds","polytope":"16cell","P":55,"out":{"volume":2.481051956813296,"onePiece":1.4142135623730938,"value":2.481051956813296,"kind":"volume"}}
+{"id":7359,"fn":"pieceBounds","polytope":"16cell","piece":"tetrahedron","P":55,"out":{"volume":1.5092026841994197,"onePiece":0.5773502691896252,"value":1.5092026841994197,"kind":"volume"}}
+{"id":7374,"fn":"pieceBounds","polytope":"16cell","piece":"dodecahedron","P":57,"out":{"volume":6.141515650624004,"onePiece":3.149499888950549,"value":6.141515650624004,"kind":"volume"}}
+{"id":7390,"fn":"pieceBounds","polytope":"16cell","piece":"cube","P":60,"out":{"volume":3.1688316855321492,"onePiece":1.4142135623730938,"value":3.1688316855321492,"kind":"volume"}}
+{"id":7405,"fn":"pieceBounds","polytope":"16cell","piece":"icosahedron","P":62,"out":{"volume":4.155060290479563,"onePiece":2.1376158005668637,"value":4.155060290479563,"kind":"volume"}}
+{"id":7421,"fn":"pieceBounds","polytope":"24cell","piece":"octahedron","P":1,"out":{"volume":0.34668063717531705,"onePiece":0.8164965809277253,"value":0.8164965809277253,"kind":"one piece"}}
+{"id":7436,"fn":"ballBounds","polytope":"24cell","P":4,"out":{"volume":0.5699252209515989,"onePiece":0.999999999999999,"value":0.999999999999999,"kind":"one piece"}}
+{"id":7437,"fn":"pieceBounds","polytope":"24cell","piece":"tetrahedron","P":4,"out":{"volume":0.346680637175317,"onePiece":0.4082482904638626,"value":0.4082482904638626,"kind":"one piece"}}
+{"id":7452,"fn":"pieceBounds","polytope":"24cell","piece":"dodecahedron","P":6,"out":{"volume":1.5958201494893294,"onePiece":2.2270327288232115,"value":2.2270327288232115,"kind":"one piece"}}
+{"id":7468,"fn":"pieceBounds","polytope":"24cell","piece":"cube","P":9,"out":{"volume":0.9265720057906979,"onePiece":0.999999999999999,"value":0.999999999999999,"kind":"one piece"}}
+{"id":7483,"fn":"pieceBounds","polytope":"24cell","piece":"icosahedron","P":11,"out":{"volume":1.28487411005775,"onePiece":1.51152262815234,"value":1.51152262815234,"kind":"one piece"}}
+{"id":7499,"fn":"pieceBounds","polytope":"24cell","piece":"octahedron","P":14,"out":{"volume":0.8355496558274299,"onePiece":0.8164965809277253,"value":0.8355496558274299,"kind":"volume"}}
+{"id":7514,"fn":"ballBounds","polytope":"24cell","P":17,"out":{"volume":0.9231682358202385,"onePiece":0.999999999999999,"value":0.999999999999999,"kind":"one piece"}}
+{"id":7515,"fn":"pieceBounds","polytope":"24cell","piece":"tetrahedron","P":17,"out":{"volume":0.5615553417337771,"onePiece":0.4082482904638626,"value":0.5615553417337771,"kind":"volume"}}
+{"id":7530,"fn":"pieceBounds","polytope":"24cell","piece":"dodecahedron","P":19,"out":{"volume":2.343426812044497,"onePiece":2.2270327288232115,"value":2.343426812044497,"kind":"volume"}}
+{"id":7546,"fn":"pieceBounds","polytope":"24cell","piece":"cube","P":22,"out":{"volume":1.248166623929848,"onePiece":0.999999999999999,"value":1.248166623929848,"kind":"volume"}}
+{"id":7561,"fn":"pieceBounds","polytope":"24cell","piece":"icosahedron","P":24,"out":{"volume":1.6664799662442369,"onePiece":1.51152262815234,"value":1.6664799662442369,"kind":"volume"}}
+{"id":7577,"fn":"pieceBounds","polytope":"24cell","piece":"octahedron","P":27,"out":{"volume":1.040041911525951,"onePiece":0.8164965809277253,"value":1.040041911525951,"kind":"volume"}}
+{"id":7592,"fn":"ballBounds","polytope":"24cell","P":30,"out":{"volume":1.1155909026947146,"onePiece":0.999999999999999,"value":1.1155909026947146,"kind":"volume"}}
+{"id":7593,"fn":"pieceBounds","polytope":"24cell","piece":"tetrahedron","P":30,"out":{"volume":0.6786044041487259,"onePiece":0.4082482904638626,"value":0.6786044041487259,"kind":"volume"}}
+{"id":7608,"fn":"pieceBounds","polytope":"24cell","piece":"dodecahedron","P":32,"out":{"volume":2.7881546156528767,"onePiece":2.2270327288232115,"value":2.7881546156528767,"kind":"volume"}}
+{"id":7624,"fn":"pieceBounds","polytope":"24cell","piece":"cube","P":35,"out":{"volume":1.4570943913495304,"onePiece":0.999999999999999,"value":1.4570943913495304,"kind":"volume"}}
+{"id":7639,"fn":"pieceBounds","polytope":"24cell","piece":"icosahedron","P":37,"out":{"volume":1.9251456450999824,"onePiece":1.51152262815234,"value":1.9251456450999824,"kind":"volume"}}
+{"id":7655,"fn":"pieceBounds","polytope":"24cell","piece":"octahedron","P":40,"out":{"volume":1.1856311014966865,"onePiece":0.8164965809277253,"value":1.1856311014966865,"kind":"volume"}}
+{"id":7670,"fn":"ballBounds","polytope":"24cell","P":43,"out":{"volume":1.257826376750635,"onePiece":0.999999999999999,"value":1.257826376750635,"kind":"volume"}}
+{"id":7671,"fn":"pieceBounds","polytope":"24cell","piece":"tetrahedron","P":43,"out":{"volume":0.7651250264372198,"onePiece":0.4082482904638626,"value":0.7651250264372198,"kind":"volume"}}
+{"id":7686,"fn":"pieceBounds","polytope":"24cell","piece":"dodecahedron","P":45,"out":{"volume":3.1237123321805167,"onePiece":2.2270327288232115,"value":3.1237123321805167,"kind":"volume"}}
+{"id":7702,"fn":"pieceBounds","polytope":"24cell","piece":"cube","P":48,"out":{"volume":1.6188704068605648,"onePiece":0.999999999999999,"value":1.6188704068605648,"kind":"volume"}}
+{"id":7717,"fn":"pieceBounds","polytope":"24cell","piece":"icosahedron","P":50,"out":{"volume":2.128398861713081,"onePiece":1.51152262815234,"value":2.128398861713081,"kind":"volume"}}
+{"id":7733,"fn":"pieceBounds","polytope":"24cell","piece":"octahedron","P":53,"out":{"volume":1.3022315386859276,"onePiece":0.8164965809277253,"value":1.3022315386859276,"kind":"volume"}}
+{"id":7748,"fn":"ballBounds","polytope":"24cell","P":56,"out":{"volume":1.3736008624348548,"onePiece":0.999999999999999,"value":1.3736008624348548,"kind":"volume"}}
+{"id":7749,"fn":"pieceBounds","polytope":"24cell","piece":"tetrahedron","P":56,"out":{"volume":0.8355496558274298,"onePiece":0.4082482904638626,"value":0.8355496558274298,"kind":"volume"}}
+{"id":7764,"fn":"pieceBounds","polytope":"24cell","piece":"dodecahedron","P":58,"out":{"volume":3.3994567909627103,"onePiece":2.2270327288232115,"value":3.3994567909627103,"kind":"volume"}}
+{"id":7780,"fn":"pieceBounds","polytope":"24cell","piece":"cube","P":61,"out":{"volume":1.7535101471943895,"onePiece":0.999999999999999,"value":1.7535101471943895,"kind":"volume"}}
+{"id":7795,"fn":"pieceBounds","polytope":"24cell","piece":"icosahedron","P":63,"out":{"volume":2.298845934163009,"onePiece":1.51152262815234,"value":2.298845934163009,"kind":"volume"}}
+{"id":7811,"fn":"pieceBounds","polytope":"120cell","piece":"octahedron","P":2,"out":{"volume":0.10083523352287846,"onePiece":0.3118739422163119,"value":0.3118739422163119,"kind":"one piece"}}
+{"id":7826,"fn":"ballBounds","polytope":"120cell","P":5,"out":{"volume":0.14172961401246945,"onePiece":0.38196601125010476,"value":0.38196601125010476,"kind":"one piece"}}
+{"id":7827,"fn":"pieceBounds","polytope":"120cell","piece":"tetrahedron","P":5,"out":{"volume":0.08621291195082494,"onePiece":0.1559369711081559,"value":0.1559369711081559,"kind":"one piece"}}
+{"id":7842,"fn":"pieceBounds","polytope":"120cell","piece":"dodecahedron","P":7,"out":{"volume":0.3878277952417599,"onePiece":0.8506508083520391,"value":0.8506508083520391,"kind":"one piece"}}
+{"id":7858,"fn":"pieceBounds","polytope":"120cell","piece":"cube","P":10,"out":{"volume":0.22154964687368559,"onePiece":0.38196601125010476,"value":0.38196601125010476,"kind":"one piece"}}
+{"id":7873,"fn":"pieceBounds","polytope":"120cell","piece":"icosahedron","P":12,"out":{"volume":0.30534875645190024,"onePiece":0.5773502691896252,"value":0.5773502691896252,"kind":"one piece"}}
+{"id":7889,"fn":"pieceBounds","polytope":"120cell","piece":"octahedron","P":15,"out":{"volume":0.19737829640421134,"onePiece":0.3118739422163119,"value":0.3118739422163119,"kind":"one piece"}}
+{"id":7904,"fn":"ballBounds","polytope":"120cell","P":18,"out":{"volume":0.21721748013450567,"onePiece":0.38196601125010476,"value":0.38196601125010476,"kind":"one piece"}}
+{"id":7905,"fn":"pieceBounds","polytope":"120cell","piece":"tetrahedron","P":18,"out":{"volume":0.13213153524406404,"onePiece":0.1559369711081559,"value":0.1559369711081559,"kind":"one piece"}}
+{"id":7920,"fn":"pieceBounds","polytope":"120cell","piece":"dodecahedron","P":20,"out":{"volume":0.5503212081491039,"onePiece":0.8506508083520391,"value":0.8506508083520391,"kind":"one piece"}}
+{"id":7936,"fn":"pieceBounds","polytope":"120cell","piece":"cube","P":23,"out":{"volume":0.2924468901549876,"onePiece":0.38196601125010476,"value":0.38196601125010476,"kind":"one piece"}}
+{"id":7951,"fn":"pieceBounds","polytope":"120cell","piece":"icosahedron","P":25,"out":{"volume":0.3899860537312216,"onePiece":0.5773502691896252,"value":0.5773502691896252,"kind":"one piece"}}
+{"id":7967,"fn":"pieceBounds","polytope":"120cell","piece":"octahedron","P":28,"out":{"volume":0.24302725803146832,"onePiece":0.3118739422163119,"value":0.3118739422163119,"kind":"one piece"}}
+{"id":7982,"fn":"ballBounds","polytope":"120cell","P":31,"out":{"volume":0.26037013455947167,"onePiece":0.38196601125010476,"value":0.38196601125010476,"kind":"one piece"}}
+{"id":7983,"fn":"pieceBounds","polytope":"120cell","piece":"tetrahedron","P":31,"out":{"volume":0.15838092583406915,"onePiece":0.1559369711081559,"value":0.15838092583406915,"kind":"volume"}}
+{"id":7998,"fn":"pieceBounds","polytope":"120cell","piece":"dodecahedron","P":33,"out":{"volume":0.6502957234256929,"onePiece":0.8506508083520391,"value":0.8506508083520391,"kind":"one piece"}}
+{"id":8014,"fn":"pieceBounds","polytope":"120cell","piece":"cube","P":36,"out":{"volume":0.3395511682855322,"onePiece":0.38196601125010476,"value":0.38196601125010476,"kind":"one piece"}}
+{"id":8029,"fn":"pieceBounds","polytope":"120cell","piece":"icosahedron","P":38,"out":{"volume":0.4483979370249283,"onePiece":0.5773502691896252,"value":0.5773502691896252,"kind":"one piece"}}
+{"id":8045,"fn":"pieceBounds","polytope":"120cell","piece":"octahedron","P":41,"out":{"volume":0.2759710941416687,"onePiece":0.3118739422163119,"value":0.3118739422163119,"kind":"one piece"}}
+{"id":8060,"fn":"ballBounds","polytope":"120cell","P":44,"out":{"volume":0.29260932463275663,"onePiece":0.38196601125010476,"value":0.38196601125010476,"kind":"one piece"}}
+{"id":8061,"fn":"pieceBounds","polytope":"120cell","piece":"tetrahedron","P":44,"out":{"volume":0.17799174940485435,"onePiece":0.1559369711081559,"value":0.17799174940485435,"kind":"volume"}}
+{"id":8076,"fn":"pieceBounds","polytope":"120cell","piece":"dodecahedron","P":46,"out":{"volume":0.7264273637109396,"onePiece":0.8506508083520391,"value":0.8506508083520391,"kind":"one piece"}}
+{"id":8092,"fn":"pieceBounds","polytope":"120cell","piece":"cube","P":49,"out":{"volume":0.37630190954939213,"onePiece":0.38196601125010476,"value":0.38196601125010476,"kind":"one piece"}}
+{"id":8107,"fn":"pieceBounds","polytope":"120cell","piece":"icosahedron","P":51,"out":{"volume":0.49460571745348997,"onePiece":0.5773502691896252,"value":0.5773502691896252,"kind":"one piece"}}
+{"id":8123,"fn":"pieceBounds","polytope":"120cell","piece":"octahedron","P":54,"out":{"volume":0.3025057005686354,"onePiece":0.3118739422163119,"value":0.3118739422163119,"kind":"one piece"}}
+{"id":8138,"fn":"ballBounds","polytope":"120cell","P":57,"out":{"volume":0.31897909495304755,"onePiece":0.38196601125010476,"value":0.38196601125010476,"kind":"one piece"}}
+{"id":8139,"fn":"pieceBounds","polytope":"120cell","piece":"tetrahedron","P":57,"out":{"volume":0.19403225514267922,"onePiece":0.1559369711081559,"value":0.19403225514267922,"kind":"volume"}}
+{"id":8154,"fn":"pieceBounds","polytope":"120cell","piece":"dodecahedron","P":59,"out":{"volume":0.789266352312814,"onePiece":0.8506508083520391,"value":0.8506508083520391,"kind":"one piece"}}
+{"id":8170,"fn":"pieceBounds","polytope":"120cell","piece":"cube","P":62,"out":{"volume":0.407006762630637,"onePiece":0.38196601125010476,"value":0.407006762630637,"kind":"volume"}}
+{"id":8185,"fn":"pieceBounds","polytope":"120cell","piece":"icosahedron","P":64,"out":{"volume":0.5334934171358038,"onePiece":0.5773502691896252,"value":0.5773502691896252,"kind":"one piece"}}
+{"id":8201,"fn":"pieceBounds","polytope":"600cell","piece":"octahedron","P":3,"out":{"volume":0.2714417616594904,"onePiece":1.1547005383792506,"value":1.1547005383792506,"kind":"one piece"}}
+{"id":8216,"fn":"ballBounds","polytope":"600cell","P":6,"out":{"volume":0.3541780345007487,"onePiece":1.4142135623730938,"value":1.4142135623730938,"kind":"one piece"}}
+{"id":8217,"fn":"pieceBounds","polytope":"600cell","piece":"tetrahedron","P":6,"out":{"volume":0.21544346900318811,"onePiece":0.5773502691896252,"value":0.5773502691896252,"kind":"one piece"}}
+{"id":8232,"fn":"pieceBounds","polytope":"600cell","piece":"dodecahedron","P":8,"out":{"volume":0.9535354656764059,"onePiece":3.149499888950549,"value":3.149499888950549,"kind":"one piece"}}
+{"id":8248,"fn":"pieceBounds","polytope":"600cell","piece":"cube","P":11,"out":{"volume":0.5378186947068889,"onePiece":1.4142135623730938,"value":1.4142135623730938,"kind":"one piece"}}
+{"id":8263,"fn":"pieceBounds","polytope":"600cell","piece":"icosahedron","P":13,"out":{"volume":0.737480930311574,"onePiece":2.1376158005668637,"value":2.1376158005668637,"kind":"one piece"}}
+{"id":8279,"fn":"pieceBounds","polytope":"600cell","piece":"octahedron","P":16,"out":{"volume":0.47425244059867455,"onePiece":1.1547005383792506,"value":1.1547005383792506,"kind":"one piece"}}
+{"id":8294,"fn":"ballBounds","polytope":"600cell","P":19,"out":{"volume":0.5201026585307099,"onePiece":1.4142135623730938,"value":1.4142135623730938,"kind":"one piece"}}
+{"id":8295,"fn":"pieceBounds","polytope":"600cell","piece":"tetrahedron","P":19,"out":{"volume":0.3163739986009773,"onePiece":0.5773502691896252,"value":0.5773502691896252,"kind":"one piece"}}
+{"id":8310,"fn":"pieceBounds","polytope":"600cell","piece":"dodecahedron","P":21,"out":{"volume":1.3153660246457333,"onePiece":3.149499888950549,"value":3.149499888950549,"kind":"one piece"}}
+{"id":8326,"fn":"pieceBounds","polytope":"600cell","piece":"cube","P":24,"out":{"volume":0.6975501126412862,"onePiece":1.4142135623730938,"value":1.4142135623730938,"kind":"one piece"}}
+{"id":8341,"fn":"pieceBounds","polytope":"600cell","piece":"icosahedron","P":26,"out":{"volume":0.9291677479956062,"onePiece":2.1376158005668637,"value":2.1376158005668637,"kind":"one piece"}}
+{"id":8357,"fn":"pieceBounds","polytope":"600cell","piece":"octahedron","P":29,"out":{"volume":0.5782321650215548,"onePiece":1.1547005383792506,"value":1.1547005383792506,"kind":"one piece"}}
+{"id":8372,"fn":"ballBounds","polytope":"600cell","P":32,"out":{"volume":0.6188060239571058,"onePiece":1.4142135623730938,"value":1.4142135623730938,"kind":"one piece"}}
+{"id":8373,"fn":"pieceBounds","polytope":"600cell","piece":"tetrahedron","P":32,"out":{"volume":0.37641441155241095,"onePiece":0.5773502691896252,"value":0.5773502691896252,"kind":"one piece"}}
+{"id":8388,"fn":"pieceBounds","polytope":"600cell","piece":"dodecahedron","P":34,"out":{"volume":1.5445423737709527,"onePiece":3.149499888950549,"value":3.149499888950549,"kind":"one piece"}}
+{"id":8404,"fn":"pieceBounds","polytope":"600cell","piece":"cube","P":37,"out":{"volume":0.8058216052946915,"onePiece":1.4142135623730938,"value":1.4142135623730938,"kind":"one piece"}}
+{"id":8419,"fn":"pieceBounds","polytope":"600cell","piece":"icosahedron","P":39,"out":{"volume":1.0636315548517754,"onePiece":2.1376158005668637,"value":2.1376158005668637,"kind":"one piece"}}
+{"id":8435,"fn":"pieceBounds","polytope":"600cell","piece":"octahedron","P":42,"out":{"volume":0.6542132620377173,"onePiece":1.1547005383792506,"value":1.1547005383792506,"kind":"one piece"}}
+{"id":8450,"fn":"ballBounds","polytope":"600cell","P":45,"out":{"volume":0.6932800632398852,"onePiece":1.4142135623730938,"value":1.4142135623730938,"kind":"one piece"}}
+{"id":8451,"fn":"pieceBounds","polytope":"600cell","piece":"tetrahedron","P":45,"out":{"volume":0.4217163326508741,"onePiece":0.5773502691896252,"value":0.5773502691896252,"kind":"one piece"}}
+{"id":8466,"fn":"pieceBounds","polytope":"600cell","piece":"dodecahedron","P":47,"out":{"volume":1.7205718284351044,"onePiece":3.149499888950549,"value":3.149499888950549,"kind":"one piece"}}
+{"id":8482,"fn":"pieceBounds","polytope":"600cell","piece":"cube","P":50,"out":{"volume":0.8908987181403384,"onePiece":1.4142135623730938,"value":1.4142135623730938,"kind":"one piece"}}
+{"id":8497,"fn":"pieceBounds","polytope":"600cell","piece":"icosahedron","P":52,"out":{"volume":1.1706780045830791,"onePiece":2.1376158005668637,"value":2.1376158005668637,"kind":"one piece"}}
+{"id":8513,"fn":"pieceBounds","polytope":"600cell","piece":"octahedron","P":55,"out":{"volume":0.7157430563396464,"onePiece":1.1547005383792506,"value":1.1547005383792506,"kind":"one piece"}}
+{"id":8528,"fn":"ballBounds","polytope":"600cell","P":58,"out":{"volume":0.7544790839861782,"onePiece":1.4142135623730938,"value":1.4142135623730938,"kind":"one piece"}}
+{"id":8529,"fn":"pieceBounds","polytope":"600cell","piece":"tetrahedron","P":58,"out":{"volume":0.45894317351853275,"onePiece":0.5773502691896252,"value":0.5773502691896252,"kind":"one piece"}}
+{"id":8544,"fn":"pieceBounds","polytope":"600cell","piece":"dodecahedron","P":60,"out":{"volume":1.8664825696417227,"onePiece":3.149499888950549,"value":3.149499888950549,"kind":"one piece"}}
+{"id":8560,"fn":"pieceBounds","polytope":"600cell","piece":"cube","P":63,"out":{"volume":0.9622439350017091,"onePiece":1.4142135623730938,"value":1.4142135623730938,"kind":"one piece"}}
+{"id":8570,"fn":"boundaryBound","piece":"ball","P":1,"out":0.7071067811865475}
+{"id":8583,"fn":"boundaryBound","piece":"ball","P":14,"out":0.9712824844713768}
+{"id":8596,"fn":"boundaryBound","piece":"ball","P":27,"out":1.208993965512352}
+{"id":8609,"fn":"boundaryBound","piece":"ball","P":40,"out":1.3782337338022654}
+{"id":8622,"fn":"boundaryBound","piece":"ball","P":53,"out":1.5137756031977634}
+{"id":8635,"fn":"boundaryBound","piece":"cube","P":2,"out":0.7071067811865475}
+{"id":8648,"fn":"boundaryBound","piece":"cube","P":15,"out":1.233106037165235}
+{"id":8661,"fn":"boundaryBound","piece":"cube","P":28,"out":1.5182944859378311}
+{"id":8674,"fn":"boundaryBound","piece":"cube","P":41,"out":1.7241086201913651}
+{"id":8687,"fn":"boundaryBound","piece":"cube","P":54,"out":1.8898815748423097}
+{"id":8698,"fn":"ncubeBound","d":5,"piece":"ball","P":1,"out":0.7071067811865475}
+{"id":8711,"fn":"ncubeBound","d":5,"piece":"ball","P":384,"out":1.855112483308569}
+{"id":8724,"fn":"ncubeBound","d":5,"piece":"cube","P":160,"out":2}
+{"id":8737,"fn":"ncubeBound","d":6,"piece":"ball","P":64,"out":0.9741580968761215}
+{"id":8750,"fn":"ncubeBound","d":6,"piece":"cube","P":16,"out":1.0592238410488122}
+{"id":8763,"fn":"ncubeBound","d":7,"piece":"ball","P":7,"out":0.7071067811865475}
+{"id":8776,"fn":"ncubeBound","d":7,"piece":"cube","P":4,"out":1}
+{"id":8789,"fn":"ncubeBound","d":8,"piece":"ball","P":2,"out":0.7071067811865475}
+{"id":8802,"fn":"ncubeBound","d":8,"piece":"ball","P":400,"out":0.9885889753840819}
+{"id":8815,"fn":"ncubeBound","d":8,"piece":"cube","P":255,"out":1.4851636596529623}
+{"id":8828,"fn":"ncubeBound","d":9,"piece":"ball","P":100,"out":0.7380902566194343}
+{"id":8841,"fn":"ncubeBound","d":9,"piece":"cube","P":31,"out":1.0703138581365705}
+{"id":8854,"fn":"ncubeBound","d":10,"piece":"ball","P":10,"out":0.7071067811865475}
+{"id":8867,"fn":"ncubeBound","d":10,"piece":"cube","P":5,"out":1}
+{"id":8878,"fn":"ndBound","polytope":"5simplex","P":1,"out":{"value":1.9364916731037083,"kind":"one ball"}}
+{"id":8891,"fn":"ndBound","polytope":"5simplex","P":14,"out":{"value":2.3576438251097476,"kind":"volume"}}
+{"id":8904,"fn":"ndBound","polytope":"6simplex","P":3,"out":{"value":2.449489742783178,"kind":"one ball"}}
+{"id":8917,"fn":"ndBound","polytope":"6simplex","P":16,"out":{"value":2.5326210343723594,"kind":"volume"}}
+{"id":8930,"fn":"ndBound","polytope":"7simplex","P":5,"out":{"value":2.9580398915498076,"kind":"one ball"}}
+{"id":8943,"fn":"ndBound","polytope":"7simplex","P":18,"out":{"value":2.9580398915498076,"kind":"one ball"}}
+{"id":8956,"fn":"ndBound","polytope":"8simplex","P":7,"out":{"value":3.4641016151377544,"kind":"one ball"}}
+{"id":8969,"fn":"ndBound","polytope":"8simplex","P":20,"out":{"value":3.4641016151377544,"kind":"one ball"}}
+{"id":8982,"fn":"ndBound","polytope":"9simplex","P":9,"out":{"value":3.9686269665968856,"kind":"one ball"}}
+{"id":8995,"fn":"ndBound","polytope":"9simplex","P":22,"out":{"value":3.9686269665968856,"kind":"one ball"}}
+{"id":9008,"fn":"ndBound","polytope":"10simplex","P":11,"out":{"value":4.472135954999579,"kind":"one ball"}}
+{"id":9021,"fn":"ndBound","polytope":"10simplex","P":24,"out":{"value":4.472135954999579,"kind":"one ball"}}
+{"id":9034,"fn":"ndBound","polytope":"5orthoplex","P":13,"out":{"value":1.9364916731037083,"kind":"one ball"}}
+{"id":9047,"fn":"ndBound","polytope":"6orthoplex","P":2,"out":{"value":2.449489742783178,"kind":"one ball"}}
+{"id":9060,"fn":"ndBound","polytope":"6orthoplex","P":15,"out":{"value":2.449489742783178,"kind":"one ball"}}
+{"id":9073,"fn":"ndBound","polytope":"7orthoplex","P":4,"out":{"value":2.9580398915498076,"kind":"one ball"}}
+{"id":9086,"fn":"ndBound","polytope":"7orthoplex","P":17,"out":{"value":2.9580398915498076,"kind":"one ball"}}
+{"id":9099,"fn":"ndBound","polytope":"8orthoplex","P":6,"out":{"value":3.4641016151377544,"kind":"one ball"}}
+{"id":9112,"fn":"ndBound","polytope":"8orthoplex","P":19,"out":{"value":3.4641016151377544,"kind":"one ball"}}
+{"id":9125,"fn":"ndBound","polytope":"9orthoplex","P":8,"out":{"value":3.9686269665968856,"kind":"one ball"}}
+{"id":9138,"fn":"ndBound","polytope":"9orthoplex","P":21,"out":{"value":3.9686269665968856,"kind":"one ball"}}
+{"id":9151,"fn":"ndBound","polytope":"10orthoplex","P":10,"out":{"value":4.472135954999579,"kind":"one ball"}}
+{"id":9164,"fn":"ndBound","polytope":"10orthoplex","P":23,"out":{"value":4.472135954999579,"kind":"one ball"}}
+{"id":9177,"fn":"ndBound","polytope":"5demicube","P":12,"out":{"value":1.224744871391589,"kind":"one ball"}}
+{"id":9190,"fn":"ndBound","polytope":"6demicube","P":1,"out":{"value":1,"kind":"one ball"}}
+{"id":9203,"fn":"ndBound","polytope":"6demicube","P":14,"out":{"value":1.0334101428294487,"kind":"volume"}}
+{"id":9216,"fn":"ndBound","polytope":"7demicube","P":3,"out":{"value":0.8451542547285166,"kind":"one ball"}}
+{"id":9229,"fn":"ndBound","polytope":"7demicube","P":16,"out":{"value":0.9551303723916501,"kind":"volume"}}
+{"id":9242,"fn":"ndBound","polytope":"8demicube","P":5,"out":{"value":0.7484661405140424,"kind":"volume"}}
+{"id":9255,"fn":"ndBound","polytope":"8demicube","P":18,"out":{"value":0.8987604315810536,"kind":"volume"}}
+{"id":9268,"fn":"ndBound","polytope":"9demicube","P":7,"out":{"value":0.7488188004867192,"kind":"volume"}}
+{"id":9281,"fn":"ndBound","polytope":"9demicube","P":20,"out":{"value":0.8538237560982029,"kind":"volume"}}
+{"id":9294,"fn":"ndBound","polytope":"10demicube","P":9,"out":{"value":0.7388685704927003,"kind":"volume"}}
+{"id":9307,"fn":"ndBound","polytope":"10demicube","P":22,"out":{"value":0.8160153407205845,"kind":"volume"}}

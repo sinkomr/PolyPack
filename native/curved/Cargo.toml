@@ -1,0 +1,29 @@
+[package]
+name = "polypack-curved"
+version = "0.1.0"
+edition = "2021"
+rust-version = "1.88"
+description = "PolyPack's curved 2D family (2D in 2D at constant curvature K): problem ids, configurations, the server's validator and the job search"
+license = "MIT"
+publish = false
+
+[lib]
+name = "polypack_curved"
+path = "src/lib.rs"
+
+[dependencies]
+# JavaScript's Math and number formats: the validator is a port of packages/curved and must give
+# the server's verdicts and messages (native/PORTING.md)
+polypack-js = { path = "../js" }
+serde = { version = "1", features = ["derive"] }
+# fdlibm-derived transcendental functions in pure Rust: the same results on every platform, so a
+# seeded job gives the same packing on macOS, Linux and Windows, ARM and x86. The search modules
+# (eval, rng, search) call it directly; the validator's modules go through polypack_js::math,
+# whose transcendental functions are these same ones.
+libm = "0.2"
+
+[target.'cfg(unix)'.dependencies]
+libc = "0.2"
+
+[dev-dependencies]
+serde_json = { version = "1", features = ["float_roundtrip"] }

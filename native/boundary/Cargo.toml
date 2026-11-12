@@ -1,0 +1,17 @@
+[package]
+name = "polypack-boundary"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+description = "PolyPack's boundary family: the server's validator, ported from packages/boundary"
+
+[lib]
+name = "polypack_boundary"
+
+[dependencies]
+polypack-js = { path = "../js" }
+serde = { version = "1", features = ["derive"] }
+# float_roundtrip: numbers read from JSON are the exact doubles JavaScript reads
+serde_json = { version = "1", features = ["float_roundtrip"] }
+# the lower bounds compare rationals exactly, as the source does with BigInt
+num-bigint = "0.4"

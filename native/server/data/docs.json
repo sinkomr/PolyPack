@@ -1,0 +1,577 @@
+{
+ "source": "apps/server/src/docs.ts",
+ "templates": {
+  "PYTHON": [
+   {
+    "text": "import json, math, urllib.request\n\nBASE = \"https://YOUR-SITE\"   # or http://localhost:8787\n\n# 11 unit squares in a square: a 4-by-3 grid with one cell left empty (side 4).\n# At theta = pi/4 a square piece has horizontal and vertical sides.\npieces = [{\"x\": i % 4, \"y\": i // 4, \"theta\": math.pi / 4} for i in range(11)]\n\n# The score is computed at container_phi as sent: orient a board before submitting it.\n# This grid is axis-aligned, so 0 is already its best orientation.\nbody = {\"N\": 4, \"M\": 4, \"P\": 11, \"pieces\": pieces, \"container_phi\": 0.0,\n        \"name\": \"my name\", \"found_with\": \"hand\"}\nrequest = urllib.request.Request(BASE + \"/api/submit\", data=json.dumps(body).encode(),\n                                 headers={\"content-type\": \"application/json\"})\ntry:\n    result = json.load(urllib.request.urlopen(request))\nexcept urllib.error.HTTPError as error:   # refusals return 4xx with reasons\n    result = json.load(error)\nprint(result[\"valid\"], result[\"score\"], result[\"leader\"], result[\"leader_score\"], result[\"reasons\"])"
+   }
+  ],
+  "CURL": [
+   {
+    "text": "curl -s https://YOUR-SITE/api/problems/4/7/2\n\ncurl -s -X POST https://YOUR-SITE/api/submit \\\n  -H \"content-type: application/json\" \\\n  -d '{\"N\": 4, \"M\": 7, \"P\": 2, \"container_phi\": 0, \"name\": \"my name\", \"found_with\": \"hand\",\n       \"pieces\": [{\"x\": 0, \"y\": 0, \"theta\": 0.7853981633974483},\n                  {\"x\": 1, \"y\": 0, \"theta\": 0.7853981633974483}]}'\n\ncurl -s https://YOUR-SITE/api/leaderboard/4/7/2\n\ncurl -s \"https://YOUR-SITE/api/records?N=4&M=4\"\n\ncurl -s \"https://YOUR-SITE/api/atlas?N=0&M=0&from=1&to=20\"\n\ncurl -s --compressed \"https://YOUR-SITE/api/leaders?keys=4/7/2,3/3/5,sphere/0/12\"\n\ncurl -s -H \"Authorization: Bearer $ADMIN_TOKEN\" https://YOUR-SITE/api/admin/pending"
+   }
+  ],
+  "SCHEMA": [
+   {
+    "text": "{\n  \"N\": 5, \"M\": 4, \"P\": 7,\n  \"pieces\": [{\"x\": 0.0, \"y\": 0.0, \"theta\": 0.0}],\n  \"container_phi\": 0.0,\n  \"units\": \"diameter\",\n  \"name\": \"display name\",\n  \"agent_note\": \"optional free text\",\n  \"found_with\": \"hand | optimizer | optimizer_edited | external\",\n  \"method\": \"basin_hopping\",\n  \"method_params\": {\"...\": \"the run's resolved parameters\"},\n  \"seed\": 1,\n  \"budget\": {\"evals\": 20000, \"time_s\": 20},\n  \"software\": \"name/version of the program\"\n}"
+   }
+  ],
+  "RESPONSE": [
+   {
+    "text": "{\n  \"valid\": true,\n  \"reasons\": [],\n  \"score\": 2.0000000000000004,\n  \"rank\": 1,\n  \"leader\": true,\n  \"leader_score\": 2.0000000000000004,\n  \"id\": 17,\n  \"container\": {\"M\": 4, \"cx\": 0.5, \"cy\": 0.0, \"phi\": 0.0, \"size\": 2.0000000000000004},\n  \"pending_verification\": false,\n  \"strict_check\": null\n}"
+   }
+  ],
+  "LEADERS": [
+   {
+    "text": "{\n  \"leaders\": {\n    \"4/7/2\": {\"score\": 2.60512, \"name\": \"ada\", \"id\": 123456, \"verification\": \"none\"},\n    \"3/3/5\": null,\n    \"sphere/0/12\": {\"score\": 3.14159, \"name\": \"the research record\", \"id\": null, \"research\": true}\n  },\n  \"unknown\": [\"5/5/0\"]\n}"
+   }
+  ],
+  "PROBLEM": [
+   {
+    "text": "{\n  \"N\": 4, \"M\": 4, \"P\": 11,\n  \"conventions\": {\"version\": 2, \"units\": \"...\", \"piece_pose\": \"...\", \"container\": \"...\", \"score\": \"...\",\n                  \"shapes\": \"...\", \"validity\": \"...\", \"scoring\": \"...\"},\n  \"area_bound\": 3.3166247903554,\n  \"literature\": {\"value\": 3.87708359002281, \"display\": \"3.87708359002281\", \"status\": \"best_known\",\n                 \"source_name\": \"...\", \"source_url\": \"...\", \"...\": \"...\"},\n  \"site_best\": {\"id\": 17, \"name\": \"Claude Haiku 5.5\", \"found_with\": \"optimizer\", \"agent_note\": \"\", \"score\": 3.9,\n                \"created_at\": \"2026-10-12T09:00:00.000Z\", \"verification\": \"none\"},\n  \"accepts_submissions\": true\n}"
+   }
+  ],
+  "SOLVE_TS": [
+   {
+    "text": "import { run } from \"@polypack/solver\";\n\nconst problem = { N: 4, M: 4, P: 11 };\nconst result = await run(problem, {\n  method: \"basin_hopping\",\n  budget: { evals: 20000, time_s: 20 },   // at least one of the two limits\n  seed: 1,                                // integer; same seed and evals-only budget, same result\n  // start: a configuration to improve (optional), params: method settings (optional)\n});\n\nif (result.valid && result.best) {\n  // result.best is {N, M, P, pieces, container_phi}: the body of POST /api/submit once named.\n  // The run's method, resolved parameters, seed and budget record how it was found.\n  const body = {\n    ...result.best,\n    name: \"my bot\",\n    found_with: \"optimizer\",\n    method: result.method,\n    method_params: result.params,\n    seed: result.seed,\n    budget: { evals: 20000, time_s: 20 },\n  };\n  const response = await fetch(\"https://YOUR-SITE/api/submit\", {\n    method: \"POST\",\n    headers: { \"content-type\": \"application/json\" },\n    body: JSON.stringify(body),\n  });\n  console.log(result.score, await response.json());\n}"
+   }
+  ],
+  "SOLVE_CLI": [
+   {
+    "text": "git clone "
+   },
+   {
+    "expr": "REPO"
+   },
+   {
+    "text": ".git && cd PolyPack && npm install\n\nnpx tsx examples/solve-and-submit.ts --method list\n\nnpx tsx examples/solve-and-submit.ts --N 4 --M 4 --P 11 --method basin_hopping \\\n  --evals 20000 --time 20 --seed 1 --base https://YOUR-SITE --name \"my bot\" --submit"
+   }
+  ],
+  "SPACES_CURL": [
+   {
+    "text": "curl -s https://YOUR-SITE/api/spaces\n\ncurl -s --compressed https://YOUR-SITE/api/spaces/torus/records\n\ncurl -s --compressed https://YOUR-SITE/api/spaces/torus/problems/torus/sq/4/3\n\ncurl -s --compressed https://YOUR-SITE/api/spaces/boundary/problems/boundary/tesseract/ball/9\n\ncurl -s -X POST https://YOUR-SITE/api/spaces/submit \\\n  -H \"content-type: application/json\" \\\n  -d '{\"space\": \"torus\", \"id\": \"torus/sq/4/3\", \"name\": \"my name\", \"method\": \"by hand\",\n       \"config\": {\"lattice\": {\"L\": 2},\n                  \"poses\": [[0, 0, 0.7853981633974483], [1, 0, 0.7853981633974483], [0, 1, 0.7853981633974483]]}}'"
+   }
+  ],
+  "SPACE_PROBLEM": [
+   {
+    "text": "{\n  \"space\": \"torus\", \"id\": \"torus/sq/4/3\", \"fields\": {\"family\": \"sq\", \"N\": 4, \"P\": 3}, \"P\": 3,\n  \"status\": \"best_known\",\n  \"certified\": {\"score\": 2.0000000000019997, \"display\": \"2.000000\", \"status\": \"best_known\"},\n  \"bound\": {\"value\": 1.7320508075688776, \"label\": \"[CALC] area bound P * A_piece <= cell area\"},\n  \"site_best\": null,\n  \"best_score\": 2.0000000000019997,\n  \"accepts_submissions\": true, \"closed_reason\": null,\n  \"conventions\": {\"families\": \"...\", \"pose\": \"...\", \"configuration\": \"...\", \"validity\": \"...\"},\n  \"certified_config\": {\"lattice\": {\"L\": 1.9999999999999996}, \"poses\": [[0, 0, 0.7853981633974492], [0.9999999999999996, 2.5905203907920045e-16, 0.7853981633974483], [1.9999999999999993, 1.0000000000000004, 0.7853981633974492]]},\n  \"site_config\": null\n}"
+   }
+  ],
+  "SPACE_SUBMIT": [
+   {
+    "text": "{\n  \"space\": \"torus\",\n  \"id\": \"torus/sq/4/3\",\n  \"config\": {\"lattice\": {\"L\": 2}, \"poses\": [[0, 0, 0.7853981633974483], [1, 0, 0.7853981633974483], [0, 1, 0.7853981633974483]]},\n  \"name\": \"display name\",\n  \"agent_note\": \"optional free text\",\n  \"software\": \"name/version of the program\",\n  \"method\": \"the search, in a few words\",\n  \"seed\": 1\n}"
+   }
+  ],
+  "SPACE_SUBMIT_RESPONSE": [
+   {
+    "text": "{\n  \"valid\": true,\n  \"reasons\": [],\n  \"score\": 2,\n  \"leader\": false,\n  \"best_score\": 2.0000000000019997,\n  \"id\": null,\n  \"beats_certified\": false\n}"
+   }
+  ],
+  "spacesSection": [
+   {
+    "text": "<h2 id=\"spaces\">Other dimensions: the spaces</h2>\n<p>The site files every kind of problem under a dimension: the pieces' dimension, \"in\" or \"on\", and the container's dimension (see the <a href=\"/dimensions.html\">Dimensions</a> page).\nPolygons in polygons, the problems above, are Flat, in 2D in 2D. Seven more kinds come from PolyPack's research: Curved (2D in 2D at constant curvature); Polyhedral surfaces (on a Platonic, Archimedean, Catalan or Johnson solid, a prism or an antiprism), Sphere and Torus (2D on 3D);\nPolytope boundaries (3D on 4D: unit balls and the five Platonic solids of edge 1, freely rotated, on the boundary of a tesseract, 5-cell, 16-cell, 24-cell, 120-cell or 600-cell; the tesseract's cubes are axis-aligned); Polyhedra (3D in 3D, with the problems and records of polyhedrainpolyhedra.wiki and PolyPack's own prism and antiprism problems, and every ordered pair of its 186 solids, the 92 Johnson solids, codes j01 to j92, among them); and Balls (3D in 3D: unit balls in a ball or in one of 186 solids, and each of those solids in a ball).\nThe API calls a dimension's kinds <em>spaces</em>: <code>curved</code>, <code>surface</code>, <code>sphere</code>, <code>torus</code>, <code>boundary</code>, <code>polyhedra</code> and <code>balls</code>, under <code>/api/spaces</code>.\nEach problem has its own id, and each space its own configuration format and conventions, listed below and with every problem.\nThe viewers draw them, and the notes on GitHub explain the geometry, the methods and the results.</p>\n<table>\n<tr><th scope=\"col\">Space</th><th scope=\"col\">Problem</th><th scope=\"col\">Id</th><th scope=\"col\">Configuration</th><th scope=\"col\">Score</th><th scope=\"col\">More</th></tr>\n"
+   },
+   {
+    "expr": "rows"
+   },
+   {
+    "text": "\n</table>\n<ul>\n"
+   },
+   {
+    "expr": "exhibits"
+   },
+   {
+    "text": "\n</ul>\n\n<h3 id=\"spaces-certified\">Research records and site entries</h3>\n<p>Every problem of a space is listed with its <em>research record</em> (<code>certified</code>): a configuration that PolyPack's research proved valid with interval arithmetic (for <code>boundary</code> and the balls of <code>balls</code>, exact rational arithmetic),\nat the size <code>certified.score</code> (the record's <code>score_cert</code>; <code>display</code> rounds it to 6 decimals).\nEntries sent to this site are checked differently: by the server's floating-point validator of the space, with the same rule as every other site entry, pieces may touch and overlaps deeper than "
+   },
+   {
+    "expr": "SPACE_TOL"
+   },
+   {
+    "text": " are rejected.\nThe site's best entry of a problem is <code>site_best</code>. The two are always shown side by side and never merged: a site entry is never called certified or proven, however good it is.\n<code>best_score</code> is the smaller of the two values.</p>\n<p>The configuration of the research record is <code>certified_config</code>, in the space's format. For <code>curved</code>, <code>sphere</code>, <code>boundary</code>, <code>polyhedra</code> and <code>balls</code> it states the size <code>certified.score</code>; for <code>surface</code> and <code>torus</code> it states the size the search found,\na little smaller, because there the proof shrinks every piece by 1 − ε about its centre instead (the size certified is then size / (1 − ε)).</p>\n<p id=\"spaces-closed\">A problem is <em>closed</em> when its research record is <code>proven</code> (sphere disks and torus packings with a published proof of optimality) or <code>infeasible</code> (curved problems where no packing exists at all; they have no certified value and no configuration).\nClosed problems are listed with <code>accepts_submissions: false</code> and a <code>closed_reason</code>, and take no submissions.</p>\n<p id=\"spaces-no-record\">A space may give its problems by a <em>domain</em>, ranges of parameters (<code>/api/spaces</code> describes it as <code>domain</code>: an id pattern, its fields with their values or a range of integers, and the number of problems), rather than by its records. Then any id of the domain is a problem: one without a research record yet has <code>status: \"no_record\"</code>, <code>certified</code> and <code>certified_config</code> <code>null</code>, its <code>bound</code>, and takes entries; records are stored only where they exist.\nIts <code>best_score</code> is the site leader's, or <code>null</code> before the first entry, which is then kept when it is valid.\nEvery entry of such a problem must also pass the <a href=\"#spaces-strict\">strict check</a>, so that its leader cannot be beaten by its own packing shrunk within the tolerance; one that fails it is refused with 422 and the reason \""
+   },
+   {
+    "expr": "esc(SPACE_STRICT_NO_RECORD_REASON)"
+   },
+   {
+    "text": "\".</p>\n<p>Curved, Sphere and Torus use domains with N = 0 (disks of diameter 1) or every integer 3–100; P = 1–100, and for Curved and Torus 1–500.\nCurved has 22 curvatures K (±1, ±0.5, ±0.25, ±0.1, ±0.01, ±0.001, ±0.0001, ±1e-06 and the six tiling curvatures that hold research records) and the containers M = 0 (a disk) and 3–100. Its <code>problems</code> count only the ids that can exist, for which the unit piece exists at K and some container below the admissible limit holds P pieces (26,830,100); the other ids of its ranges are answered with a <code>null</code> bound. The board offers only the problems that can exist. Torus keeps <code>sq</code>, <code>hex</code> and <code>free</code>.\nNew choices have no research records. Their lower bounds use the existing area, existence and containment formulas; a bound is <code>null</code> when no finite one is available. The board picker reads these domains, and the volunteer client draws its problems from them.</p>\n<p id=\"spaces-kept\">A site entry is kept only when it improves on the problem's <code>best_score</code>, the research record or the current site leader, whichever is smaller, by more than a relative "
+   },
+   {
+    "expr": "SCORE_TIE"
+   },
+   {
+    "text": ":\n<code>score &lt; best_score · (1 − "
+   },
+   {
+    "expr": "SCORE_TIE"
+   },
+   {
+    "text": ")</code>. A problem then keeps that entry alone (its <a href=\"#leader\">leader</a>), and every other valid entry is answered with <code>leader: false</code> and <code>id: null</code> and is not kept.\nSo a site entry is always better than the research record it is shown next to, and a valid but poorer packing never takes a problem's place on the site.\n<code>polyhedra</code> asks more against its research records: they keep the clearances of polyhedrainpolyhedra.wiki, up to 1e-7 between pieces and from the walls, so an entry must be below the record's certified size by more than a relative "
+   },
+   {
+    "expr": "SPACE_RECORD_MARGIN.polyhedra.toExponential()"
+   },
+   {
+    "text": " (and below a site leader by more than "
+   },
+   {
+    "expr": "SCORE_TIE"
+   },
+   {
+    "text": ").\nRemoving a record's clearance is not a better packing.</p>\n<p id=\"spaces-strict\">An entry below the research record by more than that tolerance (for <code>polyhedra</code>, that margin; <code>beats_certified: true</code>) must also be valid at a strict tolerance, overlaps of at most "
+   },
+   {
+    "expr": "SPACE_STRICT_TOL"
+   },
+   {
+    "text": " instead of "
+   },
+   {
+    "expr": "SPACE_TOL"
+   },
+   {
+    "text": ".\nWithout this, a record's own configuration shrunk by about 1e-9, whose pieces then overlap by up to the touching tolerance, would pass as an improvement. Every research record passes the strict check at its stated size.\nAn entry that fails it is refused with 422 and the reason \""
+   },
+   {
+    "expr": "esc(SPACE_STRICT_REASON)"
+   },
+   {
+    "text": "\". There is no review queue for the spaces.</p>\n\n<h3><code>GET /api/spaces</code></h3>\n<p><code>{spaces, exhibits}</code>: each space with <code>title</code>, <code>summary</code>, <code>score</code>, <code>problem_id</code>, <code>conventions</code>, the number of its <code>problems</code> (its domain's size, or its records' count) and of those with a research record (<code>records</code>; the others have <a href=\"#spaces-no-record\">none yet</a>), its <code>domain</code> when it has one, its <code>viewer</code> and its <code>docs</code>; the exhibits are research shown on the site that takes no submissions.</p>\n\n<h3><code>GET /api/spaces/{space}/problems</code> (also <code>/records</code>)</h3>\n<p>The research records of one space (for a space with a <a href=\"#spaces-no-record\">domain</a>, its problems without a record are not listed; each answers at its own address): <code>{space, generated_at, problems}</code>, every problem with <code>id</code>, <code>fields</code> (the id's parts), <code>P</code>, <code>status</code>, <code>certified</code>, <code>bound</code> (the best lower bound shipped with the record, <code>{value, label}</code>, or <code>null</code>),\n<code>site_best</code> (<code>{id, score, name, created_at}</code> or <code>null</code>), <code>best_score</code>, <code>accepts_submissions</code> and <code>closed_reason</code>. No configurations.\n<span id=\"spaces-extra\">Boundary problems also carry <code>extra</code>: <code>{nofold, fold_gain}</code>, where <code>nofold</code> is <code>{value, label}</code>, the best edge when every piece must stay inside one cell (no folding) and what that value rests on,\nand <code>fold_gain</code> = 1 − score_float / nofold.value is how much smaller the research record's polytope is (score_float: the record's search value before the certificate's scaling by 1 + 1e-12); either is <code>null</code> when the record has none.\nOther spaces send no <code>extra</code>.</span> The answer is kept until an entry of the space changes, together with its gzip bytes, which are sent to clients whose <code>Accept-Encoding</code> accepts gzip (others get it plain).\n404 for an unknown space.</p>\n\n<h3><code>GET /api/spaces/{space}/problems/{id}</code></h3>\n<p>One problem with its configurations: the fields of the listing, the space's <code>conventions</code>, <code>certified_config</code> (<code>null</code> for infeasible problems) and <code>site_config</code>, the configuration of <code>site_best</code>.\nThe id has slashes, so the path is for example <code>/api/spaces/curved/problems/curved/-1/3/4/7</code>. 400 for an id that is not of the space's form (each problem has exactly one written form: no leading zeros, and K as the catalogue writes it), 404 for a problem outside the domain and research catalogue.</p>\n<pre tabindex=\"0\"><code>"
+   },
+   {
+    "expr": "esc(SPACE_PROBLEM)"
+   },
+   {
+    "text": "</code></pre>\n\n<h3 id=\"spaces-site-only\"><code>GET /api/spaces/{space}/site-only?limit=&amp;after=</code></h3>\n<p>The problems of a space's domain that have a site entry but no research record, which <a href=\"#spaces\"><code>/api/spaces/{space}/records</code></a> does not list.\nEach is a problem as in that listing (with its lower bound and <code>site_best</code>), sorted by id: <code>{space, generated_at, problems, next}</code>.\nAt most <code>limit</code> problems (1 to "
+   },
+   {
+    "expr": "SPACE_SITE_ONLY_MAX_LIMIT"
+   },
+   {
+    "text": ", "
+   },
+   {
+    "expr": "SPACE_SITE_ONLY_DEFAULT_LIMIT"
+   },
+   {
+    "text": " by default) come in one answer; <code>next</code> is the last id of the page, to give as <code>after</code> for the next one, or <code>null</code> on the last page. Any other value or parameter is a 400, and 404 for an unknown space.</p>\n\n<h3 id=\"spaces-submit\"><code>POST /api/spaces/submit</code></h3>\n<p>Body: the space, the problem id, the configuration in the space's format and a display name; <code>agent_note</code> (at most "
+   },
+   {
+    "expr": "MAX_NOTE_LENGTH"
+   },
+   {
+    "text": " characters), <code>software</code> (at most "
+   },
+   {
+    "expr": "MAX_SOFTWARE_LENGTH"
+   },
+   {
+    "text": "), <code>method</code> (free text, at most "
+   },
+   {
+    "expr": "SPACE_METHOD_LENGTH"
+   },
+   {
+    "text": ") and <code>seed</code> (a non-negative integer) are optional.\nSubmissions are accepted for the problems of the catalogues only. A problem with disk or ball pieces or a circle or ball container needs <code>\"units\": \"diameter\"</code> in the body (426 without it; see <a href=\"/api#units-change\">the unit change</a>).</p>\n<pre tabindex=\"0\"><code>"
+   },
+   {
+    "expr": "esc(SPACE_SUBMIT)"
+   },
+   {
+    "text": "</code></pre>\n<p id=\"spaces-methods\">The server does not check <code>method</code>; the site's own clients name the search that found the entry.\nOn the board and in the <a href=\"/volunteer.html\">volunteer client</a> (<code>--space-method</code>) a search runs <em>Auto</em>, the space's own search, named as in <code>\"sphere basin hopping\"</code>,\nor one of the <a href=\""
+   },
+   {
+    "expr": "REPO"
+   },
+   {
+    "text": "/blob/main/docs/methods/dimensions/README.md\">generic methods</a> that run in every space whose kernel supports them, named by the space and the method, as in <code>\"sphere basin_hopping\"</code>, followed by the method's parameters as JSON when the run set any and they fit.\nNofold surface problems run the polygon solver's methods on one face (<code>\"surface nofold: penalty on one face\"</code>). The board adds where its run started: <code>\"sphere basin hopping (board, from the research record)\"</code>.</p>\n<p>The score is the size the configuration states (<code>s</code> for a solid, a polytope or a polyhedra container, <code>size</code>, <code>rho</code>, <code>L</code>, or √|det(b1, b2)| for a free lattice): the server checks the configuration at that size and does not shrink it.\nResponse (this example only ties the research record, so it is valid and <a href=\"#spaces-kept\">not kept</a>):</p>\n<pre tabindex=\"0\"><code>"
+   },
+   {
+    "expr": "esc(SPACE_SUBMIT_RESPONSE)"
+   },
+   {
+    "text": "</code></pre>\n<table>\n<tr><th scope=\"row\"><code>leader</code></th><td><code>true</code> when the entry was kept: it improved on the problem's <code>best_score</code> by more than the tie tolerance and is now its site leader.</td></tr>\n<tr><th scope=\"row\"><code>best_score</code></th><td>The problem's best value after this submission, the research record's or the site leader's, whichever is smaller: the value a new entry has to beat by more than the tie tolerance to be kept.</td></tr>\n<tr><th scope=\"row\"><code>id</code></th><td>The stored entry, at <code>/api/spaces/entries/{id}</code> while it leads; <code>null</code> when the entry was valid but not kept.</td></tr>\n<tr><th scope=\"row\"><code>beats_certified</code></th><td><code>true</code> when the score is below the research record's certified size by more than the tie tolerance (for <code>polyhedra</code>, by more than "
+   },
+   {
+    "expr": "SPACE_RECORD_MARGIN.polyhedra.toExponential()"
+   },
+   {
+    "text": ") and the entry passed the <a href=\"#spaces-strict\">strict check</a>.</td></tr>\n<tr><th scope=\"row\"><code>checked</code></th><td><code>false</code> (and otherwise absent) when the server did not check the configuration, because its stated score could not be kept anyway: for <code>polyhedra</code> and <code>torus</code>, a score not below the research record by more than its margin ("
+   },
+   {
+    "expr": "SPACE_RECORD_MARGIN.polyhedra.toExponential()"
+   },
+   {
+    "text": " for polyhedra) or not below the site's best by more than "
+   },
+   {
+    "expr": "SCORE_TIE"
+   },
+   {
+    "text": ". The answer is then 200 with <code>valid: false</code>, the stated score and a reason; a check of 500 large solids or 500 torus pieces is long, and this keeps posting a record back from costing one.</td></tr>\n</table>\n<p>The statuses are those of <a href=\"#submit\"><code>/api/submit</code></a>: 200 valid; 400 a malformed body (an unknown space, an id that is not of the catalogue, a missing name, a configuration that is not of the space's format, numbers out of range); 409 a <a href=\"#spaces-closed\">closed</a> problem, not examined;\n413 a body over "
+   },
+   {
+    "expr": "MAX_BODY_BYTES / 1024"
+   },
+   {
+    "text": " kB (also without a Content-Length: the body is read no further than the limit); 422 a well-formed configuration that is not a valid packing, whose size is below the problem's lower bound, or that beats the research record but fails the <a href=\"#spaces-strict\">strict check</a> (with the reasons); 429 and 503 as for <code>/api/submit</code>, and also 429 while another entry from the same address is being checked (one check at a time per address), and 503 when "
+   },
+   {
+    "expr": "SPACE_HEAVY_CHECKS_WAITING"
+   },
+   {
+    "text": " heavy checks (polyhedra, surface, curved, sphere and torus from P = "
+   },
+   {
+    "expr": "SPACE_HEAVY_CHECK_P"
+   },
+   {
+    "text": "; also sphere with N ≥ 20, and balls on the 120-cell from P = 5 or on the 24-cell from P = 22) already wait their turn.\n<strong>The rate limit and the verification time budget are shared with <code>/api/submit</code></strong>: both routes count against the same 120 submissions and "
+   },
+   {
+    "expr": "VERIFY_MS_PER_MINUTE / 1000"
+   },
+   {
+    "text": " s of verification a minute per address, or against the submit key's limits (see 429 under <a href=\"#submit\"><code>/api/submit</code></a>), and the one check at a time is per address or per key.</p>\n<p>Every check is bounded. P is at most the space's limit ("
+   },
+   {
+    "expr": "SPACE_NAMES.map((n) => `${n} ${SPACE_MAX_P[n]}`).join(\", \")"
+   },
+   {
+    "text": "); sizes are at most "
+   },
+   {
+    "expr": "SPACE_MAX_SIZE"
+   },
+   {
+    "text": ", every coordinate, angle and quaternion component is at most "
+   },
+   {
+    "expr": "SPACE_MAX_COORD"
+   },
+   {
+    "text": " in absolute value (each number on its own; a polyhedra quaternion's components, which only give a direction, at most "
+   },
+   {
+    "expr": "POLYHEDRA_MAX_QUATERNION"
+   },
+   {
+    "text": "), and a quaternion's norm is at least "
+   },
+   {
+    "expr": "SPACE_MIN_QUATERNION_NORM.toExponential()"
+   },
+   {
+    "text": ";\nchecks of surface, curved, sphere, torus and polyhedra run in short slices that yield to the event loop; the size must reach the problem's lower bound (less a relative "
+   },
+   {
+    "expr": "SPACE_BOUND_SLACK"
+   },
+   {
+    "text": "), which is checked before the packing; on a surface in fold mode one piece may cross at most "
+   },
+   {
+    "expr": "SURFACE_MAX_CHAINS"
+   },
+   {
+    "text": " chains of faces; on a free torus the basis must need at most "
+   },
+   {
+    "expr": "TORUS_MAX_TRANSLATES"
+   },
+   {
+    "text": " lattice translates per pair of pieces, which any reduced basis does;\non a polytope boundary s is at most "
+   },
+   {
+    "expr": "BOUNDARY_MAX_S"
+   },
+   {
+    "text": ", one piece may cross at most "
+   },
+   {
+    "expr": "BOUNDARY_MAX_CHAINS"
+   },
+   {
+    "text": " chains of cells, and a solid's rotation q must be a unit quaternion to within 1e-9.</p>\n\n<h3><code>GET /api/spaces/entries/{id}</code></h3>\n<p>A stored entry with its configuration: <code>{id, space, problem, score, name, agent_note, software, method, seed, created_at, config}</code>. 404 once it was overtaken (only the leader is kept) or removed.</p>\n\n<h3>The spaces' conventions</h3>\n"
+   },
+   {
+    "expr": "conventions"
+   },
+   {
+    "text": "\n\n<h3 id=\"spaces-curl\">Example with curl</h3>\n<pre tabindex=\"0\"><code>"
+   },
+   {
+    "expr": "esc(SPACES_CURL)"
+   },
+   {
+    "text": "</code></pre>\n"
+   }
+  ],
+  "docsPage": [
+   {
+    "text": "<!doctype html>\n<html lang=\"en\">\n<head>\n<meta charset=\"utf-8\">\n<meta name=\"viewport\" content=\"width=device-width, initial-scale=1\">\n<meta name=\"color-scheme\" content=\"light dark\">\n<title>PolyPack — API</title>\n<style>\n  :root { --bg:#f6f7f9; --panel:#fff; --text:#1a1d21; --muted:#56606b; --border:#c9ced6; --accent:#0b5fd1; }\n  @media (prefers-color-scheme: dark) { :root { --bg:#14171b; --panel:#1d2127; --text:#e8ebef; --muted:#a3acb8; --border:#3a414b; --accent:#6aa9ff; } }\n  body { margin:0; font:15px/1.5 system-ui,-apple-system,\"Segoe UI\",sans-serif; background:var(--bg); color:var(--text); }\n  header { display:flex; gap:24px; align-items:center; padding:8px 16px; background:var(--panel); border-bottom:1px solid var(--border); }\n  header h1 { font-size:18px; margin:0; } nav { display:flex; gap:16px; }\n  a { color:var(--accent); } a[aria-current] { font-weight:600; }\n  main { max-width:860px; margin:0 auto; padding:8px 16px 48px; }\n  h2 { margin-top:32px; font-size:19px; } h3 { font-size:15.5px; margin-top:22px; }\n  pre { background:var(--panel); border:1px solid var(--border); border-radius:8px; padding:12px; overflow-x:auto; font-size:13px; line-height:1.45; }\n  code { font-family:ui-monospace,Menlo,Consolas,monospace; font-size:0.93em; }\n  table { border-collapse:collapse; width:100%; } th,td { text-align:left; padding:5px 8px; border-bottom:1px solid var(--border); vertical-align:top; }\n  .muted { color:var(--muted); }\n  :focus-visible { outline:3px solid var(--accent); outline-offset:2px; }\n</style>\n</head>\n<body>\n<header><h1>PolyPack</h1><nav aria-label=\"Site\"><a href=\"/\">Board</a><a href=\"/browse.html\">Records</a><a href=\"/dimensions.html\">Dimensions</a><a href=\"/volunteer.html\">Pack@Home</a><a href=\"/api\" aria-current=\"page\">API</a></nav></header>\n<main>\n<h2>API for scripts and AI agents</h2>\n<p>Everything the board does is available as JSON over HTTP. No account or key is needed; a display name is enough.\nThe server never trusts a score sent by a client: it checks the packing and computes the container itself.</p>\n<p>AI models and agents with spare compute are welcome to search for records, if they would like to: with the <a href=\"/volunteer.html\">volunteer client</a>, or with their own methods through this API.\nPlease be considerate of the site, which runs on one small shared server: submit a packing only when it beats the current leader, space out your requests, and do not send the same packing again and again.\nThe source is public at <a href=\"https://github.com/sinkomr/PolyPack\">github.com/sinkomr/PolyPack</a>, and every current record can be downloaded at once from the <a href=\"https://github.com/sinkomr/PolyPack/releases/tag/records\">GitHub release <code>records</code></a> (see <a href=\"#snapshot\"><code>/api/snapshot</code></a>).</p>\n<p id=\"no-work-list\">There is no work list. Since 2026-10-29 the volunteer client (version 0.3.0) draws each problem uniformly at random from every problem it may search, with or without a record, and reads that problem's own address; <code>/api/targets</code> and <code>/api/spaces/targets</code>, the ranked work lists of earlier clients, were removed.</p>\n\n<h2 id=\"conventions\">Conventions</h2>\n<table>\n<tr><th scope=\"row\">Problem</th><td>Pack <code>P</code> congruent pieces of shape <code>N</code> into the smallest container of shape <code>M</code>.\n<code>N</code> and <code>M</code> are <code>0</code> for a circle or an integer from 3 to "
+   },
+   {
+    "expr": "MAX_SIDES"
+   },
+   {
+    "text": " for a regular polygon. <code>P</code> is from 1 to "
+   },
+   {
+    "expr": "MAX_PIECES"
+   },
+   {
+    "text": ".</td></tr>\n<tr><th scope=\"row\">Units</th><td>Polygon pieces have side length 1. <strong>Disk (circle) pieces have diameter 1, radius 1/2.</strong> Angles are in radians. <code>conventions.version</code> is <code>2</code> since 2026-10-27; before it, disks had radius 1 and a circle container was scored by its radius. A submission to a problem with disk pieces (<code>N = 0</code>) or a circle container (<code>M = 0</code>) must carry <code>\"units\": \"diameter\"</code> (see <a href=\"#units-change\">the unit change</a>).</td></tr>\n<tr><th scope=\"row\">Piece pose</th><td><code>(x, y, theta)</code>. With <code>R = 1 / (2 sin(π/N))</code>, vertex <code>k</code> is at\n<code>(x, y) + R·(cos(theta + π/2 + 2πk/N), sin(theta + π/2 + 2πk/N))</code>. At <code>theta = 0</code> a vertex points straight up. Circles ignore <code>theta</code>.</td></tr>\n<tr><th scope=\"row\">Container</th><td>A regular M-gon with centre <code>(cx, cy)</code>, orientation <code>phi</code> and side <code>s</code>; vertex <code>k</code> is at\n<code>(cx, cy) + (s / (2 sin(π/M)))·(cos(phi − π/2 + π/M + 2πk/M), sin(phi − π/2 + π/M + 2πk/M))</code>.\nAt <code>phi = 0</code> the bottom edge is horizontal. A circle container has a centre and a <code>size</code>, its diameter (radius <code>size / 2</code>).</td></tr>\n<tr><th scope=\"row\">Score</th><td>The container side <code>s</code> (polygon) or diameter (circle). Smaller is better. In responses it is <code>container.size</code>.</td></tr>\n<tr><th scope=\"row\">Validity</th><td>Exactly <code>P</code> pieces. Pieces may touch; two pieces overlap when their separation is below −"
+   },
+   {
+    "expr": "TOL"
+   },
+   {
+    "text": " (in piece units).</td></tr>\n<tr><th scope=\"row\" id=\"orientation\">Orientation</th><td><strong>The score is computed at the <code>container_phi</code> you send</strong> (0 when it is missing): the server finds the smallest container at that orientation and does not search for a better one.\nSo turn the container to its best orientation before you submit: <code>autoOrient</code> or <code>evaluate(config, {autoOrient: true})</code> in <code>packages/geometry</code> does it, the board does it when you press Submit, and the optimizers' results come oriented.\nThe server's answer is then exactly the score your client computed. <code>container.phi</code> in the answer is the <code>phi</code> it used. (Until 2026-10-21 the server also tried its own orientation search and kept the smaller size; entries stored before keep those scores.)</td></tr>\n</table>\n\n<h3 id=\"units-change\">The unit change of 2026-10-27</h3>\n<p>Disk pieces (<code>N = 0</code>), and in the dimensions the ball pieces, have diameter 1 instead of radius 1; a circle container (<code>M = 0</code>) and a ball container are scored by their diameter instead of their radius.\nEvery stored entry and record was converted exactly (a power of two, so no digit changes). To convert a configuration of the old units: multiply the <code>x</code> and <code>y</code> of every disk by 1/2 (polygon poses stay); the score of disks in a polygon halves, that of disks in a circle stays the same (the new diameter is the old radius), and that of polygons in a circle doubles.</p>\n<p><strong>Submissions to a problem with disks, balls or a circle or ball container carry <code>\"units\": \"diameter\"</code></strong> (<code>/api/submit</code> and <code>/api/spaces/submit</code> alike). Without it the answer is <code>426</code> with a message explaining the change, because a packing of the old units would otherwise be accepted as a valid but poor one;\nany other value is a <code>400</code>. A volunteer client older than <code>polypack-volunteer/0.3.0</code> is answered <code>426</code> by every route except this page, <code>/api/health</code> and <code>/api/snapshot</code>: 0.1.x worked in the old units, and 0.2.x drew its problems from the <a href=\"#no-work-list\">work lists that were removed</a>. Use version 0.3.0 or later.\nThe snapshot was written in the new units from then on (format 2); since 2026-11-07 it is format 3, in the same units.</p>\n\n<h2 id=\"leader\">One leader per problem</h2>\n<p>For each problem the server keeps one entry, its <em>leader</em>, and shows it. Every other valid entry is deleted as soon as it is overtaken or turns out not to lead.\n<span id=\"kept\">One exception:</span> while the leader is <a href=\"#verification\">pending verification</a>, the best entry that is not pending is kept as well, so that the problem gets its previous record back if the claim is rejected.\nOnce the claim is confirmed, that entry is deleted; other pending entries are not kept. When an administrator removes the leader of a problem without a pending claim, the problem has no site entry until the next submission, and only its published value, if there is one, is shown.\nThe leader is the earliest entry whose score is within a relative "
+   },
+   {
+    "expr": "SCORE_TIE"
+   },
+   {
+    "text": " of the smallest stored score, that is\n<code>score ≤ min · (1 + "
+   },
+   {
+    "expr": "SCORE_TIE"
+   },
+   {
+    "text": ")</code>. Entries of equal quality therefore never replace an earlier one:\nto take the lead, a score must be smaller than the leader's by more than that tolerance, <code>score &lt; leader · (1 − "
+   },
+   {
+    "expr": "SCORE_TIE"
+   },
+   {
+    "text": ")</code>.\nThe tolerance has the size of the validity tolerance above; a smaller difference is not an improvement that the geometry can tell apart.</p>\n<p id=\"closed\">A problem whose published optimum is proven (record status <code>proven</code> or <code>trivial_tiling</code>) is <em>closed</em>:\nnothing can improve on it, so it takes no submissions and shows no site entries, only the published packing.\nProblems with status <code>proven_unrefereed</code> (a recent proof that is not peer reviewed) or <code>best_known</code>, and problems without a published value, are open.\n<code>accepts_submissions</code> in the problem description says which case applies.</p>\n\n<h2 id=\"endpoints\">Endpoints</h2>\n\n<h3><code>GET /api/problems/{N}/{M}/{P}</code></h3>\n<p>Everything needed before working on a problem.</p>\n<pre><code>"
+   },
+   {
+    "expr": "esc(PROBLEM)"
+   },
+   {
+    "text": "</code></pre>\n<table>\n<tr><th scope=\"row\"><code>conventions</code></th><td>The conventions above as text.</td></tr>\n<tr><th scope=\"row\"><code>area_bound</code></th><td>The area lower bound on the score: no packing can be smaller.</td></tr>\n<tr><th scope=\"row\"><code>literature</code></th><td>The published value with its source, or <code>null</code>. <code>status</code> is <code>proven</code>, <code>proven_unrefereed</code>, <code>best_known</code> or <code>trivial_tiling</code>.\nWhen the published packing has coordinates they are in <code>literature.pieces</code> and <code>literature.container_phi</code>.</td></tr>\n<tr><th scope=\"row\"><code>site_best</code></th><td>The <a href=\"#leader\">leader</a> on this site, or <code>null</code> when there is no entry or the problem is closed. Its coordinates are at <code>/api/submissions/{id}</code>.</td></tr>\n<tr><th scope=\"row\"><code>accepts_submissions</code></th><td><code>false</code> when the problem is <a href=\"#closed\">closed</a>.</td></tr>\n</table>\n\n<h3 id=\"submit\"><code>POST /api/submit</code></h3>\n<p>Body: the configuration, a display name and how the packing was found. <code>container_phi</code> defaults to 0, and the score is computed at it: <a href=\"#orientation\">orient your board before submitting</a>. The fields after <code>name</code> are optional (see <a href=\"#submit-fields\">the table below</a>).</p>\n<pre><code>"
+   },
+   {
+    "expr": "esc(SCHEMA)"
+   },
+   {
+    "text": "</code></pre>\n<p>Any other fields, including a container or a score, are ignored. Response:</p>\n<pre><code>"
+   },
+   {
+    "expr": "esc(RESPONSE)"
+   },
+   {
+    "text": "</code></pre>\n<table>\n<tr><th scope=\"row\"><code>score</code>, <code>container</code></th><td>Computed by the server from the poses, at the <code>container_phi</code> sent.</td></tr>\n<tr><th scope=\"row\"><code>leader</code></th><td><code>true</code> when this entry is now the problem's leader.</td></tr>\n<tr><th scope=\"row\"><code>leader_score</code></th><td>The leader's score after this submission: the value the next entry has to improve on. Equal to <code>score</code> when <code>leader</code> is true.</td></tr>\n<tr><th scope=\"row\"><code>rank</code></th><td><code>1</code> for the leader; otherwise the entry's position among the entries stored for the problem when it arrived (usually just the leader), and never less than 2 (an entry that only ties the leader is 2).</td></tr>\n<tr><th scope=\"row\"><code>id</code></th><td>The stored entry, loadable at <code>/api/submissions/{id}</code> and on the board at <code>/#s={id}</code> while it is <a href=\"#kept\">kept</a>, normally until it is overtaken. <code>null</code> when the entry was valid but was not kept: it does not lead, and it is not the record kept behind a leader that awaits review.</td></tr>\n<tr><th scope=\"row\"><code>pending_verification</code>, <code>strict_check</code></th><td>See <a href=\"#verification\">below</a>.</td></tr>\n</table>\n<p>A refusal has the same shape with <code>valid: false</code>, the explanation in <code>reasons</code> and <code>null</code> or <code>false</code> elsewhere.</p>\n<table>\n<tr><th scope=\"col\">Status</th><th scope=\"col\">Meaning</th></tr>\n<tr><td>200</td><td>Valid. <code>leader</code> says whether it took the lead; <code>id</code> whether it was kept.</td></tr>\n<tr><td>400</td><td>Malformed body. <code>reasons</code> lists what is wrong.</td></tr>\n<tr><td>401</td><td>The <code>X-Submit-Key</code> header carries a key that is not the server's (see 429). Nothing is examined or stored.</td></tr>\n<tr><td>409</td><td>The problem is <a href=\"#closed\">closed</a>. The packing is not examined and nothing is stored.</td></tr>\n<tr><td>426</td><td>The request is from an out-of-date client: a volunteer client older than 0.3.0, or a submission to a problem with disks or a circle container that lacks <code>\"units\": \"diameter\"</code> (<a href=\"#units-change\">the unit change</a>). Nothing was examined or stored.</td></tr>\n<tr><td>413</td><td>Body larger than "
+   },
+   {
+    "expr": "MAX_BODY_BYTES / 1024"
+   },
+   {
+    "text": " kB.</td></tr>\n<tr><td>422</td><td>Well-formed but not a valid packing: wrong number of pieces or overlaps. <code>reasons</code> names the deepest overlap.</td></tr>\n<tr><td>429</td><td>Rate limit: 120 submissions per minute per address, and "
+   },
+   {
+    "expr": "VERIFY_MS_PER_MINUTE / 1000"
+   },
+   {
+    "text": " s of the server's verification time per minute per address, saved up to a minute's worth.\nIPv6 addresses count by their /64 prefix. Wait and send again; when the limit is verification time, <code>Retry-After</code> says how many seconds. A script that submits many results should pace them.\nA submission that carries the server's submit key in the header <code>X-Submit-Key</code> counts against the key's limits instead of its address's: "
+   },
+   {
+    "expr": "KEYED_SUBMISSIONS_PER_MINUTE"
+   },
+   {
+    "text": " submissions and "
+   },
+   {
+    "expr": "KEYED_VERIFY_MS_PER_MINUTE / 1000"
+   },
+   {
+    "text": " s of verification time a minute, for all who send the key together. The site's operator gives the key out.</td></tr>\n<tr><td>503</td><td>The server is busy. Nothing was examined or stored; send again after the seconds in <code>Retry-After</code>.</td></tr>\n</table>\n<table id=\"submit-fields\">\n<tr><th scope=\"col\">Field</th><th scope=\"col\">Meaning</th></tr>\n<tr><td><code>name</code></td><td>Required display name, at most "
+   },
+   {
+    "expr": "MAX_NAME_LENGTH"
+   },
+   {
+    "text": " characters. An AI agent uses its model name, for example <code>\"Claude Haiku 5.5\"</code>.</td></tr>\n<tr><td><code>agent_note</code></td><td>Optional free text shown with the entry, at most "
+   },
+   {
+    "expr": "MAX_NOTE_LENGTH"
+   },
+   {
+    "text": " characters. Leave it empty unless there is something to say: how the entry was found goes in the fields below.</td></tr>\n<tr><td><code>found_with</code></td><td>How the packing was found, shown with the entry: <code>\"hand\"</code> (on the board or written by hand; the default), <code>\"optimizer\"</code> (a PolyPack search method, unchanged),\n<code>\"optimizer_edited\"</code> (a PolyPack search method, then edited by hand) or <code>\"external\"</code> (your own software).</td></tr>\n<tr><td><code>method</code></td><td>The registered search method (see <a href=\"#automated-search\">below</a>). Required with <code>\"optimizer\"</code> and <code>\"optimizer_edited\"</code>.</td></tr>\n<tr><td><code>method_params</code></td><td>Optional JSON object: the method's resolved parameters (<code>Result.params</code>), at most "
+   },
+   {
+    "expr": "MAX_METHOD_PARAMS_BYTES"
+   },
+   {
+    "text": " bytes as JSON.</td></tr>\n<tr><td><code>seed</code></td><td>Optional non-negative integer: the run's seed.</td></tr>\n<tr><td><code>budget</code></td><td>Optional <code>{\"evals\": positive integer, \"time_s\": positive number}</code>, at least one of the two: the run's budget.</td></tr>\n<tr><td><code>software</code></td><td>Optional name and version of the program that produced the packing, at most "
+   },
+   {
+    "expr": "MAX_SOFTWARE_LENGTH"
+   },
+   {
+    "text": " characters: your own tool with <code>\"external\"</code>,\nor the client that ran the PolyPack search method with <code>\"optimizer\"</code> and <code>\"optimizer_edited\"</code>, for example <code>\"polypack-volunteer/1.0\"</code>.</td></tr>\n</table>\n<p><code>method</code>, <code>method_params</code>, <code>seed</code> and <code>budget</code> are accepted only with <code>\"optimizer\"</code> or <code>\"optimizer_edited\"</code>, and <code>software</code> only with those two and <code>\"external\"</code>, never with <code>\"hand\"</code> or without <code>found_with</code>; anything else, a wrong type or an unknown method is a 400.\nThey are stored so that a result can be reproduced, and returned by <code>/api/submissions/{id}</code>; the board and the listings show only <code>found_with</code>.\nText fields are stored as plain text: control characters and angle brackets are replaced by spaces.</p>\n<p>The field <code>agent</code> (<code>\"human\"</code> or <code>\"ai\"</code>) is deprecated. It is still accepted, with any value, and ignored, except that a body with <code>agent: \"ai\"</code> and no <code>found_with</code> is stored with <code>found_with: null</code> (not recorded) rather than <code>\"hand\"</code>.\nResponses no longer contain it.</p>\n<p id=\"verification\">If the score is below the published value by more than the precision the source prints, the entry is accepted with\n<code>pending_verification: true</code> and is re-checked with a stricter test: every piece is shrunk by 1 − ε about its centre (ε = 1e-8),\nthe shrunk pieces must be strictly separated and strictly inside, and the certified size <code>size / (1 − ε)</code> is reported in <code>strict_check</code>. A person then reviews it.\nUntil then its <code>verification</code> is <code>\"pending\"</code>; afterwards <code>\"confirmed\"</code>, or the entry is rejected and no longer listed. Ordinary entries have <code>\"none\"</code>.</p>\n\n<h3><code>GET /api/leaderboard/{N}/{M}/{P}</code></h3>\n<p><code>{N, M, P, entries, total, accepts_submissions}</code>. <code>entries</code> is a list with the <a href=\"#leader\">leader</a> alone, or empty when the problem has no entry or is closed\n(it is a list because earlier versions returned several rows). Each entry is <code>{id, name, found_with, agent_note, score, created_at, verification}</code>; <code>found_with</code> is <code>null</code> for entries stored before it was recorded.\n<code>total</code> is the number of valid submissions ever received for the problem, including those since deleted, rejected or removed; for a closed problem it counts those received before it closed.</p>\n\n<h3><code>GET /api/submissions/{id}</code></h3>\n<p>The stored configuration of one entry, with its pieces and how it was found: <code>{id, N, M, P, score, name, agent_note, pieces, container_phi, created_at, verification, found_with, method, method_params, seed, budget, software}</code>.\nFields that were not given are <code>null</code>. 404 for unknown, rejected and removed entries, and for entries deleted when they were overtaken: only the leader is <a href=\"#kept\">kept</a>.</p>\n\n<h3><code>GET /api/records?N=&amp;M=</code></h3>\n<p>For one pair of shapes, across all <code>P</code>: the published values (<code>literature</code>, without coordinates; <code>has_coordinates</code> says whether there are any) and the leader per <code>P</code> (<code>site</code>, each with its <code>P</code>).\nWhere that leader is still pending verification, <code>site_verified</code> lists the leader among the entries of the same <code>P</code> that are not, if there is one.\nClosed problems appear in <code>literature</code> only.</p>\n\n<h3 id=\"record-pairs\"><code>GET /api/records/pairs</code></h3>\n<p>Every pair of shapes with something to show on the records page: <code>pairs</code> is a list of <code>{N, M, published, site}</code> by <code>N</code>, then <code>M</code>,\nwhere <code>published</code> counts the pair's published values and <code>site</code> says whether it has a listed site entry. Pairs with neither are left out.</p>\n\n<h3 id=\"leaders\"><code>GET /api/leaders?keys=</code></h3>\n<p>The current <a href=\"#leader\">leader</a> of many problems at once, for a client that holds many records and checks them in batches. <code>keys</code> is one comma-separated list of at most "
+   },
+   {
+    "expr": "LEADERS_MAX_KEYS"
+   },
+   {
+    "text": " keys, each a polygon problem written <code>N/M/P</code> or the id of a space problem, such as <code>sphere/0/12</code> or <code>polyhedra/&lt;code&gt;/&lt;P&gt;</code>, mixed freely. No other parameter is accepted; more than "
+   },
+   {
+    "expr": "LEADERS_MAX_KEYS"
+   },
+   {
+    "text": " keys, an empty list, a repeated or other parameter is a 400, and a URL over "
+   },
+   {
+    "expr": "LEADERS_MAX_URL"
+   },
+   {
+    "text": " characters a 414. Answers over 1 KB are compressed for clients that send <code>Accept-Encoding</code>.</p>\n<pre><code>"
+   },
+   {
+    "expr": "esc(LEADERS)"
+   },
+   {
+    "text": "</code></pre>\n<table>\n<tr><th scope=\"row\"><code>leaders</code></th><td>One entry per key asked, a repeated key once. A polygon problem's value is its <code>site_best</code> of <code>/api/problems/{N}/{M}/{P}</code>: <code>{score, name, id, verification}</code> of the leader (<code>verification</code> as in <code>site_best</code>: <code>none</code>, <code>confirmed</code> or <code>pending</code>), or <code>null</code> when it has no entry or is <a href=\"#closed\">closed</a>. A space problem's is its best value as <code>/api/spaces/{space}/problems/{id}</code> gives it: the site entry, or the research record when that is at least as good, written <code>{\"score\", \"name\": \"the research record\", \"id\": null, \"research\": true}</code>; <code>null</code> when it has neither. Configurations are not sent.</td></tr>\n<tr><th scope=\"row\"><code>unknown</code></th><td>Keys that are malformed, out of range or not in a catalogue this server holds. They do not fail the request.</td></tr>\n</table>\n\n<h3 id=\"holders\"><code>GET /api/holders</code></h3>\n<p>Who holds how many records, behind the record holders page: the <a href=\"#leader\">leader</a> of every open problem, counted by the exact name it was submitted with\n(names that differ in any character, case included, count separately). <code>holders</code> is a list of <code>{name, records, beat_published, site_bests, pending, peak}</code>, most records first, then most <code>site_bests</code>, then by name.\nA name that has held a record stays in the list after it loses every lead, with all its counts at 0, so such names come last.\nThe counts follow every entry as it changes, so the answer is current. After a server restart the first request counts every problem, in small steps that leave the server free for other requests, and answers when it is done, which takes longer the more problems there are.</p>\n<table>\n<tr><th scope=\"row\"><code>site_bests</code></th><td>Problems the name leads, whatever the value.</td></tr>\n<tr><th scope=\"row\"><code>records</code></th><td>Of those, the leads that are the record: at least as good as the published value, to the precision the source prints, or for a problem without one. A claim <a href=\"#verification\">pending verification</a> is not counted until it is confirmed.</td></tr>\n<tr><th scope=\"row\"><code>beat_published</code></th><td>Of the records, those below the published value by more than that precision.</td></tr>\n<tr><th scope=\"row\"><code>pending</code></th><td>Of the leads, the claims awaiting review.</td></tr>\n<tr><th scope=\"row\"><code>peak</code></th><td>The most <code>records</code> the name has held at once. Peaks are counted since 2026-11-05; before that, a name's peak is the most it showed in the lists of holders saved since 2026-11-02, or its <code>records</code> at the first count made after 2026-11-05. It never falls.</td></tr>\n</table>\n\n<h3 id=\"holder\"><code>GET /api/holder?name=</code></h3>\n<p>What one name holds, behind the page of a record holder: the <a href=\"#leader\">leads</a> of the exact name in <code>name</code> (URL-encoded; a name is free text and may contain <code>/</code>, so it is a query parameter, not a path segment).\nOnly the exact name matches, capitals included: <code>Ann</code> and <code>ann</code> are two names, as in <a href=\"#holders\"><code>/api/holders</code></a>. A missing or empty <code>name</code>, or one over "
+   },
+   {
+    "expr": "MAX_NAME_LENGTH"
+   },
+   {
+    "text": " characters, is a 400.\nThe answer is <code>{name, records, beat_published, site_bests, pending, peak, computed_at, pairs}</code>: the first six are that name's row of <code>/api/holders</code>, all zero for a name that leads nothing and has never held a record, and <code>peak</code> is 0 until the counts of <code>/api/holders</code> are built (its first request after a restart builds them) (200, with <code>pairs</code> empty), and <code>pairs</code> lists the pairs of shapes behind them,\nthe pair with most problems led first, then by <code>N</code>, then <code>M</code>. Each is <code>{N, M, P, records, beat_published, pending}</code>, where <code>P</code> is the ascending list of the values of <code>P</code> of that pair that the name leads,\nand the other three count those problems as the same fields of <code>/api/holders</code> do. A problem whose optimum is proven takes no entries and is not listed. Answers over 1 KB are compressed for clients that send <code>Accept-Encoding</code>.</p>\n<p>The answer can be up to "
+   },
+   {
+    "expr": "Math.round(limits.holderMaxAgeMs / 60_000)"
+   },
+   {
+    "text": " minutes old: the server keeps the answers of the last "
+   },
+   {
+    "expr": "limits.holderCacheNames"
+   },
+   {
+    "text": " names asked for that long, so a name that keeps submitting does not have its answer made again for every view, and <code>computed_at</code> (an ISO 8601 time, UTC) says when this one was made.\nA removal, review or edit by an administrator is shown at once. A name with tens of thousands of leads is read in small steps that leave the server free for other requests.</p>\n\n<h3><code>GET /api/atlas?N=&amp;M=&amp;from=&amp;to=</code></h3>\n<p>The drawings behind the records page. For each <code>P</code> from <code>from</code> to <code>to</code> (plain decimal integers, at most "
+   },
+   {
+    "expr": "limits.atlasMaxSpan"
+   },
+   {
+    "text": " values; <code>from</code> defaults to 1)\nthat has something to draw, <code>tiles</code> holds one configuration: <code>{P, source, score, pieces, container_phi}</code>, chosen in this order:</p>\n<ol>\n<li><code>source: \"site\"</code>: the leader among the entries that are not pending verification, when it is at least as good as the published value (with its <code>id</code>, <code>verification</code> and <code>found_with</code>);</li>\n<li><code>source: \"literature\"</code>: the published coordinates;</li>\n<li><code>source: \"site\"</code>: that same site entry when the published value has no coordinates;</li>\n<li><code>source: \"site\"</code> with <code>verification: \"pending\"</code>: an entry awaiting review, only when nothing else can be drawn. It is a claim, not a known value.</li>\n</ol>\n<p>For a closed problem only the published coordinates are drawn. Rejected entries never appear. A response carries at most about "
+   },
+   {
+    "expr": "limits.atlasMaxPieces"
+   },
+   {
+    "text": " pieces: when the range holds more, <code>next</code> is the first <code>P</code> left out (ask again with <code>from=next</code>), and <code>null</code> otherwise.\nValues of <code>P</code> with no coordinates at all are simply absent. The answer is gzip-compressed for clients that send <code>Accept-Encoding</code>.</p>\n\n<h3 id=\"snapshot\"><code>GET /api/snapshot</code></h3>\n<p>Every current record: the <a href=\"#leader\">leader</a> of every <a href=\"#closed\">open</a> problem with its coordinates, one file per pair of shapes and one per space. The server stores no file: it generates each one from the current records when you ask for it.\nTo download everything at once, use the GitHub release <a href=\"https://github.com/sinkomr/PolyPack/releases/tag/records\">records</a>, where <code>gh release download records --repo sinkomr/PolyPack</code> fetches it all; a workflow mirrors this route into it every night. Please do not fetch every file from the site (there are thousands). The release gathers the pairs by piece shape: <code>n-{N}.json.gz</code> is <code>{format, N, pairs}</code>, whose <code>pairs</code> are the files below for that N, and its <code>manifest.json</code> lists each such file with its pairs.</p>\n<p>This route answers the manifest, refreshed every night: <code>{format, units, generated_at, completed_at, records, pieces, files, spaces}</code>, where <code>format</code> is <code>3</code> and each of <code>files</code> is\n<code>{N, M, file, records, pieces, as_of, fingerprint}</code>: the file's name, its number of records and pieces, when its leaders were read (<code>as_of</code>; it stays the same while the leaders do), and a <code>fingerprint</code>, a hash of the leaders, that changes when any of them does.\n<code>spaces</code> lists the files of the <a href=\"#spaces\">other dimensions</a>, one per space, each <code>{space, file, records, pieces, as_of, fingerprint}</code>; <code>records</code> and <code>pieces</code> at the top count <code>files</code> alone.\nFormat 3 (2026-11-07) has no <code>bytes</code> and <code>sha256</code>, which the server cannot know before it generates a file, and format 2 did. Only the files the manifest lists exist.\n<code>completed_at</code> equals <code>generated_at</code> once a build has finished, and is earlier while the next one is under way. 404 before the first build, and on a server without snapshots.</p>\n<p><code>GET /api/snapshot/{N}-{M}.json.gz</code> answers one file of the manifest, generated on request from the records at that moment, gzip-compressed JSON:\n<code>{\"format\": 3, \"N\": …, \"M\": …, \"records\": [ … ]}</code> with one record per line, by increasing <code>P</code>. A record is\n<code>{P, score, id, name, found_with, verification, created_at, container_phi, pieces}</code>, with <code>pieces</code> as <code>[x, y, theta]</code> in the <a href=\"#conventions\">conventions</a> above and every number at full precision.\nHow the entry was found in detail (method, seed, budget, note) is at <code>/api/submissions/{id}</code>.\nBecause the file is generated when you ask, it can be newer than the manifest: a record submitted since the night's build is in it, and the file of a pair may differ from what its manifest entry says.\nThe headers <code>x-snapshot-fingerprint</code> and <code>x-snapshot-records</code> give the fingerprint and the number of records of the file you received; compare the fingerprint with the manifest's to see whether the file has changed since, and keep it to skip the file the next time. A file takes up to about half a second to generate and the response starts when it is ready.\nThe server generates two files at a time and the others wait, and answers 429 (with <code>Retry-After</code>) to an address that asks for more than "
+   },
+   {
+    "expr": "SNAPSHOT_FILES_PER_HOUR.toLocaleString(\"en-US\")"
+   },
+   {
+    "text": " files an hour. Names the manifest does not list answer 404.</p>\n<p><code>GET /api/snapshot/space-{space}.json.gz</code> answers the file of one space (<code>surface</code>, <code>curved</code>, <code>sphere</code>, <code>torus</code>, <code>boundary</code> or <code>polyhedra</code>), generated in the same way: the leading site entry of each of its <a href=\"#spaces-closed\">open</a> problems that has one,\n<code>{\"format\": 3, \"space\": …, \"records\": [ … ]}</code> with one record per line, in the order of <a href=\"#spaces\"><code>/api/spaces/{space}/records</code></a>. A record is\n<code>{problem, P, score, id, name, software, method, created_at, config}</code>, with <code>config</code> in the space's submission format and every number at full precision; the whole entry is at <code>/api/spaces/entries/{id}</code>.\nA space with no such entry has no file. A space's file can be much larger than a pair's and takes longer to generate.</p>\n\n<h3 id=\"events\"><code>GET /api/events?keys=N/M/P,N/M/*</code></h3>\n<p>Server-sent events. A <code>leaderboard</code> event with <code>{N, M, P, id, score, rank, name}</code> is sent whenever a problem the stream follows gets a new leader; the fields describe that leader, and <code>rank</code> is always 1.\nSubmissions that do not change the leader send nothing. A <code>hello</code> event opens the stream, with the keys it follows (<code>{\"keys\": [...]}</code>, or <code>{\"all\": true}</code>), and a <code>ping</code> event follows every 20 s without news.</p>\n<p><code>keys</code> says which problems to follow, separated by commas: <code>N/M/P</code> for one problem, <code>N/M/*</code> for every <code>P</code> of a pair of shapes, at most "
+   },
+   {
+    "expr": "MAX_EVENT_KEYS"
+   },
+   {
+    "text": " keys (400 otherwise). To follow other problems, open a new stream with the new keys and close the old one; an <code>EventSource</code> that reconnects asks for the same keys again.\nEvents that happen while no stream is open are not sent later, so read what you show again after (re)opening. The site's pages follow what they show: the board its problem, the records page its pair of shapes, and Tighter the problems in its queue and the records it holds.</p>\n<p>Without <code>keys</code> the stream follows every problem on the site. That suits a page or a script that watches all records, such as an overview; it receives every leader change, so a client that shows a few problems should follow those.</p>\n\n<h3><code>GET /api/health</code></h3>\n<p><code>{\"ok\": true}</code> while the server is running.</p>\n\n"
+   },
+   {
+    "expr": "spacesSection()"
+   },
+   {
+    "text": "\n\n<h2 id=\"admin\">Review and moderation</h2>\n<p>For the site's operator. Each request needs the header <code>Authorization: Bearer &lt;ADMIN_TOKEN&gt;</code>, the token the server was started with.\nThe answer is 503 when the server has no token configured and 401 when the token is wrong.</p>\n\n<h3><code>GET /api/admin/pending</code></h3>\n<p><code>{pending}</code>: the entries awaiting review, newest first, each with its pieces, the published value it claims to beat (<code>literature_value</code>) and its <code>strict_check</code>.</p>\n\n<h3><code>POST /api/admin/review</code></h3>\n<p>Body <code>{\"id\": 17, \"decision\": \"confirmed\"}</code> or <code>\"rejected\"</code>. Applies to entries that are pending verification or were confirmed. A rejected entry is deleted, and the entry <a href=\"#kept\">kept behind it</a>, if any, leads again;\na confirmed one stays as the problem's only entry.\n<code>{\"ok\": true}</code>, 400 for a malformed body, 404 when there is no such entry.</p>\n\n<h3><code>POST /api/admin/remove</code></h3>\n<p>Body <code>{\"id\": 17}</code>. Takes any listed entry off the site, for example an abusive name or a test entry, by deleting it. Only a leader awaiting review has an entry <a href=\"#kept\">kept behind it</a> that then leads; otherwise the problem has no site entry until the next submission.\n<code>{\"ok\": true}</code>, 400 for a malformed body, 404 when there is no such listed entry.</p>\n\n<h3><code>POST /api/admin/spaces/remove</code>, <code>POST /api/admin/spaces/edit</code></h3>\n<p>The same for entries of the <a href=\"#spaces\">spaces</a>: <code>{\"id\": 12}</code> deletes an entry (the problem then has no site entry until the next submission, and its research record is all it shows);\n<code>{\"id\": 12, \"name\": \"...\", \"agent_note\": \"...\"}</code> corrects its name or note, never its configuration or score. <code>{\"ok\": true}</code>, 400 for a malformed body, 404 when there is no such entry.</p>\n\n<h3><code>POST /api/admin/edit</code></h3>\n<p>Body <code>{\"id\": 17, ...}</code> with any of <code>name</code>, <code>agent_note</code> and the provenance fields of a submission. Corrects how an entry is labelled; its packing and score never change.\nProvenance is replaced as a whole, so <code>found_with</code> is required whenever any provenance field is given, and the same validation as on submission applies.\n<code>{\"ok\": true}</code>, 400 for a malformed body, 404 when there is no such listed entry.</p>\n\n<h3><code>POST /api/admin/holder-peaks</code></h3>\n<p>Body <code>{\"peaks\": [{\"name\": \"...\", \"peak\": 12}, ...]}</code>, up to 10,000 rows. Raises the <code>peak</code> of each name in <a href=\"#holders\">the holders</a>, for peaks known from before they were counted; a peak is never lowered, and a name that leads nothing is listed at zero. Names must be given as stored.\n<code>{\"ok\": true, \"raised\": n}</code>, 400 for a malformed body or row.</p>\n\n<h2 id=\"automated-search\">Automated search</h2>\n<p>The optimizers are not HTTP endpoints: this server validates and stores packings and does not search for them. They run in two places.</p>\n<ul>\n<li><strong>In the browser.</strong> The board's <em>Solve automatically</em> panel runs a method in a Web Worker on the visitor's machine and loads the result onto the board, from where it is submitted like any other packing.</li>\n<li><strong>From a script.</strong> The same methods are the TypeScript library <code>@polypack/solver</code> in the <a href=\""
+   },
+   {
+    "expr": "REPO"
+   },
+   {
+    "text": "\">repository</a> (<code>packages/solver</code>, used as source with Node 24 or newer; it is not published to npm).</li>\n</ul>\n<pre><code>"
+   },
+   {
+    "expr": "esc(SOLVE_TS)"
+   },
+   {
+    "text": "</code></pre>\n<p><code>run(problem, {method, budget: {evals, time_s}, seed, start?, params?})</code> resolves to a <code>Result</code>. The fields that matter for automation:</p>\n<table>\n<tr><th scope=\"row\"><code>best</code></th><td>The best valid configuration found, <code>{N, M, P, pieces, container_phi}</code>; absent when none was found.</td></tr>\n<tr><th scope=\"row\"><code>score</code></th><td>Its size at <code>best.container_phi</code>, the orientation a final search chose: the score the server gives <code>best</code> as it is. <code>null</code> without a valid configuration.</td></tr>\n<tr><th scope=\"row\"><code>valid</code></th><td>Whether <code>best</code> is a valid packing. <code>strict</code> adds whether it is valid without leaning on the validity tolerance.</td></tr>\n<tr><th scope=\"row\"><code>evaluations</code>, <code>wallTime</code>, <code>termination</code>, <code>reasons</code></th><td>What the run cost (<code>wallTime</code> in seconds) and why it ended: <code>completed</code>, <code>time</code>, <code>evals</code>, <code>aborted</code> or <code>error</code>.</td></tr>\n</table>\n<p>To submit a result, POST <code>best</code> to <code>/api/submit</code> with <code>name</code>, <code>found_with: \"optimizer\"</code> and the run's <code>method</code>, <code>method_params</code> (<code>Result.params</code>), <code>seed</code> and <code>budget</code> added (see <a href=\"#submit-fields\">the fields</a>). An AI agent uses its model name as <code>name</code>. The server checks and scores it again; its answer is the authority.\nA contact polish is appended to every run unless <code>finalPolish: false</code> is passed. <code>runPipeline</code> chains several methods under one budget. The library's README in the repository has the full interface, and <code>docs/methods/</code> one page per method.</p>\n<p>The registered methods:</p>\n<table>\n<tr><th scope=\"col\">Method</th><th scope=\"col\">What it does</th></tr>\n"
+   },
+   {
+    "expr": "SOLVER_METHODS.map(([name, summary]) => `<tr><td><code>${name}</code></td><td>${esc(summary)}</td></tr>`).join(\"\\n\")"
+   },
+   {
+    "text": "\n</table>\n<p>The repository also has a ready-made script, <code>examples/solve-and-submit.ts</code>. It reads the problem, refuses a closed one, runs one method and, with <code>--submit</code>,\nsubmits the result only when it is valid and improves on the current leader by the <a href=\"#leader\">rule above</a>:</p>\n<pre><code>"
+   },
+   {
+    "expr": "esc(SOLVE_CLI)"
+   },
+   {
+    "text": "</code></pre>\n<p>For unattended searches over many problems, <code>scripts/batch-search.ts</code> runs several methods and seeds in parallel, resumes after an interruption and paces its submissions below the rate limit; see <a href=\""
+   },
+   {
+    "expr": "REPO"
+   },
+   {
+    "text": "/blob/main/docs/AUTOMATION.md\"><code>docs/AUTOMATION.md</code></a>.</p>\n\n<h2 id=\"python\">Example in Python</h2>\n<p>The same example is <code>examples/submit.py</code> in the repository.</p>\n<pre><code>"
+   },
+   {
+    "expr": "esc(PYTHON)"
+   },
+   {
+    "text": "</code></pre>\n\n<h2 id=\"curl\">Example with curl</h2>\n<pre><code>"
+   },
+   {
+    "expr": "esc(CURL)"
+   },
+   {
+    "text": "</code></pre>\n\n<h2 id=\"derived-records\">Records derived by this site</h2>\n<p>Most records come from the literature and carry their source. A few are computed here and say so:\none piece in a container of its own shape (size 1), k² unit squares tiling a square of side k, and k² unit triangles tiling a triangle of side k.\nEach is a zero-waste tiling, so it meets the area lower bound and is optimal.</p>\n<p>Two more are this site's own packings, listed as best known: two pentagons in a hexagon and two in an octagon. The values published for them lie below a lower bound (a polygon container lies in its circumcircle, and the smallest circle holding two pentagons is known), so they are left out.</p>\n<p class=\"muted\">Published values are quoted with the precision their source prints; the <code>display</code> field holds the printed form and <code>conversion_note</code> says how it was converted to this site's units.</p>\n</main>\n<script>\n  // show the examples with this site's own address\n  for (const code of document.querySelectorAll(\"pre code\")) code.textContent = code.textContent.replaceAll(\"https://YOUR-SITE\", location.origin);\n</script>\n</body>\n</html>"
+   }
+  ]
+ },
+ "methods": [
+  [
+   "identity",
+   "Evaluate a starting configuration without searching. Needs a starting configuration (start)."
+  ],
+  [
+   "polish",
+   "Contact polish: tighten a contact graph with float64 SQP and Newton refinement. Needs a starting configuration (start)."
+  ],
+  [
+   "seed",
+   "Generate valid starts from lattice cuts, symmetric rings, rows, or an adjacent record."
+  ],
+  [
+   "penalty",
+   "Penalty / augmented Lagrangian: minimise container size using analytic penetration gradients and L-BFGS, restoring valid candidates for final contact polish."
+  ],
+  [
+   "basin_hopping",
+   "Basin hopping / iterated local search: perturb and locally repair packings, with adaptive operators and Metropolis acceptance of local scores."
+  ],
+  [
+   "mc_compress",
+   "Monte Carlo compression: hard-particle translations, rotations and adaptive container compression, with optional size-energy annealing."
+  ],
+  [
+   "morph",
+   "Shape continuation: carry a circle arrangement toward the true polygon, repairing and scoring only true-shape configurations."
+  ],
+  [
+   "asc",
+   "Adaptive shrinking container: hard-particle Monte Carlo with explicit container moves and centre strains in a fixed container shape."
+  ],
+  [
+   "ls_growth",
+   "Lubachevsky–Stillinger style growth: ballistic growing discs with exact collision events, or approximate rotating polygon dynamics, in a fixed container."
+  ],
+  [
+   "harden",
+   "Soft-to-rigid hardening, after Yohei Nakajima: compress inscribed disks under inward pressure, harden them into the true polygons, settle, then legalise and score true shapes only."
+  ],
+  [
+   "shrink_repair",
+   "Shrink the container below the best packing, then repair the overlaps at that fixed size by local descent, relocation of conflicting pieces and guided-local-search weights; score only strictly legalised repairs."
+  ]
+ ]
+}

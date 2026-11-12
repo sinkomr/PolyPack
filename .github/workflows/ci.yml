@@ -61,9 +61,74 @@ jobs:
       - run: npx playwright install --with-deps chromium webkit
       - run: npm run e2e -- --shard=${{ matrix.shard }}/2
 
+  # The Rust server (native/): its own tests, the tables it embeds, and the differential harness, which
+  # replays the same requests against the TypeScript server and the Rust server and compares every
+  # answer, database row and log line (native/tools/serverdiff/README.md). This runner's Node 24 on
+  # Linux x86-64 is the platform the port's numbers are held to (native/tools/LINUX_REFERENCE.md).
+  rust:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+      - run: npm ci
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: native
+      - run: cargo test --workspace --release
+        working-directory: native
+      # the tables and fixtures written from the TypeScript must be the ones in the repository
+      - run: |
+          node --import tsx native/tools/surface-export.mts --check
+          node --import tsx native/tools/polyhedra-solids.mts --check
+          node --import tsx native/tools/ndim-tables.mts --check
+          node --import tsx native/tools/spaces-tables.mts --check
+          node --import tsx native/tools/boundary-tables.mts --check
+          node --import tsx native/tools/app-docs.mts --check
+      - run: cargo build --release -p polypack-server
+        working-directory: native
+      - run: node --import tsx native/tools/serverdiff/run.mts --out "$RUNNER_TEMP/serverdiff" --cand native/target/release/polypack-server
+
+  # The browser tests again, against the Rust server.
+  e2e-rust:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        shard: [1, 2]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+      - run: npm ci
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: native
+      - run: cargo build --release -p polypack-server
+        working-directory: native
+      - run: npm run build
+      - run: npx playwright install --with-deps chromium webkit
+      - run: npm run e2e -- --shard=${{ matrix.shard }}/2
+        env:
+          POLYPACK_E2E_SERVER: rust
+
+  # The image that is deployed, built as Fly builds it and tried: the server starts, answers, takes
+  # an entry, keeps it over a restart and stops cleanly; the operator's tools run in it.
+  image:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - run: deploy/fly/image-smoke.sh
+
   # The live site is updated only from main, and only after every test job above has passed.
   deploy:
-    needs: [node, python, e2e]
+    needs: [node, python, e2e, rust, e2e-rust, image]
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
     concurrency: deploy

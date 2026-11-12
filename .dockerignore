@@ -4,6 +4,10 @@
 !package-lock.json
 !tsconfig.base.json
 !apps
+# the Rust server (Dockerfile.rust), without its build directory
+!native
+native/target
+native/target-*
 !packages
 !data
 data/*

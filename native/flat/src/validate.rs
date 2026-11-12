@@ -1,0 +1,165 @@
+//! What the volunteer client checks before it offers a packing to the server.
+//!
+//! The server's rule itself is the port in [`crate::config`] (`parse_config`, `evaluate`,
+//! `strict_verify`), [`crate::overlap`] and [`crate::enclose`]; this module re-exports it under
+//! the names the client and the examples use, and adds the client's own, stricter check:
+//!
+//! - N and M are 0 or 3..=100, P is 1..=500, every piece has finite x, y, theta with |x|, |y| at
+//!   most 1e6, container_phi is finite;
+//! - exactly P pieces, and no pair of pieces with a separation below -1e-9 (TOL): contact and
+//!   overlaps up to 1e-9 are accepted;
+//! - the score is the size of the smallest enclosing container at the container_phi sent (the
+//!   server does not search for a better orientation);
+//! - a score below a published value by more than its precision is stored but held for review,
+//!   with the shrink test of [`strict_verify`].
+//!
+//! The client never offers a packing that relies on the 1e-9 allowance: it submits only
+//! configurations that are *strict* (no penetration above 1e-12, the search framework's rule),
+//! and checks them with [`server_check`] first, which errs on the strict side by a further
+//! rounding margin.
+
+pub use crate::config::{strict_verify, Evaluation, StrictResult};
+use crate::config::{evaluate_parts, EvaluateOptions};
+use crate::enclose::enclose;
+use crate::grid::NeighborGrid;
+pub use crate::overlap::{find_overlaps, Overlap, TOL};
+pub use crate::protocol::{improves_on, SCORE_TIE};
+use crate::sep::pair_separation;
+use crate::shapes::{bounding_radius, is_shape_code, Config, Container, Pose, MAX_COORD, MAX_PIECES};
+
+/// Penetration above which a configuration is not strict (search results must not rely on TOL).
+pub const STRICT_TOLERANCE: f64 = 1e-12;
+
+/// The strict margin of a configuration: STRICT_TOLERANCE, widened by four units in the last
+/// place of the largest coordinate far from the origin.
+pub fn strict_tolerance(pieces: &[Pose]) -> f64 {
+    let mut reach = 0.0f64;
+    for p in pieces {
+        reach = reach.max(p.x.abs()).max(p.y.abs());
+    }
+    STRICT_TOLERANCE + 4.0 * f64::EPSILON * reach
+}
+
+/// The range checks of the server's parseConfig for a configuration already held as numbers (the
+/// search's own candidates); untrusted JSON goes through [`crate::config::parse_config`].
+pub fn parse_errors(n: u32, m: u32, p: usize, pieces: &[Pose], phi: f64) -> Vec<String> {
+    let mut errors = Vec::new();
+    if !is_shape_code(n) {
+        errors.push("N must be 0 (circle) or an integer from 3 to 100".to_string());
+    }
+    if !is_shape_code(m) {
+        errors.push("M must be 0 (circle) or an integer from 3 to 100".to_string());
+    }
+    if p < 1 || p > MAX_PIECES {
+        errors.push("P must be an integer from 1 to 500".to_string());
+    }
+    if pieces.len() > MAX_PIECES {
+        errors.push("pieces must have at most 500 entries".to_string());
+    } else {
+        for (i, q) in pieces.iter().enumerate() {
+            if !(q.x.is_finite() && q.y.is_finite() && q.theta.is_finite()) {
+                errors.push(format!("pieces[{i}] must have finite numbers x, y, theta"));
+                break;
+            }
+            if q.x.abs() > MAX_COORD || q.y.abs() > MAX_COORD {
+                errors.push(format!("pieces[{i}] is outside the coordinate limit of {MAX_COORD}"));
+                break;
+            }
+        }
+    }
+    if !phi.is_finite() {
+        errors.push("container_phi must be a finite number".to_string());
+    }
+    errors
+}
+
+/// The server's evaluate(config, {autoOrient, maxOverlaps, stopWhenInvalid}) for the search's
+/// `Config` (`max_overlaps` of `usize::MAX`: no limit). See [`crate::config::evaluate`].
+pub fn evaluate(config: &Config, p: usize, auto_orient: bool, max_overlaps: usize, stop_when_invalid: bool) -> Evaluation {
+    let opts = EvaluateOptions {
+        auto_orient,
+        max_overlaps: if max_overlaps == usize::MAX { None } else { Some(max_overlaps) },
+        stop_when_invalid,
+    };
+    evaluate_parts(config.n, config.m, p, &config.pieces, config.phi, &opts)
+}
+
+/// What the client checks before it offers a packing to the server.
+#[derive(Clone, Debug)]
+pub struct ServerCheck {
+    /// Accepted by the server's rule, with a further safety margin (see `server_check`).
+    pub valid: bool,
+    /// No penetration above the strict tolerance.
+    pub strict: bool,
+    /// The server's score at the configuration's container_phi.
+    pub score: Option<f64>,
+    pub container: Option<Container>,
+    pub reasons: Vec<String>,
+}
+
+/// Rounding margin by which the client's verdict is stricter than the server's. Both evaluate the
+/// same expressions in the same order, and IEEE additions, subtractions and products round alike
+/// everywhere (the centre differences of near pairs are even exact), so they can differ only
+/// through sin, cos, atan2 and hypot, which libraries may round differently in the last place.
+/// A separation is a sum of terms of size up to 2R (R the bounding radius); an angle error of a
+/// few units in the last place of |theta| moves a vertex by about R ulp(theta). A pair is accepted
+/// only when it clears -TOL by this much more.
+pub fn rounding_margin(n: u32, pieces: &[Pose]) -> f64 {
+    let mut turn = 0.0f64;
+    for p in pieces {
+        turn = turn.max(p.theta.abs());
+    }
+    32.0 * f64::EPSILON * (1.0 + 2.0 * bounding_radius(n)) * (4.0 + turn)
+}
+
+/// The same packing with every angle reduced to one symmetry period of its shape (theta modulo
+/// 2 pi / N, phi modulo 2 pi / M; disks and circles 0). A regular N-gon is invariant under a turn
+/// by 2 pi / N, so only rounding changes; small angles keep the rounding margin small.
+pub fn canonical(config: &Config) -> Config {
+    let reduce = |x: f64, period: f64| {
+        let t = x % period;
+        if t < 0.0 {
+            t + period
+        } else {
+            t
+        }
+    };
+    let mut out = config.clone();
+    for p in &mut out.pieces {
+        p.theta = if config.n == 0 { 0.0 } else { reduce(p.theta, 2.0 * std::f64::consts::PI / config.n as f64) };
+    }
+    out.phi = if config.m == 0 { 0.0 } else { reduce(config.phi, 2.0 * std::f64::consts::PI / config.m as f64) };
+    out
+}
+
+/// The server's rule as the client applies it to its own candidates: the parse checks, the piece
+/// count, no pair below -(TOL - margin) (stricter than the server), and the score at phi.
+pub fn server_check(config: &Config, p: usize) -> ServerCheck {
+    let mut reasons = parse_errors(config.n, config.m, p, &config.pieces, config.phi);
+    if config.pieces.len() != p {
+        reasons.push(format!("expected exactly {p} pieces, got {}", config.pieces.len()));
+    }
+    if !reasons.is_empty() {
+        return ServerCheck { valid: false, strict: false, score: None, container: None, reasons };
+    }
+    let margin = rounding_margin(config.n, &config.pieces);
+    let strict_tol = strict_tolerance(&config.pieces);
+    let reach = 2.0 * bounding_radius(config.n);
+    let mut grid = NeighborGrid::new();
+    grid.build(&config.pieces, reach);
+    let mut worst = f64::INFINITY;
+    grid.for_each_pair(&config.pieces, |i, j| {
+        let sep = pair_separation(config.n, &config.pieces[i], &config.pieces[j], 1.0);
+        if sep < worst {
+            worst = sep;
+        }
+        true
+    });
+    let valid = !(worst < -(TOL - margin));
+    let strict = !(worst < -strict_tol);
+    if !valid {
+        reasons.push(format!("deepest penetration {:.3e} is beyond the tolerance", -worst));
+    }
+    let container = enclose(config.n, &config.pieces, config.m, config.phi);
+    ServerCheck { valid, strict, score: Some(container.size), container: Some(container), reasons }
+}

@@ -1,0 +1,16 @@
+{"writtenBy":"Node 24.22.2 (V8 13.6.233.17-node.63) on linux/x64",
+"polytopes":[
+{"name":"tesseract","d":4,"vertices":16,"cells":8,"facets":48,"hinges":96,"edges":32,"ints":1000,"structure":3832843881,"doubles":1890,"bits":1957711702,"sum":554.3052837250043,"hingeAngle":4.71238898038469,"volume":8.000000000000005},
+{"name":"5cell","d":4,"vertices":5,"cells":5,"facets":20,"hinges":30,"edges":10,"ints":315,"structure":3772019072,"doubles":782,"bits":3095791688,"sum":134.09746759302024,"hingeAngle":3.692878252022323,"volume":0.5892556509887893},
+{"name":"16cell","d":4,"vertices":8,"cells":16,"facets":64,"hinges":96,"edges":24,"ints":992,"structure":4205073117,"doubles":2458,"bits":3112492036,"sum":557.5627805422895,"hingeAngle":4.923837669363098,"volume":1.885618083164129},
+{"name":"24cell","d":4,"vertices":24,"cells":24,"facets":192,"hinges":288,"edges":96,"ints":3720,"structure":10969281,"doubles":6770,"bits":3048236119,"sum":2031.0866654801102,"hingeAngle":5.731899708747055,"volume":11.313708498984738},
+{"name":"120cell","d":4,"vertices":600,"cells":120,"facets":1440,"hinges":3600,"edges":1200,"ints":43080,"structure":1765887513,"doubles":57122,"bits":416441843,"sum":24322.890328791826,"hingeAngle":6.103331807387107,"volume":919.574275274972},
+{"name":"600cell","d":4,"vertices":120,"cells":600,"facets":2400,"hinges":3600,"edges":720,"ints":36840,"structure":3835631585,"doubles":91202,"bits":2551259473,"sum":24211.33730664994,"hingeAngle":6.154797086703871,"volume":70.7106781186542}
+],
+"pieces":[
+{"name":"tetrahedron","vertices":4,"faces":4,"edges":6,"edgeDirs":6,"ints":28,"structure":2618920591,"doubles":55,"bits":719392225,"sum":0.04526041459947261,"inradius":0.20412414523193148,"circumradius":0.6123724356957945,"midradius":0.35355339059327373,"volume":0.11785113019775788},
+{"name":"cube","vertices":8,"faces":6,"edges":12,"edgeDirs":3,"ints":54,"structure":3496442437,"doubles":64,"bits":2956655154,"sum":3.0731321849709863,"inradius":0.5,"circumradius":0.8660254037844386,"midradius":0.7071067811865476,"volume":0.9999999999999999},
+{"name":"octahedron","vertices":6,"faces":8,"edges":12,"edgeDirs":6,"ints":56,"structure":83999181,"doubles":73,"bits":1647145233,"sum":-5.155881094677843,"inradius":0.408248290463863,"circumradius":0.7071067811865476,"midradius":0.5000000000000001,"volume":0.4714045207910318},
+{"name":"dodecahedron","vertices":20,"faces":12,"edges":30,"edgeDirs":15,"ints":132,"structure":3688355319,"doubles":154,"bits":47361210,"sum":3.01477490285568,"inradius":1.1135163644116068,"circumradius":1.4012585384440734,"midradius":1.3090169943749477,"volume":7.663118960624633},
+{"name":"icosahedron","vertices":12,"faces":20,"edges":30,"edgeDirs":15,"ints":140,"structure":3109115695,"doubles":154,"bits":1609196077,"sum":-9.010674117128183,"inradius":0.7557613140761708,"circumradius":0.9510565162951536,"midradius":0.8090169943749475,"volume":2.1816949906249135}
+]}

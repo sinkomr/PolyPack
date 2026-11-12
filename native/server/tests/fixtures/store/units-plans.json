@@ -1,0 +1,803 @@
+{
+ "plans": [
+  {
+   "space": "torus",
+   "id": "torus/sq/0/2",
+   "plan": {
+    "score": 0.5,
+    "label": "torus disks",
+    "probe": {
+     "s": 8,
+     "size": 8,
+     "rho": 8,
+     "lattice": {
+      "L": 4,
+      "b1": [
+       4,
+       4
+      ],
+      "b2": [
+       4,
+       4
+      ]
+     },
+     "poses": [
+      [
+       4,
+       4,
+       8
+      ]
+     ],
+     "pieces": [
+      {
+       "x": 8,
+       "y": 8,
+       "theta": 8,
+       "u": [
+        8,
+        8,
+        8
+       ]
+      }
+     ]
+    },
+    "probeList": {
+     "s": 8,
+     "pieces": [
+      [
+       8,
+       8,
+       8,
+       8
+      ]
+     ]
+    }
+   }
+  },
+  {
+   "space": "torus",
+   "id": "torus/free/0/2",
+   "plan": {
+    "score": 0.5,
+    "label": "torus disks",
+    "probe": {
+     "s": 8,
+     "size": 8,
+     "rho": 8,
+     "lattice": {
+      "L": 4,
+      "b1": [
+       4,
+       4
+      ],
+      "b2": [
+       4,
+       4
+      ]
+     },
+     "poses": [
+      [
+       4,
+       4,
+       8
+      ]
+     ],
+     "pieces": [
+      {
+       "x": 8,
+       "y": 8,
+       "theta": 8,
+       "u": [
+        8,
+        8,
+        8
+       ]
+      }
+     ]
+    },
+    "probeList": {
+     "s": 8,
+     "pieces": [
+      [
+       8,
+       8,
+       8,
+       8
+      ]
+     ]
+    }
+   }
+  },
+  {
+   "space": "torus",
+   "id": "torus/sq/4/2",
+   "plan": null
+  },
+  {
+   "space": "torus",
+   "id": "torus/sq/0/3",
+   "plan": {
+    "score": 0.5,
+    "label": "torus disks",
+    "probe": {
+     "s": 8,
+     "size": 8,
+     "rho": 8,
+     "lattice": {
+      "L": 4,
+      "b1": [
+       4,
+       4
+      ],
+      "b2": [
+       4,
+       4
+      ]
+     },
+     "poses": [
+      [
+       4,
+       4,
+       8
+      ]
+     ],
+     "pieces": [
+      {
+       "x": 8,
+       "y": 8,
+       "theta": 8,
+       "u": [
+        8,
+        8,
+        8
+       ]
+      }
+     ]
+    },
+    "probeList": {
+     "s": 8,
+     "pieces": [
+      [
+       8,
+       8,
+       8,
+       8
+      ]
+     ]
+    }
+   }
+  },
+  {
+   "space": "sphere",
+   "id": "sphere/0/3",
+   "plan": {
+    "score": 0.5,
+    "label": "sphere disks",
+    "probe": {
+     "s": 8,
+     "size": 8,
+     "rho": 4,
+     "lattice": {
+      "L": 8,
+      "b1": [
+       8,
+       8
+      ],
+      "b2": [
+       8,
+       8
+      ]
+     },
+     "poses": [
+      [
+       8,
+       8,
+       8
+      ]
+     ],
+     "pieces": [
+      {
+       "x": 8,
+       "y": 8,
+       "theta": 8,
+       "u": [
+        8,
+        8,
+        8
+       ]
+      }
+     ]
+    },
+    "probeList": {
+     "s": 8,
+     "pieces": [
+      [
+       8,
+       8,
+       8,
+       8
+      ]
+     ]
+    }
+   }
+  },
+  {
+   "space": "sphere",
+   "id": "sphere/4/3",
+   "plan": null
+  },
+  {
+   "space": "surface",
+   "id": "surface/cube/fold/0/3",
+   "plan": {
+    "score": 0.5,
+    "label": "surface disks",
+    "probe": {
+     "s": 4,
+     "size": 8,
+     "rho": 8,
+     "lattice": {
+      "L": 8,
+      "b1": [
+       8,
+       8
+      ],
+      "b2": [
+       8,
+       8
+      ]
+     },
+     "poses": [
+      [
+       8,
+       8,
+       8
+      ]
+     ],
+     "pieces": [
+      {
+       "x": 4,
+       "y": 4,
+       "theta": 8,
+       "u": [
+        8,
+        8,
+        8
+       ]
+      }
+     ]
+    },
+    "probeList": {
+     "s": 4,
+     "pieces": [
+      [
+       8,
+       8,
+       8,
+       8
+      ]
+     ]
+    }
+   }
+  },
+  {
+   "space": "boundary",
+   "id": "boundary/tesseract/ball/3",
+   "plan": {
+    "score": 0.5,
+    "label": "boundary balls",
+    "probe": {
+     "s": 4,
+     "size": 8,
+     "rho": 8,
+     "lattice": {
+      "L": 8,
+      "b1": [
+       8,
+       8
+      ],
+      "b2": [
+       8,
+       8
+      ]
+     },
+     "poses": [
+      [
+       8,
+       8,
+       8
+      ]
+     ],
+     "pieces": [
+      {
+       "x": 8,
+       "y": 8,
+       "theta": 8,
+       "u": [
+        4,
+        4,
+        4
+       ]
+      }
+     ]
+    },
+    "probeList": {
+     "s": 4,
+     "pieces": [
+      [
+       8,
+       8,
+       8,
+       8
+      ]
+     ]
+    }
+   }
+  },
+  {
+   "space": "boundary",
+   "id": "boundary/tesseract/cube/3",
+   "plan": null
+  },
+  {
+   "space": "balls",
+   "id": "balls/ballinball/3",
+   "plan": {
+    "score": 1,
+    "label": "balls in a ball",
+    "probe": {
+     "s": 8,
+     "size": 8,
+     "rho": 8,
+     "lattice": {
+      "L": 8,
+      "b1": [
+       8,
+       8
+      ],
+      "b2": [
+       8,
+       8
+      ]
+     },
+     "poses": [
+      [
+       8,
+       8,
+       8
+      ]
+     ],
+     "pieces": [
+      {
+       "x": 8,
+       "y": 8,
+       "theta": 8,
+       "u": [
+        8,
+        8,
+        8
+       ]
+      }
+     ]
+    },
+    "probeList": {
+     "s": 8,
+     "pieces": [
+      [
+       4,
+       4,
+       4,
+       8
+      ]
+     ]
+    }
+   }
+  },
+  {
+   "space": "balls",
+   "id": "balls/ballincub/3",
+   "plan": {
+    "score": 0.5,
+    "label": "balls in a solid",
+    "probe": {
+     "s": 4,
+     "size": 8,
+     "rho": 8,
+     "lattice": {
+      "L": 8,
+      "b1": [
+       8,
+       8
+      ],
+      "b2": [
+       8,
+       8
+      ]
+     },
+     "poses": [
+      [
+       8,
+       8,
+       8
+      ]
+     ],
+     "pieces": [
+      {
+       "x": 8,
+       "y": 8,
+       "theta": 8,
+       "u": [
+        8,
+        8,
+        8
+       ]
+      }
+     ]
+    },
+    "probeList": {
+     "s": 4,
+     "pieces": [
+      [
+       4,
+       4,
+       4,
+       8
+      ]
+     ]
+    }
+   }
+  },
+  {
+   "space": "balls",
+   "id": "balls/cubinball/2",
+   "plan": {
+    "score": 2,
+    "label": "solids in a ball",
+    "probe": {
+     "s": 16,
+     "size": 8,
+     "rho": 8,
+     "lattice": {
+      "L": 8,
+      "b1": [
+       8,
+       8
+      ],
+      "b2": [
+       8,
+       8
+      ]
+     },
+     "poses": [
+      [
+       8,
+       8,
+       8
+      ]
+     ],
+     "pieces": [
+      {
+       "x": 8,
+       "y": 8,
+       "theta": 8,
+       "u": [
+        8,
+        8,
+        8
+       ]
+      }
+     ]
+    },
+    "probeList": {
+     "s": 16,
+     "pieces": [
+      [
+       8,
+       8,
+       8,
+       8
+      ]
+     ]
+    }
+   }
+  },
+  {
+   "space": "balls",
+   "id": "balls/cubinball/3",
+   "plan": {
+    "score": 2,
+    "label": "solids in a ball",
+    "probe": {
+     "s": 16,
+     "size": 8,
+     "rho": 8,
+     "lattice": {
+      "L": 8,
+      "b1": [
+       8,
+       8
+      ],
+      "b2": [
+       8,
+       8
+      ]
+     },
+     "poses": [
+      [
+       8,
+       8,
+       8
+      ]
+     ],
+     "pieces": [
+      {
+       "x": 8,
+       "y": 8,
+       "theta": 8,
+       "u": [
+        8,
+        8,
+        8
+       ]
+      }
+     ]
+    },
+    "probeList": {
+     "s": 16,
+     "pieces": [
+      [
+       8,
+       8,
+       8,
+       8
+      ]
+     ]
+    }
+   }
+  },
+  {
+   "space": "curved",
+   "id": "curved/0/0/4/2",
+   "plan": {
+    "score": 0.5,
+    "label": "flat disks",
+    "probe": {
+     "s": 8,
+     "size": 4,
+     "rho": 8,
+     "lattice": {
+      "L": 8,
+      "b1": [
+       8,
+       8
+      ],
+      "b2": [
+       8,
+       8
+      ]
+     },
+     "poses": [
+      [
+       8,
+       8,
+       8
+      ]
+     ],
+     "pieces": [
+      {
+       "x": 4,
+       "y": 4,
+       "theta": 8,
+       "u": [
+        8,
+        8,
+        8
+       ]
+      }
+     ]
+    },
+    "probeList": {
+     "s": 8,
+     "pieces": [
+      [
+       8,
+       8,
+       8,
+       8
+      ]
+     ]
+    }
+   }
+  },
+  {
+   "space": "curved",
+   "id": "curved/0/0/0/2",
+   "plan": {
+    "score": 1,
+    "label": "flat disks",
+    "probe": {
+     "s": 8,
+     "size": 8,
+     "rho": 8,
+     "lattice": {
+      "L": 8,
+      "b1": [
+       8,
+       8
+      ],
+      "b2": [
+       8,
+       8
+      ]
+     },
+     "poses": [
+      [
+       8,
+       8,
+       8
+      ]
+     ],
+     "pieces": [
+      {
+       "x": 4,
+       "y": 4,
+       "theta": 8,
+       "u": [
+        8,
+        8,
+        8
+       ]
+      }
+     ]
+    },
+    "probeList": {
+     "s": 8,
+     "pieces": [
+      [
+       8,
+       8,
+       8,
+       8
+      ]
+     ]
+    }
+   }
+  },
+  {
+   "space": "curved",
+   "id": "curved/-1/3/0/2",
+   "plan": {
+    "score": 2,
+    "label": "curved polygons in a disk",
+    "probe": {
+     "s": 8,
+     "size": 16,
+     "rho": 8,
+     "lattice": {
+      "L": 8,
+      "b1": [
+       8,
+       8
+      ],
+      "b2": [
+       8,
+       8
+      ]
+     },
+     "poses": [
+      [
+       8,
+       8,
+       8
+      ]
+     ],
+     "pieces": [
+      {
+       "x": 8,
+       "y": 8,
+       "theta": 8,
+       "u": [
+        8,
+        8,
+        8
+       ]
+      }
+     ]
+    },
+    "probeList": {
+     "s": 8,
+     "pieces": [
+      [
+       8,
+       8,
+       8,
+       8
+      ]
+     ]
+    }
+   }
+  },
+  {
+   "space": "curved",
+   "id": "curved/1/0/0/2",
+   "plan": "archive"
+  },
+  {
+   "space": "curved",
+   "id": "curved/-1/0/4/2",
+   "plan": "archive"
+  },
+  {
+   "space": "curved",
+   "id": "curved/1/3/4/2",
+   "plan": null
+  },
+  {
+   "space": "polyhedra",
+   "id": "polyhedra/cubincub/8",
+   "plan": null
+  },
+  {
+   "space": "ndim",
+   "id": "ndim/4/ball/ball/2",
+   "plan": null
+  },
+  {
+   "space": "surface",
+   "id": "surface/nosuch/fold/0/3",
+   "plan": null
+  },
+  {
+   "space": "sphere",
+   "id": "x",
+   "plan": null
+  }
+ ],
+ "planar": [
+  {
+   "N": 0,
+   "M": 0,
+   "factors": {
+    "len": 0.5,
+    "score": 1
+   }
+  },
+  {
+   "N": 0,
+   "M": 7,
+   "factors": {
+    "len": 0.5,
+    "score": 0.5
+   }
+  },
+  {
+   "N": 9,
+   "M": 0,
+   "factors": {
+    "len": 1,
+    "score": 2
+   }
+  },
+  {
+   "N": 4,
+   "M": 4,
+   "factors": null
+  },
+  {
+   "N": 0,
+   "M": 3,
+   "factors": {
+    "len": 0.5,
+    "score": 0.5
+   }
+  },
+  {
+   "N": 3,
+   "M": 0,
+   "factors": {
+    "len": 1,
+    "score": 2
+   }
+  }
+ ]
+}
