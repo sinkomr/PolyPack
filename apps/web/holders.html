@@ -28,22 +28,57 @@
       <p class="note">
         Who leads the problems on this site, counted by the exact name submitted with each entry: names that differ in
         any character, capitals included, are counted separately. Problems with a proven optimum take no entries and are
-        left out.
+        left out. Select the heading of a column to sort the table by it, and again to turn the order round.
       </p>
       <p id="note" class="note" role="status" aria-live="polite"></p>
       <div class="table-wrap">
         <table class="holders">
           <thead>
             <tr>
-              <th scope="col" class="num">#</th>
-              <th scope="col">Name</th>
-              <th scope="col" class="num">Records</th>
-              <th scope="col" class="num" title="the most records the name has held at once, counted since 2026-11-05 and taken from lists saved since 2026-11-02 before that">
-                Most held
+              <th
+                scope="col"
+                class="num"
+                aria-sort="ascending"
+                title="the place by records, then by site bests; it stays with the name however the table is sorted"
+              >
+                <button type="button" class="sort" data-sort="place">
+                  #<span class="sort-mark" aria-hidden="true"></span>
+                </button>
               </th>
-              <th scope="col" class="num">Beat published</th>
-              <th scope="col" class="num">Site bests</th>
-              <th scope="col" class="num">Awaiting review</th>
+              <th scope="col">
+                <button type="button" class="sort" data-sort="name">
+                  Name<span class="sort-mark" aria-hidden="true"></span>
+                </button>
+              </th>
+              <th scope="col" class="num">
+                <button type="button" class="sort" data-sort="records">
+                  Records<span class="sort-mark" aria-hidden="true"></span>
+                </button>
+              </th>
+              <th
+                scope="col"
+                class="num"
+                title="the most records the name has held at once, counted since 2026-11-05 and taken from lists saved since 2026-11-02 before that"
+              >
+                <button type="button" class="sort" data-sort="peak">
+                  Most held<span class="sort-mark" aria-hidden="true"></span>
+                </button>
+              </th>
+              <th scope="col" class="num">
+                <button type="button" class="sort" data-sort="beat_published">
+                  Beat published<span class="sort-mark" aria-hidden="true"></span>
+                </button>
+              </th>
+              <th scope="col" class="num">
+                <button type="button" class="sort" data-sort="site_bests">
+                  Site bests<span class="sort-mark" aria-hidden="true"></span>
+                </button>
+              </th>
+              <th scope="col" class="num">
+                <button type="button" class="sort" data-sort="pending">
+                  Awaiting review<span class="sort-mark" aria-hidden="true"></span>
+                </button>
+              </th>
             </tr>
           </thead>
           <tbody id="rows"></tbody>

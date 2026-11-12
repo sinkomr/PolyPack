@@ -537,6 +537,45 @@ body.scroll {
 .holders .num {
   text-align: right;
 }
+/* the heading of a column sorts the table by it: it reads as a heading, with a mark for the order beside it */
+.holders th .sort {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  background: none;
+  border: 0;
+  border-radius: 4px;
+  padding: 0;
+  min-height: 24px;
+}
+.holders th .sort:hover {
+  text-decoration: underline;
+}
+/* a column of numbers has its mark on the left, so the heading ends where its numbers end */
+.holders th.num .sort {
+  flex-direction: row-reverse;
+}
+/* the mark has one width whatever it shows, so a sort moves no column */
+.sort-mark {
+  flex: none;
+  width: 1em;
+  text-align: center;
+  font-size: 0.75em;
+  color: var(--muted);
+}
+/* U+FE0E asks for the plain arrow where a phone would draw a picture */
+.sort-mark::after {
+  content: "\2195\FE0E";
+}
+th[aria-sort] .sort-mark {
+  color: inherit;
+}
+th[aria-sort="ascending"] .sort-mark::after {
+  content: "\25B2";
+}
+th[aria-sort="descending"] .sort-mark::after {
+  content: "\25BC";
+}
 /* on a phone the table scrolls sideways rather than break a name over several lines */
 .holders .name {
   min-width: 10em;
