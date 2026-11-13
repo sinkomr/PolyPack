@@ -44,6 +44,48 @@ fn blob_from_json_as_the_typescript() {
     }
 }
 
+fn unhex(text: &str) -> Vec<u8> {
+    (0..text.len()).step_by(2).map(|i| u8::from_str_radix(&text[i..i + 2], 16).expect("hex")).collect()
+}
+
+/// packPieces of triples of several kinds (nothing, a few scattered pieces, lattices, mixtures, and
+/// the padded form) gives the bytes the TypeScript stores, and unpackPieces reads or refuses hand-made
+/// values as it does, with its message.
+#[test]
+fn packs_and_unpacks_pieces_as_the_typescript() {
+    let f = fixture(include_str!(concat!(env!("CARGO_MANIFEST_DIR"), "/tests/fixtures/store/pieces-packed.json")));
+    let (mut packed, mut kept, mut padded) = (0, 0, 0);
+    for c in f["packed"].as_array().unwrap() {
+        let triples = unhex(c["triples"].as_str().unwrap());
+        let stored = pack_pieces(triples.clone()).unwrap();
+        assert_eq!(hex(&stored), c["stored"].as_str().unwrap(), "{} bytes of triples", triples.len());
+        assert_eq!(unpack_pieces(&stored).unwrap().as_ref(), &triples[..]);
+        assert_eq!(decode_pieces(&stored).unwrap(), decode_pieces(&triples).unwrap());
+        match (stored.len() % PIECE_BYTES == 0, stored.first()) {
+            (true, _) => kept += 1,
+            (false, Some(2)) => padded += 1,
+            (false, _) => packed += 1,
+        }
+    }
+    assert!(packed >= 7 && kept >= 4 && padded >= 6, "{packed} packed, {kept} kept as triples, {padded} padded");
+    let (mut read, mut refused) = (0, 0);
+    for c in f["unpacked"].as_array().unwrap() {
+        let value = unhex(c["value"].as_str().unwrap());
+        match (unpack_pieces(&value), c["triples"].as_str(), c["error"].as_str()) {
+            (Ok(triples), Some(want), None) => {
+                assert_eq!(hex(&triples), want);
+                read += 1;
+            }
+            (Err(e), None, Some(want)) => {
+                assert_eq!(format!("{}: {}", e.name(), e.message()), want);
+                refused += 1;
+            }
+            (got, _, want) => panic!("{} bytes: {:?}, the TypeScript gives {want:?}", value.len(), got.map(|t| t.len())),
+        }
+    }
+    assert!(read >= 3 && refused >= 14, "{read} read, {refused} refused");
+}
+
 #[test]
 fn encodes_awkward_doubles_to_the_same_bytes() {
     let f = fixture(include_str!(concat!(env!("CARGO_MANIFEST_DIR"), "/tests/fixtures/store/pieces-awkward.json")));

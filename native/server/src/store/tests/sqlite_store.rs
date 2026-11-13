@@ -461,6 +461,100 @@ fn keeps_the_leader_alone_and_the_best_reviewed_entry_behind_a_pending_one_until
 }
 
 #[test]
+fn packs_the_triples_and_the_json_text_of_a_database_of_october_2026_and_leaves_what_packing_does_not_shorten() {
+    // rows of a lattice with one angle pack well; a few scattered pieces do not
+    let lattice = |p: usize, k: f64| -> Vec<Pose> {
+        (0..p).map(|i| Pose { x: (i % 9) as f64 * (1.0 + k * 1e-9), y: (i / 9) as f64 / 3.0, theta: 0.0 }).collect()
+    };
+    let held: Vec<Option<Vec<Pose>>> = vec![
+        Some(lattice(60, 1.0)),
+        Some(poses(2, 2.0)),
+        Some(lattice(200, 3.0)),
+        Some(lattice(45, 4.0)),
+        None, // row 5: text that is no list of poses
+        Some(poses(3, 6.0)),
+        Some(lattice(500, 7.0)),
+    ];
+    let dir = TempDir::new("packs");
+    let rows: Vec<OldRow> = held
+        .iter()
+        .enumerate()
+        .map(|(i, pieces)| {
+            let text = pieces.as_ref().map(|p| poses_json(p)).unwrap_or_else(|| r#"[{"x":1,"y":2}]"#.to_string());
+            row(4.0, 4.0, 101.0 + i as f64, 9.0, "none", text)
+        })
+        .collect();
+    let path = old_database(&dir, &rows);
+    // as the server of October 2026 left it: triples (rows 4 and 5 still text), its own migration marked complete
+    {
+        let old = Connection::open(&path).unwrap();
+        for id in [1usize, 2, 3, 6, 7] {
+            old.execute(
+                "UPDATE submissions SET pieces = ? WHERE id = ?",
+                rusqlite::params![encode_pieces(held[id - 1].as_ref().unwrap()), id as i64],
+            )
+            .unwrap();
+        }
+        old.execute_batch(
+            "CREATE TABLE meta (key TEXT PRIMARY KEY, value INTEGER NOT NULL);
+      INSERT INTO meta VALUES ('pieces_cursor', 7), ('pieces_migrated', 1)",
+        )
+        .unwrap();
+    }
+    // the length of each row's BLOB, or -1 for text
+    let lengths = || -> Vec<i64> {
+        let db = Connection::open_with_flags(&path, rusqlite::OpenFlags::SQLITE_OPEN_READ_ONLY).unwrap();
+        let mut st = db.prepare("SELECT typeof(pieces), length(pieces) FROM submissions ORDER BY id").unwrap();
+        let rows = st
+            .query_map([], |r| Ok(if r.get::<_, String>(0)? == "blob" { r.get::<_, i64>(1)? } else { -1 }))
+            .unwrap()
+            .collect::<rusqlite::Result<Vec<_>>>()
+            .unwrap();
+        rows
+    };
+    assert_eq!(lengths(), vec![1440, 48, 4800, -1, -1, 72, 12000]);
+
+    let store = open(&path);
+    assert!(!store.pieces_migrated().unwrap());
+    let first = store.migrate_pieces(3.0).unwrap();
+    assert_eq!(
+        (first.done, first.cursor, first.rows, first.converted, first.deleted, first.unreadable),
+        (false, 3.0, 3.0, 2.0, 0.0, 0.0)
+    );
+    assert_eq!(first.bytes_before, 1440.0 + 4800.0);
+    let second = store.migrate_pieces(10.0).unwrap();
+    assert_eq!(
+        (second.done, second.cursor, second.rows, second.converted, second.deleted, second.unreadable),
+        (false, 7.0, 4.0, 2.0, 0.0, 1.0)
+    );
+    let third = store.migrate_pieces(10.0).unwrap();
+    assert!(third.done && third.rows == 0.0);
+    assert!(store.pieces_migrated().unwrap());
+
+    let after = lengths();
+    // packed: shorter, and never a multiple of 24
+    for id in [1usize, 3, 4, 7] {
+        let triples = held[id - 1].as_ref().unwrap().len() as i64 * 24;
+        assert!(after[id - 1] > 0 && after[id - 1] * 2 < triples, "row {id}: {} of {triples}", after[id - 1]);
+        assert_ne!(after[id - 1] % 24, 0, "row {id}");
+    }
+    assert_eq!(first.bytes_after, (after[0] + after[2]) as f64);
+    // left as they were: triples no shorter packed, and text that is no list of poses
+    assert_eq!((after[1], after[4], after[5]), (48, -1, 72));
+    for (i, pieces) in held.iter().enumerate() {
+        if let Some(pieces) = pieces {
+            assert!(same_bits(pieces, &stored_poses(&store.get(i as f64 + 1.0).unwrap().unwrap())), "row {}", i + 1);
+        }
+    }
+    // the keys of the first migration are as they were, and a second pass finds nothing to do
+    assert_eq!(read(&path, "SELECT value FROM meta WHERE key = 'pieces_cursor'"), 7);
+    assert_eq!(cursor_of(&path), 7);
+    drop(store);
+    assert!(open(&path).pieces_migrated().unwrap());
+    assert_eq!(lengths(), after);
+}
+
+#[test]
 fn marks_a_new_database_as_migrated_since_it_never_held_json_text() {
     assert!(open(":memory:").pieces_migrated().unwrap());
     let dir = TempDir::new("new");

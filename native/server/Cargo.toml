@@ -39,6 +39,10 @@ http-body-util = "0.1"
 futures-util = { version = "0.3", default-features = false, features = ["std"] }
 # gzip and deflate (hono/compress, the snapshot's files): zlib itself, as Node has it
 flate2 = { version = "1", default-features = false, features = ["zlib"] }
+# The packed form of stored pieces (store/pieces.rs): zstd itself, the library Node's zlib module
+# has, so that both servers write the same bytes. Keep it at the zstd release of the Node that CI
+# compares with (process.versions.zstd); the store comparison fails when they part.
+zstd = { version = "0.13", default-features = false }
 # String.prototype.normalize("NFC") of names and notes
 unicode-normalization = "0.1"
 # Map and Set in insertion order

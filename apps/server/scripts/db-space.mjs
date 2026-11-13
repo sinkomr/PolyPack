@@ -42,8 +42,9 @@ function report(db) {
     disk_free_mb: mb(disk.bavail * disk.bsize),
     rows: one("SELECT COUNT(*) FROM submissions"),
     migration: {
-      done: meta("pieces_migrated") === 1,
-      cursor: meta("pieces_cursor"),
+      // the migration to packed pieces (the keys without "packed" are those of its first version)
+      done: meta("pieces_packed") === 1,
+      cursor: meta("pieces_packed_cursor"),
       last_id: one("SELECT MAX(id) FROM submissions"),
     },
   };

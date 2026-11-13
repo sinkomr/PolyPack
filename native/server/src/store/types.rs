@@ -328,7 +328,8 @@ pub struct MigrationStep {
     /// Id of the last row handled so far.
     pub cursor: f64,
     pub rows: f64,
-    /// Rows whose JSON text became a BLOB.
+    /// Rows whose pieces, JSON text or triples, were rewritten in the packed form (or, from JSON
+    /// text, as triples).
     pub converted: f64,
     /// Rows deleted because their problem no longer keeps them (see KEEP_PER_PROBLEM), rejected rows
     /// included. Rows of the same problem beyond this step count here too.

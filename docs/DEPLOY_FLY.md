@@ -137,6 +137,8 @@ Since 2026-10-18 the server keeps the database small in two ways:
 - **Only the leader of each problem is kept.** Every other entry is deleted as soon as it is overtaken, row and name included. The one exception is a leader that awaits review: the best entry that is not pending is kept behind it, so that rejecting the claim gives the problem its previous record back. A rejected or removed entry is deleted.
 - **Pieces are stored as binary.** Each piece takes 24 bytes (three 8-byte numbers) instead of about 74 bytes of JSON text, and comes back exactly as it was sent.
 
+Since 2026-11-14 the binary pieces are also compressed, without loss; see [Packed pieces](#packed-pieces-2026-11-14) below.
+
 ### The migration of existing rows
 
 Rows written before this version are converted in the background by the server itself, so nothing needs to be run by hand. Every second the server takes the next 100 rows by id. It deletes the rows their problem no longer keeps, converts the pieces of the rest, and records how far it got. It does this in one short transaction, and the requests in between are served as usual. After a restart or a deployment it carries on where it stopped. The log shows one line when it starts, one a minute while it runs, and one when it is complete:
@@ -180,6 +182,39 @@ fly ssh console -C "node --no-warnings /app/apps/server/scripts/db-space.mjs --v
 ```
 
 It refuses to start before the migration is complete, or with less free disk than about twice the pages in use (a temporary copy next to the database, and the write-ahead log). While it runs, the site keeps answering, but submissions fail with HTTP 500 (the database is busy). `scripts/batch-search.ts` tries a failed submission again for about two minutes, and running the same command again sends what is still missing. Run it at a quiet time, and not while a backup runs. On the synthetic copy it took a fraction of a second; on the live volume it will take longer, by an amount not yet measured. Its output gives the figures before and after. Take a new backup afterwards.
+
+## Packed pieces (2026-11-14)
+
+The pieces of an entry are stored compressed ("packed") when that is shorter: the x, y and angle values are grouped (every x, then every y, then every angle) and compressed with zstd at level 3. Every number comes back bit for bit, and nothing that reads the site changes: the API, the live updates and the snapshot are made from the unpacked numbers. `apps/server/src/pieces.ts` describes the stored form; both servers write the same bytes.
+
+**What it saves** [CALC]. On a copy of the live database of 2026-11-08 (1,807,576 entries), converted by the Rust server on a Mac:
+
+| | before | after |
+|---|---|---|
+| pieces | 6,733 MB | 3,777 MB (56.1%) |
+| entries packed | | 1,221,935; the other 585,641 (mostly under 100 pieces, 8% of the bytes) are no shorter packed and stay as they were |
+| free for reuse in the 9,133 MB file | 0 | 2,022 MB |
+
+The conversion took 171.5 s of work, and afterwards every entry held the same numbers as before, read back by the TypeScript. How well an entry packs depends on its numbers: lattice-like arrangements pack to about 27%, arrangements with no repeated value to about 75%. The file does not shrink by itself; SQLite reuses the freed pages for new entries, so the file stops growing until they are used up (see [Checking and reclaiming the space](#checking-and-reclaiming-the-space)).
+
+**The migration.** New entries are packed as they arrive. Existing ones are converted by the same background migration as in 2026-10 (see [The migration of existing rows](#the-migration-of-existing-rows)): 100 rows a second by default, in short transactions, resumed after a restart, with `[pieces]` lines in the log and the same two settings, `PIECES_MIGRATION_BATCH` and `PIECES_MIGRATION_PAUSE_MS`. Its progress is kept under new names (`pieces_packed_cursor` and `pieces_packed` in the `meta` table), so it starts from the first row on the first start of this version. At the default pace 3 million rows take about 9 hours [CALC]. `db-space.mjs` reports how far it is.
+
+**Deploying it.** Take a backup first (`./deploy/fly/backup-to-mac.sh`). To watch new entries being packed for a while before the old ones are converted, deploy with the migration switched off and switch it on later:
+
+```sh
+fly secrets set PIECES_MIGRATION_BATCH=0
+fly secrets unset PIECES_MIGRATION_BATCH
+```
+
+**Going back.** A server from before this version answers 500 for every packed entry, so the entries must be unpacked before or right after such a server is deployed again. `pieces-unpack.mjs` does that; without `--write` it only counts:
+
+```sh
+fly ssh console -C "node --no-warnings /app/apps/server/scripts/pieces-unpack.mjs --write"
+```
+
+It needs the room that packing saved, so check `disk_free_mb` of `db-space.mjs` first. Run it only while the older server is the one deployed, since the current server would pack the entries again.
+
+**Damage.** A packed value carries the length and the CRC-32 of the numbers it holds. One that is cut short or changed on disk is refused (the routes that read the entry answer 500) instead of being read as other pieces.
 
 ## The Rust server
 
