@@ -1,9 +1,10 @@
 #!/bin/zsh
 # Copies the live PolyPack database from Fly.io to this Mac, compressed, keeping the newest few.
-# backup-dump.cjs runs on the server and streams one consistent snapshot of the database (a single
-# read transaction, while the server goes on writing) straight over `fly ssh`, so nothing is
-# written to the server's disk and no free space is needed there. backup-rebuild.mjs turns the
-# stream back into a database here, which is checked before it is kept.
+# backup-dump.cjs runs on the server and streams the database straight over `fly ssh`, the entries
+# a chunk of rows per read while the server goes on writing, so nothing is written to the server's
+# disk and no read lasts long enough to let the write-ahead log grow there. backup-rebuild.mjs
+# turns the stream back into a database here, as it was when the dump ended, which is checked
+# before it is kept.
 #   backup-to-mac.sh            take a backup now
 #   backup-to-mac.sh install    run it every Sunday at 04:00 (launchd; a missed run happens on wake)
 #   backup-to-mac.sh uninstall  stop the schedule
@@ -59,9 +60,10 @@ work=$(mktemp -d "${TMPDIR:-/tmp}/polypack-backup.XXXXXX")
 trap 'rm -rf "$work"' EXIT
 
 # On the server, at low CPU priority: the dump script arrives base64-encoded on the command line
-# (so that no quoting survives the trip) and its gzipped stream comes back on stdout.
+# (so that no quoting survives the trip, and without its comment lines, to keep the command short)
+# and its gzipped stream comes back on stdout.
 started=$SECONDS
-script=$(base64 < "$HERE/backup-dump.cjs" | tr -d '\n')
+script=$(grep -v '^[[:space:]]*//' "$HERE/backup-dump.cjs" | base64 | tr -d '\n')
 fly ssh console -q -a "$APP" -C "sh -c 'echo $script | base64 -d | nice -n 10 node --no-warnings -'" \
   > "$work/dump.ndjson.gz" 2> "$work/dump.err" ||
   { print -u2 "The dump failed: $(tail -3 "$work/dump.err")"; exit 1; }
