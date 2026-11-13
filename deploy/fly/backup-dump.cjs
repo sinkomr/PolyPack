@@ -62,8 +62,17 @@ async function dump({ path, out, level = 1, chunk = 1000, between = () => {} }) 
   db.exec("PRAGMA busy_timeout = 30000");
   const gz = zlib.createGzip({ level });
   gz.pipe(out);
+  // Lines go to the compressor 64 KiB at a time: a write per line costs a round trip to its thread,
+  // which for the millions of short lines of the last read was most of the time that read was open.
+  let lines = "";
+  const flush = async () => {
+    const text = lines;
+    lines = "";
+    if (text && !gz.write(text)) await once(gz, "drain");
+  };
   const put = async (obj) => {
-    if (!gz.write(JSON.stringify(obj) + "\n")) await once(gz, "drain");
+    lines += JSON.stringify(obj) + "\n";
+    if (lines.length >= 65536) await flush();
   };
   const bigints = (statement) => (statement.setReadBigInts(true), statement);
   const readSchema = () =>
@@ -145,6 +154,7 @@ async function dump({ path, out, level = 1, chunk = 1000, between = () => {} }) 
   const last_read_s = Number(process.hrtime.bigint() - began) / 1e9;
   db.close();
   await put({ end: true, as_of: new Date().toISOString(), rows: counts });
+  await flush();
   // pipe() never ends process.stdout; the pending writes keep the process alive until flushed
   const flushed = once(gz, "end");
   gz.end();
