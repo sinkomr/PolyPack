@@ -96,14 +96,14 @@ Each address may cause 2 s of verification a minute (`VERIFY_MS_PER_MINUTE` in `
 
 Fly takes a daily snapshot of the volume and keeps it for a few days; see <https://fly.io/docs/volumes/snapshots/>. The volume lives on one server, so the snapshots are the only copy on Fly.
 
-For a copy of your own on a Mac, `deploy/fly/backup-to-mac.sh` streams the database to the Mac and keeps it gzip-compressed, the newest four by default. On the server, `backup-dump.cjs` reads one consistent snapshot (a single read transaction, while the server goes on writing) and sends it gzipped over `fly ssh`; nothing is written to the server's disk. On the Mac, `backup-rebuild.mjs` rebuilds the database from the stream, refuses a stream that was cut short or whose row counts differ from the dump's own, and checks the result before it is kept:
+For a copy of your own on a Mac, `deploy/fly/backup-to-mac.sh` streams the database to the Mac and keeps it gzip-compressed, the newest four by default. On the server, `backup-dump.cjs` reads the database and sends it gzipped over `fly ssh`; nothing is written to the server's disk. It reads the entries a thousand rows at a time while the server goes on writing, then in one short read the rows added meanwhile, the list of rows that still exist and the small tables. No read lasts long, so the write-ahead log is emptied as usual during the backup (one read of the whole database took hours and let the log grow by everything written meanwhile). The copy is the database as it was when the dump ended, except that an entry changed in place during the dump (a moderator's edit or a verification decision, not a new leader) may be as it was before the change. On the Mac, `backup-rebuild.mjs` rebuilds the database from the stream, refuses a stream that was cut short or whose row counts differ from the dump's own, and checks the result before it is kept:
 
 ```sh
 ./deploy/fly/backup-to-mac.sh
 ./deploy/fly/backup-to-mac.sh install
 ```
 
-The first takes a backup now; the second runs it every Sunday at 04:00 through launchd (a run missed while the Mac sleeps happens on wake). Backups go to `~/GitHub/PolyPack-backups/database` unless `POLYPACK_BACKUP_DIR` says otherwise, and the log to `~/Library/Logs/polypack-backup.log`. Reading the whole database, at low CPU priority, slows the site for a few minutes. Copying the file directly (`fly ssh sftp get /data/polypack.sqlite`) while the server writes can give an inconsistent file.
+The first takes a backup now; the second runs it every Sunday at 04:00 through launchd (a run missed while the Mac sleeps happens on wake). The schedule runs a copy of the three backup scripts, which `install` puts in `~/Library/Application Support/PolyPack/backup`, so it does not depend on the branch the checkout is on; run `install` again after the scripts change. Backups go to `~/GitHub/PolyPack-backups/database` unless `POLYPACK_BACKUP_DIR` says otherwise, and the log to `~/Library/Logs/polypack-backup.log`. Reading the whole database, at low CPU priority, took 3.6 hours for 1.8 million entries on 2026-11-08 and draws on the machine's CPU allowance for that long; the last line of the log says how many chunks were read and how long the last read was open. Copying the file directly (`fly ssh sftp get /data/polypack.sqlite`) while the server writes can give an inconsistent file.
 
 To restore from such a backup: `gunzip` it, upload it with `fly ssh sftp shell` (`put polypack-….sqlite /data/restore.sqlite`), then in `fly ssh console` replace the database and its journal, and restart. Entries submitted between the replacement and the restart are lost. The upload needs free space on the volume as large as the backup; if the volume is too full, move the broken database off it first.
 
@@ -173,7 +173,7 @@ fly ssh console -C "node --no-warnings /app/apps/server/scripts/db-space.mjs"
 
 It prints JSON and changes nothing. `page_count × page_size` is the file, `freelist_count × page_size` the free part (`free_in_file_mb`), `in_use_mb` the rest, `disk_free_mb` the room left on the volume, and `migration` how far the migration is (`done`, and `cursor` against `last_id`).
 
-The weekly backup streams the database and needs no room on the volume, but its single read transaction keeps the write-ahead log from being emptied while it runs. During the migration the log grows by about 0.7 MB a step (about 40 MB a minute) [CALC], so let a backup and the migration overlap only when the volume has room for that.
+The weekly backup streams the database and needs no room on the volume, and it reads in chunks, so the write-ahead log is emptied while it runs. The migration changes entries in place, which a backup taken meanwhile may miss (see the backup above), so take the backup before or after the migration, not during it.
 
 To give the free pages back to the volume, optionally and once the migration is complete:
 

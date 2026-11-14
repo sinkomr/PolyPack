@@ -1,13 +1,17 @@
 #!/bin/zsh
 # Copies the live PolyPack database from Fly.io to this Mac, compressed, keeping the newest few.
-# backup-dump.cjs runs on the server and streams one consistent snapshot of the database (a single
-# read transaction, while the server goes on writing) straight over `fly ssh`, so nothing is
-# written to the server's disk and no free space is needed there. backup-rebuild.mjs turns the
-# stream back into a database here, which is checked before it is kept.
+# backup-dump.cjs runs on the server and streams the database straight over `fly ssh`, the entries
+# a chunk of rows per read while the server goes on writing, so nothing is written to the server's
+# disk and no read lasts long enough to let the write-ahead log grow there. backup-rebuild.mjs
+# turns the stream back into a database here, as it was when the dump ended, which is checked
+# before it is kept.
 #   backup-to-mac.sh            take a backup now
 #   backup-to-mac.sh install    run it every Sunday at 04:00 (launchd; a missed run happens on wake)
 #   backup-to-mac.sh uninstall  stop the schedule
-# Settings, all optional: POLYPACK_APP (polypack), POLYPACK_BACKUP_DIR, POLYPACK_BACKUP_KEEP (4).
+# The schedule runs a copy of the three backup scripts, made by `install`, so that it does not
+# depend on which branch this checkout is on that Sunday. Run `install` again after a change here.
+# Settings, all optional: POLYPACK_APP (polypack), POLYPACK_BACKUP_DIR, POLYPACK_BACKUP_KEEP (4),
+# POLYPACK_BACKUP_SCRIPTS (where `install` keeps the copy).
 set -euo pipefail
 export PATH="/opt/homebrew/bin:/usr/local/bin:$HOME/.fly/bin:/usr/bin:/bin:/usr/sbin:/sbin"
 
@@ -18,17 +22,20 @@ HERE="${0:A:h}"
 LABEL=com.polypack.backup
 PLIST="$HOME/Library/LaunchAgents/$LABEL.plist"
 LOG="$HOME/Library/Logs/polypack-backup.log"
+SCRIPTS="${POLYPACK_BACKUP_SCRIPTS:-$HOME/Library/Application Support/PolyPack/backup}"
 
 case "${1:-}" in
 install)
-  mkdir -p "${PLIST:h}" "${LOG:h}"
+  mkdir -p "${PLIST:h}" "${LOG:h}" "$SCRIPTS"
+  [[ "$HERE" == "${SCRIPTS:A}" ]] ||
+    cp "$HERE/backup-to-mac.sh" "$HERE/backup-dump.cjs" "$HERE/backup-rebuild.mjs" "$SCRIPTS/"
   cat > "$PLIST" <<EOF
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0">
 <dict>
   <key>Label</key><string>$LABEL</string>
-  <key>ProgramArguments</key><array><string>${0:A}</string></array>
+  <key>ProgramArguments</key><array><string>$SCRIPTS/backup-to-mac.sh</string></array>
   <key>StartCalendarInterval</key><dict><key>Weekday</key><integer>0</integer><key>Hour</key><integer>4</integer><key>Minute</key><integer>0</integer></dict>
   <key>StandardOutPath</key><string>$LOG</string>
   <key>StandardErrorPath</key><string>$LOG</string>
@@ -37,12 +44,12 @@ install)
 EOF
   launchctl bootout "gui/$(id -u)/$LABEL" 2> /dev/null || true
   launchctl bootstrap "gui/$(id -u)" "$PLIST"
-  print "Scheduled: every Sunday at 04:00 into $DEST (log: $LOG)."
+  print "Scheduled: every Sunday at 04:00 into $DEST (log: $LOG), running the copy in $SCRIPTS."
   exit 0
   ;;
 uninstall)
   launchctl bootout "gui/$(id -u)/$LABEL" 2> /dev/null || true
-  rm -f "$PLIST"
+  rm -f "$PLIST" "$SCRIPTS/backup-to-mac.sh" "$SCRIPTS/backup-dump.cjs" "$SCRIPTS/backup-rebuild.mjs"
   print "Schedule removed. Backups already taken stay in $DEST."
   exit 0
   ;;
@@ -59,9 +66,10 @@ work=$(mktemp -d "${TMPDIR:-/tmp}/polypack-backup.XXXXXX")
 trap 'rm -rf "$work"' EXIT
 
 # On the server, at low CPU priority: the dump script arrives base64-encoded on the command line
-# (so that no quoting survives the trip) and its gzipped stream comes back on stdout.
+# (so that no quoting survives the trip, and without its comment lines, to keep the command short)
+# and its gzipped stream comes back on stdout.
 started=$SECONDS
-script=$(base64 < "$HERE/backup-dump.cjs" | tr -d '\n')
+script=$(grep -v '^[[:space:]]*//' "$HERE/backup-dump.cjs" | base64 | tr -d '\n')
 fly ssh console -q -a "$APP" -C "sh -c 'echo $script | base64 -d | nice -n 10 node --no-warnings -'" \
   > "$work/dump.ndjson.gz" 2> "$work/dump.err" ||
   { print -u2 "The dump failed: $(tail -3 "$work/dump.err")"; exit 1; }
