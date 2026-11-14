@@ -1,7 +1,7 @@
 import { createHash } from "node:crypto";
 import type { DatabaseSync } from "node:sqlite";
 import { SPACE_NAMES, isSpaceName, parseSpaceId, type SpaceName } from "@polypack/spaces";
-import { blobFromJson, decodePieces, encodePieces } from "./pieces";
+import { blobFromJson, decodePieces, encodePieces, packPieces, unpackPieces } from "./pieces";
 
 /**
  * The unit change of 2026-10-27: disk and ball pieces have DIAMETER 1 (they had radius 1), and circle and ball
@@ -103,7 +103,8 @@ function scaleList(list: unknown, f: number, ...indices: number[]): void {
 }
 function eachPiece(cfg: Record<string, unknown>, key: string, fn: (p: Record<string, unknown>) => void): void {
   const list = cfg[key];
-  if (Array.isArray(list)) for (const p of list) if (typeof p === "object" && p !== null) fn(p as Record<string, unknown>);
+  if (Array.isArray(list))
+    for (const p of list) if (typeof p === "object" && p !== null) fn(p as Record<string, unknown>);
 }
 
 /** What the unit change does to the entries of one space problem; null when it leaves them alone. */
@@ -305,7 +306,7 @@ export function applyUnits(db: DatabaseSync, reverse: boolean): UnitsReport {
     let pieces: Uint8Array = blob;
     if (lenF !== 1) {
       const poses = decodePieces(blob).map((p) => ({ x: p.x * lenF, y: p.y * lenF, theta: p.theta }));
-      pieces = encodePieces(poses);
+      pieces = packPieces(encodePieces(poses));
     }
     let strict = r.strict_check as string | null;
     if (strict) {
@@ -330,7 +331,11 @@ export function applyUnits(db: DatabaseSync, reverse: boolean): UnitsReport {
 
   // space entries
   const entries = db
-    .prepare("SELECT id, space, problem, score, config FROM space_entries WHERE space IN (" + SPACE_NAMES.map(() => "?").join(",") + ") ORDER BY id")
+    .prepare(
+      "SELECT id, space, problem, score, config FROM space_entries WHERE space IN (" +
+        SPACE_NAMES.map(() => "?").join(",") +
+        ") ORDER BY id",
+    )
     .all(...SPACE_NAMES) as Row[];
   const updateEntry = db.prepare("UPDATE space_entries SET score = ?, config = ? WHERE id = ?");
   const toArchive = db.prepare(
@@ -400,13 +405,19 @@ export function unitsDigest(db: DatabaseSync): string {
   const feed = (rows: Row[]) => {
     for (const r of rows)
       for (const v of Object.values(r)) {
-        if (v instanceof Uint8Array) h.update(v);
-        else if (typeof v === "string" && (v.startsWith("{") || v.startsWith("["))) h.update(JSON.stringify(JSON.parse(v)));
+        // pieces, by their triples: the same arrangement packed or not (see pieces.ts) is the same content
+        if (v instanceof Uint8Array) h.update(unpackPieces(v));
+        else if (typeof v === "string" && (v.startsWith("{") || v.startsWith("[")))
+          h.update(JSON.stringify(JSON.parse(v)));
         else h.update(String(v));
         h.update("\u0001");
       }
   };
-  feed(db.prepare("SELECT id, n, m, p, score, pieces, literature_value, strict_check FROM submissions ORDER BY id").all() as Row[]);
+  feed(
+    db
+      .prepare("SELECT id, n, m, p, score, pieces, literature_value, strict_check FROM submissions ORDER BY id")
+      .all() as Row[],
+  );
   feed(db.prepare("SELECT id, space, problem, score, config FROM space_entries ORDER BY id").all() as Row[]);
   return h.digest("hex");
 }

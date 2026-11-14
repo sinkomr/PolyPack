@@ -355,7 +355,7 @@ fn answers_a_malformed_blob_with_an_error_rather_than_a_crash_of_the_process() {
     store.db().prepare("UPDATE submissions SET pieces = ? WHERE id = ?").unwrap().run(&[(&bytes[..]).into(), id.into()]).unwrap();
     let e = store.get(id).unwrap_err();
     assert!(matches!(e, StoreError::Range(_)));
-    assert_eq!(e.message(), "stored pieces have 23 bytes, not a multiple of 24");
+    assert_eq!(e.message(), "stored pieces have 23 bytes, not a multiple of 24, and are not packed (they begin with 0)");
     assert!(matches!(store.get_many(&[id]), Err(StoreError::Range(_))));
     // the listing of the pair reads no pieces, so the atlas fails only when it fetches the entry
     assert_eq!(store.best_per_p(4.0, 4.0, false).unwrap().len(), 1);

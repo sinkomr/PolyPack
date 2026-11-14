@@ -225,7 +225,7 @@ pub(super) fn read(path: &str, sql: &str) -> i64 {
 }
 
 pub(super) fn cursor_of(path: &str) -> i64 {
-    read(path, "SELECT value FROM meta WHERE key = 'pieces_cursor'")
+    read(path, "SELECT value FROM meta WHERE key = 'pieces_packed_cursor'")
 }
 
 /// One row of a database written before pieces became BLOBs.

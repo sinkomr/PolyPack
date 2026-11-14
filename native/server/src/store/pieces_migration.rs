@@ -79,7 +79,7 @@ impl PiecesMigration {
     fn summary(&self) -> String {
         let t = &self.total;
         format!(
-            "{} converted ({} of JSON to {}), {} deleted, {} left as text; {} rows in {} s of work",
+            "{} converted ({} to {}), {} deleted, {} left as text; {} rows in {} s of work",
             fmt::num(t.converted),
             mb(t.bytes_before),
             mb(t.bytes_after),

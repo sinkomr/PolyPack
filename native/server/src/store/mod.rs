@@ -29,7 +29,7 @@ mod tests;
 
 pub use db::{Db, JsVal, Param, TraceEvent, Tracer};
 pub use error::{Result, StoreError};
-pub use pieces::{blob_from_json, decode_pieces, encode_pieces, read_pieces, PIECE_BYTES};
+pub use pieces::{blob_from_json, decode_pieces, encode_pieces, pack_pieces, read_pieces, unpack_pieces, PIECE_BYTES};
 pub use pieces_migration::{MigrationOptions, PiecesMigration};
 pub use sqlite_store::{OpenOptions, SqliteStore};
 pub use types::*;

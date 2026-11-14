@@ -1,6 +1,6 @@
 import { DatabaseSync } from "node:sqlite";
 import { LeaderboardEntry, SCORE_TIE } from "@polypack/geometry";
-import { blobFromJson, encodePieces, readPieces } from "./pieces";
+import { blobFromJson, encodePieces, packPieces, PIECE_BYTES, readPieces } from "./pieces";
 import { EPOCH_DIAMETER, UnitsReport, migrateUnits, setUnitsEpoch, unitsEpoch } from "./units-migration";
 import {
   EntryEdit,
@@ -115,10 +115,14 @@ const SPACE_LEADER_COLUMNS = "id, space, problem, score, name, created_at";
 
 /** Small settings of the store itself; for now the progress of the pieces migration. */
 const META = `CREATE TABLE IF NOT EXISTS meta (key TEXT PRIMARY KEY, value INTEGER NOT NULL);`;
-/** Id of the last row the pieces migration has handled. */
-const CURSOR = "pieces_cursor";
+/**
+ * Id of the last row the pieces migration has handled. The migration brings every row to the packed form (see
+ * pieces.ts). The keys "pieces_cursor" and "pieces_migrated" that a database may hold are those of its first
+ * version, from JSON text to triples; this one starts again from the first row and does that conversion too.
+ */
+const CURSOR = "pieces_packed_cursor";
 /** 1 once the pieces migration has reached the last row. */
-const MIGRATED = "pieces_migrated";
+const MIGRATED = "pieces_packed";
 
 /** The most records each name has held at once (see Store.holderPeaks); a name that never held one has no row. */
 const HOLDER_PEAKS = `CREATE TABLE IF NOT EXISTS holder_peaks (name TEXT PRIMARY KEY, peak INTEGER NOT NULL);`;
@@ -137,7 +141,7 @@ export interface MigrationStep {
   /** Id of the last row handled so far. */
   cursor: number;
   rows: number;
-  /** Rows whose JSON text became a BLOB. */
+  /** Rows whose pieces, JSON text or triples, were rewritten in the packed form (or, from JSON text, as triples). */
   converted: number;
   /**
    * Rows deleted because their problem no longer keeps them (see KEEP_PER_PROBLEM), rejected rows
@@ -204,7 +208,7 @@ export class SqliteStore implements Store, SpaceStore {
     this.db.exec(SCHEMA);
     this.db.exec(META);
     this.db.exec(HOLDER_PEAKS);
-    // a new database never holds pieces in the older format, so there is nothing to migrate
+    // a new database never holds pieces in an older format, so there is nothing to migrate
     if (fresh) this.setMeta(MIGRATED, 1);
     // A database from before a column existed: add it. The legacy `agent` column stays as it was
     // (SQLite cannot drop its NOT NULL), and new rows store an empty string in it.
@@ -270,8 +274,8 @@ export class SqliteStore implements Store, SpaceStore {
         s.score,
         s.name,
         s.agent_note,
-        // a BLOB of Float64s keeps every double exactly, -0 included, in a third of the JSON
-        encodePieces(s.pieces),
+        // Float64s keep every double exactly, -0 included, in a third of the JSON; packed, in about a fifth
+        packPieces(encodePieces(s.pieces)),
         s.container_phi,
         s.created_at,
         s.verification,
@@ -763,10 +767,11 @@ export class SqliteStore implements Store, SpaceStore {
   /**
    * One step of the pieces migration, in one transaction: the next `batch` rows by id after the
    * stored cursor. The problem of each row is pruned as a whole (see KEEP_PER_PROBLEM), which
-   * deletes the rows it no longer keeps, rejected rows included, also those further on; the JSON
-   * text of each kept row in the step becomes a BLOB. The cursor is saved with the changes, so a
+   * deletes the rows it no longer keeps, rejected rows included, also those further on; the pieces
+   * of each kept row in the step, JSON text or triples, are rewritten in the packed form (triples
+   * that packing does not shorten stay as they are). The cursor is saved with the changes, so a
    * step cut short by a restart is simply done again, and nothing before the cursor is read again.
-   * Rows written after the cursor passed are BLOBs already, and `prune`, `review` and `remove`
+   * Rows written after the cursor passed are packed already, and `prune`, `review` and `remove`
    * keep their problems to the rule.
    */
   migratePieces(batch: number): MigrationStep {
@@ -810,16 +815,20 @@ export class SqliteStore implements Store, SpaceStore {
           pruned.add(problem);
           for (const d of this.pruneSync(r.n as number, r.m as number, r.p as number)) gone.add(d);
         }
-        if (gone.has(id) || r.kind !== "text") continue; // deleted, or a BLOB already
-        const blob = blobFromJson((read.get(id) as Row).pieces as string);
+        const triples = r.kind === "blob" && (r.bytes as number) % PIECE_BYTES === 0;
+        if (gone.has(id) || (r.kind !== "text" && !triples)) continue; // deleted, or packed already
+        const held = (read.get(id) as Row).pieces;
+        const blob = triples ? (held as Uint8Array) : blobFromJson(held as string);
         if (!blob) {
           step.unreadable++;
           continue;
         }
-        write.run(blob, id);
+        const packed = packPieces(blob);
+        if (triples && packed.length === blob.length) continue; // packing does not shorten them
+        write.run(packed, id);
         step.converted++;
         step.bytesBefore += r.bytes as number;
-        step.bytesAfter += blob.length;
+        step.bytesAfter += packed.length;
       }
       step.deleted = gone.size;
       this.setMeta(CURSOR, step.cursor);
@@ -859,7 +868,7 @@ export class SqliteStore implements Store, SpaceStore {
         `${batch} rows every ${pauseMs} ms`,
     );
     const summary = () =>
-      `${total.converted} converted (${mb(total.bytesBefore)} of JSON to ${mb(total.bytesAfter)}), ` +
+      `${total.converted} converted (${mb(total.bytesBefore)} to ${mb(total.bytesAfter)}), ` +
       `${total.deleted} deleted, ${total.unreadable} left as text; ${total.rows} rows in ${(total.ms / 1000).toFixed(1)} s of work`;
     const finish = () => {
       stopped = true;

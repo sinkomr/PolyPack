@@ -179,6 +179,18 @@ defect.
 - **What an internal error writes to stderr** is one line with the error's text, where Node prints
   the exception with its stack; the answer (500, `Internal Server Error`) is the same.
 
+## Libraries both servers share
+
+- **zstd, for packed pieces** (`store/pieces.rs`, `apps/server/src/pieces.ts`). A packed value is
+  a zstd frame, and the comparison holds the database rows of the two servers to the same bytes.
+  They are the same because both call the same library on the whole input at the same level: Node
+  through its zlib module (`process.versions.zstd`), Rust through the `zstd` crate, which builds
+  the library it bundles (`zstd-sys`, whose version names it). On 2026-11-13 both were zstd 1.5.7.
+  Another release of the library may compress the same input to other bytes, so when the Node of
+  the reference moves to one, move the crate with it and write the store's fixtures again
+  (`native/tools/store-ref.mts fixtures`). Reading does not depend on the release: every release
+  reads every frame.
+
 ## Comparing a port with its source
 
 Each family has three pieces, after the pattern of the flat one (`native/tools/flat-ref.mts`,
