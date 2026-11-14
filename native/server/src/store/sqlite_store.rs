@@ -14,7 +14,7 @@ use serde_json::Value;
 use super::db::{is_integer, Db, JsVal, Param, Row, Tracer};
 use super::error::{Result, StoreError};
 use super::json;
-use super::pieces::{blob_from_json, encode_pieces, read_pieces};
+use super::pieces::{blob_from_json, encode_pieces, pack_pieces, read_pieces, PIECE_BYTES};
 use super::types::*;
 use super::units_migration::{
     json_source, migrate_units, set_units_epoch, units_epoch, SpaceIds, UnitsReport, EPOCH_DIAMETER,
@@ -110,10 +110,13 @@ CREATE INDEX IF NOT EXISTS space_entries_listing ON space_entries (space, proble
 
 /// Small settings of the store itself; for now the progress of the pieces migration.
 const META: &str = "CREATE TABLE IF NOT EXISTS meta (key TEXT PRIMARY KEY, value INTEGER NOT NULL);";
-/// Id of the last row the pieces migration has handled.
-const CURSOR: &str = "pieces_cursor";
+/// Id of the last row the pieces migration has handled. The migration brings every row to the
+/// packed form (see pieces.rs). The keys "pieces_cursor" and "pieces_migrated" that a database may
+/// hold are those of its first version, from JSON text to triples; this one starts again from the
+/// first row and does that conversion too.
+const CURSOR: &str = "pieces_packed_cursor";
 /// 1 once the pieces migration has reached the last row.
-const MIGRATED: &str = "pieces_migrated";
+const MIGRATED: &str = "pieces_packed";
 
 /// The most records each name has held at once (see `holder_peaks`); a name that never held one has no row.
 const HOLDER_PEAKS: &str = "CREATE TABLE IF NOT EXISTS holder_peaks (name TEXT PRIMARY KEY, peak INTEGER NOT NULL);";
@@ -324,8 +327,8 @@ impl SqliteStore {
     }
 
     fn insert_sync(&self, s: &NewSubmission) -> Result<f64> {
-        // a BLOB of Float64s keeps every double exactly, -0 included, in a third of the JSON
-        let pieces = encode_pieces(&s.pieces);
+        // Float64s keep every double exactly, -0 included, in a third of the JSON; packed, in about a fifth
+        let pieces = pack_pieces(encode_pieces(&s.pieces))?;
         let strict_check = text_or_null(&s.strict_check);
         let method_params = text_or_null(&s.method_params);
         let budget = text_or_null(&s.budget);
@@ -1036,10 +1039,11 @@ impl SqliteStore {
     /// sqlite-store.ts: migratePieces. One step of the pieces migration, in one transaction: the
     /// next `batch` rows by id after the stored cursor. The problem of each row is pruned as a whole
     /// (see KEEP_PER_PROBLEM), which deletes the rows it no longer keeps, rejected rows included,
-    /// also those further on; the JSON text of each kept row in the step becomes a BLOB. The cursor
-    /// is saved with the changes, so a step cut short by a restart is simply done again, and nothing
-    /// before the cursor is read again. Rows written after the cursor passed are BLOBs already, and
-    /// `prune`, `review` and `remove` keep their problems to the rule.
+    /// also those further on; the pieces of each kept row in the step, JSON text or triples, are
+    /// rewritten in the packed form (triples that packing does not shorten stay as they are). The
+    /// cursor is saved with the changes, so a step cut short by a restart is simply done again, and
+    /// nothing before the cursor is read again. Rows written after the cursor passed are packed
+    /// already, and `prune`, `review` and `remove` keep their problems to the rule.
     pub fn migrate_pieces(&self, batch: f64) -> Result<MigrationStep> {
         // an empty step would look like the end of the table
         if !is_integer(batch) || batch < 1.0 {
@@ -1090,8 +1094,11 @@ impl SqliteStore {
                         }
                     }
                 }
-                // deleted, or a BLOB already
-                if gone.contains(&id) || *r.get("kind") != JsVal::Text("text".into()) {
+                let text = *r.get("kind") == JsVal::Text("text".into());
+                // `(r.bytes as number) % PIECE_BYTES === 0` of a BLOB (its length is a number)
+                let triples = *r.get("kind") == JsVal::Text("blob".into()) && r.num("bytes")? % PIECE_BYTES as f64 == 0.0;
+                // deleted, or packed already
+                if gone.contains(&id) || (!text && !triples) {
                     continue;
                 }
                 // a row another process deleted since the rows were listed: the source reads a property of
@@ -1099,14 +1106,30 @@ impl SqliteStore {
                 let stored = read.get(&[id.into()])?.ok_or_else(|| {
                     StoreError::Type("Cannot read properties of undefined (reading 'pieces')".to_string())
                 })?;
-                let Some(blob) = blob_from_json(&stored.text("pieces")?) else {
+                let blob = if triples {
+                    match stored.get("pieces") {
+                        JsVal::Blob(b) => Some(b.clone()),
+                        other => {
+                            return Err(StoreError::Type(format!("unexpected stored pieces of type {}", other.type_of())))
+                        }
+                    }
+                } else {
+                    blob_from_json(&stored.text("pieces")?)
+                };
+                let Some(blob) = blob else {
                     step.unreadable += 1.0;
                     continue;
                 };
-                write.run(&[(&blob).into(), id.into()])?;
+                let length = blob.len();
+                let packed = pack_pieces(blob)?;
+                // packing does not shorten them
+                if triples && packed.len() == length {
+                    continue;
+                }
+                write.run(&[(&packed).into(), id.into()])?;
                 step.converted += 1.0;
                 step.bytes_before += r.num("bytes")?;
-                step.bytes_after += blob.len() as f64;
+                step.bytes_after += packed.len() as f64;
             }
             step.deleted = gone.len() as f64;
             self.set_meta(CURSOR, step.cursor)?;

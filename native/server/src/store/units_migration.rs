@@ -37,7 +37,7 @@ use serde_json::{Map, Number, Value};
 use super::db::{Db, JsVal, Param};
 use super::error::Result;
 use super::json;
-use super::pieces::{blob_from_json, decode_pieces, encode_pieces};
+use super::pieces::{blob_from_json, decode_pieces, encode_pieces, pack_pieces, unpack_pieces};
 use super::sha256::Sha256;
 use super::types::Pose;
 use super::Clock;
@@ -462,7 +462,7 @@ pub fn apply_units(db: &Db, reverse: bool, spaces: &dyn SpaceIds, clock: &dyn Cl
                 .iter()
                 .map(|p| Pose { x: p.x * len_f, y: p.y * len_f, theta: p.theta })
                 .collect();
-            pieces = encode_pieces(&poses);
+            pieces = pack_pieces(encode_pieces(&poses))?;
         }
         // `strict` is bound as it was read unless its JSON was read and written again
         let mut strict: JsVal = r.get("strict_check").clone();
@@ -579,7 +579,9 @@ pub fn units_digest(db: &Db) -> Result<String> {
         for r in db.prepare(sql)?.all(&[])? {
             for v in r.values() {
                 match v {
-                    JsVal::Blob(b) => h.update(b),
+                    // pieces, by their triples: the same arrangement packed or not (see pieces.rs) is the
+                    // same content
+                    JsVal::Blob(b) => h.update(&unpack_pieces(b)?),
                     JsVal::Text(s) if s.starts_with('{') || s.starts_with('[') => {
                         h.update(json::stringify(&json::parse(s)?).as_bytes())
                     }

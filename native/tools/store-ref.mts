@@ -23,9 +23,9 @@
 import { appendFileSync, createReadStream, mkdirSync, rmSync, writeFileSync, readFileSync, existsSync } from "node:fs";
 import { createInterface } from "node:readline";
 import { DatabaseSync } from "node:sqlite";
-import { createGunzip } from "node:zlib";
+import { crc32, createGunzip, zstdCompressSync } from "node:zlib";
 import { SPACE_NAMES, isSpaceName, parseSpaceId } from "../../packages/spaces/src/index.ts";
-import { blobFromJson, decodePieces, encodePieces } from "../../apps/server/src/pieces.ts";
+import { blobFromJson, decodePieces, encodePieces, packPieces, unpackPieces } from "../../apps/server/src/pieces.ts";
 import { SqliteStore } from "../../apps/server/src/sqlite-store.ts";
 import {
   migrateUnits,
@@ -653,7 +653,7 @@ function oldScript(db: DatabaseSync): { calls: Call[]; cut: number } {
   b.push({ op: "units_migrate", reverse: false }, { op: "units_migrate", reverse: true }, { op: "units_epoch" }, { op: "units_digest" }, { op: "units_migrate", reverse: false }, ...reads());
   noteSpaceId("curved", "curved/1/0/0/3");
   // a step that fails while something holds the rows: five failures, then the run gives up
-  b.push({ op: "exec", sql: "UPDATE meta SET value = 0 WHERE key IN ('pieces_migrated', 'pieces_cursor')" });
+  b.push({ op: "exec", sql: "UPDATE meta SET value = 0 WHERE key IN ('pieces_packed', 'pieces_packed_cursor')" });
   b.push({ op: "exec", sql: "UPDATE submissions SET pieces = '[{\"x\":1,\"y\":2,\"theta\":3}]' WHERE id = (SELECT MIN(id) FROM submissions)" });
   b.push({ op: "exec", sql: "CREATE TRIGGER held BEFORE UPDATE OF pieces ON submissions BEGIN SELECT RAISE(ABORT, 'the rows are held'); END" });
   b.push({ op: "start_pieces_migration", batch: 5, pauseMs: 10, logEveryMs: 60_000 }, { op: "pieces_migrated" });
@@ -794,6 +794,46 @@ function fixtures(dir: string) {
   const bytes = encodePieces(awkward);
   if (JSON.stringify(decodePieces(bytes)) !== JSON.stringify(awkward)) throw new Error("pieces do not round-trip");
   writeFileSync(`${dir}/pieces-awkward.json`, JSON.stringify({ hex: hex(bytes), json: JSON.stringify(awkward) }));
+  // packPieces: the stored value of triples of several kinds, byte for byte, and what unpackPieces refuses
+  const lattice = (count: number): Pose[] => Array.from({ length: count }, (_, i) => ({ x: (i % 17) * 1.0000000000000002, y: Math.floor(i / 17) / 3, theta: 0 }));
+  const scattered = (count: number): Pose[] => Array.from({ length: count }, () => ({ x: (r() - 0.5) * 40, y: (r() - 0.5) * 40, theta: r() * 6.283 }));
+  const mixed = (count: number): Pose[] => scattered(count).map((p, i) => ({ x: p.x, y: i % 5 ? p.y : 0.25, theta: i % 3 ? 0 : p.theta }));
+  const kinds: Pose[][] = [[], awkward, scattered(1), scattered(2), scattered(40), scattered(500), lattice(1), lattice(4), lattice(30), lattice(500), mixed(7), mixed(60), mixed(333)];
+  // and the padded form (tag 2), wherever these counts give it
+  let padded = 0;
+  for (let count = 1; count <= 520 && padded < 6; count++) for (const pieces of [lattice(count), mixed(count)]) { const stored = packPieces(encodePieces(pieces)); if (stored.length % 24 !== 0 && stored[0] === 2) { kinds.push(pieces); padded++; } }
+  if (padded < 6) throw new Error("no padded form among the fixtures");
+  const packed = kinds.map((pieces) => {
+    const triples = encodePieces(pieces);
+    const stored = packPieces(triples);
+    if (hex(unpackPieces(stored)) !== hex(triples)) throw new Error("packed pieces do not round-trip");
+    return { triples: hex(triples), stored: hex(stored) };
+  });
+  const good = packPieces(encodePieces(lattice(40)));
+  const made = (claimed: number, content: Uint8Array, crc = crc32(content), after = new Uint8Array(0), tag = 1) => {
+    const head = Buffer.alloc(9, tag); head.writeUInt32LE(claimed, 1); head.writeUInt32LE(crc, 5);
+    const value = Buffer.concat([head, zstdCompressSync(content), after]);
+    return value.length % 24 === 0 ? Buffer.concat([value, Buffer.alloc(1)]).fill(2, 0, 1) : value;
+  };
+  const cut = (value: Uint8Array, by: number) => { const shorter = value.subarray(0, value.length - by); return shorter.length % 24 === 0 ? value.subarray(0, value.length - by - 1) : shorter; };
+  const zeros = new Uint8Array(48);
+  const flip = (value: Uint8Array, at: number, mask: number) => Uint8Array.from(value, (b, i) => (i === at ? b ^ mask : b));
+  // a padded value (tag 2) whose last byte is not the zero it must be, and one with its tag turned into the other
+  const paddedOne = packed.map((c) => Buffer.from(c.stored, "hex")).find((v) => v.length % 24 !== 0 && v[0] === 2)!;
+  // frames by hand: a raw block and a run-length block, each the last; an empty last block after one; a reserved block type; a checksum
+  const frameOf = (...blocks: [type: number, size: number, body: number[], last: number][]) => Buffer.concat([Buffer.from([0x28, 0xb5, 0x2f, 0xfd, 0x00, 0x58]), ...blocks.map(([type, size, body, last]) => { const h = (size << 3) | (type << 1) | last; return Buffer.from([h & 255, (h >> 8) & 255, (h >> 16) & 255, ...body]); })]);
+  const handMade = (frame: Uint8Array, content: Uint8Array) => { const head = Buffer.alloc(9, 1); head.writeUInt32LE(content.length, 1); head.writeUInt32LE(crc32(content), 5); const value = Buffer.concat([head, frame]); return value.length % 24 === 0 ? Buffer.concat([value, Buffer.alloc(1)]).fill(2, 0, 1) : value; };
+  const body24 = Array.from({ length: 24 }, (_, i) => i * 7 + 1);
+  const values: Uint8Array[] = [new Uint8Array(25), new Uint8Array([3, 1, 2, 3, 4]), new Uint8Array([1]), new Uint8Array([2, 0]), good.subarray(0, 9), good.subarray(0, 10), cut(good, 1), cut(good, 2), cut(good, 3), cut(good, 5), cut(good, 40),
+    flip(good, 30, 0xff), flip(good, good.length - 2, 1), flip(good, 1, 24), flip(good, 6, 1), flip(good, 9, 1), flip(good, 13, 0x20), flip(good, 13, 3), flip(good, 13, 8), flip(good, 0, 3),
+    flip(paddedOne, paddedOne.length - 1, 1), flip(paddedOne, 0, 3), paddedOne.subarray(0, paddedOne.length - 1),
+    made(72, zeros), made(24, zeros), made(50, new Uint8Array(50)), made(48, zeros), made(0, new Uint8Array(0)), made((1 << 24) + 24, new Uint8Array(24)), made(48 << 20, new Uint8Array(48 << 20)),
+    made(48, zeros, (crc32(zeros) ^ 1) >>> 0), made(48, zeros, crc32(zeros), new Uint8Array([7, 7, 7])), made(48, zeros, crc32(zeros), zstdCompressSync(new Uint8Array(0))), made(48, zeros, crc32(zeros), new Uint8Array(0), 2),
+    handMade(frameOf([0, 24, body24, 1]), Uint8Array.from(body24)), handMade(frameOf([1, 24, [9], 1]), new Uint8Array(24).fill(9)), handMade(frameOf([0, 24, body24, 0], [0, 0, [], 1]), Uint8Array.from(body24)),
+    handMade(frameOf([0, 24, body24, 0]), Uint8Array.from(body24)), handMade(frameOf([0, 24, body24, 0], [0, 0, [], 1]).subarray(0, 35), Uint8Array.from(body24)), handMade(frameOf([3, 24, body24, 1]), Uint8Array.from(body24)),
+    handMade(frameOf([0, 24, body24.slice(0, 20), 1]), Uint8Array.from(body24))];
+  const unpacked = values.map((value) => { try { return { value: hex(value), triples: hex(unpackPieces(value)), error: null }; } catch (e) { return { value: hex(value), triples: null, error: `${(e as Error).name}: ${(e as Error).message}` }; } });
+  writeFileSync(`${dir}/pieces-packed.json`, JSON.stringify({ packed, unpacked }));
   console.log(`fixtures written to ${dir}`);
 }
 

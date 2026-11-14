@@ -5,6 +5,7 @@ import { DatabaseSync } from "node:sqlite";
 import { SCORE_TIE } from "@polypack/geometry";
 import { describe, expect, it } from "vitest";
 import { SqliteStore } from "../src/sqlite-store";
+import { encodePieces } from "../src/pieces";
 
 // The pieces of an entry can be tens of kilobytes and sit in the table before verification and
 // the later columns, so a query that reads those from the table walks every row's pieces. These
@@ -149,6 +150,14 @@ function oldDatabase(rows: OldRow[]): string {
   return path;
 }
 
+/** The same doubles bit for bit (toEqual takes -0 for 0). */
+function expectSamePoses(want: Pose[], got: Pose[]) {
+  expect(got.length).toBe(want.length);
+  want.forEach((p, i) => {
+    for (const k of ["x", "y", "theta"] as const) expect(Object.is(got[i][k], p[k]), `piece ${i} ${k}`).toBe(true);
+  });
+}
+
 /** P poses with full-precision coordinates, different for every seed. */
 const poses = (P: number, seed: number): Pose[] =>
   Array.from({ length: P }, (_, i) => ({
@@ -174,7 +183,7 @@ function read(path: string, sql: string): number {
   db.close();
   return r ? (Object.values(r)[0] ?? 0) : 0;
 }
-const cursorOf = (path: string) => read(path, "SELECT value FROM meta WHERE key = 'pieces_cursor'");
+const cursorOf = (path: string) => read(path, "SELECT value FROM meta WHERE key = 'pieces_packed_cursor'");
 
 describe("pieces as BLOBs, and the migration of older rows", () => {
   // ids follow the order of this list
@@ -443,6 +452,68 @@ describe("pieces as BLOBs, and the migration of older rows", () => {
     expect(await store.remove(lone)).toBe(false);
     expect(await leaderOf(5)).toBeNull();
     expect(await store.bestPerP(4, 4)).toEqual([]);
+  });
+
+  it("packs the triples and the JSON text of a database of October 2026, and leaves what packing does not shorten", async () => {
+    // rows of a lattice with one angle pack well; a few scattered pieces do not
+    const lattice = (P: number, k: number): Pose[] =>
+      Array.from({ length: P }, (_, i) => ({ x: (i % 9) * (1 + k * 1e-9), y: Math.floor(i / 9) / 3, theta: 0 }));
+    const held: Record<number, Pose[] | string> = {
+      1: lattice(60, 1),
+      2: poses(2, 2),
+      3: lattice(200, 3),
+      4: lattice(45, 4),
+      5: '[{"x":1,"y":2}]',
+      6: poses(3, 6),
+      7: lattice(500, 7),
+    };
+    const path = oldDatabase(Object.entries(held).map(([id, pieces]) => ({ p: 100 + Number(id), score: 9, pieces })));
+    // as the server of October 2026 left it: triples (rows 4 and 5 still text), its own migration marked complete
+    const old = new DatabaseSync(path);
+    for (const id of [1, 2, 3, 6, 7])
+      old.prepare("UPDATE submissions SET pieces = ? WHERE id = ?").run(encodePieces(held[id] as Pose[]), id);
+    old.exec(`CREATE TABLE meta (key TEXT PRIMARY KEY, value INTEGER NOT NULL);
+      INSERT INTO meta VALUES ('pieces_cursor', 7), ('pieces_migrated', 1)`);
+    old.close();
+    const lengths = () => {
+      const db = new DatabaseSync(path, { readOnly: true });
+      const rows = db.prepare("SELECT id, typeof(pieces) AS kind, length(pieces) AS n FROM submissions").all() as {
+        id: number;
+        kind: string;
+        n: number;
+      }[];
+      db.close();
+      return Object.fromEntries(rows.map((r) => [r.id, r.kind === "blob" ? r.n : "text"]));
+    };
+    const before = lengths();
+    expect(before).toEqual({ 1: 1440, 2: 48, 3: 4800, 4: "text", 5: "text", 6: 72, 7: 12000 });
+
+    const store = new SqliteStore(path);
+    expect(store.piecesMigrated()).toBe(false);
+    const first = store.migratePieces(3);
+    expect(first).toMatchObject({ done: false, cursor: 3, rows: 3, converted: 2, deleted: 0, unreadable: 0 });
+    expect(first.bytesBefore).toBe(1440 + 4800);
+    const second = store.migratePieces(10);
+    expect(second).toMatchObject({ done: false, cursor: 7, rows: 4, converted: 2, deleted: 0, unreadable: 1 });
+    expect(store.migratePieces(10)).toMatchObject({ done: true, rows: 0 });
+    expect(store.piecesMigrated()).toBe(true);
+
+    const after = lengths();
+    // packed: shorter, and never a multiple of 24
+    for (const id of [1, 3, 4, 7]) {
+      expect(after[id], `row ${id}`).toBeLessThan((held[id] as Pose[]).length * 24 * 0.5);
+      expect((after[id] as number) % 24, `row ${id}`).not.toBe(0);
+    }
+    expect(first.bytesAfter).toBe((after[1] as number) + (after[3] as number));
+    // left as they were: triples no shorter packed, and text that is no list of poses
+    expect([after[2], after[5], after[6]]).toEqual([48, "text", 72]);
+    for (const [id, pieces] of Object.entries(held))
+      if (typeof pieces !== "string") expectSamePoses(pieces, (await store.get(Number(id)))!.pieces);
+    // the keys of the first migration are as they were, and a second pass finds nothing to do
+    expect(read(path, "SELECT value FROM meta WHERE key = 'pieces_cursor'")).toBe(7);
+    expect(cursorOf(path)).toBe(7);
+    expect(new SqliteStore(path).piecesMigrated()).toBe(true);
+    expect(lengths()).toEqual(after);
   });
 
   it("marks a new database as migrated, since it never held JSON text", () => {
