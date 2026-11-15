@@ -216,21 +216,27 @@ describe("mirroring the snapshot, one file per piece shape", () => {
     expect(JSON.parse(gunzipSync(pieceFileBytes(3, 5, [])).toString("utf8"))).toEqual({ format: 3, N: 5, pairs: [] });
   });
 
-  it("counts the records and pieces of the bytes it fetched, whatever the site's manifest said", () => {
+  it("counts the records and pieces of the bytes it fetched, whatever the site's manifest said", async () => {
     const text = `{"format":3,"N":4,"M":4,"records":[\n{"P":2,"score":2},\n{"P":3,"score":2}\n]}\n`;
-    expect(countRecords(gzipSync(text))).toEqual({ records: 2, pieces: 5 });
-    expect(countRecords(gzipSync(`{"format":3,"N":4,"M":4,"records":[\n]}\n`))).toEqual({ records: 0, pieces: 0 });
-    expect(() => countRecords(Buffer.from("not gzip"))).toThrow();
-    expect(() => countRecords(gzipSync("not json"))).toThrow();
-    expect(() => countRecords(gzipSync('{"error":"too many"}'))).toThrow(/no list/);
-    expect(() => countRecords(gzipSync('{"records":[{"score":1}]}'))).toThrow(/without P/);
+    expect(await countRecords(gzipSync(text))).toEqual({ records: 2, pieces: 5 });
+    expect(await countRecords(gzipSync(`{"format":3,"N":4,"M":4,"records":[\n]}\n`))).toEqual({ records: 0, pieces: 0 });
+    expect(await countRecords(gzipSync(`{"format":3,"N":4,"M":4,"records":[\n{"P":7}\n]}\n`))).toEqual({ records: 1, pieces: 7 });
+    await expect(countRecords(Buffer.from("not gzip"))).rejects.toThrow();
+    await expect(countRecords(gzipSync("not json"))).rejects.toThrow();
+    await expect(countRecords(gzipSync(""))).rejects.toThrow(/no list/);
+    await expect(countRecords(gzipSync('{"error":"too many"}'))).rejects.toThrow(/no list/);
+    await expect(countRecords(gzipSync('{"records":[{"score":1}]}'))).rejects.toThrow(/without P/);
     // the site's layout, read line by line
     const space = `{"format":3,"space":"polyhedra","records":[\n{"problem":"a","P":4},\n{"problem":"b","P":6},\n{"problem":"c","P":1}\n]}\n`;
-    expect(countRecords(gzipSync(space))).toEqual({ records: 3, pieces: 11 });
-    expect(() => countRecords(gzipSync(space.replace('"P":6', '"score":6')))).toThrow(/without P/);
-    expect(() => countRecords(gzipSync(space.replace("},\n{\"problem\":\"b\"", '}\n{"problem":"b"')))).toThrow();
-    expect(() => countRecords(gzipSync(`{"error":\n"too",\n"many"}\n`))).toThrow(/no list/);
-    expect(() => countRecords(gzipSync(`{"records":[{"P":1},\n{"P":2},\n{"P":3}]}\n`))).toThrow();
+    expect(await countRecords(gzipSync(space))).toEqual({ records: 3, pieces: 11 });
+    await expect(countRecords(gzipSync(space.replace('"P":6', '"score":6')))).rejects.toThrow(/without P/);
+    await expect(countRecords(gzipSync(space.replace('},\n{"problem":"b"', '}\n{"problem":"b"')))).rejects.toThrow();
+    await expect(countRecords(gzipSync(`{"error":\n"too",\n"many"}\n`))).rejects.toThrow(/no list/);
+    await expect(countRecords(gzipSync(`{"records":[{"P":1},\n{"P":2},\n{"P":3}]}\n`))).rejects.toThrow();
+    // lines that run across the chunks the stream is unzipped in
+    const many = Array.from({ length: 3000 }, (_, i) => `{"problem":"p${i}","P":${(i % 7) + 1},"config":"${"x".repeat(i % 50)}"}`);
+    const big = `{"format":3,"space":"polyhedra","records":[\n${many.join(",\n")}\n]}\n`;
+    expect(await countRecords(gzipSync(big))).toEqual({ records: 3000, pieces: many.reduce((s, _, i) => s + (i % 7) + 1, 0) });
   });
 
   it("lists a piece shape's pairs, totals and latest time in its entry", () => {
