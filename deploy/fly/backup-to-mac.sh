@@ -4,14 +4,17 @@
 # a chunk of rows per read while the server goes on writing, so nothing is written to the server's
 # disk and no read lasts long enough to let the write-ahead log grow there. backup-rebuild.mjs
 # turns the stream back into a database here, as it was when the dump ended, which is checked
-# before it is kept.
+# before it is kept. Then the GitHub release "records" is refreshed from that copy
+# (mirror-from-backup.sh), when `install` has put what it needs beside this script.
 #   backup-to-mac.sh            take a backup now
 #   backup-to-mac.sh install    run it every Sunday at 04:00 (launchd; a missed run happens on wake)
 #   backup-to-mac.sh uninstall  stop the schedule
-# The schedule runs a copy of the three backup scripts, made by `install`, so that it does not
-# depend on which branch this checkout is on that Sunday. Run `install` again after a change here.
+# The schedule runs a copy of the backup scripts, made by `install`, so that it does not depend on
+# which branch this checkout is on that Sunday. `install` also builds the server (cargo) and copies
+# it, with the data/ files it reads and the mirror script, into mirror/ there. Run `install` again
+# after a change here, to the server, or to data/.
 # Settings, all optional: POLYPACK_APP (polypack), POLYPACK_BACKUP_DIR, POLYPACK_BACKUP_KEEP (4),
-# POLYPACK_BACKUP_SCRIPTS (where `install` keeps the copy).
+# POLYPACK_BACKUP_SCRIPTS (where `install` keeps the copy), POLYPACK_MIRROR (0: no release refresh).
 set -euo pipefail
 export PATH="/opt/homebrew/bin:/usr/local/bin:$HOME/.fly/bin:/usr/bin:/bin:/usr/sbin:/sbin"
 
@@ -27,8 +30,23 @@ SCRIPTS="${POLYPACK_BACKUP_SCRIPTS:-$HOME/Library/Application Support/PolyPack/b
 case "${1:-}" in
 install)
   mkdir -p "${PLIST:h}" "${LOG:h}" "$SCRIPTS"
-  [[ "$HERE" == "${SCRIPTS:A}" ]] ||
-    cp "$HERE/backup-to-mac.sh" "$HERE/backup-dump.cjs" "$HERE/backup-rebuild.mjs" "$SCRIPTS/"
+  if [[ "$HERE" != "${SCRIPTS:A}" ]]; then
+    cp "$HERE/backup-to-mac.sh" "$HERE/backup-dump.cjs" "$HERE/backup-rebuild.mjs" "$HERE/mirror-from-backup.sh" "$SCRIPTS/"
+    # For the records release: the server built from this checkout, the data/ files the deployed
+    # image holds (the Dockerfile's list), and the mirror script.
+    repo="${HERE:h:h}"
+    PATH="$HOME/.cargo/bin:$PATH"
+    if command -v cargo > /dev/null && (cd "$repo/native" && cargo build --release --locked -q -p polypack-server); then
+      rm -rf "$SCRIPTS/mirror"
+      mkdir -p "$SCRIPTS/mirror"
+      cp "$repo/native/target/release/polypack-server" "$repo/scripts/mirror-snapshot.ts" "$SCRIPTS/mirror/"
+      (cd "$repo" && rsync -aR $(awk '$1 == "COPY" && $2 ~ /^data\// { print $2 }' Dockerfile | sort -u) "$SCRIPTS/mirror/")
+      print "The records release will be refreshed after each backup (mirror-from-backup.sh)."
+    else
+      rm -rf "$SCRIPTS/mirror"
+      print "The server could not be built here (cargo), so the records release will not be refreshed."
+    fi
+  fi
   cat > "$PLIST" <<EOF
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
@@ -49,13 +67,14 @@ EOF
   ;;
 uninstall)
   launchctl bootout "gui/$(id -u)/$LABEL" 2> /dev/null || true
-  rm -f "$PLIST" "$SCRIPTS/backup-to-mac.sh" "$SCRIPTS/backup-dump.cjs" "$SCRIPTS/backup-rebuild.mjs"
+  rm -f "$PLIST" "$SCRIPTS/backup-to-mac.sh" "$SCRIPTS/backup-dump.cjs" "$SCRIPTS/backup-rebuild.mjs" "$SCRIPTS/mirror-from-backup.sh"
+  rm -rf "$SCRIPTS/mirror"
   print "Schedule removed. Backups already taken stay in $DEST."
   exit 0
   ;;
 "") ;;
 *)
-  sed -n '2,10p' "$0"
+  sed -n '2,11p' "$0"
   exit 2
   ;;
 esac
@@ -95,3 +114,15 @@ ls -1t "$DEST"/polypack-*.sqlite.gz | tail -n +$((KEEP + 1)) | while read -r old
   rm -f "$old"
   print "removed old $old"
 done
+
+# The records release, from the copy this backup kept (gzipped above, so the server's writes to
+# the unzipped one change nothing kept). Its failure leaves the backup as it is.
+if [[ "${POLYPACK_MIRROR:-1}" != 0 && -x "$HERE/mirror/polypack-server" ]]; then
+  as_of=$(node -e 'process.stdout.write(String(JSON.parse(process.argv[1]).as_of ?? ""))' "$report")
+  print "$(date '+%Y-%m-%d %H:%M:%S') refreshing the records release from this copy (as of ${as_of:-unknown})"
+  if caffeinate -i "$HERE/mirror-from-backup.sh" "$work/polypack.sqlite" "$as_of"; then
+    print "$(date '+%Y-%m-%d %H:%M:%S') records release refreshed"
+  else
+    print -u2 "$(date '+%Y-%m-%d %H:%M:%S') the records release was not refreshed; the backup is kept"
+  fi
+fi
