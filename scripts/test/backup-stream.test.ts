@@ -77,7 +77,9 @@ describe("streaming backup", () => {
     expect(gunzipSync(stream).length).toBeGreaterThan(4 * 16384);
     const out = join(dir, "out.sqlite");
     const report = JSON.parse(execFileSync(process.execPath, [rebuild, join(dir, "dump.gz"), out]).toString());
-    expect(report).toEqual({ rows: { items: 5, pairs: PAIRS }, superseded: 0, check: "ok" });
+    expect(report).toEqual({ rows: { items: 5, pairs: PAIRS }, superseded: 0, check: "ok", as_of: expect.any(String) });
+    // when the dump ended, as its end line says
+    expect(report.as_of).toBe(JSON.parse(gunzipSync(stream).toString().trimEnd().split("\n").at(-1)!).as_of);
     expect(everything(out)).toEqual(everything(src));
     // AUTOINCREMENT goes on from the deleted row 6, as it would on the server
     const db = new DatabaseSync(out);

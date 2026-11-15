@@ -3,9 +3,14 @@
  * apps/server/src/snapshot.ts) into the GitHub release "records": one gzipped JSON file per piece
  * shape N ("n-{N}.json.gz", holding the site's file of every pair N-M as it is), one per space
  * ("space-{space}.json.gz": every kind of problem but flat polygons), and manifest.json listing them
- * with their SHA-256. Run every night by .github/workflows/records.yml, after the server's build.
+ * with their SHA-256. Run every week by deploy/fly/mirror-from-backup.sh, after the Mac's backup, against
+ * the server run on that copy of the database; .github/workflows/records.yml runs it against the site by hand.
  *
  *   GH_TOKEN=... node scripts/mirror-snapshot.ts
+ *
+ * POLYPACK_SOURCE is where the snapshot is read (the site by default, or a server run on a copy of its
+ * database); POLYPACK_SITE is the site the release notes name. POLYPACK_AS_OF, when given, is the time the
+ * notes give for the records (the end of the backup the copy was made from).
  *
  * - The site stores no file: it generates each one from its records when asked (format 3), and its
  *   manifest has a fingerprint of each file's leaders, no SHA-256. A release holds at most 1000 files, and
@@ -37,7 +42,11 @@ import { pathToFileURL } from "node:url";
 import { gunzipSync, gzipSync } from "node:zlib";
 
 const SITE = process.env.POLYPACK_SITE ?? "https://polypack.fly.dev";
+/** Where the manifest and files are read: the site, or a server run on a copy of its database. */
+const SOURCE = process.env.POLYPACK_SOURCE ?? SITE;
 const REPO = process.env.GITHUB_REPOSITORY ?? "sinkomr/PolyPack";
+/** The GitHub CLI; a test puts a stand-in here. */
+const GH = process.env.POLYPACK_GH || "gh";
 const TAG = "records";
 /** A pair's file on the site; in the release only in the old layout, before 2026-10-27. */
 const FILE_NAME = /^(0|[1-9]\d{0,2})-(0|[1-9]\d{0,2})\.json\.gz$/;
@@ -341,12 +350,12 @@ export function releaseManifest(
 }
 
 function gh(args: string[]): string {
-  return execFileSync("gh", [...args, "--repo", REPO], { encoding: "utf8", stdio: ["ignore", "pipe", "inherit"] });
+  return execFileSync(GH, [...args, "--repo", REPO], { encoding: "utf8", stdio: ["ignore", "pipe", "inherit"] });
 }
 
 async function siteManifest(): Promise<Manifest> {
-  const r = await fetch(`${SITE}/api/snapshot`);
-  if (!r.ok) throw new Error(`${SITE}/api/snapshot answered ${r.status}: ${(await r.text()).slice(0, 200)}`);
+  const r = await fetch(`${SOURCE}/api/snapshot`);
+  if (!r.ok) throw new Error(`${SOURCE}/api/snapshot answered ${r.status}: ${(await r.text()).slice(0, 200)}`);
   return checkManifest(await r.json());
 }
 
@@ -372,7 +381,7 @@ export async function fetchFile(file: string, wait_: (ms: number) => Promise<voi
   for (let attempt = 1; attempt <= TRIES; attempt++) {
     let wait = attempt * 5000;
     try {
-      const r = await fetch(`${SITE}/api/snapshot/${file}`);
+      const r = await fetch(`${SOURCE}/api/snapshot/${file}`);
       if (r.ok) {
         const bytes = Buffer.from(await r.arrayBuffer());
         const fingerprint = r.headers.get("x-snapshot-fingerprint") ?? "";
@@ -404,9 +413,9 @@ function notes(m: ReleaseManifest): string {
   const pairs = m.files.reduce((n, f) => n + f.pairs.length, 0);
   return `Every current record on ${SITE.replace(/^https?:\/\//, "")} with its coordinates: the leader of each open problem, \
 one gzipped JSON file per piece shape, named \`n-{N}.json.gz\`, holding every container shape M for that N (N is the piece shape, \
-M the container shape; 0 is a circle, 3 or more a regular polygon). The site lists the snapshot every night, and this release mirrors it.
+M the container shape; 0 is a circle, 3 or more a regular polygon). The release is refreshed every week, on Sunday, from a copy of the site's database.
 
-As of ${m.completed_at ?? m.generated_at}: ${count(m.records)} records, ${count(m.pieces)} pieces, ${count(pairs)} shape pairs in ${count(m.files.length)} files; \
+As of ${process.env.POLYPACK_AS_OF || m.completed_at || m.generated_at}: ${count(m.records)} records, ${count(m.pieces)} pieces, ${count(pairs)} shape pairs in ${count(m.files.length)} files; \
 and ${count(spaceRecords)} records of the other kinds of problem in ${count(spaces.length)} files.
 
 **Download everything** with the GitHub CLI: \`gh release download ${TAG} --repo ${REPO}\`. \`manifest.json\` lists every file with its size and SHA-256, and for each piece shape its pairs, each with the fingerprint of its records. One pair alone is at ${SITE}/api/snapshot/{N}-{M}.json.gz (the site generates it when asked, from its records at that moment).

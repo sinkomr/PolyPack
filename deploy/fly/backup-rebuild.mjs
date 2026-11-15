@@ -2,9 +2,10 @@
 // format), then checks it. Exits non-zero, leaving no database behind, when the stream is cut
 // short, a table's row count differs from the dump's own count, or the check fails.
 //   node backup-rebuild.mjs dump.ndjson.gz out.sqlite
-// Prints {"rows": {...}, "superseded": n, "check": "ok"} on success; `superseded` counts the rows
-// that the dump read in a chunk and that were deleted on the server before the dump ended. They
-// are dropped here, and the pages they leave free stay in the file.
+// Prints {"rows": {...}, "superseded": n, "check": "ok", "as_of": "…"} on success; `superseded` counts
+// the rows that the dump read in a chunk and that were deleted on the server before the dump ended.
+// They are dropped here, and the pages they leave free stay in the file. `as_of` is when the dump
+// ended (absent from a dump of version 1): the database is the server's as of then.
 import { createReadStream, rmSync, existsSync } from "node:fs";
 import { createInterface } from "node:readline";
 import { createGunzip } from "node:zlib";
@@ -126,7 +127,7 @@ async function rebuild() {
   const check = Object.values(db.prepare("PRAGMA quick_check").get())[0];
   db.close();
   if (check !== "ok") throw new Error(`quick_check: ${check}`);
-  return { rows: end.rows, superseded, check };
+  return { rows: end.rows, superseded, check, as_of: end.as_of };
 }
 
 rebuild().then(
