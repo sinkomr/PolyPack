@@ -25,7 +25,7 @@
  *   fingerprint differs or the release's copy is not the one listed. A fingerprint the release does not
  *   record (a release written before format 3) counts as changed, so the first run fetches everything.
  * - Whatever bytes the server returns are taken; the fingerprint of the header is what is recorded. A
- *   file that cannot be fetched (after a few tries) is left for the next night, with its piece shape's file.
+ *   file that cannot be fetched (after a few tries) is left for the next run, with its piece shape's file.
  * - Files are fetched one at a time: the server generates each from its database and shares its CPU.
  * - The release's manifest is written last, from a fresh listing of the release, even after a
  *   failure: it lists exactly the files the release holds. Files that left the snapshot are
@@ -39,7 +39,8 @@ import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { pathToFileURL } from "node:url";
-import { gunzipSync, gzipSync } from "node:zlib";
+import { Readable } from "node:stream";
+import { createGunzip, gunzipSync, gzipSync } from "node:zlib";
 
 const SITE = process.env.POLYPACK_SITE ?? "https://polypack.fly.dev";
 /** Where the manifest and files are read: the site, or a server run on a copy of its database. */
@@ -189,16 +190,68 @@ export function pieceFileBytes(format: number, N: number, pairs: readonly Buffer
   return gzipSync(Buffer.concat(parts));
 }
 
-/** What a site file holds, read from its bytes: its number of records and of pieces. Throws if it is not a snapshot file. */
-export function countRecords(gz: Buffer): { records: number; pieces: number } {
-  const doc = JSON.parse(gunzipSync(gz).toString("utf8")) as { records?: { P?: unknown }[] };
-  if (!Array.isArray(doc.records)) throw new Error("no list of records");
-  let pieces = 0;
-  for (const r of doc.records) {
+/**
+ * What a site file holds, read from its bytes: its number of records and of pieces. Throws if it is not a snapshot file.
+ * The site writes one record per line, between a first line that opens the list and a last that closes it, and
+ * the file is unzipped as a stream and read a line at a time: a space's file can be longer unzipped than the
+ * longest string Node can make (512 MB) and than the 2 GiB a Buffer can be searched in (the polyhedra file,
+ * 2.7 GB in November 2026).
+ */
+export async function countRecords(gz: Buffer): Promise<{ records: number; pieces: number }> {
+  const records = (doc: unknown) => {
+    const list = (doc as { records?: unknown } | null)?.records;
+    if (!Array.isArray(list)) throw new Error("no list of records");
+    return list as { P?: unknown }[];
+  };
+  const pieces = (r: { P?: unknown }) => {
     if (!Number.isInteger(r?.P)) throw new Error("a record without P");
-    pieces += r.P as number;
+    return r.P as number;
+  };
+  // the first line, then the last two lines seen; every line before those two is a record followed by a comma
+  let first: string | null = null;
+  const held: string[] = [];
+  let count = 0;
+  let total = 0;
+  const take = (line: string) => {
+    if (!line) return;
+    if (first === null) {
+      first = line;
+      return;
+    }
+    held.push(line);
+    if (held.length > 2) {
+      const record = held.shift()!;
+      if (!record.endsWith(",")) throw new Error("not one record per line");
+      total += pieces(JSON.parse(record.slice(0, -1)));
+      count++;
+    }
+  };
+  let part: Buffer[] = [];
+  let partLength = 0;
+  for await (const chunk of Readable.from([gz]).pipe(createGunzip()) as AsyncIterable<Buffer>) {
+    let start = 0;
+    for (let end = chunk.indexOf(10); end >= 0; end = chunk.indexOf(10, start)) {
+      part.push(chunk.subarray(start, end));
+      take(Buffer.concat(part).toString("utf8"));
+      part = [];
+      partLength = 0;
+      start = end + 1;
+    }
+    part.push(chunk.subarray(start));
+    partLength += chunk.length - start;
+    if (partLength > 64 * 1024 * 1024) throw new Error("a line longer than 64 MB");
   }
-  return { records: doc.records.length, pieces };
+  take(Buffer.concat(part).toString("utf8"));
+  if (first === null) throw new Error("no list of records");
+  if (count === 0 && held.length < 2) {
+    // no records, or not the site's layout: small, read whole
+    const list = records(JSON.parse([first, ...held].join("\n")));
+    return { records: list.length, pieces: list.reduce((sum, r) => sum + pieces(r), 0) };
+  }
+  const [last, closing] = held;
+  // the first and last lines alone make the file without its records
+  if (records(JSON.parse(first + closing)).length) throw new Error("not one record per line");
+  return { records: count + 1, pieces: total + pieces(JSON.parse(last)) };
 }
 
 export interface Asset {
@@ -387,7 +440,7 @@ export async function fetchFile(file: string, wait_: (ms: number) => Promise<voi
         const fingerprint = r.headers.get("x-snapshot-fingerprint") ?? "";
         try {
           if (!isSha(fingerprint)) throw new Error("no x-snapshot-fingerprint header");
-          return { bytes, fingerprint, ...countRecords(bytes), at: new Date().toISOString() };
+          return { bytes, fingerprint, ...(await countRecords(bytes)), at: new Date().toISOString() };
         } catch (e) {
           // what the site sent is not a snapshot file: another try would send the same
           console.log(`${file}: ${(e as Error).message}`);
@@ -561,7 +614,7 @@ async function main(): Promise<void> {
   }
   for (const name of remove) gh(["release", "delete-asset", TAG, name, "--yes"]);
   if (failed) {
-    console.log(`${failed} file(s) left for the next night`);
+    console.log(`${failed} file(s) left for the next run`);
     process.exitCode = 1;
   }
 }
