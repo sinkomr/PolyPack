@@ -224,6 +224,13 @@ describe("mirroring the snapshot, one file per piece shape", () => {
     expect(() => countRecords(gzipSync("not json"))).toThrow();
     expect(() => countRecords(gzipSync('{"error":"too many"}'))).toThrow(/no list/);
     expect(() => countRecords(gzipSync('{"records":[{"score":1}]}'))).toThrow(/without P/);
+    // the site's layout, read line by line
+    const space = `{"format":3,"space":"polyhedra","records":[\n{"problem":"a","P":4},\n{"problem":"b","P":6},\n{"problem":"c","P":1}\n]}\n`;
+    expect(countRecords(gzipSync(space))).toEqual({ records: 3, pieces: 11 });
+    expect(() => countRecords(gzipSync(space.replace('"P":6', '"score":6')))).toThrow(/without P/);
+    expect(() => countRecords(gzipSync(space.replace("},\n{\"problem\":\"b\"", '}\n{"problem":"b"')))).toThrow();
+    expect(() => countRecords(gzipSync(`{"error":\n"too",\n"many"}\n`))).toThrow(/no list/);
+    expect(() => countRecords(gzipSync(`{"records":[{"P":1},\n{"P":2},\n{"P":3}]}\n`))).toThrow();
   });
 
   it("lists a piece shape's pairs, totals and latest time in its entry", () => {

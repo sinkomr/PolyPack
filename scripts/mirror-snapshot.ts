@@ -25,7 +25,7 @@
  *   fingerprint differs or the release's copy is not the one listed. A fingerprint the release does not
  *   record (a release written before format 3) counts as changed, so the first run fetches everything.
  * - Whatever bytes the server returns are taken; the fingerprint of the header is what is recorded. A
- *   file that cannot be fetched (after a few tries) is left for the next night, with its piece shape's file.
+ *   file that cannot be fetched (after a few tries) is left for the next run, with its piece shape's file.
  * - Files are fetched one at a time: the server generates each from its database and shares its CPU.
  * - The release's manifest is written last, from a fresh listing of the release, even after a
  *   failure: it lists exactly the files the release holds. Files that left the snapshot are
@@ -189,16 +189,48 @@ export function pieceFileBytes(format: number, N: number, pairs: readonly Buffer
   return gzipSync(Buffer.concat(parts));
 }
 
-/** What a site file holds, read from its bytes: its number of records and of pieces. Throws if it is not a snapshot file. */
+/**
+ * What a site file holds, read from its bytes: its number of records and of pieces. Throws if it is not a snapshot file.
+ * The site writes one record per line, between a first line that opens the list and a last that closes it, and
+ * the lines are read one at a time: a space's file can be longer unzipped than the longest string Node can make
+ * (512 MB; the polyhedra file passed it in November 2026).
+ */
 export function countRecords(gz: Buffer): { records: number; pieces: number } {
-  const doc = JSON.parse(gunzipSync(gz).toString("utf8")) as { records?: { P?: unknown }[] };
-  if (!Array.isArray(doc.records)) throw new Error("no list of records");
-  let pieces = 0;
-  for (const r of doc.records) {
-    if (!Number.isInteger(r?.P)) throw new Error("a record without P");
-    pieces += r.P as number;
+  const text = gunzipSync(gz);
+  const lines: Buffer[] = [];
+  for (let start = 0; start < text.length; ) {
+    const end = text.indexOf(10, start);
+    const line = text.subarray(start, end < 0 ? text.length : end);
+    if (line.length) lines.push(line);
+    start = end < 0 ? text.length : end + 1;
   }
-  return { records: doc.records.length, pieces };
+  const records = (doc: unknown) => {
+    const list = (doc as { records?: unknown } | null)?.records;
+    if (!Array.isArray(list)) throw new Error("no list of records");
+    return list as { P?: unknown }[];
+  };
+  const pieces = (r: { P?: unknown }) => {
+    if (!Number.isInteger(r?.P)) throw new Error("a record without P");
+    return r.P as number;
+  };
+  if (lines.length < 3) {
+    // no records, or not the site's layout: small, read whole
+    const list = records(JSON.parse(Buffer.concat(lines).toString("utf8")));
+    return { records: list.length, pieces: list.reduce((sum, r) => sum + pieces(r), 0) };
+  }
+  // the first and last lines alone make the file without its records
+  if (records(JSON.parse(lines[0].toString("utf8") + lines[lines.length - 1].toString("utf8"))).length)
+    throw new Error("not one record per line");
+  let total = 0;
+  for (let i = 1; i < lines.length - 1; i++) {
+    let line = lines[i].toString("utf8");
+    if (i < lines.length - 2) {
+      if (!line.endsWith(",")) throw new Error("not one record per line");
+      line = line.slice(0, -1);
+    }
+    total += pieces(JSON.parse(line));
+  }
+  return { records: lines.length - 2, pieces: total };
 }
 
 export interface Asset {
@@ -561,7 +593,7 @@ async function main(): Promise<void> {
   }
   for (const name of remove) gh(["release", "delete-asset", TAG, name, "--yes"]);
   if (failed) {
-    console.log(`${failed} file(s) left for the next night`);
+    console.log(`${failed} file(s) left for the next run`);
     process.exitCode = 1;
   }
 }
