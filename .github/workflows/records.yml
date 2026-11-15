@@ -1,5 +1,10 @@
 name: Records snapshot
-# Every night: mirrors the site's records snapshot (GET /api/snapshot) into the release "records"
+# Not scheduled since 2026-11-15: run by hand only. Every night from 2026-11-08 the run fetched about 3 GB
+# from the site (a quarter of its outbound data) and stopped at its time limit halfway, since every piece
+# shape now changes every day. The release is to be refreshed every week from the Mac's backup instead,
+# which reaches the Mac over Fly's private network (deploy/fly/backup-to-mac.sh).
+#
+# Mirrors the site's records snapshot (GET /api/snapshot) into the release "records"
 # (scripts/mirror-snapshot.ts): one gzipped JSON file per piece shape (n-{N}.json.gz, every pair N-M
 # with each open problem's leader and its coordinates), and one per space with its site entries'
 # configurations. At 11:00 UTC the server builds only the snapshot's manifest, with a fingerprint of
@@ -7,8 +12,6 @@ name: Records snapshot
 # fetches the files one at a time, and only those of the piece shapes and spaces whose fingerprint
 # differs from the one it recorded in the release's manifest the last time.
 on:
-  schedule:
-    - cron: "30 12 * * *"
   workflow_dispatch:
 permissions:
   contents: write
