@@ -13,14 +13,14 @@
 # which branch this checkout is on that Sunday. `install` also builds the server (cargo) and copies
 # it, with the data/ files it reads and the mirror script, into mirror/ there. Run `install` again
 # after a change here, to the server, or to data/.
-# Settings, all optional: POLYPACK_APP (polypack), POLYPACK_BACKUP_DIR, POLYPACK_BACKUP_KEEP (4),
+# Settings, all optional: POLYPACK_APP (polypack), POLYPACK_BACKUP_DIR, POLYPACK_BACKUP_KEEP (2),
 # POLYPACK_BACKUP_SCRIPTS (where `install` keeps the copy), POLYPACK_MIRROR (0: no release refresh).
 set -euo pipefail
 export PATH="/opt/homebrew/bin:/usr/local/bin:$HOME/.fly/bin:/usr/bin:/bin:/usr/sbin:/sbin"
 
 APP="${POLYPACK_APP:-polypack}"
 DEST="${POLYPACK_BACKUP_DIR:-$HOME/GitHub/PolyPack-backups/database}"
-KEEP="${POLYPACK_BACKUP_KEEP:-4}"
+KEEP="${POLYPACK_BACKUP_KEEP:-2}"
 HERE="${0:A:h}"
 LABEL=com.polypack.backup
 PLIST="$HOME/Library/LaunchAgents/$LABEL.plist"
