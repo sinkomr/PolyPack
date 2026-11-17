@@ -15,9 +15,10 @@
 //! | packages/geometry/src/shapes.ts, trig.ts, overlap.ts (the helpers the above call) | [`geometry`] |
 //!
 //! and, for the coordinator, the `torus` branch of `check` and `reducedSpaceConfig` of
-//! packages/spaces/src/validate.ts as [`server`]. The search (search.ts, kernel*.ts, start.ts), the
-//! record reader, `penetrationOf` and `scalePacking` are not reached by the server and are not
-//! ported.
+//! packages/spaces/src/validate.ts as [`server`]. The search (packages/torus/src/search.ts) is
+//! [`search`], with `regularPolygonOverlap` as [`overlap`], and the torus branch of the spaces'
+//! Auto search (packages/spaces/src/search/run.ts) is [`auto`], for the personal client. The
+//! kernel (kernel*.ts, start.ts), the record reader and `penetrationOf` are not ported.
 //!
 //! Every `Math.*` of the source is `polypack_js::math::*`, every number in a message is
 //! `polypack_js::fmt::num`.
@@ -30,10 +31,13 @@
     clippy::nonminimal_bool
 )]
 
+pub mod auto;
 pub mod disk;
 pub mod geometry;
 pub mod json;
 pub mod lattice;
+pub mod overlap;
+pub mod search;
 pub mod server;
 pub mod validate;
 
