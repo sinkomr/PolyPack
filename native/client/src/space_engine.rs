@@ -149,7 +149,7 @@ pub struct SpaceOutcome {
     pub best: Option<Candidate>,
     pub jobs: usize,
     pub evaluations: u64,
-    /// "time", "stagnation", "aborted" or "bound".
+    /// "time", "stagnation", "aborted", "bound" or "no start".
     pub stopped: &'static str,
     /// Jobs that lost their thread (a panic).
     pub crashed: usize,
@@ -214,6 +214,8 @@ pub fn search_space_problem(
     let mut last_progress = 0.0;
     let mut jobs = 0usize;
     let mut failures = 0u32;
+    // jobs in a row that ended without one evaluation or packing: the search cannot start on this problem
+    let mut empties = 0u32;
     let mut evaluations = 0u64;
     let mut crashed = 0usize;
     let mut flights: std::collections::HashMap<usize, Flight> = std::collections::HashMap::new();
@@ -230,6 +232,12 @@ pub fn search_space_problem(
                 }
                 if failures >= 3 {
                     stopped = "stagnation";
+                    break;
+                }
+                if empties >= 3 {
+                    // the space's own search returns at once with nothing on some problems (the TypeScript does
+                    // the same, "no valid configuration found" after 0 evaluations): stop rather than start more
+                    stopped = "no start";
                     break;
                 }
                 if at_floor || best.as_ref().map_or(false, |b| input.bound.map_or(false, |bd| bd > 0.0 && b.score <= bd * (1.0 + MIN_IMPROVEMENT))) {
@@ -333,6 +341,7 @@ pub fn search_space_problem(
             }
             let st = &mut kinds[flight.kind as usize];
             failures = if r.failed { failures + 1 } else { 0 };
+            empties = if !r.failed && !r.valid && r.evaluations == 0 { empties + 1 } else { 0 };
             if r.crashed {
                 crashed += 1;
             }
@@ -438,6 +447,26 @@ pub mod tests {
         assert_eq!(out.stopped, "bound");
         assert_eq!(out.best.as_ref().map(|b| (b.score, b.kind)), Some((2.0, "iterate")));
         assert!(searcher.log.lock().unwrap()[0].1);
+    }
+
+    #[test]
+    fn jobs_that_cannot_start_end_the_problem_after_three() {
+        struct Empty(Mutex<usize>);
+        impl SpaceSearcher for Empty {
+            fn search(&self, _: &str, _: &AutoJob) -> Result<AutoResult, String> {
+                *self.0.lock().unwrap() += 1;
+                Ok(AutoResult { config: None, score: None, evaluations: 0, stopped: "done".into(), method: "test auto".into() })
+            }
+        }
+        let now = || {
+            static START: std::sync::OnceLock<Instant> = std::sync::OnceLock::new();
+            START.get_or_init(Instant::now).elapsed().as_secs_f64()
+        };
+        let input = SpaceSearchInput { space: "surface", id: "surface/rhombicuboctahedron/nofold/0/1", known: None, bound: None, max_seconds: 600.0, lanes: 1, seed: 1, now: &now, check: &ok_check, low_priority: false };
+        let searcher = Empty(Mutex::new(0));
+        let out = search_space_problem(&input, &searcher, &SpaceControl::new(), &mut |_, _| {});
+        assert_eq!((out.jobs, out.stopped, out.best.is_none()), (3, "no start", true));
+        assert_eq!(*searcher.0.lock().unwrap(), 3);
     }
 
     #[test]
