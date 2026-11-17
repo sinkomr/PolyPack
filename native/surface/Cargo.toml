@@ -13,3 +13,6 @@ polypack-js = { path = "../js" }
 serde = { version = "1", features = ["derive"] }
 # float_roundtrip: numbers read from JSON are the exact doubles JavaScript reads
 serde_json = { version = "1", features = ["float_roundtrip"] }
+# nofold on the Platonic solids is a planar problem of one face, searched by the flat solver
+polypack-flat = { path = "../flat" }
+polypack-spaceauto = { path = "../spaceauto" }

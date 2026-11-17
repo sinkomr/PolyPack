@@ -24,6 +24,7 @@ pub mod disk;
 pub mod domain;
 pub mod geometry;
 pub mod kernel;
+pub mod nofold_planar;
 pub mod parts;
 pub mod rigid;
 pub mod solids;

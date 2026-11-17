@@ -780,7 +780,9 @@ dependencies = [
 name = "polypack-surface"
 version = "0.1.0"
 dependencies = [
+ "polypack-flat",
  "polypack-js",
+ "polypack-spaceauto",
  "serde",
  "serde_json",
 ]
