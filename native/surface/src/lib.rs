@@ -27,7 +27,9 @@ pub mod kernel;
 pub mod nofold_planar;
 pub mod parts;
 pub mod rigid;
+pub mod search;
 pub mod solids;
+pub mod surface_auto;
 pub mod validate;
 
 pub use chains::{enumerate_chains, ChainError, ChainNode, Wedge, MAX_CHAIN_DEPTH};
