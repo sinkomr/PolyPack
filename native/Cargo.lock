@@ -777,6 +777,7 @@ name = "polypack-sphere"
 version = "0.1.0"
 dependencies = [
  "polypack-js",
+ "polypack-spaceauto",
  "serde",
  "serde_json",
 ]
@@ -785,7 +786,9 @@ dependencies = [
 name = "polypack-surface"
 version = "0.1.0"
 dependencies = [
+ "polypack-flat",
  "polypack-js",
+ "polypack-spaceauto",
  "serde",
  "serde_json",
 ]
@@ -795,6 +798,7 @@ name = "polypack-torus"
 version = "0.1.0"
 dependencies = [
  "polypack-js",
+ "polypack-spaceauto",
  "serde",
  "serde_json",
 ]

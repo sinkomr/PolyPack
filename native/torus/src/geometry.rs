@@ -85,7 +85,7 @@ pub fn axes_of(n: usize, theta: f64) -> Vec<f64> {
 /// overlap.ts: `cosToNearestVertex`. The cosine of the angle between a direction and the nearest
 /// vertex direction of an N-gon (`rel` is measured from a vertex, `step` = 2 pi/N).
 #[inline]
-fn cos_to_nearest_vertex(rel: f64, step: f64) -> f64 {
+pub(crate) fn cos_to_nearest_vertex(rel: f64, step: f64) -> f64 {
     // JavaScript's % is the remainder that keeps the sign of the dividend, as Rust's
     let mut t = rel % step;
     if t < 0.0 {

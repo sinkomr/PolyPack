@@ -387,6 +387,11 @@ fn cut_gap(h: &HalfPlanes, q: &[f64]) -> f64 {
     best
 }
 
+/// `cutGap` for the search's part records (`search/energy.rs`).
+pub fn part_cut_gap(h: &HalfPlanes, q: &[f64]) -> f64 {
+    cut_gap(h, q)
+}
+
 /// `packages/surface/src/parts.ts: partSeparation`. Separation of two parts on one face (negative:
 /// their penetration depth), by separating axes taken from the half-planes each part was cut from
 /// rather than from its clipped sides.
