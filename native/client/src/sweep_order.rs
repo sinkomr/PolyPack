@@ -245,6 +245,8 @@ pub enum Next {
     /// Nothing to hand out now: the rest of the loop is being searched, or a pass that searched
     /// nothing is waiting. Ask again shortly.
     Wait,
+    /// The first pass is complete and the sweep was asked to make one pass only (--one-pass).
+    Finished,
 }
 
 struct Inner {
@@ -259,6 +261,8 @@ struct Inner {
     done: BTreeSet<usize>,
     searched_in_pass: usize,
     not_before: Option<Instant>,
+    /// True once the pass is complete with --one-pass.
+    finished: bool,
 }
 
 /// Hands the sweep's problems out one at a time to the slots, and keeps the position.
@@ -267,6 +271,8 @@ pub struct Dispenser {
     path: Option<PathBuf>,
     log: Arc<dyn Fn(&str) + Send + Sync>,
     empty_pass_wait: Duration,
+    /// Stop at the end of the current pass instead of starting the next one (--one-pass).
+    one_pass: bool,
     inner: Mutex<Inner>,
 }
 
@@ -308,7 +314,8 @@ impl Dispenser {
             path,
             log,
             empty_pass_wait: EMPTY_PASS_WAIT,
-            inner: Mutex::new(Inner { pass, k, items, next, low, done, searched_in_pass: 0, not_before: None }),
+            one_pass: false,
+            inner: Mutex::new(Inner { pass, k, items, next, low, done, searched_in_pass: 0, not_before: None, finished: false }),
         };
         {
             let g = d.inner.lock().unwrap();
@@ -316,6 +323,12 @@ impl Dispenser {
             d.save(&g);
         }
         d
+    }
+
+    /// Stop at the end of the current pass (--one-pass).
+    pub fn with_one_pass(mut self, one_pass: bool) -> Self {
+        self.one_pass = one_pass;
+        self
     }
 
     #[cfg(test)]
@@ -364,6 +377,9 @@ impl Dispenser {
     /// The next problem, or Wait.
     pub fn take(&self) -> Next {
         let mut g = self.inner.lock().unwrap();
+        if g.finished {
+            return Next::Finished;
+        }
         if g.not_before.map_or(false, |t| Instant::now() < t) {
             return Next::Wait;
         }
@@ -384,6 +400,11 @@ impl Dispenser {
                 return Next::Wait;
             }
             // the loop is finished: the next one, or the next pass
+            if g.k >= self.order.loops() && self.one_pass {
+                (self.log)(&format!("Sweep pass {} is complete ({} problem(s) searched): stopping (--one-pass)", g.pass, g.searched_in_pass));
+                g.finished = true;
+                return Next::Finished;
+            }
             if g.k >= self.order.loops() {
                 (self.log)(&format!("Sweep pass {} is complete ({} problem(s) searched); starting pass {} at loop 1", g.pass, g.searched_in_pass, g.pass + 1));
                 if g.searched_in_pass == 0 {
@@ -437,7 +458,7 @@ mod tests {
     use std::sync::Mutex as M;
 
     fn opts() -> SweepOptions {
-        SweepOptions { kinds: SweepKind::ALL.to_vec(), surface_modes: vec!["fold".into(), "nofold".into()], solids: None, max_n: None, restart: false, include_own: false }
+        SweepOptions { kinds: SweepKind::ALL.to_vec(), surface_modes: vec!["fold".into(), "nofold".into()], solids: None, max_n: None, restart: false, include_own: false, open_only: false, one_pass: false }
     }
 
     fn ids(v: &[SweepProblem]) -> Vec<&str> {
@@ -563,6 +584,7 @@ mod tests {
                     t
                 }
                 Next::Wait => panic!("unexpected wait"),
+                Next::Finished => panic!("unexpected finish"),
             })
             .collect()
     }
@@ -611,6 +633,18 @@ mod tests {
         assert_eq!(d.position().0, 2);
     }
 
+    #[test]
+    fn one_pass_finishes_instead_of_starting_the_next() {
+        let o = Order::new(&SweepOptions { kinds: vec![SweepKind::Sphere], ..opts() }, Some(&vec![0]), Some(&vec![1]));
+        let d = Dispenser::open(o, None, false, quiet()).with_one_pass(true);
+        let Next::Problem(a) = d.take() else { panic!() };
+        d.finish(&a, true);
+        assert!(matches!(d.take(), Next::Finished));
+        // every slot that asks afterwards hears the same, and the pass does not advance
+        assert!(matches!(d.take(), Next::Finished));
+        assert_eq!(d.position().0, 1);
+    }
+
     fn temp(name: &str) -> PathBuf {
         let dir = std::env::temp_dir().join(format!("polypack-sweep-{name}-{}-{:08x}", std::process::id(), crate::state::random_u32()));
         std::fs::create_dir_all(&dir).unwrap();
@@ -642,7 +676,7 @@ mod tests {
                     d.finish(&t, true);
                     Some(t.problem.id)
                 }
-                Next::Wait => None,
+                Next::Wait | Next::Finished => None,
             })
             .collect();
         assert_eq!(got, ["sphere/3/1", "sphere/3/2", "sphere/4/1"]);

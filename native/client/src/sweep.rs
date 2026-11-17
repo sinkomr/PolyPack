@@ -250,7 +250,7 @@ pub fn run_with(o: Options, searcher: Arc<dyn SpaceSearcher>, signals: bool) -> 
     let logger: Arc<dyn Fn(&str) + Send + Sync> = Arc::new(|m: &str| log(m));
     let reader = Api::new(&o.base, &user_agent, stop.clone(), pacer.clone(), logger.clone(), on_upgrade.clone());
     let submitter = Api::new(&o.base, &user_agent, hard.clone(), pacer, logger.clone(), on_upgrade).with_submit_key(submit_key, on_key_refused);
-    let dispenser = Dispenser::open(order, Some(&o.state_dir), sw.restart, logger);
+    let dispenser = Dispenser::open(order, Some(&o.state_dir), sw.restart, logger).with_one_pass(sw.one_pass);
     let shared = Arc::new(Shared {
         searcher,
         clock: ActiveClock::new(),
@@ -443,6 +443,10 @@ fn slot(s: &Arc<Shared>, lanes: usize) -> i32 {
                 sleep_unless(&s.stop, 250);
                 continue;
             }
+            Next::Finished => {
+                s.request_stop("The pass is complete (--one-pass)");
+                break;
+            }
             Next::Problem(t) => t,
         };
         let mut tries = 0;
@@ -560,6 +564,12 @@ fn search_one(s: &Arc<Shared>, t: &Taken, lanes: usize) -> Searched {
         });
         log(&format!("{label} is closed: {why}. Skipping it."));
         return Searched::Skipped;
+    }
+    if s.sw.open_only {
+        if let Some(best) = info.best_score {
+            log(&format!("{label} already has a best ({}): skipping it (--open-only)", format_score(best)));
+            return Searched::Skipped;
+        }
     }
     let before = best_ref(&info);
     if let (Some(name), Some(l)) = (s.o.name.as_deref(), &info.site_best) {

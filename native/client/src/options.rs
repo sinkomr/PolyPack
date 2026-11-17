@@ -86,6 +86,10 @@ pub struct SweepOptions {
     pub restart: bool,
     /// Also search problems the user already leads.
     pub include_own: bool,
+    /// Only problems with no best at all, neither a site entry nor a research record (--open-only).
+    pub open_only: bool,
+    /// Stop at the end of the current pass instead of starting the next (--one-pass).
+    pub one_pass: bool,
 }
 
 #[derive(Clone, Debug, PartialEq)]
@@ -136,6 +140,7 @@ Usage: polypack-native [options]
                            (default: all)
   --max-P K                shorthand for --P 1-K; with both, the numbers in both
   --open-only              skip problems that already have a leader: only first entries are made
+                           (with --sweep-2d-on-3d: skip problems with any best, a site entry or a research record)
                            (not with --target-holder)
   --dry-run                search, but never submit
   --note TEXT              free text shown with your entries (at most {MAX_NOTE_LENGTH} characters)
@@ -169,6 +174,7 @@ sphere and torus problems from easy to hard.
                            (--N LIST, --P LIST and --max-P K narrow the sweep too)
   --sweep-restart          forget the kept position and start again at loop 1 of pass 1
   --include-own            also search problems the --name already leads (default: skip them)
+  --one-pass               stop when the current pass is complete instead of starting the next one
 
 Target mode: re-search the low-effort records of one holder.
 
@@ -325,9 +331,10 @@ const FLAG_OPTIONS: &[&str] = &[
     "sweep-2d-on-3d",
     "sweep-restart",
     "include-own",
+    "one-pass",
 ];
 /// Options that only the sweep takes.
-const SWEEP_ONLY: &[&str] = &["kinds", "surface-modes", "solids", "max-N", "sweep-restart", "include-own"];
+const SWEEP_ONLY: &[&str] = &["kinds", "surface-modes", "solids", "max-N", "sweep-restart", "include-own", "one-pass"];
 const UNSUPPORTED: &[&str] = &["dimensions", "spaces", "only-dimensions", "only-spaces", "space-method", "space-params"];
 
 /// The options as name -> value (flags have "true"), from `--name value` or `--name=value`.
@@ -514,8 +521,8 @@ pub fn parse_options(argv: &[String], machine: &Machine) -> Result<Parsed, Optio
     }
     let p = parse_pieces(get("P").as_deref(), get("max-P").as_deref())?;
     let sweep = if flag("sweep-2d-on-3d") {
-        if target_holder.is_some() || open_only {
-            return Err(OptionError("--sweep-2d-on-3d searches 2D-on-3D problems: it cannot be combined with --target-holder or --open-only".into()));
+        if target_holder.is_some() {
+            return Err(OptionError("--sweep-2d-on-3d searches 2D-on-3D problems: it cannot be combined with --target-holder".into()));
         }
         if pairs.iter().any(|(key, _)| key == "M") {
             return Err(OptionError("--M does not apply to --sweep-2d-on-3d (the containers are the surfaces); --N, --P and --max-P do".into()));
@@ -546,6 +553,8 @@ pub fn parse_options(argv: &[String], machine: &Machine) -> Result<Parsed, Optio
             max_n,
             restart: flag("sweep-restart"),
             include_own: flag("include-own"),
+            open_only,
+            one_pass: flag("one-pass"),
         })
     } else {
         if let Some((key, _)) = pairs.iter().find(|(key, _)| SWEEP_ONLY.contains(&key.as_str())) {
@@ -667,7 +676,9 @@ mod tests {
         assert!(run(&["--sweep-2d-on-3d", "--solids", "cub"]).is_err());
         assert!(run(&["--sweep-2d-on-3d", "--max-N", "101"]).is_err());
         assert!(run(&["--sweep-2d-on-3d", "--M", "4"]).is_err());
-        assert!(run(&["--sweep-2d-on-3d", "--open-only"]).is_err());
+        assert!(run(&["--sweep-2d-on-3d", "--open-only"]).unwrap().sweep.unwrap().open_only);
+        assert!(!run(&["--sweep-2d-on-3d"]).unwrap().sweep.unwrap().open_only);
+        assert!(run(&["--sweep-2d-on-3d", "--target-holder", "jg"]).is_err());
         assert!(run(&["--kinds", "sphere"]).unwrap_err().contains("needs --sweep-2d-on-3d"));
         assert!(run(&["--include-own"]).is_err());
         assert_eq!(run(&["--sweep-2d-on-3d", "--max-P", "5"]).unwrap().p, Some(vec![1, 2, 3, 4, 5]));

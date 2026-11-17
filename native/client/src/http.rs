@@ -428,6 +428,10 @@ impl Api {
 
     /// `submit` to `path` (POST /api/spaces/submit for the spaces).
     pub fn submit_to(&self, path: &str, body: &Value, check: &dyn Fn() -> Option<SubmitCheck>) -> SubmitOutcome {
+        // The server checks one entry from an address at a time and answers 429 to the next one while it
+        // does: the threads of this client send theirs one after another instead of racing for it.
+        static ONE_AT_A_TIME: std::sync::Mutex<()> = std::sync::Mutex::new(());
+        let _turn = ONE_AT_A_TIME.lock().unwrap_or_else(|e| e.into_inner());
         let mut current = body.clone();
         let mut without_software = false;
         let mut requests = 0;

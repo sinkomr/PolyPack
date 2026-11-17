@@ -13,6 +13,8 @@ use serde_json::{json, Value};
 
 /// The longest `method` text of a space submission (apps/server SPACE_METHOD_LENGTH).
 pub const SPACE_METHOD_LENGTH: usize = 80;
+/// Relative slack below a problem's lower bound that the server accepts (validate.ts SPACE_BOUND_SLACK).
+pub const SPACE_BOUND_SLACK: f64 = 1e-9;
 
 /// What the client uses of GET /api/spaces/:space/problems/<id>.
 #[derive(Clone, Debug)]
@@ -185,7 +187,9 @@ pub fn decide_space_submission(a: &DecideArgs) -> Decision {
     if !a.open {
         return no("the problem is closed".into());
     }
-    if a.bound.map_or(false, |b| score < b) {
+    // the server's rule (packages/spaces/src/validate.ts SPACE_BOUND_SLACK): a size may lie a relative 1e-9
+    // below the bound, the float rounding of a bound that the optimum reaches (P = 1 often does)
+    if a.bound.map_or(false, |b| score < b * (1.0 - SPACE_BOUND_SLACK)) {
         return no("below the problem's lower bound".into());
     }
     if a.best_score.map_or(false, |b| !improves_on(score, b)) {
@@ -296,6 +300,9 @@ mod tests {
         assert!(decide_space_submission(&DecideArgs { best_score: Some(2.0 * (1.0 + 1e-8)), ..args(&ok) }).submit);
         assert_eq!(decide_space_submission(&DecideArgs { open: false, ..args(&ok) }).reason, "the problem is closed");
         assert_eq!(decide_space_submission(&DecideArgs { bound: Some(2.5), ..args(&ok) }).reason, "below the problem's lower bound");
+        // the server's slack: an optimum on its bound that rounding puts a hair below it is sent
+        assert!(decide_space_submission(&DecideArgs { bound: Some(2.0 * (1.0 + 1e-12)), ..args(&ok) }).submit);
+        assert_eq!(decide_space_submission(&DecideArgs { bound: Some(2.0 * (1.0 + 1e-8)), ..args(&ok) }).reason, "below the problem's lower bound");
         assert_eq!(decide_space_submission(&DecideArgs { dry_run: true, ..args(&ok) }).reason, "dry run: would submit");
         assert_eq!(decide_space_submission(&DecideArgs { certified: Some(2.0), ..args(&ok) }).reason, "not below the research record by the space's margin");
         assert_eq!(decide_space_submission(&DecideArgs { has_best: false, ..args(&ok) }).reason, "no valid configuration");

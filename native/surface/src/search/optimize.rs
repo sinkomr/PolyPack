@@ -642,6 +642,9 @@ pub fn refine(pk: &mut Packing, lo: f64, poses_lo: Vec<SurfacePose>, mut hi: f64
     best
 }
 
+/// Shrinks of `compress` before it gives up: 0.96^120 = 0.0075 of the starting size (the TypeScript: 25).
+pub const MAX_SHRINKS: u32 = 120;
+
 /// `compress` (disks): grow lam while the packing can be relaxed to (near) zero energy. Starts at
 /// lam0 (shrinking first if lam0 is infeasible). Returns the largest feasible lam reached, with
 /// its poses.
@@ -652,7 +655,10 @@ pub fn compress(pk: &mut Packing, lam0: f64, opts: &CompressOptions, should_stop
     pk.set_scale(lam);
     let mut r = pk.relax(max_iter * 2, feas_tol, 0.05, should_stop);
     let mut tries = 0;
-    while r.energy > feas_tol && tries < 25 {
+    // Personal build: the TypeScript gives up after 25 shrinks (0.96^25 = 0.36 of the start), which on
+    // solids of many small faces leaves a few disks (P = 1 to about 5) with no packing at all. Going on
+    // shrinking changes nothing where 25 sufficed: the loop ends at the first feasible size.
+    while r.energy > feas_tol && tries < MAX_SHRINKS {
         lam *= 0.96;
         pk.set_scale(lam);
         r = pk.relax(max_iter, feas_tol, 0.05, should_stop);
