@@ -644,6 +644,7 @@ version = "0.1.0"
 dependencies = [
  "polypack-js",
  "polypack-polyhedra",
+ "polypack-spaceauto",
  "serde",
  "serde_json",
 ]

@@ -11,14 +11,27 @@
 //! | container.ts | [`container`]: a solid as a container of balls, the wall gap |
 //! | problems.ts | [`problems`]: the lower bounds and the domain |
 //! | validate.ts | [`validate`]: the check of a configuration's form and the validator |
+//! | search.ts | [`search`]: `searchBalls`, with [`stop`] (its `StopSearch`, `tick` and `poll`) |
+//! | ball-pieces.ts | [`ball_pieces`]: the penalty polish, legalization, starts and hops of balls |
+//! | solid-pieces.ts | [`solid_pieces`]: the same for unit-edge solids in a ball |
+//! | random.ts | [`random`]: mulberry32, a normal deviate, a random rotation |
+//! | (polyhedra polish.ts) | [`lbfgs`]: the L-BFGS both polishes use |
+//! | run.ts (balls case) | [`auto`]: the Auto search of a volunteer job |
 //!
 //! `native/PORTING.md` has the rules of the port; `native/tools/balls-ref.mts`, `examples/ballsdiff.rs` and
 //! `native/tools/balls-compare.mjs` compare it with the TypeScript.
 
+pub mod auto;
+pub mod ball_pieces;
 pub mod catalogue;
 pub mod container;
 pub mod extent;
+pub mod lbfgs;
 pub mod problems;
+pub mod random;
+pub mod search;
+pub mod solid_pieces;
+pub mod stop;
 pub mod validate;
 
 pub use catalogue::{

@@ -152,3 +152,15 @@ pub fn wall_gap(c: &Container, s: f64, r: f64, x: f64, y: f64, z: f64) -> f64 {
     }
     gap
 }
+
+/// `container.ts: sizeFor`: the smallest size s at which a ball of radius r + w centred at (x, y, z) lies in s
+/// times the container: the largest over faces of (N_f . c + r + w) / b_f. (`r` is the caller's r + w.)
+pub fn size_for(c: &Container, r: f64, x: f64, y: f64, z: f64) -> f64 {
+    let mut s = 0.0;
+    let n = c.n();
+    let b = c.b();
+    for f in 0..c.f {
+        s = math::max(s, (n[3 * f] * x + n[3 * f + 1] * y + n[3 * f + 2] * z + r) / b[f]);
+    }
+    s
+}
