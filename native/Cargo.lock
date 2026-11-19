@@ -644,6 +644,7 @@ version = "0.1.0"
 dependencies = [
  "polypack-js",
  "polypack-polyhedra",
+ "polypack-spaceauto",
  "serde",
  "serde_json",
 ]
@@ -654,6 +655,7 @@ version = "0.1.0"
 dependencies = [
  "num-bigint",
  "polypack-js",
+ "polypack-spaceauto",
  "serde",
  "serde_json",
 ]
@@ -665,6 +667,7 @@ dependencies = [
  "libc",
  "libm",
  "polypack-js",
+ "polypack-spaceauto",
  "serde",
  "serde_json",
 ]
@@ -688,12 +691,29 @@ dependencies = [
 ]
 
 [[package]]
+name = "polypack-methods"
+version = "0.1.0"
+dependencies = [
+ "polypack-js",
+]
+
+[[package]]
 name = "polypack-native"
 version = "0.1.0"
 dependencies = [
  "ctrlc",
  "libc",
+ "polypack-balls",
+ "polypack-boundary",
+ "polypack-curved",
  "polypack-flat",
+ "polypack-ndim",
+ "polypack-polyhedra",
+ "polypack-spaceauto",
+ "polypack-spaces",
+ "polypack-sphere",
+ "polypack-surface",
+ "polypack-torus",
  "serde",
  "serde_json",
  "ureq",
@@ -705,6 +725,8 @@ name = "polypack-ndim"
 version = "0.1.0"
 dependencies = [
  "polypack-js",
+ "polypack-methods",
+ "polypack-spaceauto",
  "serde",
  "serde_json",
 ]
@@ -714,6 +736,7 @@ name = "polypack-polyhedra"
 version = "0.1.0"
 dependencies = [
  "polypack-js",
+ "polypack-spaceauto",
  "serde",
  "serde_json",
 ]
@@ -743,6 +766,13 @@ dependencies = [
 ]
 
 [[package]]
+name = "polypack-spaceauto"
+version = "0.1.0"
+dependencies = [
+ "serde_json",
+]
+
+[[package]]
 name = "polypack-spaces"
 version = "0.1.0"
 dependencies = [
@@ -765,6 +795,7 @@ name = "polypack-sphere"
 version = "0.1.0"
 dependencies = [
  "polypack-js",
+ "polypack-spaceauto",
  "serde",
  "serde_json",
 ]
@@ -773,7 +804,9 @@ dependencies = [
 name = "polypack-surface"
 version = "0.1.0"
 dependencies = [
+ "polypack-flat",
  "polypack-js",
+ "polypack-spaceauto",
  "serde",
  "serde_json",
 ]
@@ -783,6 +816,7 @@ name = "polypack-torus"
 version = "0.1.0"
 dependencies = [
  "polypack-js",
+ "polypack-spaceauto",
  "serde",
  "serde_json",
 ]

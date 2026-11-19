@@ -1,7 +1,8 @@
-//! The client's main loop (apps/volunteer/src/main.ts, flat problems): draw a problem at random
-//! (pick.rs), read it from the server, search it with the engine on its share of the threads,
-//! submit the best only when it beats the site's leader, and draw the next. Several problems are
-//! searched at once (--parallel-problems), each in its own slot.
+//! The client's main loop (apps/volunteer/src/main.ts): draw a problem at random (pick.rs), read it
+//! from the server, search it with the engine on its share of the threads, submit the best only
+//! when it beats the site's leader, and draw the next. Several problems are searched at once
+//! (--parallel-problems), each in its own slot. A problem of a kind beyond Flat (--dimensions) is
+//! searched by space_search.rs.
 //!
 //! Two modes narrow the draws: --open-only skips problems that have a leader, and target mode
 //! (--target-holder, target.rs) draws only from the problems one holder leads, checks before each
@@ -14,7 +15,8 @@ use crate::format::{format_duration, format_score, iso_now, now_ms, relative_per
 use crate::http::{read_submit_key, sleep_unless, Answer, Api, Pacer, SubmitCheck, SubmitOutcome, KEYED_SUBMISSIONS_PER_MINUTE, SUBMISSIONS_PER_MINUTE, SUBMISSION_WINDOW_MS};
 use crate::memory::Memory;
 use crate::options::Options;
-use crate::pick::{draw_problem, note_search, prune_recent, FlatKind};
+use crate::pick::{draw_once, draw_problem, kinds_for, note_search, prune_recent, Drawn, Kind};
+use crate::space_engine::SpaceSearcher;
 use crate::state::{random_u32, StateDir};
 use crate::target::{is_lazy, leaderboard_verdict, load_targets, read_budget_seconds, stop_early, BudgetCache, Filters, TargetPool, Verdict, BUDGETS_FILE};
 use polypack_flat::clock::ClockKind;
@@ -78,18 +80,18 @@ impl ActiveClock {
 }
 
 /// A problem being searched, for the status line, the stop and the pause.
-struct Current {
-    label: String,
-    lanes: usize,
-    control: Arc<Control>,
-    started_at: f64,
-    max_seconds: f64,
-    jobs: AtomicUsize,
-    best: Mutex<Option<f64>>,
-    leader: Mutex<Option<f64>>,
+pub(crate) struct Current {
+    pub(crate) label: String,
+    pub(crate) lanes: usize,
+    pub(crate) control: Arc<Control>,
+    pub(crate) started_at: f64,
+    pub(crate) max_seconds: f64,
+    pub(crate) jobs: AtomicUsize,
+    pub(crate) best: Mutex<Option<f64>>,
+    pub(crate) leader: Mutex<Option<f64>>,
 }
 
-enum Searched {
+pub(crate) enum Searched {
     Done(bool),
     Skipped,
     Unreachable,
@@ -111,35 +113,38 @@ fn format_margin(r: f64) -> String {
     }
 }
 
-struct Shared {
-    o: Options,
-    clock: ActiveClock,
+pub(crate) struct Shared {
+    pub(crate) o: Options,
+    pub(crate) clock: ActiveClock,
     stop: Arc<AtomicBool>,
     hard: Arc<AtomicBool>,
-    paused: AtomicBool,
+    pub(crate) paused: AtomicBool,
     stop_reason: Mutex<Option<String>>,
     upgrade: Mutex<Option<String>>,
-    reader: Api,
-    submitter: Api,
-    state: Mutex<StateDir>,
+    pub(crate) reader: Api,
+    pub(crate) submitter: Api,
+    pub(crate) state: Mutex<StateDir>,
     memory: Mutex<Memory>,
     recent: Mutex<HashMap<String, i64>>,
     skip_until: Mutex<HashMap<String, i64>>,
     in_flight: Mutex<HashSet<String>>,
-    currents: Mutex<Vec<Arc<Current>>>,
+    pub(crate) currents: Mutex<Vec<Arc<Current>>>,
     rng: Mutex<Rng>,
-    kind: FlatKind,
+    /// The kinds the draws cover: the flat problems unless --only-dimensions, and those of --dimensions.
+    kinds: Vec<Kind>,
+    /// The kinds' own searches (real_search.rs); None without --dimensions.
+    pub(crate) searcher: Option<Arc<dyn SpaceSearcher>>,
     /// Target mode's list and the leaders' search times (--target-max-budget).
     targets: Mutex<Option<TargetPool>>,
     budgets: Mutex<Option<BudgetCache>>,
     reloading: AtomicBool,
     held_skipped: AtomicUsize,
-    counts: Mutex<[usize; 4]>,
+    pub(crate) counts: Mutex<[usize; 4]>,
     started: Instant,
 }
 
 impl Shared {
-    fn stopped(&self) -> bool {
+    pub(crate) fn stopped(&self) -> bool {
         self.stop.load(Ordering::Relaxed)
     }
 
@@ -212,7 +217,7 @@ impl Shared {
         false
     }
 
-    fn max_seconds(&self) -> f64 {
+    pub(crate) fn max_seconds(&self) -> f64 {
         let mut s = (self.o.minutes_per_problem * 60.0).max(1.0);
         if self.o.hours.is_finite() {
             s = s.min(self.deadline_left().max(1.0));
@@ -227,7 +232,7 @@ impl Shared {
         }
     }
 
-    fn sub(&self, label: &str) -> String {
+    pub(crate) fn sub(&self, label: &str) -> String {
         if self.o.parallel_problems > 1 {
             format!("  {label}: ")
         } else {
@@ -339,7 +344,18 @@ pub fn run(o: Options) -> i32 {
     let logger: Arc<dyn Fn(&str) + Send + Sync> = Arc::new(|m: &str| log(m));
     let reader = Api::new(&o.base, &user_agent, stop.clone(), pacer.clone(), logger.clone(), on_upgrade.clone());
     let submitter = Api::new(&o.base, &user_agent, hard.clone(), pacer, logger, on_upgrade).with_submit_key(submit_key.clone(), on_key_refused);
-    let kind = FlatKind::new(o.n.as_ref(), o.m.as_ref(), o.p.as_ref());
+    let kinds = kinds_for(&o);
+    let searcher = if o.dimensions.is_some() {
+        match crate::real_search::searcher() {
+            Ok(s) => Some(s),
+            Err(why) => {
+                log(&format!("Cannot search {}: {why}", o.dimensions.iter().flatten().map(|d| d.as_str()).collect::<Vec<_>>().join(", ")));
+                return 1;
+            }
+        }
+    } else {
+        None
+    };
     let shared = Arc::new(Shared {
         clock: ActiveClock::new(),
         stop,
@@ -356,7 +372,8 @@ pub fn run(o: Options) -> i32 {
         in_flight: Mutex::new(HashSet::new()),
         currents: Mutex::new(Vec::new()),
         rng: Mutex::new(Rng::new(random_u32())),
-        kind,
+        kinds,
+        searcher,
         targets: Mutex::new(None),
         budgets: Mutex::new(None),
         reloading: AtomicBool::new(false),
@@ -456,8 +473,11 @@ pub fn run(o: Options) -> i32 {
     let code = if let Some((0, total, holder)) = targets_left {
         log(&format!("None of the {total} problem(s) \"{holder}\" leads passes --N, --M and --P: there is nothing to search."));
         1
-    } else if shared.kind.size() == 0 {
-        log("No problem passes --N, --M, --P and --max-P together: there is nothing to search.");
+    } else if shared.kinds.is_empty() {
+        log(&format!(
+            "No problem passes --N, --M, --P and --max-P together{}: there is nothing to search.",
+            if shared.o.dimensions.is_some() { " in the kinds chosen" } else { "" }
+        ));
         1
     } else {
         let shares = lane_shares(shared.o.cores, shared.o.parallel_problems);
@@ -534,13 +554,17 @@ fn banner(s: &Shared) {
         }
     ));
     let methods: Vec<&str> = polypack_flat::methods::ALL.iter().filter(|m| m.available() && !matches!(m, Method::Identity | Method::Seed | Method::Polish)).map(|m| m.name()).collect();
+    let searches = match (&o.dimensions, o.only_dimensions) {
+        (None, _) => format!("search methods {}", methods.join(", ")),
+        (Some(_), true) => "each kind's own search (Auto)".to_string(),
+        (Some(_), false) => format!("search methods {} for flat problems, each other kind's own search (Auto)", methods.join(", ")),
+    };
     log(&format!(
-        "Up to {} per problem; state in {}; {}{}; search methods {}",
+        "Up to {} per problem; state in {}; {}{}; {searches}",
         format_duration(o.minutes_per_problem * 60.0),
         o.state_dir.display(),
         if o.battery_pause { "pauses on battery power" } else { "keeps running on battery power" },
         if o.hours.is_finite() { format!("; stops after {} h", o.hours) } else { String::new() },
-        methods.join(", ")
     ));
     if let Some(holder) = &o.target_holder {
         log(&format!(
@@ -555,9 +579,11 @@ fn banner(s: &Shared) {
             (o.minutes_per_problem * 60.0).max(1.0)
         ));
     } else {
+        let total: f64 = s.kinds.iter().map(Kind::size).sum();
+        let parts: Vec<String> = s.kinds.iter().map(|k| format!("{} {}", k.size(), k.name())).collect();
         log(&format!(
-            "Draws each problem at random, every one as likely, from {} flat problems{}",
-            s.kind.size(),
+            "Draws each problem at random, every one as likely, from {}{}",
+            if s.kinds.len() == 1 { format!("{} {} problems", total, s.kinds[0].name()) } else { format!("{total} problems: {}", and_list(&parts)) },
             if o.open_only { "; open problems only (a problem that already has a leader is skipped)" } else { "" }
         ));
     }
@@ -605,15 +631,15 @@ fn slot(s: &Arc<Shared>, lanes: usize) -> i32 {
             all.extend(in_flight.iter().cloned());
             let targets = s.targets.lock().unwrap();
             let d = match targets.as_ref() {
-                Some(t) => draw_problem(&|r: &mut Rng| t.draw(r), &recent, &all, now, &mut s.rng.lock().unwrap()),
-                None => draw_problem(&|r: &mut Rng| s.kind.draw(r), &recent, &all, now, &mut s.rng.lock().unwrap()),
+                Some(t) => draw_problem(&|r: &mut Rng| t.draw(r).map(Drawn::Flat), &recent, &all, now, &mut s.rng.lock().unwrap()),
+                None => draw_problem(&|r: &mut Rng| draw_once(&s.kinds, r), &recent, &all, now, &mut s.rng.lock().unwrap()),
             };
             if let Some(p) = &d {
                 in_flight.insert(p.key());
             }
             d
         };
-        let Some(problem) = pick else {
+        let Some(drawn) = pick else {
             match s.targets.lock().unwrap().as_ref() {
                 Some(t) => log(&format!(
                     "No target is left: the list holds {} problem(s) \"{}\" may still lead, {} of them not skipped yet (and those are being searched or could not be read lately).",
@@ -630,13 +656,20 @@ fn slot(s: &Arc<Shared>, lanes: usize) -> i32 {
             reload_targets(s);
             continue;
         };
-        let key = problem.key();
-        let outcome = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| search_one(s, problem, lanes)));
+        let key = drawn.key();
+        let label = match &drawn {
+            Drawn::Flat(p) => p.label(),
+            Drawn::Space { id, .. } => id.clone(),
+        };
+        let outcome = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| match &drawn {
+            Drawn::Flat(problem) => search_one(s, *problem, lanes),
+            Drawn::Space { space, id } => crate::space_search::search_space(s, *space, id, lanes),
+        }));
         s.in_flight.lock().unwrap().remove(&key);
         let searched = match outcome {
             Ok(r) => r,
             Err(_) => {
-                log(&format!("Skipping {} for 10 minutes after an unexpected error", problem.label()));
+                log(&format!("Skipping {label} for 10 minutes after an unexpected error"));
                 s.skip_until.lock().unwrap().insert(key, now_ms() + SKIP_MS);
                 Searched::Done(false)
             }

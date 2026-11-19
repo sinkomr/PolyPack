@@ -1,0 +1,10 @@
+[package]
+name = "polypack-spaceauto"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+rust-version.workspace = true
+description = "The interface between the personal 2D-on-3D sweep and the Auto searches of surface, sphere and torus"
+
+[dependencies]
+serde_json = { version = "1", features = ["float_roundtrip"] }

@@ -10,6 +10,7 @@ name = "polypack_boundary"
 
 [dependencies]
 polypack-js = { path = "../js" }
+polypack-spaceauto = { path = "../spaceauto" }
 serde = { version = "1", features = ["derive"] }
 # float_roundtrip: numbers read from JSON are the exact doubles JavaScript reads
 serde_json = { version = "1", features = ["float_roundtrip"] }

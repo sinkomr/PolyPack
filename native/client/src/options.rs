@@ -1,8 +1,9 @@
-//! Command-line options, matching the JavaScript client's (apps/volunteer/src/options.ts) where
-//! they apply to flat problems. Parsing is pure: the machine's core count and home directory are
+//! Command-line options, matching the JavaScript client's (apps/volunteer/src/options.ts), except
+//! --space-method and --space-params: this client runs each kind's own (Auto) search. Parsing is pure: the machine's core count and home directory are
 //! passed in.
 
 use crate::target::{DEFAULT_TARGET_MARGIN, DEFAULT_TARGET_MIN_SECONDS};
+use polypack_spaces::{SpaceName, SPACE_NAMES};
 use std::path::PathBuf;
 
 pub const DEFAULT_BASE: &str = "https://polypack.fly.dev";
@@ -46,6 +47,12 @@ pub struct Options {
     pub target_include_unknown: bool,
     pub target_min_seconds: f64,
     pub target_margin: f64,
+    /// The kinds of problem beyond Flat whose problems are also searched (--dimensions, or its
+    /// first name --spaces), in the order of SPACE_NAMES ("all" names every one); None when the
+    /// option is not given: then no problem of them is drawn or read.
+    pub dimensions: Option<Vec<SpaceName>>,
+    /// --only-dimensions (or --only-spaces): no flat problem is drawn.
+    pub only_dimensions: bool,
 }
 
 #[derive(Clone, Debug, PartialEq)]
@@ -76,9 +83,9 @@ pub fn help_text(m: &Machine) -> String {
     format!(
         "polypack-native {version}: give spare CPU time to PolyPack ({DEFAULT_BASE})
 
-A native client for flat problems (polygons in polygons): it draws problems at random, several
-at once on a machine with many cores, searches each with many methods and seeds on its share of
-the cores, and submits a result only when it beats the site's leader.
+A native client: it draws problems at random, several at once on a machine with many cores,
+searches each with many methods and seeds on its share of the cores, and submits a result only
+when it beats the site's leader. By default it searches Flat problems (polygons in polygons).
 
 Usage: polypack-native [options]
 
@@ -108,6 +115,19 @@ Usage: polypack-native [options]
   --once                   search one problem, then exit
   --help                   this text
   --version                the version
+
+Optional, off by default: the other kinds of problem (see {DEFAULT_BASE}/dimensions.html).
+surface (Platonic and other surfaces), curved (constant curvature), sphere, torus, boundary
+(balls and solids on the boundary of 4-polytopes and n-cubes), polyhedra (polyhedra in polyhedra),
+balls (balls in a ball or a solid, solids in a ball) and ndim (4D to 10D: polytopes or balls in a
+polytope or ball). The API calls these kinds spaces.
+
+  --dimensions LIST        also search problems of these kinds: surface, curved, sphere, torus,
+                           boundary, polyhedra, balls, ndim, comma-separated, or all; every problem of
+                           them and of the flat ones is then as likely as any other. --P narrows them too
+  --spaces LIST            the same as --dimensions (its earlier name)
+  --only-dimensions        search only the kinds given with --dimensions
+  --only-spaces            the same as --only-dimensions
 
 Target mode: re-search the low-effort records of one holder.
 
@@ -145,6 +165,28 @@ state and exits within about 30 s. A second Ctrl-C exits at once.
 }
 
 /// "0,3-6,12" into the sorted distinct integers it names, each in [min, max] and allowed.
+/// "surface,torus" or "all" into the named kinds, in the order of SPACE_NAMES (options.ts
+/// `parseSpaces`). `flag` is the option's name as it was given, for the messages.
+pub fn parse_dimensions(text: &str, flag: &str) -> Result<Vec<SpaceName>, OptionError> {
+    let parts: Vec<String> = text.split(',').map(|s| s.trim().to_lowercase()).collect();
+    if parts.iter().any(|s| s.is_empty()) {
+        return Err(OptionError(format!("--{flag}: empty item in \"{text}\"")));
+    }
+    if parts.iter().any(|s| s == "all") {
+        if parts.len() > 1 {
+            return Err(OptionError(format!("--{flag}: \"all\" cannot be combined with other names")));
+        }
+        return Ok(SPACE_NAMES.to_vec());
+    }
+    let names: Vec<&str> = SPACE_NAMES.iter().map(|n| n.as_str()).collect();
+    for part in &parts {
+        if !names.contains(&part.as_str()) {
+            return Err(OptionError(format!("--{flag}: \"{part}\" is not one of {} or all", names.join(", "))));
+        }
+    }
+    Ok(SPACE_NAMES.into_iter().filter(|n| parts.iter().any(|p| p == n.as_str())).collect())
+}
+
 pub fn parse_int_list(text: &str, what: &str, min: u32, max: u32, allowed: impl Fn(u32) -> bool) -> Result<Vec<u32>, OptionError> {
     let mut out = std::collections::BTreeSet::new();
     for part in text.split(',').map(|s| s.trim()) {
@@ -246,9 +288,25 @@ const VALUE_OPTIONS: &[&str] = &[
     "target-max-budget",
     "target-min-seconds",
     "target-margin",
+    "dimensions",
+    "spaces",
 ];
-const FLAG_OPTIONS: &[&str] = &["dry-run", "no-battery-pause", "once", "help", "version", "open-only", "target-refresh", "target-any-entry", "target-include-unknown"];
-const UNSUPPORTED: &[&str] = &["dimensions", "spaces", "only-dimensions", "only-spaces", "space-method", "space-params"];
+const FLAG_OPTIONS: &[&str] = &[
+    "dry-run",
+    "no-battery-pause",
+    "once",
+    "help",
+    "version",
+    "open-only",
+    "target-refresh",
+    "target-any-entry",
+    "target-include-unknown",
+    "only-dimensions",
+    "only-spaces",
+];
+/// The JavaScript client's choice of a generic method for the other kinds: this client runs each
+/// kind's own search.
+const UNSUPPORTED: &[&str] = &["space-method", "space-params"];
 
 /// The options as name -> value (flags have "true"), from `--name value` or `--name=value`.
 pub fn split_args(argv: &[String]) -> Result<Vec<(String, String)>, OptionError> {
@@ -264,7 +322,7 @@ pub fn split_args(argv: &[String]) -> Result<Vec<(String, String)>, OptionError>
             None => (rest.to_string(), None),
         };
         if UNSUPPORTED.contains(&key.as_str()) {
-            return Err(OptionError(format!("--{key}: this client searches flat problems only; the JavaScript client covers the other kinds")));
+            return Err(OptionError(format!("--{key}: this client runs each kind's own search (Auto); the JavaScript client offers the generic methods")));
         }
         if FLAG_OPTIONS.contains(&key.as_str()) {
             if inline.is_some() {
@@ -357,6 +415,28 @@ pub fn parse_options(argv: &[String], machine: &Machine) -> Result<Parsed, Optio
             "--target-holder and --open-only cannot be combined: a target is a problem with a leader, open-only skips those; run two processes with different --state directories".into(),
         ));
     }
+    if get("spaces").is_some() && get("dimensions").is_some() {
+        return Err(OptionError("--spaces and --dimensions are the same option: give one of them".into()));
+    }
+    let dim_flag = if get("dimensions").is_some() { "dimensions" } else { "spaces" };
+    let dimensions = match get("dimensions").or_else(|| get("spaces")) {
+        Some(v) => Some(parse_dimensions(&v, dim_flag)?),
+        None => None,
+    };
+    let only_dimensions = flag("only-dimensions") || flag("only-spaces");
+    let only = if flag("only-dimensions") { "--only-dimensions" } else { "--only-spaces" };
+    let (named, other) = if flag("only-dimensions") { ("dimensions", "spaces") } else { ("spaces", "dimensions") };
+    if only_dimensions && dimensions.is_none() {
+        return Err(OptionError(format!("{only} needs --{named} LIST (or --{other} LIST), for example --{named} all")));
+    }
+    if only_dimensions && (get("N").is_some() || get("M").is_some()) {
+        return Err(OptionError(format!("--N and --M filter the flat problems, which {only} leaves out")));
+    }
+    if target_holder.is_some() && dimensions.is_some() {
+        return Err(OptionError(format!(
+            "--target-holder searches flat problems only: leave out --{dim_flag}, or run a second process with its own --state directory"
+        )));
+    }
     if target_holder.is_none() {
         for f in ["target-refresh", "target-any-entry", "target-max-budget", "target-include-unknown", "target-min-seconds", "target-margin"] {
             if pairs.iter().any(|(key, _)| key == f) {
@@ -447,6 +527,8 @@ pub fn parse_options(argv: &[String], machine: &Machine) -> Result<Parsed, Optio
         target_max_budget,
         target_min_seconds,
         target_margin,
+        dimensions,
+        only_dimensions,
     }))
 }
 
@@ -475,7 +557,7 @@ mod tests {
         assert!(!o.dry_run);
         assert_eq!(o.parallel_problems, 1);
         assert!(parse_options(&args(&["--N", "1"]), &machine()).is_err());
-        assert!(parse_options(&args(&["--dimensions", "all"]), &machine()).is_err());
+        assert!(parse_options(&args(&["--space-method", "basin_hopping"]), &machine()).is_err());
         assert!(parse_options(&args(&["--server", "ftp://x"]), &machine()).is_err());
     }
 
@@ -505,5 +587,28 @@ mod tests {
         assert!(run(&["--target-holder", "jg", "--target-min-seconds", "90", "--minutes-per-problem", "1"]).is_err());
         assert!(run(&["--target-holder", ""]).is_err());
         assert!(run(&["--open-only"]).unwrap().open_only);
+    }
+
+    #[test]
+    fn dimensions() {
+        let run = |a: &[&str]| match parse_options(&args(a), &machine()) {
+            Ok(Parsed::Run(o)) => Ok(o),
+            Ok(_) => panic!(),
+            Err(e) => Err(e.0),
+        };
+        let o = run(&[]).unwrap();
+        assert_eq!((o.dimensions, o.only_dimensions), (None, false));
+        let o = run(&["--dimensions", "torus, Surface"]).unwrap();
+        assert_eq!(o.dimensions, Some(vec![SpaceName::Surface, SpaceName::Torus]));
+        assert_eq!(run(&["--spaces=all", "--only-spaces"]).unwrap().dimensions, Some(SPACE_NAMES.to_vec()));
+        assert!(run(&["--dimensions", "all", "--only-dimensions"]).unwrap().only_dimensions);
+        assert!(run(&["--dimensions", "all,torus"]).unwrap_err().contains("cannot be combined"));
+        assert!(run(&["--dimensions", "flat"]).unwrap_err().contains("is not one of surface, curved, sphere, torus, boundary, polyhedra, balls, ndim"));
+        assert!(run(&["--dimensions", "torus,,sphere"]).unwrap_err().contains("empty item"));
+        assert!(run(&["--spaces", "torus", "--dimensions", "torus"]).unwrap_err().contains("the same option"));
+        assert!(run(&["--only-dimensions"]).unwrap_err().contains("needs --dimensions LIST"));
+        assert!(run(&["--dimensions", "torus", "--only-dimensions", "--N", "4"]).unwrap_err().contains("leaves out"));
+        assert!(run(&["--dimensions", "torus", "--target-holder", "x"]).unwrap_err().contains("flat problems only"));
+        assert!(run(&["--space-method", "x"]).unwrap_err().contains("Auto"));
     }
 }

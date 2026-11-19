@@ -21,6 +21,9 @@ serde = { version = "1", features = ["derive"] }
 # (eval, rng, search) call it directly; the validator's modules go through polypack_js::math,
 # whose transcendental functions are these same ones.
 libm = "0.2"
+# the native client's Auto search (src/auto.rs): the job interface, and the configurations as JSON
+polypack-spaceauto = { path = "../spaceauto" }
+serde_json = { version = "1", features = ["float_roundtrip"] }
 
 [target.'cfg(unix)'.dependencies]
 libc = "0.2"

@@ -21,6 +21,8 @@ COPY native/polyhedra polyhedra
 COPY native/balls balls
 COPY native/ndim ndim
 COPY native/spaces spaces
+COPY native/spaceauto spaceauto
+COPY native/methods methods
 COPY native/server server
 # --locked: the versions of Cargo.lock, nothing newer
 RUN cargo build --release --locked -p polypack-server

@@ -5,8 +5,11 @@
 //!
 //! The modules of the crate root are packages/ndim (the geometry, file by file); `space` is what
 //! the server reaches of packages/ndspace (ids, the domain, bounds, the parser of a configuration
-//! and the check with its cap on the work). Only what the server's bundle keeps is ported: the
-//! search kernel, the exact certifier's helpers and the pose-from-matrix functions are not here.
+//! and the check with its cap on the work). Only what the server's bundle keeps is ported, and
+//! what the Auto search needs: the search kernel (`kernel`, with `contact` and `lattice` of
+//! packages/ndspace, and the pose-from-matrix functions of `pose`) and the space's Auto job
+//! (`auto`, on the generic basin hopping of the polypack-methods crate). The exact certifier's
+//! helpers are not here.
 //!
 //! The port follows native/PORTING.md: the order of operations, loops and early exits is the
 //! source's; `Math.*` is `polypack_js::math`, numbers in messages are `polypack_js::fmt::num`.
@@ -18,10 +21,14 @@
 // The workspace's rust-version is 1.80: `is_none_or` and `is_multiple_of` are newer.
 #![allow(clippy::unnecessary_map_or, clippy::manual_is_multiple_of)]
 
+pub mod auto;
 pub mod ball;
+pub mod contact;
 pub mod generate;
 pub mod gjk;
 pub mod info;
+pub mod kernel;
+pub mod lattice;
 pub mod limits;
 pub mod linalg;
 pub mod margin;

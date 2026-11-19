@@ -5,6 +5,7 @@
 //!   memory.json     the engine's memory, rewritten atomically after each problem
 //!   history.jsonl   one line per problem searched, kept to the last 20,000
 //!   best/N-M-P.json the best strict packing this machine found for a problem, with provenance
+//!   best/spaces/<id with / as _>.json   the same for a problem of a kind beyond Flat
 //!
 //! Every whole-file write goes to a temporary file that is then renamed over the target.
 
@@ -153,5 +154,29 @@ impl StateDir {
 
     pub fn write_best(&self, n: u32, m: u32, p: usize, file: &Value) -> std::io::Result<()> {
         write_atomic(&self.best_path(n, m, p), &format!("{file}\n"))
+    }
+
+    pub fn space_best_path(&self, id: &str) -> PathBuf {
+        self.dir.join("best").join("spaces").join(format!("{}.json", id.replace('/', "_")))
+    }
+
+    /// The kept configuration of a problem of a kind beyond Flat, when it is of that problem and has a score
+    /// and a configuration.
+    pub fn read_space_best(&self, id: &str) -> Option<Value> {
+        let v: Value = serde_json::from_str(&fs::read_to_string(self.space_best_path(id)).ok()?).ok()?;
+        let ok = v.get("id").and_then(|x| x.as_str()) == Some(id)
+            && v.get("units").and_then(|x| x.as_str()) == Some("diameter")
+            && v.get("score").and_then(|x| x.as_f64()).map_or(false, |s| s.is_finite() && s > 0.0)
+            && v.get("config").is_some();
+        if ok {
+            Some(v)
+        } else {
+            None
+        }
+    }
+
+    pub fn write_space_best(&self, id: &str, file: &Value) -> std::io::Result<()> {
+        fs::create_dir_all(self.dir.join("best").join("spaces"))?;
+        write_atomic(&self.space_best_path(id), &format!("{file}\n"))
     }
 }

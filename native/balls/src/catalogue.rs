@@ -37,6 +37,13 @@ pub fn ball_container_radius(score: f64) -> f64 {
     SCORE_TO_RADIUS * score
 }
 
+/// `catalogue.ts: ballContainerRadiusSlope`: d(radius) / d(score), the factor of every gradient with respect
+/// to the size of a ball container.
+#[inline]
+pub fn ball_container_radius_slope() -> f64 {
+    SCORE_TO_RADIUS
+}
+
 /// `catalogue.ts: BALL_DIAMETER`: the least distance of two ball centres.
 pub const BALL_DIAMETER: f64 = 2.0 * BALL_RADIUS;
 

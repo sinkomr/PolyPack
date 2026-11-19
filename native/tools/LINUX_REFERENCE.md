@@ -108,6 +108,15 @@ snapshots (`n-<N>.json.gz` of the flat boards, `space-<family>.json.gz`).
     $L/linux.sh boundary-fx boundary-ref fixtures $O/boundary
     $L/linux.sh boundary-tables boundary-tables              # native/boundary/tests/fixtures/builders.json
 
+The searches of the native client (each crate's `tests/fixtures/search-ref.jsonl`: the Auto search
+with evaluation budgets only, so that the clock never decides) are held to Linux Node 24 the same way:
+
+    $L/bundle.sh boundary-search-ref polyhedra-search-ref balls-search-ref ndim-search-ref
+    $L/linux.sh boundary-search boundary-search-ref     # about 10 minutes under emulation
+    $L/linux.sh polyhedra-search polyhedra-search-ref native/polyhedra/tests/fixtures/search-ref.jsonl
+    $L/linux.sh balls-search balls-search-ref
+    $L/linux.sh ndim-search ndim-search-ref
+
 Under emulation on an Apple Silicon Mac these took between one minute (balls) and twenty-two (sphere).
 `native/boundary/tests/fixtures/cbrt.json` is `[x, Math.cbrt(x)]` for 1,507 arguments; Linux Node 24 gives
 the values it holds.

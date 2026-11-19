@@ -11,6 +11,11 @@ mod memory;
 mod options;
 mod pick;
 mod platform;
+#[cfg_attr(not(feature = "real-search"), allow(dead_code))]
+mod real_search;
+mod space_api;
+mod space_engine;
+mod space_search;
 mod state;
 mod target;
 mod volunteer;

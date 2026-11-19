@@ -13,16 +13,24 @@
 //! | problems.ts | [`problems`]: `get_problem`, `volume_bound` |
 //! | info.ts | [`info`]: the limits |
 //! | domain.ts | [`domain`]: what /api/spaces says of the family, its bound and its sample |
+//! | search.ts | [`search`]: `search_polyhedra`; [`auto`] is the job runner of the personal client |
+//! | polish.ts | [`polish`]: the penalty polish and the legalization |
+//! | sim/sim.ts, sim/geom.ts | [`sim`], [`simgeom`]: the soft-to-rigid simulator |
 //!
 //! `native/PORTING.md` has the rules of the port; `native/tools/polyhedra-ref.mts`,
 //! `examples/polyhedradiff.rs` and `native/tools/polyhedra-compare.mjs` compare it with the TypeScript.
 
+pub mod auto;
 pub mod catalogue;
 pub mod domain;
 pub mod geom;
 pub mod info;
+pub mod polish;
 pub mod problems;
 pub mod records;
+pub mod search;
+pub mod sim;
+pub mod simgeom;
 pub mod solids;
 pub mod validate;
 

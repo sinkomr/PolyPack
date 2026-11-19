@@ -11,10 +11,12 @@
 //! | geometry.ts (the functions the validator and the domain's bound use) | [`geometry`] |
 //! | hull.ts | [`hull`] |
 //! | validate.ts | [`validate`] |
+//! | search.ts (`searchSphere` and its helpers) | [`search`] |
+//! | the `sphere` branch of `runSpaceJob` (packages/spaces/src/search/run.ts) | [`auto`] |
 //!
 //! and, for the coordinator, the `sphere` branch of `check` in packages/spaces/src/validate.ts as
-//! [`server::check`]. The search (search.ts, kernel*.ts) and the record reader are not reached by
-//! the server and are not ported.
+//! [`server::check`]. `search` and `auto` are for the personal 2D-on-3D client, not the server; the kernel files
+//! (kernel*.ts) and the record reader are not ported.
 //!
 //! Every `Math.*` of the source is `polypack_js::math::*`, every number in a message is
 //! `polypack_js::fmt::num`.
@@ -27,9 +29,11 @@
     clippy::nonminimal_bool
 )]
 
+pub mod auto;
 pub mod geometry;
 pub mod hull;
 pub mod json;
+pub mod search;
 pub mod server;
 pub mod validate;
 
