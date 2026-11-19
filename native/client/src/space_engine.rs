@@ -25,7 +25,7 @@
 use polypack_spaceauto::{AutoJob, AutoResult};
 use serde_json::Value;
 use std::panic::{catch_unwind, AssertUnwindSafe};
-use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::atomic::Ordering;
 use std::sync::mpsc;
 use std::time::{Duration, Instant};
 
@@ -44,15 +44,6 @@ pub const EVALUATION_FILL: f64 = 0.8;
 pub const MIN_EVALUATIONS: u64 = 16;
 pub const MIN_IMPROVEMENT: f64 = 1e-9;
 pub const STAGNATION_SHARE: f64 = 0.25;
-
-/// Any number as a uint32, as JavaScript's `>>> 0`.
-pub fn to_u32(v: f64) -> u32 {
-    if v.is_finite() {
-        (v.trunc() as i64) as u32
-    } else {
-        0
-    }
-}
 
 /// seed.ts `mixSeed`.
 pub fn mix_seed(a: u32, b: u32) -> u32 {
@@ -116,16 +107,9 @@ pub struct JobReport {
 }
 
 /// Stop and pause flags shared by the client and the running jobs.
-pub struct SpaceControl {
-    pub aborted: AtomicBool,
-    pub paused: AtomicBool,
-}
-
-impl SpaceControl {
-    pub fn new() -> SpaceControl {
-        SpaceControl { aborted: AtomicBool::new(false), paused: AtomicBool::new(false) }
-    }
-}
+/// The stop and pause flags of a search: the flat engine's, so that the client's main loop drives
+/// both kinds of search alike.
+pub type SpaceControl = polypack_flat::Control;
 
 /// Checks a job's configuration with the claimed score: the validated score, or why not.
 pub type CheckFn<'a> = &'a (dyn Fn(&Value, f64) -> Result<f64, String> + Sync);
@@ -420,7 +404,7 @@ pub mod tests {
             START.get_or_init(Instant::now).elapsed().as_secs_f64() * 50.0
         };
         let input = SpaceSearchInput { space: "sphere", id: "sphere/4/3", known: None, bound: None, max_seconds: 40.0, lanes: 1, seed: 7, now: &now, check: &ok_check, low_priority: false };
-        let control = SpaceControl::new();
+        let control = SpaceControl::default();
         let mut reports = Vec::new();
         let out = search_space_problem(&input, &searcher, &control, &mut |r, b| reports.push((r.score, b.map(|b| b.score))));
         assert!(out.jobs >= 3, "{out:?}");
@@ -442,7 +426,7 @@ pub mod tests {
             START.get_or_init(Instant::now).elapsed().as_secs_f64()
         };
         let input = SpaceSearchInput { space: "sphere", id: "sphere/4/3", known: Some(&known), bound: Some(2.0), max_seconds: 30.0, lanes: 2, seed: 1, now: &now, check: &ok_check, low_priority: false };
-        let out = search_space_problem(&input, &searcher, &SpaceControl::new(), &mut |_, _| {});
+        let out = search_space_problem(&input, &searcher, &SpaceControl::default(), &mut |_, _| {});
         // the first job iterates from the known start, a valid job that ended "bound" ends the problem
         assert_eq!(out.stopped, "bound");
         assert_eq!(out.best.as_ref().map(|b| (b.score, b.kind)), Some((2.0, "iterate")));
@@ -464,7 +448,7 @@ pub mod tests {
         };
         let input = SpaceSearchInput { space: "surface", id: "surface/rhombicuboctahedron/nofold/0/1", known: None, bound: None, max_seconds: 600.0, lanes: 1, seed: 1, now: &now, check: &ok_check, low_priority: false };
         let searcher = Empty(Mutex::new(0));
-        let out = search_space_problem(&input, &searcher, &SpaceControl::new(), &mut |_, _| {});
+        let out = search_space_problem(&input, &searcher, &SpaceControl::default(), &mut |_, _| {});
         assert_eq!((out.jobs, out.stopped, out.best.is_none()), (3, "no start", true));
         assert_eq!(*searcher.0.lock().unwrap(), 3);
     }
@@ -482,7 +466,7 @@ pub mod tests {
             START.get_or_init(Instant::now).elapsed().as_secs_f64()
         };
         let input = SpaceSearchInput { space: "sphere", id: "sphere/4/3", known: None, bound: None, max_seconds: 600.0, lanes: 1, seed: 1, now: &now, check: &ok_check, low_priority: false };
-        let out = search_space_problem(&input, &Bad, &SpaceControl::new(), &mut |_, _| {});
+        let out = search_space_problem(&input, &Bad, &SpaceControl::default(), &mut |_, _| {});
         assert_eq!((out.jobs, out.stopped, out.best.is_none()), (3, "stagnation", true));
     }
 }

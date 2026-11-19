@@ -3,7 +3,7 @@ name = "polypack-native"
 version.workspace = true
 edition.workspace = true
 license.workspace = true
-description = "Native PolyPack volunteer client"
+description = "Native PolyPack volunteer client: Flat problems, and with --dimensions the other kinds"
 
 [[bin]]
 name = "polypack-native"
@@ -13,7 +13,8 @@ path = "src/main.rs"
 polypack-flat = { path = "../flat" }
 polypack-spaces = { path = "../spaces" }
 polypack-spaceauto = { path = "../spaceauto" }
-# the 2D-on-3D searches, behind the real-search feature (their auto modules are ported separately)
+# the searches of the kinds beyond Flat (their crates' auto modules), behind the real-search feature
+polypack-curved = { path = "../curved", optional = true }
 polypack-sphere = { path = "../sphere", optional = true }
 polypack-torus = { path = "../torus", optional = true }
 polypack-surface = { path = "../surface", optional = true }
@@ -26,9 +27,9 @@ ctrlc = "3"
 # HTTPS through rustls (ring); without it the client speaks plain HTTP only (a local server)
 default = ["tls", "real-search"]
 tls = ["ureq/tls"]
-# calls the Auto searches of surface, sphere and torus (src/real_search.rs); without it
-# --sweep-2d-on-3d refuses to start
-real-search = ["dep:polypack-sphere", "dep:polypack-torus", "dep:polypack-surface"]
+# calls the Auto searches of the kinds beyond Flat (src/real_search.rs); without it --dimensions
+# refuses to start
+real-search = ["dep:polypack-curved", "dep:polypack-sphere", "dep:polypack-torus", "dep:polypack-surface"]
 
 [target.'cfg(unix)'.dependencies]
 libc = "0.2"

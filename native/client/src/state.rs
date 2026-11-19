@@ -5,8 +5,7 @@
 //!   memory.json     the engine's memory, rewritten atomically after each problem
 //!   history.jsonl   one line per problem searched, kept to the last 20,000
 //!   best/N-M-P.json the best strict packing this machine found for a problem, with provenance
-//!   best/spaces/<id with / as _>.json   the same for a 2D-on-3D problem (the sweep)
-//!   sweep.json      the sweep's position (sweep_order.rs)
+//!   best/spaces/<id with / as _>.json   the same for a problem of a kind beyond Flat
 //!
 //! Every whole-file write goes to a temporary file that is then renamed over the target.
 
@@ -161,7 +160,7 @@ impl StateDir {
         self.dir.join("best").join("spaces").join(format!("{}.json", id.replace('/', "_")))
     }
 
-    /// The kept configuration of a 2D-on-3D problem, when it is of that problem and has a score
+    /// The kept configuration of a problem of a kind beyond Flat, when it is of that problem and has a score
     /// and a configuration.
     pub fn read_space_best(&self, id: &str) -> Option<Value> {
         let v: Value = serde_json::from_str(&fs::read_to_string(self.space_best_path(id)).ok()?).ok()?;

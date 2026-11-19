@@ -1,4 +1,4 @@
-//! The sweep's side of the spaces API: reading a problem, deciding whether to submit and what to
+//! The client's side of the spaces API: reading a problem, deciding whether to submit and what to
 //! send. Ports of apps/volunteer/src/spaces/read.ts (`readSpaceProblem`), submit.ts
 //! (`decideSpaceSubmission`, `spaceSubmissionBody`, `checkSpaceStored`, `bestRef`) and of
 //! search/model.ts (`buildSpaceKnown`, `checkSpaceConfig`). Pure functions of what the server said

@@ -59,6 +59,7 @@
 // Index loops over coordinates read as the formulas they implement.
 #![allow(clippy::needless_range_loop, clippy::too_many_arguments, clippy::collapsible_match)]
 
+pub mod auto;
 mod basis;
 pub mod bound;
 mod dual_lp;
