@@ -665,6 +665,7 @@ dependencies = [
  "libc",
  "libm",
  "polypack-js",
+ "polypack-spaceauto",
  "serde",
  "serde_json",
 ]
@@ -693,6 +694,7 @@ version = "0.1.0"
 dependencies = [
  "ctrlc",
  "libc",
+ "polypack-curved",
  "polypack-flat",
  "polypack-spaceauto",
  "polypack-spaces",
