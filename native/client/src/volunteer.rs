@@ -554,13 +554,17 @@ fn banner(s: &Shared) {
         }
     ));
     let methods: Vec<&str> = polypack_flat::methods::ALL.iter().filter(|m| m.available() && !matches!(m, Method::Identity | Method::Seed | Method::Polish)).map(|m| m.name()).collect();
+    let searches = match (&o.dimensions, o.only_dimensions) {
+        (None, _) => format!("search methods {}", methods.join(", ")),
+        (Some(_), true) => "each kind's own search (Auto)".to_string(),
+        (Some(_), false) => format!("search methods {} for flat problems, each other kind's own search (Auto)", methods.join(", ")),
+    };
     log(&format!(
-        "Up to {} per problem; state in {}; {}{}; search methods {}",
+        "Up to {} per problem; state in {}; {}{}; {searches}",
         format_duration(o.minutes_per_problem * 60.0),
         o.state_dir.display(),
         if o.battery_pause { "pauses on battery power" } else { "keeps running on battery power" },
         if o.hours.is_finite() { format!("; stops after {} h", o.hours) } else { String::new() },
-        methods.join(", ")
     ));
     if let Some(holder) = &o.target_holder {
         log(&format!(
