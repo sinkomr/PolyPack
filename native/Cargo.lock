@@ -702,8 +702,10 @@ version = "0.1.0"
 dependencies = [
  "ctrlc",
  "libc",
+ "polypack-balls",
  "polypack-curved",
  "polypack-flat",
+ "polypack-ndim",
  "polypack-spaceauto",
  "polypack-spaces",
  "polypack-sphere",
