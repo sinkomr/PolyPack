@@ -13,11 +13,12 @@
 //! suitable flip every rotation of the group is representable. A ball's pose is its centre
 //! [t_1..t_d].
 //!
-//! The server's bundle keeps cayleyMatrix, readPose and placeVertices of the source (the
-//! matrix-to-pose functions and placeFacets are the search's and are not ported).
-use crate::linalg::solve;
+//! The server's bundle keeps cayleyMatrix, readPose and placeVertices of the source; the
+//! matrix-to-pose functions (cayleyOfMatrix, poseOfMatrix) are the search's, for the nD kernel's
+//! Auto search. placeFacets is not ported.
+use crate::linalg::{det, matmul, solve, transpose};
 use crate::Thrown;
-use polypack_js::fmt;
+use polypack_js::{fmt, math};
 use serde_json::Value;
 
 /// Largest absolute value of a Cayley parameter (keeps I - S well conditioned, and rotations within
@@ -174,4 +175,133 @@ pub fn place_vertices(v: &[f64], n_v: usize, d: usize, t: &[f64], r: &[f64]) -> 
         }
     }
     x
+}
+
+/// A candidate's rebuild must match the matrix to this (largest absolute entry difference).
+const VERIFY_TOL: f64 = 1e-12;
+
+/// packages/ndim/src/pose.ts: cayleyOfMatrix. The Cayley parameters and flip of a rotation matrix
+/// (row-major d x d), choosing the flip that keeps the parameters smallest. Every candidate
+/// (D R - I)(D R + I)^-1 is rebuilt with cayley_matrix and kept only if it reproduces R to 1e-12: a
+/// nearly singular D R + I would otherwise return the parameters of another rotation. All even
+/// flips are tried for d <= 7; above, a greedy flip and its pair swaps first, and, when none of
+/// those verifies, all even flips (2^(d-1), 512 at d = 10). `Err` (a RangeError of the source,
+/// with its message) for a matrix that is not finite, not orthonormal (R^T R differs from I by more
+/// than 1e-9), a reflection (determinant < 0) or without a verified Cayley form within MAX_CAYLEY.
+pub fn cayley_of_matrix(r: &[f64], d: usize) -> Result<(Vec<f64>, u32), Thrown> {
+    if r.len() != d * d || !r.iter().all(|v| v.is_finite()) {
+        return Err(Thrown("the rotation must be a finite d x d matrix".into()));
+    }
+    let mm = r.to_vec();
+    let g = matmul(&transpose(&mm, d), &mm, d);
+    let mut dev = 0.0f64;
+    for i in 0..d {
+        for j in 0..d {
+            dev = math::max(dev, math::abs(g[i * d + j] - if i == j { 1.0 } else { 0.0 }));
+        }
+    }
+    if dev > 1e-9 {
+        return Err(Thrown("the matrix is not orthonormal (R^T R differs from I by more than 1e-9)".into()));
+    }
+    if det(&mm, d) < 0.0 {
+        return Err(Thrown("the matrix is a reflection (determinant -1): poses are rotations only".into()));
+    }
+    // a matrix that is itself off orthogonal by dev is reproduced only that well (a wrong candidate is off by order 1)
+    let tol = VERIFY_TOL + 10.0 * dev;
+    let mut even_flips: Vec<u32> = Vec::new();
+    for m in 0..(1u32 << d) {
+        if parity(m) == 0 {
+            even_flips.push(m);
+        }
+    }
+    let mut heuristic = even_flips.clone();
+    let mut heuristic_is_all = true;
+    if d > 7 {
+        let mut base = 0u32;
+        for i in 0..d {
+            if mm[i * d + i] < 0.0 {
+                base |= 1 << i;
+            }
+        }
+        if parity(base) != 0 {
+            let mut imin = 0;
+            for i in 1..d {
+                if math::abs(mm[i * d + i]) < math::abs(mm[imin * d + imin]) {
+                    imin = i;
+                }
+            }
+            base ^= 1 << imin;
+        }
+        heuristic = vec![base];
+        for i in 0..d {
+            for j in i + 1..d {
+                heuristic.push(base ^ (1 << i) ^ (1 << j));
+            }
+        }
+        heuristic_is_all = false;
+    }
+    let try_masks = |masks: &[u32]| -> Option<(f64, Vec<f64>, u32)> {
+        let mut best: Option<(f64, Vec<f64>, u32)> = None;
+        for &m in masks {
+            let mut c = vec![0.0f64; d * d];
+            for i in 0..d {
+                for j in 0..d {
+                    c[i * d + j] = (if (m >> i) & 1 != 0 { -1.0 } else { 1.0 }) * mm[i * d + j];
+                }
+            }
+            let mut num = c.clone();
+            let mut den = c;
+            for i in 0..d {
+                num[i * d + i] -= 1.0;
+                den[i * d + i] += 1.0;
+            }
+            // S = num den^-1, i.e. den^T S^T = num^T
+            let Some(st) = solve(&transpose(&den, d), &transpose(&num, d), d, d) else {
+                continue;
+            };
+            let s = transpose(&st, d);
+            let mut params: Vec<f64> = Vec::new();
+            let mut size = 0.0f64;
+            for i in 0..d {
+                for j in i + 1..d {
+                    let v = 0.5 * (s[i * d + j] - s[j * d + i]);
+                    params.push(v);
+                    size = math::max(size, math::abs(v));
+                }
+            }
+            if !(size <= MAX_CAYLEY) || matches!(&best, Some(b) if size >= b.0) {
+                continue;
+            }
+            let Ok(back) = cayley_matrix(&params, d, m) else {
+                continue;
+            };
+            let mut err = 0.0f64;
+            for k in 0..d * d {
+                err = math::max(err, math::abs(back[k] - mm[k]));
+            }
+            if err < tol {
+                best = Some((size, params, m));
+            }
+        }
+        best
+    };
+    let best = match try_masks(&heuristic) {
+        Some(b) => Some(b),
+        None if heuristic_is_all => None,
+        None => try_masks(&even_flips),
+    };
+    match best {
+        Some((_, params, flip)) => Ok((params, flip)),
+        None => Err(Thrown("the rotation has no verified Cayley form within the parameter bound".into())),
+    }
+}
+
+/// packages/ndim/src/pose.ts: poseOfMatrix. The pose array [t..., k..., flip] of a centre and a
+/// rotation matrix (see cayley_of_matrix for the refusals).
+pub fn pose_of_matrix(t: &[f64], r: &[f64], d: usize) -> Result<Vec<f64>, Thrown> {
+    let (params, flip) = cayley_of_matrix(r, d)?;
+    let mut out: Vec<f64> = t.iter().take(d).copied().collect();
+    out.extend(params);
+    out.push(flip as f64);
+    Ok(out)
 }
