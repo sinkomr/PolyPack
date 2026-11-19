@@ -11,7 +11,9 @@
 //!  - the d-cubes: `ncube::{validate, lattice, bounds}`;
 //!  - the n-dimensional polytopes: `nd::{validate, chains, container, bounds, names}`;
 //!  - `exact`: the exact comparison of a double with a rational, which the source repeats in three
-//!    of its files.
+//!    of its files;
+//!  - `search`: the seeded searches (search/ of the source, and the search entry points of ncube/ and nd/);
+//!  - `auto`: the personal client's Auto job on a boundary problem (a port of its branch of `runSpaceJob`).
 //!
 //! What the server calls is re-exported below (see packages/boundary/src/index.ts).
 
@@ -35,6 +37,8 @@ pub mod parts;
 pub mod pieces;
 pub mod polyhedron;
 pub mod polytope;
+pub mod search;
+pub mod auto;
 pub mod types;
 pub mod units;
 pub mod validate;
