@@ -2101,7 +2101,7 @@ impl App {
             return Ok(hono::json_error("no such snapshot file", 404));
         };
         let length = generated.body.len();
-        let mut res = headers(Res::new(200, ResBody::Full(generated.body)));
+        let mut res = headers(Res::new(200, generated.body.into_res_body()));
         res.set("content-length", length.to_string());
         // the fingerprint of the leaders written, which can be newer than the manifest's
         res.set("etag", format!("W/\"{}\"", generated.fingerprint));

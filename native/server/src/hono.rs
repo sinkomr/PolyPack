@@ -559,7 +559,7 @@ fn lists_token(header: &str, token: &str) -> bool {
 
 /// A gzip stream with the header zlib writes in Node: no name, no time, and the system's code
 /// (3 for Unix, 19 for macOS), where flate2 would write 255, "unknown".
-pub fn gzip_writer(out: Vec<u8>, level: flate2::Compression) -> flate2::write::GzEncoder<Vec<u8>> {
+pub fn gzip_writer<W: Write>(out: W, level: flate2::Compression) -> flate2::write::GzEncoder<W> {
     let os = if cfg!(target_os = "macos") { 19 } else { 3 };
     flate2::GzBuilder::new().operating_system(os).write(out, level)
 }

@@ -28,7 +28,7 @@ const CHUNK: u64 = 64 * 1024;
 /// be opened or read (removed since it was looked up, a failing disk) is an error of the stream,
 /// which ends the answer where it stands and the connection with it, compressed or not: never an
 /// answer that looks whole.
-fn file_stream(file: std::io::Result<std::fs::File>, start: u64, count: u64) -> BodyStream {
+pub(crate) fn file_stream(file: std::io::Result<std::fs::File>, start: u64, count: u64) -> BodyStream {
     struct Reading {
         file: Arc<std::fs::File>,
         at: u64,
