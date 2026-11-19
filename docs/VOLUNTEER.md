@@ -27,7 +27,9 @@ The best strict packing this machine has found for each problem is also kept on 
 
 ## Getting it and running it
 
-You need Node.js 24 or newer and the single file `polypack-volunteer.mjs`. The file needs nothing else: no `npm install`, no repository. It contains the solver and the geometry code, and is readable JavaScript rather than minified, so you can see what runs on your machine. [CALC] It is about 709 kB (726,253 bytes on 2026-10-25, with the boundary space and its search; 628,526 bytes without them, and 418,719 bytes before the spaces option, built the same way). It was run from a directory outside the repository on macOS, with Node 24.22.1 and 26.5.0.
+You need Node.js 24 or newer and the single file `polypack-volunteer.mjs`. The file needs nothing else: no `npm install`, no repository. It contains the solver and the geometry code, and is readable JavaScript rather than minified, so you can see what runs on your machine. [CALC] It is about 2.8 MB (2,909,261 bytes for version 0.4.0, served on 2026-11-18; about 0.7 MB over the wire, compressed). Half of it is the tables of the other dimensions: the polyhedra (0.7 MB), the surfaces (0.26 MB) and the nD polytopes (0.38 MB). It was 726,253 bytes on 2026-10-25. It was run from a directory outside the repository on macOS, with Node 24.22.1 and 26.5.0.
+
+The site serves it as an attachment (`Content-Disposition: attachment`), so that a browser saves it rather than shows it, also where the link's `download` attribute is ignored: an app's built-in browser, or the link opened in a new tab.
 
 Download it from the site's volunteer page, https://polypack.fly.dev/volunteer.html, which also shows its version and SHA-256. The site's build makes it from the same sources (`npm run build` writes it to `apps/web/public/downloads/`). Or build it from the repository:
 
@@ -59,6 +61,33 @@ node polypack-volunteer.mjs --once --minutes-per-problem 1
 ```
 
 In development, the same program runs from the sources with `npx tsx apps/volunteer/src/cli.ts`.
+
+## The native client
+
+`polypack-native` (`native/client`) is the same client written in Rust, for Flat problems (2D in 2D) only. It draws problems, searches and submits as described above and takes the same options, except those for other dimensions (`--dimensions` and the rest are refused). It also has a target mode (`--target-holder`, see `polypack-native --help`).
+
+It runs the same search methods several times faster. [CALC] On an Apple silicon Mac on 2026-11-18, each client's own engine benchmark (`polypack-native bench` and `apps/volunteer/scripts/bench-engine/bench.ts`, 30 CPU seconds, seed 1) on five problems of the bench panel (30 disks in a circle; 17 squares, 20 triangles, 20 heptagons and 50 octagons in a square): per CPU second, shrink_repair made 3.0 to 5.3 times as many evaluations, asc 6.5 to 11.7 times, harden 54 times (one problem). The native result ended closer to the best known in 3 of the 5, the JavaScript one in 1, and 1 tied: one seed each, so a hint, not a measurement of quality.
+
+Its engine chooses methods as the JavaScript client did before version 0.4.0: it does not start with shrink-repair and still runs `asc`, `basin_hopping` and `morph` from scratch and `ls_growth` (see the 0.4.0 notes below). [SPEC] Porting that change would help it further.
+
+Builds for macOS (Apple silicon and Intel), Linux (x86-64 and ARM 64-bit, static, so they run on any distribution) and Windows (x86-64) are in the release `native`, built by `.github/workflows/native-client.yml` and linked from the volunteer page. Each build replaces the release's files, so the links stay the same; `SHA256SUMS` holds their checksums. The files are not signed. Downloaded in a terminal, they run without a warning:
+
+```sh
+curl -fLo polypack-native https://github.com/sinkomr/PolyPack/releases/download/native/polypack-native-macos-arm64
+chmod +x polypack-native
+./polypack-native --name "your name"
+```
+
+The other files are `polypack-native-macos-x64`, `polypack-native-linux-x64`, `polypack-native-linux-arm64` and `polypack-native-windows-x64.exe` (on Windows, `curl.exe -fLo polypack-native.exe ...` in PowerShell). A file saved from a browser works too: macOS refuses to open it until `xattr -d com.apple.quarantine polypack-native` is run, and Windows asks first (More info, then Run anyway).
+
+To build it yourself (Rust 1.89 or newer):
+
+```sh
+cd native
+cargo build --release -p polypack-native
+```
+
+The program is then `native/target/release/polypack-native`. It keeps its state in `~/.polypack-native` (`--state` changes that), apart from the JavaScript client's.
 
 ### Version 0.4.0
 

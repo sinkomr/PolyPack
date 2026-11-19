@@ -1,0 +1,111 @@
+name: Native client
+# Builds the Rust volunteer client (native/client, polypack-native: Flat 2D only) for macOS, Linux and
+# Windows. On a pull request that changes it, the builds are checked and nothing is published. Run by hand
+# (workflow_dispatch), it also replaces the files of the release "native", whose fixed download links the
+# volunteer page gives (apps/web/volunteer.html):
+#   polypack-native-macos-arm64, polypack-native-macos-x64, polypack-native-linux-x64,
+#   polypack-native-linux-arm64, polypack-native-windows-x64.exe, and SHA256SUMS.
+# The Linux builds are static (musl), so they run on any distribution. The macOS and Windows builds are not
+# signed: the page says how to run them.
+on:
+  workflow_dispatch:
+  pull_request:
+    paths:
+      - native/client/**
+      - native/flat/**
+      - native/Cargo.toml
+      - native/Cargo.lock
+      - .github/workflows/native-client.yml
+permissions:
+  contents: read
+concurrency:
+  group: native-client-${{ github.ref }}
+  cancel-in-progress: true
+jobs:
+  build:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { os: macos-15, target: aarch64-apple-darwin, file: polypack-native-macos-arm64, run: true }
+          # cross-built on the Apple silicon runner, so it is not run here
+          - { os: macos-15, target: x86_64-apple-darwin, file: polypack-native-macos-x64, run: false }
+          - { os: ubuntu-latest, target: x86_64-unknown-linux-musl, file: polypack-native-linux-x64, run: true, musl: true }
+          - { os: ubuntu-24.04-arm, target: aarch64-unknown-linux-musl, file: polypack-native-linux-arm64, run: true, musl: true }
+          - { os: windows-latest, target: x86_64-pc-windows-msvc, file: polypack-native-windows-x64.exe, run: true }
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ matrix.target }}
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: native
+          key: ${{ matrix.target }}
+      # ring (TLS) compiles C: musl-gcc for the static Linux builds
+      - if: matrix.musl
+        run: |
+          sudo apt-get update -q
+          sudo apt-get install -y -q musl-tools
+          t='${{ matrix.target }}'
+          echo "CC_${t//-/_}=musl-gcc" >> "$GITHUB_ENV"
+      - run: cargo build --release --locked -p polypack-native --target ${{ matrix.target }}
+        working-directory: native
+        env:
+          MACOSX_DEPLOYMENT_TARGET: "11.0"
+      - name: Name the file
+        shell: bash
+        run: |
+          mkdir out
+          src=native/target/${{ matrix.target }}/release/polypack-native
+          [ -f "$src.exe" ] && src="$src.exe"
+          cp "$src" "out/${{ matrix.file }}"
+          ls -l out
+      # a short search of one problem: the binary starts, searches and checks its result; no server is asked
+      - if: matrix.run
+        shell: bash
+        run: |
+          ./out/${{ matrix.file }} --version
+          ./out/${{ matrix.file }} bench --N 4 --M 4 --P 10 --seconds 3 --seed 1 > bench.json
+          node -e 'const d = JSON.parse(require("fs").readFileSync("bench.json", "utf8")); console.log(d.score, d.check_valid, d.check_strict); if (!d.check_valid || !d.check_strict) process.exit(1)'
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.file }}
+          path: out/${{ matrix.file }}
+          if-no-files-found: error
+
+  publish:
+    if: github.event_name == 'workflow_dispatch'
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    concurrency: native-client-release
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+          merge-multiple: true
+      - name: Replace the release's files
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          cd artifacts
+          sha256sum polypack-native-* > SHA256SUMS
+          cat SHA256SUMS
+          version=$(sed -n 's/^version = "\(.*\)"/\1/p' ../native/Cargo.toml | head -1)
+          notes="polypack-native $version, built from ${GITHUB_SHA::8} on $(date -u +%Y-%m-%d).
+
+          The native volunteer client: Flat 2D problems (polygons in polygons) only, several times faster than polypack-volunteer.mjs. How to run it: https://polypack.fly.dev/volunteer.html and docs/VOLUNTEER.md.
+
+          The links of this release stay the same; each build replaces its files. The tag is not moved: the commit named above is the one built."
+          # not marked latest: that stays the records release
+          if gh release view native > /dev/null 2>&1; then
+            gh release upload native polypack-native-* SHA256SUMS --clobber
+            gh release edit native --notes "$notes" --latest=false
+          else
+            gh release create native polypack-native-* SHA256SUMS --target "$GITHUB_SHA" --title "Native volunteer client" --notes "$notes" --latest=false
+          fi

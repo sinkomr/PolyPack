@@ -128,6 +128,12 @@ impl StaticSite {
             prepared.retain(|(k, _)| k != "cross-origin-embedder-policy");
             prepared.push(("cross-origin-embedder-policy".to_string(), "require-corp".to_string()));
         }
+        // The downloads (the volunteer client) are saved, not shown: a link opened in a new tab or
+        // in an app's built-in browser, which ignores the link's download attribute, would otherwise
+        // display the client's 3 MB of JavaScript as a page.
+        if under("/downloads") {
+            prepared.push(("content-disposition".to_string(), "attachment".to_string()));
+        }
         let dist = self.dist.clone();
         let served = crate::pool::blocking(|| serve_static(&dist, req)).await;
         let mut res = match served {
@@ -828,6 +834,36 @@ pub async fn main() {
 mod tests {
     use super::*;
     use std::sync::atomic::Ordering;
+
+    fn get(path: &str) -> Req {
+        Req {
+            method: "GET".into(),
+            url: format!("http://localhost{path}"),
+            path: path.into(),
+            headers: Default::default(),
+            remote: None,
+            body: std::sync::Mutex::new(None),
+            deadline: None,
+        }
+    }
+
+    // A download is saved, not shown, even by a browser that ignores the link's download
+    // attribute (an app's built-in browser, a link opened in a new tab); the other pages are shown.
+    #[tokio::test(flavor = "multi_thread")]
+    async fn downloads_are_attachments() {
+        let dist = concat!(env!("CARGO_MANIFEST_DIR"), "/../tools/serverdiff/fixtures/static").to_string();
+        let site = StaticSite { dist };
+        for path in ["/downloads/tool.mjs", "/downloads/tool.json"] {
+            let res = site.answer(&get(path)).await;
+            assert_eq!(res.status, 200, "{path}");
+            assert_eq!(res.header("content-disposition"), Some("attachment"), "{path}");
+        }
+        for path in ["/index.html", "/assets/app.js", "/tighter.html"] {
+            let res = site.answer(&get(path)).await;
+            assert_eq!(res.status, 200, "{path}");
+            assert_eq!(res.header("content-disposition"), None, "{path}");
+        }
+    }
 
     // An answer that hyper has taken whole may still wait in hyper's buffer behind a full socket.
     // The stop once counted it as answered the moment hyper dropped its body, and the process
