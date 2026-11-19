@@ -20,6 +20,8 @@ struct Srv {
     posts: Vec<Value>,
     gets: Vec<String>,
     next_id: i64,
+    /// The bulk lists (known.rs): None answers 404 to them, as a server without them would.
+    lists: Option<(Vec<Value>, Vec<Value>)>,
 }
 
 fn problem_body(id: &str, open: bool, leader: Option<(i64, f64, &str)>) -> Value {
@@ -71,10 +73,20 @@ fn serve(srv: Arc<Mutex<Srv>>) -> String {
                     let mut s = srv.lock().unwrap();
                     if method == "GET" {
                         s.gets.push(path.clone());
+                        if path.starts_with("/api/spaces/sphere/records") || path.starts_with("/api/spaces/sphere/site-only") {
+                            match &s.lists {
+                                Some((records, site_only)) => {
+                                    let list = if path.contains("records") { records.clone() } else { site_only.clone() };
+                                    (200, json!({"space": "sphere", "problems": list, "next": null}))
+                                }
+                                None => (404, json!({"error": "not here"})),
+                            }
+                        } else {
                         let id = path.strip_prefix("/api/spaces/sphere/problems/").unwrap_or("");
                         match s.problems.get(id) {
                             Some(p) => (200, p.clone()),
                             None => (404, json!({"error": "unknown problem"})),
+                        }
                         }
                     } else {
                         s.posts.push(body.clone());
@@ -191,5 +203,43 @@ fn dry_run_and_include_own() {
     assert!(fake.calls.lock().unwrap().iter().any(|(id, _)| id == "sphere/0/1"));
     let history = std::fs::read_to_string(dir.join("history.jsonl")).unwrap();
     assert!(history.contains("dry run: would submit"), "{history}");
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
+#[test]
+fn open_only_passes_over_listed_problems_without_reading_them() {
+    let dir = temp("lists");
+    let mut srv = Srv::default();
+    // 0/1: open and in no list; 3/1: another holder's site entry; 4/1: a research record only;
+    // 5/1: closed; 6/1: led by us. Every one can still be read on its own.
+    srv.problems.insert("sphere/0/1".into(), problem_body("sphere/0/1", true, None));
+    srv.problems.insert("sphere/3/1".into(), problem_body("sphere/3/1", true, Some((7, 1.0, "Someone"))));
+    srv.problems.insert("sphere/4/1".into(), json!({"space": "sphere", "id": "sphere/4/1", "accepts_submissions": true, "status": "best_known", "bound": {"value": 0.1}, "certified": {"score": 1.0}, "best_score": 1.0, "site_best": null}));
+    srv.problems.insert("sphere/5/1".into(), problem_body("sphere/5/1", false, None));
+    srv.problems.insert("sphere/6/1".into(), problem_body("sphere/6/1", true, Some((8, 1.0, "Tester"))));
+    srv.lists = Some((
+        vec![
+            json!({"id": "sphere/4/1", "best_score": 1.0, "accepts_submissions": true, "site_best": null}),
+            json!({"id": "sphere/5/1", "best_score": null, "accepts_submissions": false, "site_best": null}),
+        ],
+        vec![
+            json!({"id": "sphere/3/1", "best_score": 1.0, "accepts_submissions": true, "site_best": {"id": 7, "score": 1.0, "name": "Someone"}}),
+            json!({"id": "sphere/6/1", "best_score": 1.0, "accepts_submissions": true, "site_best": {"id": 8, "score": 1.0, "name": "Tester"}}),
+        ],
+    ));
+    let srv = Arc::new(Mutex::new(srv));
+    let base = serve(srv.clone());
+    let fake = Arc::new(Fake { rho: HashMap::from([("sphere/0/1".to_string(), 2.0)]), calls: Mutex::new(Vec::new()) });
+    let code = run_with(options(&base, &dir, &["--open-only", "--one-pass"]), fake.clone(), false);
+    assert_eq!(code, 0);
+    let s = srv.lock().unwrap();
+    // the lists were read; of the problems, only the open one was read on its own, searched and sent
+    assert!(s.gets.iter().any(|g| g.starts_with("/api/spaces/sphere/records")), "{:?}", s.gets);
+    assert!(s.gets.iter().any(|g| g.starts_with("/api/spaces/sphere/site-only?limit=5000")), "{:?}", s.gets);
+    let read: Vec<&String> = s.gets.iter().filter(|g| g.starts_with("/api/spaces/sphere/problems/")).collect();
+    assert!(read.iter().all(|g| g.ends_with("sphere/0/1")), "{read:?}");
+    assert_eq!(s.posts.len(), 1);
+    assert_eq!(s.posts[0]["id"], "sphere/0/1");
+    assert!(fake.calls.lock().unwrap().iter().all(|(id, _)| id == "sphere/0/1"));
     let _ = std::fs::remove_dir_all(&dir);
 }

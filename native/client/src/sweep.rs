@@ -8,6 +8,7 @@
 
 use crate::answers::{clean_text, describe_answer, stored_name};
 use crate::format::{format_duration, format_score, iso_now, relative_percent};
+use crate::known::{Known, REFRESH_SECONDS};
 use crate::http::{read_submit_key, sleep_unless, Answer, Api, Pacer, SubmitCheck, SubmitOutcome, KEYED_SUBMISSIONS_PER_MINUTE, SUBMISSIONS_PER_MINUTE, SUBMISSION_WINDOW_MS};
 use crate::options::{Options, SweepOptions};
 use crate::space_api::{
@@ -66,9 +67,66 @@ pub struct Shared {
     counts: Mutex<[usize; 4]>,
     skipped: AtomicUsize,
     started: Instant,
+    /// The bulk lists of problems with a best (known.rs) and when they were read; None when they could not be.
+    known: Mutex<Option<(Instant, Arc<Known>)>>,
+    /// Problems passed over from the lists, without reading them.
+    known_skipped: AtomicUsize,
 }
 
 impl Shared {
+    /// Reads the bulk lists of problems with a best for the swept spaces (known.rs), and logs what they hold.
+    fn load_known(&self) {
+        let spaces: Vec<&str> = self.sw.kinds.iter().map(|k| k.name()).collect();
+        let t = Instant::now();
+        match crate::known::load(&self.reader, &spaces) {
+            Ok(k) => {
+                log(&format!(
+                    "Read the lists of problems with a best ({}): {} with a best, {} closed, in {}; {} without reading them",
+                    spaces.join(", "),
+                    k.has_best.len(),
+                    k.closed.len(),
+                    format_duration(t.elapsed().as_secs_f64()),
+                    if self.sw.open_only {
+                        "problems with a best, closed ones and those you lead are passed over"
+                    } else if self.sw.include_own {
+                        "closed problems are passed over"
+                    } else {
+                        "closed problems and those you lead are passed over"
+                    }
+                ));
+                *self.known.lock().unwrap() = Some((Instant::now(), Arc::new(k)));
+            }
+            Err(e) => {
+                if !self.stopped() {
+                    log(&format!("Could not read the lists of problems with a best ({e}): every problem is read on its own"));
+                }
+                // try again at the next refresh, not at every problem
+                *self.known.lock().unwrap() = Some((Instant::now(), Arc::new(Known::default())));
+            }
+        }
+    }
+
+    /// True when the lists say the problem can be passed over without reading it. Lists older than
+    /// REFRESH_SECONDS are read again first, by the thread that finds them old.
+    fn known_skip(&self, id: &str) -> bool {
+        let stale = self.known.lock().unwrap().as_ref().map_or(false, |(at, _)| at.elapsed().as_secs() >= REFRESH_SECONDS);
+        if stale {
+            // the next thread to look finds them fresh: mark them now, read after
+            if let Some((at, _)) = self.known.lock().unwrap().as_mut() {
+                *at = Instant::now();
+            }
+            self.load_known();
+        }
+        let known = self.known.lock().unwrap().as_ref().map(|(_, k)| k.clone());
+        let Some(known) = known else { return false };
+        let own = if self.sw.include_own { None } else { self.o.name.as_deref() };
+        if known.skip(id, self.sw.open_only, own).is_some() {
+            self.known_skipped.fetch_add(1, Ordering::Relaxed);
+            return true;
+        }
+        false
+    }
+
     fn stopped(&self) -> bool {
         self.stop.load(Ordering::Relaxed)
     }
@@ -267,11 +325,14 @@ pub fn run_with(o: Options, searcher: Arc<dyn SpaceSearcher>, signals: bool) -> 
         counts: Mutex::new([0; 4]),
         skipped: AtomicUsize::new(0),
         started: Instant::now(),
+        known: Mutex::new(None),
+        known_skipped: AtomicUsize::new(0),
         sw,
         o,
     });
     *cell.lock().unwrap() = Some(Arc::downgrade(&shared));
     banner(&shared);
+    shared.load_known();
     if signals {
         let s = shared.clone();
         let _ = ctrlc::set_handler(move || {
@@ -340,11 +401,13 @@ pub fn run_with(o: Options, searcher: Arc<dyn SpaceSearcher>, signals: bool) -> 
     }
     let c = *shared.counts.lock().unwrap();
     let (pass, k) = shared.dispenser.position();
+    shared.dispenser.flush();
     log(&format!(
-        "Stopped after {}: {} problem(s) searched, {} skipped, {} submission(s) sent, {} accepted, {} took the lead. At loop {k} of pass {pass}; state is in {}.",
+        "Stopped after {}: {} problem(s) searched, {} skipped ({} of them from the lists, without reading them), {} submission(s) sent, {} accepted, {} took the lead. At loop {k} of pass {pass}; state is in {}.",
         format_duration(shared.started.elapsed().as_secs_f64()),
         c[0],
         shared.skipped.load(Ordering::Relaxed),
+        shared.known_skipped.load(Ordering::Relaxed),
         c[1],
         c[2],
         c[3],
@@ -540,6 +603,9 @@ fn search_one(s: &Arc<Shared>, t: &Taken, lanes: usize) -> Searched {
         log(&format!("{id} is not a problem id of the spaces: skipping it"));
         return Searched::Skipped;
     };
+    if s.known_skip(id) {
+        return Searched::Skipped;
+    }
     let (info, answer) = s.read_problem(&s.reader, id, space);
     if s.stopped() {
         return Searched::Done(false);

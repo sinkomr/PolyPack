@@ -7,6 +7,7 @@ mod answers;
 mod engine;
 mod format;
 mod http;
+mod known;
 mod memory;
 mod options;
 mod pick;

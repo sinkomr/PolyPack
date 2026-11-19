@@ -263,6 +263,8 @@ struct Inner {
     not_before: Option<Instant>,
     /// True once the pass is complete with --one-pass.
     finished: bool,
+    /// When the position was last written.
+    saved_at: Option<Instant>,
 }
 
 /// Hands the sweep's problems out one at a time to the slots, and keeps the position.
@@ -315,7 +317,7 @@ impl Dispenser {
             log,
             empty_pass_wait: EMPTY_PASS_WAIT,
             one_pass: false,
-            inner: Mutex::new(Inner { pass, k, items, next, low, done, searched_in_pass: 0, not_before: None, finished: false }),
+            inner: Mutex::new(Inner { pass, k, items, next, low, done, searched_in_pass: 0, not_before: None, finished: false, saved_at: None }),
         };
         {
             let g = d.inner.lock().unwrap();
@@ -447,6 +449,17 @@ impl Dispenser {
             }
             g.low += 1;
         }
+        // a searched problem is written at once; problems passed over (thousands a minute from the
+        // lists) at most once a second, and flush() writes the last of them
+        if searched || g.saved_at.map_or(true, |t| t.elapsed() >= Duration::from_secs(1)) {
+            self.save(&g);
+            g.saved_at = Some(Instant::now());
+        }
+    }
+
+    /// Writes the position now.
+    pub fn flush(&self) {
+        let g = self.inner.lock().unwrap();
         self.save(&g);
     }
 }
