@@ -126,6 +126,13 @@ if (existsSync(dist)) {
     c.header("Cross-Origin-Embedder-Policy", "require-corp");
     await next();
   });
+  // The downloads (the volunteer client) are saved, not shown: a link opened in a new tab or in an
+  // app's built-in browser, which ignores the link's download attribute, would otherwise display the
+  // client's 3 MB of JavaScript as a page.
+  app.use("/downloads/*", async (c, next) => {
+    c.header("Content-Disposition", "attachment");
+    await next();
+  });
   app.use("/*", serveStatic({ root: dist }));
 }
 

@@ -31,6 +31,43 @@
 
       <h3>Download</h3>
       <p>
+        There are two clients. Both run on a computer (macOS, Linux or Windows) from a terminal; neither runs on a
+        phone. They search Flat problems the same way and submit the same way.
+      </p>
+
+      <h4>The native client: faster, Flat problems only</h4>
+      <p>
+        A program for your system, with the same search methods. It runs them several times faster than the
+        JavaScript client: 3 to 12 times as many evaluations per second, measured on five Flat problems. It searches
+        Flat problems (2D in 2D) only.
+      </p>
+      <ul class="downloads" id="native-downloads">
+        <li><a href="https://github.com/sinkomr/PolyPack/releases/download/native/polypack-native-macos-arm64">macOS, Apple silicon</a></li>
+        <li><a href="https://github.com/sinkomr/PolyPack/releases/download/native/polypack-native-macos-x64">macOS, Intel</a></li>
+        <li><a href="https://github.com/sinkomr/PolyPack/releases/download/native/polypack-native-linux-x64">Linux, x86-64</a></li>
+        <li><a href="https://github.com/sinkomr/PolyPack/releases/download/native/polypack-native-linux-arm64">Linux, ARM 64-bit</a></li>
+        <li><a href="https://github.com/sinkomr/PolyPack/releases/download/native/polypack-native-windows-x64.exe">Windows, x86-64</a></li>
+      </ul>
+      <p>
+        The files are not signed, so download them in a terminal, where the system does not hold them back. On macOS
+        or Linux (for another system, change the end of the address to one of the files above):
+      </p>
+      <pre><code>curl -fLo polypack-native https://github.com/sinkomr/PolyPack/releases/download/native/polypack-native-macos-arm64
+chmod +x polypack-native
+./polypack-native --name "your name"</code></pre>
+      <p>On Windows, in PowerShell:</p>
+      <pre><code>curl.exe -fLo polypack-native.exe https://github.com/sinkomr/PolyPack/releases/download/native/polypack-native-windows-x64.exe
+.\polypack-native.exe --name "your name"</code></pre>
+      <p class="note">
+        A file saved from the browser works too. macOS then refuses to open it until you run
+        <code>xattr -d com.apple.quarantine polypack-native</code>; Windows asks first (More info, then Run anyway).
+        The files' SHA-256 sums are in
+        <a href="https://github.com/sinkomr/PolyPack/releases/download/native/SHA256SUMS">SHA256SUMS</a>, and the source is in the repository's <code>native/client</code>.
+        It takes the options described below, except those for other dimensions.
+      </p>
+
+      <h4>The JavaScript client: every dimension</h4>
+      <p>
         <a class="button-link" id="download" href="/downloads/polypack-volunteer.mjs" download>
           Download polypack-volunteer.mjs
         </a>
@@ -38,11 +75,13 @@
       <p id="file-info" class="note" hidden></p>
       <p>
         It is one file that runs with <a href="https://nodejs.org/">Node.js</a> 24 or newer. It needs no installation,
-        account or key. It is readable JavaScript rather than minified, so you can see what runs on your machine.
+        account or key. It is readable JavaScript rather than minified, so you can see what runs on your machine. It is
+        the client that also searches the <a href="#dimensions">other dimensions</a>.
       </p>
 
       <h3>Run it</h3>
       <pre><code>node polypack-volunteer.mjs --name "your name"</code></pre>
+      <p>The native client runs the same way: <code>./polypack-native --name "your name"</code>. For both:</p>
       <ul>
         <li>
           It uses all cores but one, at low priority, and searches one problem at once for every 4 of them
@@ -65,7 +104,7 @@
         what the client sends and what it keeps on disk.
       </p>
 
-      <h3>Optional: other dimensions</h3>
+      <h3 id="dimensions">Optional: other dimensions (JavaScript client)</h3>
       <p>
         By default the client searches Flat problems (2D in 2D): polygons in polygons. It can also search the other
         kinds on the <a href="/dimensions.html">Dimensions</a> page: Curved (2D in 2D at constant curvature); Platonic

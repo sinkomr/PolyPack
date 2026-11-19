@@ -325,16 +325,16 @@ export function gateScenario(site: SiteEntry[]): Scenario {
 /** The built website served by the same process. */
 export function staticScenario(): Scenario {
   const s = new Scenario("static-files", "static files", {
-    about: "files of the static directory with their types, lengths and isolation headers, HEAD, ranges, compression under /spaces, paths that leave the directory, and the API beside them",
+    about: "files of the static directory with their types, lengths, isolation headers and the downloads' attachment header, HEAD, ranges, compression under /spaces, paths that leave the directory, and the API beside them",
     options: { limits: NOLIMIT, staticDir: "{fixtures}/static" },
   });
   const gz = { "accept-encoding": "gzip" };
-  for (const path of ["/", "/index.html", "/tighter.html", "/assets/app.js", "/assets/big.css", "/assets/missing.js", "/assets/", "/spaces/viewer.html", "/spaces/small.txt", "/spaces/data.json", "/spaces/missing.html", "/spaces/", "/sub/", "/sub", "/sub/index.html", "/file%20with%20space.txt", "/data.bin", "/noext", "/image.svg", "/.hidden", "/empty.txt", "/unicode-%C3%A9.txt", "/missing", "/index.html?x=1", "/INDEX.HTML", "/index.html/", "/api/shadow.txt", "/tighter.html?x", "/tighter.html/"]) {
+  for (const path of ["/", "/index.html", "/tighter.html", "/assets/app.js", "/assets/big.css", "/assets/missing.js", "/assets/", "/spaces/viewer.html", "/spaces/small.txt", "/spaces/data.json", "/spaces/missing.html", "/spaces/", "/sub/", "/sub", "/sub/index.html", "/file%20with%20space.txt", "/data.bin", "/noext", "/image.svg", "/.hidden", "/empty.txt", "/unicode-%C3%A9.txt", "/missing", "/index.html?x=1", "/INDEX.HTML", "/index.html/", "/api/shadow.txt", "/tighter.html?x", "/tighter.html/", "/downloads/tool.mjs", "/downloads/tool.json", "/downloads/missing.mjs", "/downloads/", "/downloads"]) {
     s.get(path).get(path, undefined, gz);
   }
   for (const path of ["/../ref-server.mts", "/%2e%2e/records.json", "/..%2frecords.json", "/assets/..%2f..%2frecords.json", "/assets/../index.html", "//index.html", "/assets//app.js", "/assets\\app.js", "/%2e/index.html", "/./index.html", "/sub/../index.html", "/%zz", "/%E0%A4%A", "/index.html%00", "/assets/%2e%2e/%2e%2e/records.json"])
     s.get(path);
-  for (const path of ["/index.html", "/assets/app.js", "/spaces/viewer.html", "/tighter.html", "/missing", "/sub/"])
+  for (const path of ["/index.html", "/assets/app.js", "/spaces/viewer.html", "/tighter.html", "/missing", "/sub/", "/downloads/tool.mjs"])
     s.req("HEAD", path).req("HEAD", path, { headers: gz }).req("POST", path, { json: {} }).req("PUT", path, { text: "x" }).req("DELETE", path);
   // OPTIONS on a file announces the file's length and sends no body (README.md, "Defects"): once is enough
   s.req("OPTIONS", "/missing").req("OPTIONS", "/empty.txt").req("OPTIONS", "/index.html");
