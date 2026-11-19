@@ -494,6 +494,23 @@ body.scroll {
   font-size: 14.5px;
   margin: 18px 0 4px;
 }
+/* the native client's instructions, one block per system */
+.prose details.os {
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 8px 12px;
+  margin: 8px 0;
+}
+.prose details.os summary {
+  cursor: pointer;
+  font-weight: 600;
+}
+.prose details.os[open] summary {
+  margin-bottom: 4px;
+}
+.prose details.os pre {
+  margin-bottom: 4px;
+}
 /* a row of download links, one per system, that wraps on a narrow screen */
 .prose ul.downloads {
   list-style: none;
