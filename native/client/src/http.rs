@@ -417,13 +417,28 @@ impl Api {
     /// 400) gets the body once more without it. After a POST without an answer, `check` reads the
     /// problem, and the POST is sent again, after a backoff, only when the packing is not there.
     pub fn submit(&self, body: &Value, check: &dyn Fn() -> Option<SubmitCheck>) -> SubmitOutcome {
+        self.submit_to("/api/submit", body, check)
+    }
+
+    /// GET /api/spaces/:space/problems/<id>: the id has been through `parse_space_id`, so it
+    /// needs no escaping.
+    pub fn space_problem(&self, space: &str, id: &str) -> Option<Answer> {
+        self.get(&format!("/api/spaces/{space}/problems/{id}"))
+    }
+
+    /// `submit` to `path` (POST /api/spaces/submit for the spaces).
+    pub fn submit_to(&self, path: &str, body: &Value, check: &dyn Fn() -> Option<SubmitCheck>) -> SubmitOutcome {
+        // The server checks one entry from an address at a time and answers 429 to the next one while it
+        // does: the threads of this client send theirs one after another instead of racing for it.
+        static ONE_AT_A_TIME: std::sync::Mutex<()> = std::sync::Mutex::new(());
+        let _turn = ONE_AT_A_TIME.lock().unwrap_or_else(|e| e.into_inner());
         let mut current = body.clone();
         let mut without_software = false;
         let mut requests = 0;
         let mut checked: Option<SubmitCheck> = None;
         let mut attempt = 1;
         loop {
-            let (answer, failure, made) = self.post("/api/submit", &current);
+            let (answer, failure, made) = self.post(path, &current);
             requests += made;
             if let Some(a) = answer {
                 if without_software || current.get("software").is_none() || !is_software_refusal(a.status, &a.body) {

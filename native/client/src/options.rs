@@ -46,6 +46,50 @@ pub struct Options {
     pub target_include_unknown: bool,
     pub target_min_seconds: f64,
     pub target_margin: f64,
+    /// Personal 2D-on-3D sweep (--sweep-2d-on-3d, sweep.rs); None for the flat client.
+    pub sweep: Option<SweepOptions>,
+}
+
+/// The spaces the sweep covers, in the order it visits them within one P and N.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
+pub enum SweepKind {
+    Surface,
+    Sphere,
+    Torus,
+}
+
+impl SweepKind {
+    pub const ALL: [SweepKind; 3] = [SweepKind::Surface, SweepKind::Sphere, SweepKind::Torus];
+
+    pub fn name(self) -> &'static str {
+        match self {
+            SweepKind::Surface => "surface",
+            SweepKind::Sphere => "sphere",
+            SweepKind::Torus => "torus",
+        }
+    }
+}
+
+/// The options of --sweep-2d-on-3d. The flat options --N, --P and --max-P also narrow it (the
+/// shape codes and the numbers of pieces it visits); --M does not apply.
+#[derive(Clone, Debug, PartialEq)]
+pub struct SweepOptions {
+    /// The kinds to search, in the sweep's order (surface, sphere, torus).
+    pub kinds: Vec<SweepKind>,
+    /// "fold" and "nofold", in that order.
+    pub surface_modes: Vec<String>,
+    /// The solids to search, in catalogue order; None for every solid.
+    pub solids: Option<Vec<String>>,
+    /// Only shape codes up to this one (the disk, 0, always passes).
+    pub max_n: Option<u32>,
+    /// Start over from the first loop of the first pass.
+    pub restart: bool,
+    /// Also search problems the user already leads.
+    pub include_own: bool,
+    /// Only problems with no best at all, neither a site entry nor a research record (--open-only).
+    pub open_only: bool,
+    /// Stop at the end of the current pass instead of starting the next (--one-pass).
+    pub one_pass: bool,
 }
 
 #[derive(Clone, Debug, PartialEq)]
@@ -96,6 +140,7 @@ Usage: polypack-native [options]
                            (default: all)
   --max-P K                shorthand for --P 1-K; with both, the numbers in both
   --open-only              skip problems that already have a leader: only first entries are made
+                           (with --sweep-2d-on-3d: skip problems with any best, a site entry or a research record)
                            (not with --target-holder)
   --dry-run                search, but never submit
   --note TEXT              free text shown with your entries (at most {MAX_NOTE_LENGTH} characters)
@@ -108,6 +153,28 @@ Usage: polypack-native [options]
   --once                   search one problem, then exit
   --help                   this text
   --version                the version
+
+2D on 3D sweep (personal build): instead of drawing flat problems at random, search the surface,
+sphere and torus problems from easy to hard.
+
+  --sweep-2d-on-3d         the mode. Loop k = 1, 2, 3 ... covers the problems with
+                           max(P, rank of N) = k, where N is ranked disk first (N = 0, 3, 4, 5 ...: rank
+                           1, 2, 3, 4 ...); within a loop by P, then N, then kind (surface, sphere,
+                           torus), then solid in catalogue order, then mode and torus family. The
+                           position is kept in the state directory (sweep.json), so a restart goes on
+                           where it stopped; after the last loop a second pass starts at loop 1. A problem
+                           that is closed or unknown to the server is skipped, and so is one the
+                           --name already leads (unless --include-own). Needs a build with the
+                           real-search feature
+  --kinds LIST             of surface,sphere,torus (default: all three)
+  --surface-modes LIST     of fold,nofold (default: both)
+  --solids LIST            surface solids, by name (cube, snub_cube, square_pyramid ...) or group (platonic,
+                           archimedean, catalan, johnson); searched in catalogue order (default: all 141)
+  --max-N K                only shape codes N up to K (the disk, 0, passes)
+                           (--N LIST, --P LIST and --max-P K narrow the sweep too)
+  --sweep-restart          forget the kept position and start again at loop 1 of pass 1
+  --include-own            also search problems the --name already leads (default: skip them)
+  --one-pass               stop when the current pass is complete instead of starting the next one
 
 Target mode: re-search the low-effort records of one holder.
 
@@ -246,8 +313,28 @@ const VALUE_OPTIONS: &[&str] = &[
     "target-max-budget",
     "target-min-seconds",
     "target-margin",
+    "kinds",
+    "surface-modes",
+    "solids",
+    "max-N",
 ];
-const FLAG_OPTIONS: &[&str] = &["dry-run", "no-battery-pause", "once", "help", "version", "open-only", "target-refresh", "target-any-entry", "target-include-unknown"];
+const FLAG_OPTIONS: &[&str] = &[
+    "dry-run",
+    "no-battery-pause",
+    "once",
+    "help",
+    "version",
+    "open-only",
+    "target-refresh",
+    "target-any-entry",
+    "target-include-unknown",
+    "sweep-2d-on-3d",
+    "sweep-restart",
+    "include-own",
+    "one-pass",
+];
+/// Options that only the sweep takes.
+const SWEEP_ONLY: &[&str] = &["kinds", "surface-modes", "solids", "max-N", "sweep-restart", "include-own", "one-pass"];
 const UNSUPPORTED: &[&str] = &["dimensions", "spaces", "only-dimensions", "only-spaces", "space-method", "space-params"];
 
 /// The options as name -> value (flags have "true"), from `--name value` or `--name=value`.
@@ -291,6 +378,47 @@ pub fn split_args(argv: &[String]) -> Result<Vec<(String, String)>, OptionError>
         i += 1;
     }
     Ok(out)
+}
+
+/// "a,b" into the names, each one of `allowed`, in the order of `allowed`, without repeats.
+fn parse_names(what: &str, text: &str, allowed: &[&str]) -> Result<Vec<String>, OptionError> {
+    let mut chosen = std::collections::BTreeSet::new();
+    for part in text.split(',').map(|s| s.trim()) {
+        match allowed.iter().position(|a| *a == part) {
+            Some(i) => {
+                chosen.insert(i);
+            }
+            None => return Err(OptionError(format!("--{what}: \"{part}\" is not one of {}", allowed.join(", ")))),
+        }
+    }
+    Ok(chosen.into_iter().map(|i| allowed[i].to_string()).collect())
+}
+
+/// --solids: names and group names into the catalogue's names, in the catalogue's order.
+fn parse_solids(text: &str) -> Result<Vec<String>, OptionError> {
+    let all = polypack_spaces::surface_solids();
+    let mut chosen = vec![false; all.len()];
+    for part in text.split(',').map(|s| s.trim()) {
+        let group: Option<&[String]> = match part {
+            "platonic" => Some(polypack_spaces::surface_platonic()),
+            "archimedean" => Some(polypack_spaces::surface_archimedean()),
+            "catalan" => Some(polypack_spaces::surface_catalan()),
+            "johnson" => Some(polypack_spaces::surface_johnson()),
+            _ => None,
+        };
+        if let Some(g) = group {
+            for s in g {
+                chosen[all.iter().position(|a| a == s).unwrap()] = true;
+            }
+        } else if let Some(i) = all.iter().position(|a| a == part) {
+            chosen[i] = true;
+        } else {
+            return Err(OptionError(format!(
+                "--solids: \"{part}\" is not a solid of the surface catalogue (a name such as cube or snub_cube, or one of platonic, archimedean, catalan, johnson)"
+            )));
+        }
+    }
+    Ok(all.iter().zip(chosen).filter(|(_, c)| *c).map(|(s, _)| s.clone()).collect())
 }
 
 pub fn parse_options(argv: &[String], machine: &Machine) -> Result<Parsed, OptionError> {
@@ -392,6 +520,48 @@ pub fn parse_options(argv: &[String], machine: &Machine) -> Result<Parsed, Optio
         )));
     }
     let p = parse_pieces(get("P").as_deref(), get("max-P").as_deref())?;
+    let sweep = if flag("sweep-2d-on-3d") {
+        if target_holder.is_some() {
+            return Err(OptionError("--sweep-2d-on-3d searches 2D-on-3D problems: it cannot be combined with --target-holder".into()));
+        }
+        if pairs.iter().any(|(key, _)| key == "M") {
+            return Err(OptionError("--M does not apply to --sweep-2d-on-3d (the containers are the surfaces); --N, --P and --max-P do".into()));
+        }
+        let kinds = match get("kinds") {
+            Some(v) => parse_names("kinds", &v, &["surface", "sphere", "torus"])?,
+            None => vec!["surface".into(), "sphere".into(), "torus".into()],
+        };
+        let kinds: Vec<SweepKind> = SweepKind::ALL.iter().copied().filter(|k| kinds.iter().any(|n| n == k.name())).collect();
+        let surface_modes = match get("surface-modes") {
+            Some(v) => parse_names("surface-modes", &v, &["fold", "nofold"])?,
+            None => vec!["fold".into(), "nofold".into()],
+        };
+        let max_n = match get("max-N") {
+            Some(v) => match v.trim().parse::<u32>() {
+                Ok(k) if k <= MAX_SIDES && v.trim().len() <= 3 => Some(k),
+                _ => return Err(OptionError(format!("--max-N must be an integer from 0 to {MAX_SIDES}"))),
+            },
+            None => None,
+        };
+        Some(SweepOptions {
+            kinds,
+            surface_modes,
+            solids: match get("solids") {
+                Some(v) => Some(parse_solids(&v)?),
+                None => None,
+            },
+            max_n,
+            restart: flag("sweep-restart"),
+            include_own: flag("include-own"),
+            open_only,
+            one_pass: flag("one-pass"),
+        })
+    } else {
+        if let Some((key, _)) = pairs.iter().find(|(key, _)| SWEEP_ONLY.contains(&key.as_str())) {
+            return Err(OptionError(format!("--{key} needs --sweep-2d-on-3d")));
+        }
+        None
+    };
     let mut state_dir = match get("state") {
         Some(s) => PathBuf::from(s),
         None => machine.home.join(".polypack-native"),
@@ -447,6 +617,7 @@ pub fn parse_options(argv: &[String], machine: &Machine) -> Result<Parsed, Optio
         target_max_budget,
         target_min_seconds,
         target_margin,
+        sweep,
     }))
 }
 
@@ -477,6 +648,40 @@ mod tests {
         assert!(parse_options(&args(&["--N", "1"]), &machine()).is_err());
         assert!(parse_options(&args(&["--dimensions", "all"]), &machine()).is_err());
         assert!(parse_options(&args(&["--server", "ftp://x"]), &machine()).is_err());
+    }
+
+    #[test]
+    fn sweep_options() {
+        let run = |a: &[&str]| match parse_options(&args(a), &machine()) {
+            Ok(Parsed::Run(o)) => Ok(o),
+            Ok(_) => panic!(),
+            Err(e) => Err(e.0),
+        };
+        assert_eq!(run(&[]).unwrap().sweep, None);
+        let o = run(&["--sweep-2d-on-3d"]).unwrap().sweep.unwrap();
+        assert_eq!(o.kinds, SweepKind::ALL.to_vec());
+        assert_eq!(o.surface_modes, vec!["fold", "nofold"]);
+        assert!(o.solids.is_none() && o.max_n.is_none() && !o.restart && !o.include_own);
+        let o = run(&["--sweep-2d-on-3d", "--kinds", "torus,surface", "--surface-modes=nofold", "--solids", "snub_cube,cube", "--max-N", "6", "--sweep-restart", "--include-own"])
+            .unwrap()
+            .sweep
+            .unwrap();
+        assert_eq!(o.kinds, vec![SweepKind::Surface, SweepKind::Torus]);
+        assert_eq!(o.surface_modes, vec!["nofold"]);
+        assert_eq!(o.solids, Some(vec!["cube".to_string(), "snub_cube".to_string()]));
+        assert_eq!(o.max_n, Some(6));
+        assert!(o.restart && o.include_own);
+        assert_eq!(run(&["--sweep-2d-on-3d", "--solids", "platonic"]).unwrap().sweep.unwrap().solids.unwrap().len(), 5);
+        assert!(run(&["--sweep-2d-on-3d", "--kinds", "flat"]).is_err());
+        assert!(run(&["--sweep-2d-on-3d", "--solids", "cub"]).is_err());
+        assert!(run(&["--sweep-2d-on-3d", "--max-N", "101"]).is_err());
+        assert!(run(&["--sweep-2d-on-3d", "--M", "4"]).is_err());
+        assert!(run(&["--sweep-2d-on-3d", "--open-only"]).unwrap().sweep.unwrap().open_only);
+        assert!(!run(&["--sweep-2d-on-3d"]).unwrap().sweep.unwrap().open_only);
+        assert!(run(&["--sweep-2d-on-3d", "--target-holder", "jg"]).is_err());
+        assert!(run(&["--kinds", "sphere"]).unwrap_err().contains("needs --sweep-2d-on-3d"));
+        assert!(run(&["--include-own"]).is_err());
+        assert_eq!(run(&["--sweep-2d-on-3d", "--max-P", "5"]).unwrap().p, Some(vec![1, 2, 3, 4, 5]));
     }
 
     #[test]

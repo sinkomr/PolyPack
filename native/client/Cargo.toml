@@ -11,6 +11,12 @@ path = "src/main.rs"
 
 [dependencies]
 polypack-flat = { path = "../flat" }
+polypack-spaces = { path = "../spaces" }
+polypack-spaceauto = { path = "../spaceauto" }
+# the 2D-on-3D searches, behind the real-search feature (their auto modules are ported separately)
+polypack-sphere = { path = "../sphere", optional = true }
+polypack-torus = { path = "../torus", optional = true }
+polypack-surface = { path = "../surface", optional = true }
 serde = { version = "1", features = ["derive"] }
 serde_json = { version = "1", features = ["preserve_order", "float_roundtrip"] }
 ureq = { version = "2", default-features = false, features = ["json"] }
@@ -18,8 +24,11 @@ ctrlc = "3"
 
 [features]
 # HTTPS through rustls (ring); without it the client speaks plain HTTP only (a local server)
-default = ["tls"]
+default = ["tls", "real-search"]
 tls = ["ureq/tls"]
+# calls the Auto searches of surface, sphere and torus (src/real_search.rs); without it
+# --sweep-2d-on-3d refuses to start
+real-search = ["dep:polypack-sphere", "dep:polypack-torus", "dep:polypack-surface"]
 
 [target.'cfg(unix)'.dependencies]
 libc = "0.2"

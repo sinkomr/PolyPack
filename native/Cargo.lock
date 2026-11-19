@@ -694,6 +694,11 @@ dependencies = [
  "ctrlc",
  "libc",
  "polypack-flat",
+ "polypack-spaceauto",
+ "polypack-spaces",
+ "polypack-sphere",
+ "polypack-surface",
+ "polypack-torus",
  "serde",
  "serde_json",
  "ureq",
@@ -743,6 +748,13 @@ dependencies = [
 ]
 
 [[package]]
+name = "polypack-spaceauto"
+version = "0.1.0"
+dependencies = [
+ "serde_json",
+]
+
+[[package]]
 name = "polypack-spaces"
 version = "0.1.0"
 dependencies = [
@@ -765,6 +777,7 @@ name = "polypack-sphere"
 version = "0.1.0"
 dependencies = [
  "polypack-js",
+ "polypack-spaceauto",
  "serde",
  "serde_json",
 ]
@@ -773,7 +786,9 @@ dependencies = [
 name = "polypack-surface"
 version = "0.1.0"
 dependencies = [
+ "polypack-flat",
  "polypack-js",
+ "polypack-spaceauto",
  "serde",
  "serde_json",
 ]
@@ -783,6 +798,7 @@ name = "polypack-torus"
 version = "0.1.0"
 dependencies = [
  "polypack-js",
+ "polypack-spaceauto",
  "serde",
  "serde_json",
 ]

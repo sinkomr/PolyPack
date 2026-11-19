@@ -7,11 +7,20 @@ mod answers;
 mod engine;
 mod format;
 mod http;
+mod known;
 mod memory;
 mod options;
 mod pick;
 mod platform;
+#[cfg_attr(not(feature = "real-search"), allow(dead_code))]
+mod real_search;
+mod space_api;
+mod space_engine;
 mod state;
+mod sweep;
+mod sweep_order;
+#[cfg(test)]
+mod sweep_tests;
 mod target;
 mod volunteer;
 
@@ -153,6 +162,7 @@ fn main() {
             println!("{}", env!("CARGO_PKG_VERSION"));
             0
         }
+        Ok(Parsed::Run(o)) if o.sweep.is_some() => sweep::run(o),
         Ok(Parsed::Run(o)) => volunteer::run(o),
     };
     std::process::exit(code);
