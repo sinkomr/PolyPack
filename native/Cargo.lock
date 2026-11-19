@@ -704,6 +704,7 @@ dependencies = [
  "ctrlc",
  "libc",
  "polypack-balls",
+ "polypack-boundary",
  "polypack-curved",
  "polypack-flat",
  "polypack-ndim",

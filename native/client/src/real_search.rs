@@ -9,6 +9,7 @@
 //!   curved                            polypack_curved::auto::auto_search
 //!   sphere                            polypack_sphere::auto::auto_search
 //!   torus                             polypack_torus::auto::auto_search
+//!   boundary                          polypack_boundary::auto::auto_search
 //!   polyhedra                         polypack_polyhedra::auto::auto_search
 //!   balls                             polypack_balls::auto::auto_search
 //!   ndim                              polypack_ndim::auto::auto_search
@@ -23,6 +24,7 @@ use std::sync::Arc;
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Route {
     Curved,
+    Boundary,
     Polyhedra,
     Balls,
     Ndim,
@@ -42,6 +44,7 @@ pub fn route(space: &str, id: &str) -> Result<Route, String> {
     }
     match space {
         "curved" => Ok(Route::Curved),
+        "boundary" => Ok(Route::Boundary),
         "polyhedra" => Ok(Route::Polyhedra),
         "balls" => Ok(Route::Balls),
         "ndim" => Ok(Route::Ndim),
@@ -55,7 +58,7 @@ pub fn route(space: &str, id: &str) -> Result<Route, String> {
                 Ok(Route::SurfaceAuto)
             }
         }
-        other => Err(format!("this client has no search for {other} yet")),
+        other => Err(format!("{other} is not a kind of problem this client knows")),
     }
 }
 
@@ -82,6 +85,7 @@ mod real {
     fn function(r: Route) -> AutoSearch {
         match r {
             Route::Curved => polypack_curved::auto::auto_search,
+            Route::Boundary => polypack_boundary::auto::auto_search,
             Route::Polyhedra => polypack_polyhedra::auto::auto_search,
             Route::Balls => polypack_balls::auto::auto_search,
             Route::Ndim => polypack_ndim::auto::auto_search,
@@ -116,6 +120,7 @@ mod tests {
         assert_eq!(route("surface", "surface/prism3/nofold/4/3"), Ok(Route::SurfaceAuto));
         assert!(route("sphere", "torus/sq/4/3").is_err());
         assert_eq!(route("curved", "curved/1/3/4/2"), Ok(Route::Curved));
+        assert_eq!(route("boundary", "boundary/tesseract/ball/9"), Ok(Route::Boundary));
         assert_eq!(route("polyhedra", "polyhedra/cubintet/5"), Ok(Route::Polyhedra));
         assert_eq!(route("balls", "balls/ballinball/7"), Ok(Route::Balls));
         assert_eq!(route("ndim", "ndim/4/cube/cube/6"), Ok(Route::Ndim));
