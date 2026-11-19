@@ -1,5 +1,5 @@
 name: Native client
-# Builds the Rust volunteer client (native/client, polypack-native: Flat 2D only) for macOS, Linux and
+# Builds the Rust volunteer client (native/client, polypack-native: every kind of problem) for macOS, Linux and
 # Windows. On a pull request that changes it, the builds are checked and nothing is published. Run by hand
 # (workflow_dispatch), it also replaces the files of the release "native", whose fixed download links the
 # volunteer page gives (apps/web/volunteer.html):
@@ -10,11 +10,11 @@ name: Native client
 on:
   workflow_dispatch:
   pull_request:
+    # the client and the crates it builds on: every crate of native/ but the server and the tools
     paths:
-      - native/client/**
-      - native/flat/**
-      - native/Cargo.toml
-      - native/Cargo.lock
+      - native/**
+      - "!native/server/**"
+      - "!native/tools/**"
       - .github/workflows/native-client.yml
 permissions:
   contents: read
@@ -99,7 +99,7 @@ jobs:
           version=$(sed -n 's/^version = "\(.*\)"/\1/p' ../native/Cargo.toml | head -1)
           notes="polypack-native $version, built from ${GITHUB_SHA::8} on $(date -u +%Y-%m-%d).
 
-          The native volunteer client: Flat 2D problems (polygons in polygons) only, several times faster than polypack-volunteer.mjs. How to run it: https://polypack.fly.dev/volunteer.html and docs/VOLUNTEER.md.
+          The native volunteer client: Flat problems (polygons in polygons), and with --dimensions every other kind, as polypack-volunteer.mjs does, and faster. How to run it: https://polypack.fly.dev/volunteer.html and docs/VOLUNTEER.md.
 
           The links of this release stay the same; each build replaces its files. The tag is not moved: the commit named above is the one built."
           # not marked latest: that stays the records release

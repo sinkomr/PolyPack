@@ -64,11 +64,27 @@ In development, the same program runs from the sources with `npx tsx apps/volunt
 
 ## The native client
 
-`polypack-native` (`native/client`) is the same client written in Rust, for Flat problems (2D in 2D) only. It draws problems, searches and submits as described above and takes the same options, except those for other dimensions (`--dimensions` and the rest are refused). It also has a target mode (`--target-holder`, see `polypack-native --help`).
+`polypack-native` (`native/client`) is the same client written in Rust. It draws problems, searches and submits as described above and takes the same options: Flat problems by default, and with `--dimensions` (or `--only-dimensions`) the other kinds, each with its own (Auto) search. `--space-method` and `--space-params`, the JavaScript client's choice of a generic method for the other kinds, are not offered. It also has a target mode for Flat problems (`--target-holder`, see `polypack-native --help`).
 
-It runs the same search methods several times faster. [CALC] On an Apple silicon Mac on 2026-11-18, each client's own engine benchmark (`polypack-native bench` and `apps/volunteer/scripts/bench-engine/bench.ts`, 30 CPU seconds, seed 1) on five problems of the bench panel (30 disks in a circle; 17 squares, 20 triangles, 20 heptagons and 50 octagons in a square): per CPU second, shrink_repair made 3.0 to 5.3 times as many evaluations, asc 6.5 to 11.7 times, harden 54 times (one problem). The native result ended closer to the best known in 3 of the 5, the JavaScript one in 1, and 1 tied: one seed each, so a hint, not a measurement of quality.
+Each kind's search is a port of the TypeScript, line by line (`native/PORTING.md`), in that kind's crate (`native/<kind>/src/auto.rs`). With an evaluation budget, so that the clock does not decide, each gives the TypeScript's packing bit for bit, held to Node 24 on Linux x86-64 by fixtures (`tests/fixtures/search-ref.jsonl` of `native/boundary`, `polyhedra`, `balls`, `ndim`, `sphere`, `torus` and `surface`; see `native/tools/LINUX_REFERENCE.md`). Two differences are deliberate: the surface search shrinks disks up to 120 times before giving up on a start (the TypeScript stops at 25), so that a few disks on a solid of many small faces get a start at all; and a curved round has no time limit of its own.
 
-Its engine chooses methods as the JavaScript client did before version 0.4.0: it does not start with shrink-repair and still runs `asc`, `basin_hopping` and `morph` from scratch and `ls_growth` (see the 0.4.0 notes below). [SPEC] Porting that change would help it further.
+It runs the same searches faster. [CALC] The same job (seed and evaluation budget) timed in Rust (release) and in Node on an Apple silicon Mac, 2026-11-18, in times faster:
+
+| Kind | Cases | Times faster |
+|---|---|---|
+| Flat | five problems of the bench panel, per method | 3 to 12 (shrink_repair 3 to 5, asc 7 to 12) |
+| Curved | 12 disks at K = -1; 8 pentagons in a square at K = 0.1 | 7 and 10 |
+| Sphere | 30 disks; 12 hexagons | 3.1 and 2.4 |
+| Torus | 20 disks, square torus; 8 pentagons, hexagonal torus | 2.6 and 1.4 |
+| Surface (fold) | 10 disks on the cube; 6 squares on the dodecahedron | 2.5 (instructions retired) and 3.1 |
+| Polytope boundaries | balls and solids on the tesseract, 5-cell, 16-cell; balls on the 7-cube | 2 to 5 |
+| Polyhedra | five pairs of solids, P = 3 to 30 | 2.3 to 4.9 |
+| Balls | balls in a ball, in a pentakis dodecahedron; cube and icosahedron in a ball | 1.7 to 2.1 |
+| nD in nD | cubes and balls in 4D to 6D | 3.4 to 9 |
+
+The machine was busy or on battery power for some of these, so they are rough; the cube case's wall times were not usable and its figure is the ratio of instructions retired. On Flat problems [CALC], each client's own engine benchmark (`polypack-native bench` and `apps/volunteer/scripts/bench-engine/bench.ts`, 30 CPU seconds, seed 1) on five problems of the panel (30 disks in a circle; 17 squares, 20 triangles, 20 heptagons and 50 octagons in a square): the native result ended closer to the best known in 3 of the 5, the JavaScript one in 1, and 1 tied: one seed each, so a hint, not a measurement of quality.
+
+On Flat problems its engine chooses methods as the JavaScript client did before version 0.4.0: it does not start with shrink-repair and still runs `asc`, `basin_hopping` and `morph` from scratch and `ls_growth` (see the 0.4.0 notes below). [SPEC] Porting that change would help it further.
 
 Builds for macOS (Apple silicon and Intel), Linux (x86-64 and ARM 64-bit, static, so they run on any distribution) and Windows (x86-64) are in the release `native`, built by `.github/workflows/native-client.yml` and linked from the volunteer page. Each build replaces the release's files, so the links stay the same; `SHA256SUMS` holds their checksums. The files are not signed. Downloaded in a terminal, they run without a warning:
 

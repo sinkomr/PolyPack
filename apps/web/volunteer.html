@@ -32,14 +32,14 @@
       <h3>Download</h3>
       <p>
         There are two clients. Both run on a computer (macOS, Linux or Windows) from a terminal; neither runs on a
-        phone. They search Flat problems the same way and submit the same way.
+        phone. They search the same problems with the same methods and submit the same way.
       </p>
 
-      <h4>The native client: faster, Flat problems only</h4>
+      <h4>The native client: faster</h4>
       <p>
-        A program for your system, with the same search methods. It runs them several times faster than the
-        JavaScript client: 3 to 12 times as many evaluations per second, measured on five Flat problems. It searches
-        Flat problems (2D in 2D) only.
+        A program for your system, with the same search methods as the JavaScript client, ported line by line and
+        checked to give the same results. It runs them faster: from about 1.5 to 10 times, depending on the kind of
+        problem (3 to 12 times on Flat problems).
       </p>
       <ul class="downloads" id="native-downloads">
         <li><a href="https://github.com/sinkomr/PolyPack/releases/download/native/polypack-native-macos-arm64">macOS, Apple silicon</a></li>
@@ -63,10 +63,10 @@ chmod +x polypack-native
         <code>xattr -d com.apple.quarantine polypack-native</code>; Windows asks first (More info, then Run anyway).
         The files' SHA-256 sums are in
         <a href="https://github.com/sinkomr/PolyPack/releases/download/native/SHA256SUMS">SHA256SUMS</a>, and the source is in the repository's <code>native/client</code>.
-        It takes the options described below, except those for other dimensions.
+        It takes the options described below.
       </p>
 
-      <h4>The JavaScript client: every dimension</h4>
+      <h4>The JavaScript client</h4>
       <p>
         <a class="button-link" id="download" href="/downloads/polypack-volunteer.mjs" download>
           Download polypack-volunteer.mjs
@@ -75,8 +75,7 @@ chmod +x polypack-native
       <p id="file-info" class="note" hidden></p>
       <p>
         It is one file that runs with <a href="https://nodejs.org/">Node.js</a> 24 or newer. It needs no installation,
-        account or key. It is readable JavaScript rather than minified, so you can see what runs on your machine. It is
-        the client that also searches the <a href="#dimensions">other dimensions</a>.
+        account or key. It is readable JavaScript rather than minified, so you can see what runs on your machine.
       </p>
 
       <h3>Run it</h3>
@@ -104,7 +103,7 @@ chmod +x polypack-native
         what the client sends and what it keeps on disk.
       </p>
 
-      <h3 id="dimensions">Optional: other dimensions (JavaScript client)</h3>
+      <h3 id="dimensions">Optional: other dimensions</h3>
       <p>
         By default the client searches Flat problems (2D in 2D): polygons in polygons. It can also search the other
         kinds on the <a href="/dimensions.html">Dimensions</a> page: Curved (2D in 2D at constant curvature); Platonic
@@ -115,6 +114,7 @@ chmod +x polypack-native
         server about them.
       </p>
       <pre><code>node polypack-volunteer.mjs --name "your name" --dimensions all</code></pre>
+      <p>The native client takes the same options: <code>./polypack-native --name "your name" --dimensions all</code>.</p>
       <ul>
         <li>
           <code>--dimensions</code> takes <code>surface</code>, <code>curved</code>, <code>sphere</code>,
