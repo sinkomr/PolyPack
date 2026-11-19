@@ -76,7 +76,7 @@ test("a name that holds nothing, no name, and an unreachable server each get a m
   await page.goto("/holder.html?name=Nobody%20holds%20this");
   await expect(page.getByRole("heading", { name: "Records held by Nobody holds this" })).toBeVisible();
   await expect(page.locator("#note")).toContainText(
-    "This name leads no problem of 2D in 2D with polygon or disk pieces at the moment.",
+    "This name leads no problem of 2D in 2D with polygon or disk pieces at the moment,",
   );
   await expect(page.locator("#results")).toBeHidden();
   await expect(page.locator("#asof")).toBeHidden();
