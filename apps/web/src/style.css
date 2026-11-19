@@ -524,6 +524,12 @@ body.scroll {
   font-family: ui-monospace, Menlo, Consolas, monospace;
   font-size: 0.93em;
 }
+/* a command with a long address: wrapped on screen rather than scrolled (a scrolled block must take
+   the keyboard's focus); copying it still gives one line */
+.prose pre.wrap {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
 .button-link {
   display: inline-block;
   padding: 8px 14px;

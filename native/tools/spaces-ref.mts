@@ -1232,6 +1232,6 @@ if (fixturesDir) {
     auxSeen.set(key, n + 1);
     auxChosen.push({ case: c, result });
   }
-  writeFileSync(join(fixturesDir, "aux.jsonl"), auxChosen.map((c) => JSON.stringify(c)).join("\n") + "\n");
+  writeFileSync(join(fixturesDir, "auxiliary.jsonl"), auxChosen.map((c) => JSON.stringify(c)).join("\n") + "\n");
   console.error(`fixtures: ${chosen.length} checks and ${auxChosen.length} auxiliary cases in ${fixturesDir}`);
 }
