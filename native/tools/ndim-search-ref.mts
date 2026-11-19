@@ -11,7 +11,7 @@
 //
 //   export LINUXREF_DIR=<scratch dir outside the repository>
 //   native/tools/linuxref/bundle.sh ndim-search-ref
-//   LINUXREF_RW=1 native/tools/linuxref/linux.sh ndim-search native-ndim-search-ref
+//   LINUXREF_RW=1 native/tools/linuxref/linux.sh ndim-search ndim-search-ref
 //
 // Cases. Every case has an evaluation budget only (the clock never decides) and is one of
 //   job     runSpaceJob of packages/spaces/src/search/run.ts for the space "ndim" (method "auto": the
