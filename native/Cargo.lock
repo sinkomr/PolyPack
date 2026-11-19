@@ -719,6 +719,7 @@ name = "polypack-polyhedra"
 version = "0.1.0"
 dependencies = [
  "polypack-js",
+ "polypack-spaceauto",
  "serde",
  "serde_json",
 ]
