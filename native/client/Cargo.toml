@@ -15,6 +15,7 @@ polypack-spaces = { path = "../spaces" }
 polypack-spaceauto = { path = "../spaceauto" }
 # the searches of the kinds beyond Flat (their crates' auto modules), behind the real-search feature
 polypack-curved = { path = "../curved", optional = true }
+polypack-polyhedra = { path = "../polyhedra", optional = true }
 polypack-balls = { path = "../balls", optional = true }
 polypack-ndim = { path = "../ndim", optional = true }
 polypack-sphere = { path = "../sphere", optional = true }
@@ -36,6 +37,7 @@ real-search = [
     "dep:polypack-sphere",
     "dep:polypack-torus",
     "dep:polypack-surface",
+    "dep:polypack-polyhedra",
     "dep:polypack-balls",
     "dep:polypack-ndim",
 ]

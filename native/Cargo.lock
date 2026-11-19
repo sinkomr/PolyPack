@@ -706,6 +706,7 @@ dependencies = [
  "polypack-curved",
  "polypack-flat",
  "polypack-ndim",
+ "polypack-polyhedra",
  "polypack-spaceauto",
  "polypack-spaces",
  "polypack-sphere",
