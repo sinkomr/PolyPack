@@ -32,6 +32,8 @@ primary_region = 'sjc'
     method = 'GET'
     path = '/api/health'
 
+# 2 GB since 2026-11-19: with 1 GB the database's working set no longer fit beside the server, the
+# machine was killed for want of memory, and every read then waited on the disk.
 [[vm]]
   size = 'shared-cpu-2x'
-  memory = '1gb'
+  memory = '2gb'

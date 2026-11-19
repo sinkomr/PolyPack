@@ -19,7 +19,9 @@
 //! The source generates a file on its one thread, a few thousand pieces at a time with the event
 //! loop let in between, and compresses in zlib's threads. Here a file is generated on a thread of
 //! its own; the store is locked for one chunk of entries at a time, so that requests keep being
-//! answered in between. At most `max_concurrent` files are generated at once, the others wait.
+//! answered in between. At most `max_concurrent` files are generated at once, the others wait. A
+//! file is kept whole until it is finished, so that the answer can state its length and fingerprint
+//! first: in memory up to `SPILL_BYTES`, past that in an unnamed file of the snapshot's directory.
 
 use std::collections::HashMap;
 use std::io::Write;
@@ -61,9 +63,9 @@ pub const CHUNK_PIECES: f64 = 1000.0;
 pub const MAX_CONCURRENT: usize = 2;
 
 /// A file generated from the database, gzipped.
-#[derive(Clone, Debug)]
+#[derive(Debug)]
 pub struct GeneratedFile {
-    pub body: Bytes,
+    pub body: GeneratedBody,
     /// The fingerprint of the records written, which can differ from the manifest's if they changed since.
     pub fingerprint: String,
     pub records: f64,
@@ -328,19 +330,132 @@ fn chunked<T>(leaders: &[T], p_of: impl Fn(&T) -> f64) -> Vec<&[T]> {
     out
 }
 
-/// snapshot.ts: gzipText, as a writer: zlib's gzip at level 6, in memory, so that the answer can
-/// say what it holds before its body.
-struct Gzip(flate2::write::GzEncoder<Vec<u8>>);
+/// Bytes of a file being generated past which they go to a file on the disk rather than memory.
+/// Every pair's file is smaller (a few MB at most); a space's can be far larger: the polyhedra
+/// file passed 1 GB gzipped in November 2026, more than the machine's memory then, and a request
+/// for it had the server killed for want of memory.
+pub const SPILL_BYTES: usize = 8 * 1024 * 1024;
+
+/// A generated file's gzipped bytes: in memory, or in a file of the snapshot's directory that was
+/// removed as soon as it was made, which keeps its bytes for as long as it is open and leaves
+/// nothing behind when the server stops.
+#[derive(Debug)]
+pub enum GeneratedBody {
+    Memory(Bytes),
+    File { file: std::fs::File, len: u64 },
+}
+
+impl GeneratedBody {
+    pub fn len(&self) -> u64 {
+        match self {
+            GeneratedBody::Memory(b) => b.len() as u64,
+            GeneratedBody::File { len, .. } => *len,
+        }
+    }
+    pub fn is_empty(&self) -> bool {
+        self.len() == 0
+    }
+    /// The body of an answer: a file is read as the answer is sent, a chunk at a time.
+    pub fn into_res_body(self) -> crate::hono::ResBody {
+        match self {
+            GeneratedBody::Memory(b) => crate::hono::ResBody::Full(b),
+            GeneratedBody::File { file, len } => crate::hono::ResBody::Promised { stream: crate::serve_static::file_stream(Ok(file), 0, len), bytes: len },
+        }
+    }
+    /// Every byte, read into memory (for tests).
+    pub fn to_bytes(&self) -> std::io::Result<Vec<u8>> {
+        match self {
+            GeneratedBody::Memory(b) => Ok(b.to_vec()),
+            GeneratedBody::File { file, len } => {
+                use std::os::unix::fs::FileExt;
+                let mut buf = vec![0u8; *len as usize];
+                file.read_exact_at(&mut buf, 0)?;
+                Ok(buf)
+            }
+        }
+    }
+}
+
+static SPILLED: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
+
+/// Where the gzipped bytes go: memory up to `limit`, then (with a directory) a file there.
+enum Spill {
+    Memory { bytes: Vec<u8>, dir: Option<PathBuf>, limit: usize },
+    File { out: std::io::BufWriter<std::fs::File>, len: u64 },
+}
+
+impl Spill {
+    fn new(dir: Option<&Path>, limit: usize) -> Spill {
+        Spill::Memory { bytes: Vec::new(), dir: dir.map(Path::to_path_buf), limit }
+    }
+    fn finish(self) -> std::io::Result<GeneratedBody> {
+        match self {
+            Spill::Memory { bytes, .. } => Ok(GeneratedBody::Memory(Bytes::from(bytes))),
+            Spill::File { out, len } => {
+                let file = out.into_inner().map_err(|e| e.into_error())?;
+                Ok(GeneratedBody::File { file, len })
+            }
+        }
+    }
+}
+
+/// A file of `dir` that no name leads to: made, then removed at once.
+fn unnamed_file(dir: &Path) -> std::io::Result<std::fs::File> {
+    std::fs::create_dir_all(dir)?;
+    let n = SPILLED.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+    let path = dir.join(format!(".generating-{}-{n}.tmp", std::process::id()));
+    let file = std::fs::OpenOptions::new().read(true).write(true).create_new(true).open(&path)?;
+    std::fs::remove_file(&path)?;
+    Ok(file)
+}
+
+impl Write for Spill {
+    fn write(&mut self, buf: &[u8]) -> std::io::Result<usize> {
+        if let Spill::Memory { bytes, dir: Some(dir), limit } = self {
+            if bytes.len() + buf.len() > *limit {
+                let mut out = std::io::BufWriter::with_capacity(256 * 1024, unnamed_file(dir)?);
+                out.write_all(bytes)?;
+                *self = Spill::File { out, len: bytes.len() as u64 };
+            }
+        }
+        match self {
+            Spill::Memory { bytes, .. } => {
+                bytes.extend_from_slice(buf);
+                Ok(buf.len())
+            }
+            Spill::File { out, len } => {
+                let n = out.write(buf)?;
+                *len += n as u64;
+                Ok(n)
+            }
+        }
+    }
+    fn flush(&mut self) -> std::io::Result<()> {
+        match self {
+            Spill::Memory { .. } => Ok(()),
+            Spill::File { out, .. } => out.flush(),
+        }
+    }
+}
+
+/// snapshot.ts: gzipText, as a writer: zlib's gzip at level 6, kept whole until it is finished, so
+/// that the answer can say what it holds before its body; in memory, or past `SPILL_BYTES` on the
+/// disk (see `Spill`).
+struct Gzip(flate2::write::GzEncoder<Spill>);
 
 impl Gzip {
-    fn new() -> Gzip {
-        Gzip(crate::hono::gzip_writer(Vec::new(), flate2::Compression::new(6)))
+    fn new(dir: Option<&Path>) -> Gzip {
+        Gzip::with_limit(dir, SPILL_BYTES)
     }
-    fn write(&mut self, text: &str) {
-        self.0.write_all(text.as_bytes()).expect("writing to memory");
+    fn with_limit(dir: Option<&Path>, limit: usize) -> Gzip {
+        Gzip(crate::hono::gzip_writer(Spill::new(dir, limit), flate2::Compression::new(6)))
     }
-    fn finish(self) -> Bytes {
-        Bytes::from(self.0.finish().expect("writing to memory"))
+    fn write(&mut self, text: &str) -> Result<(), Thrown> {
+        self.0.write_all(text.as_bytes()).map_err(|e| Thrown::new(format!("writing a snapshot file: {e}")))
+    }
+    fn finish(self) -> Result<GeneratedBody, Thrown> {
+        let out = self.0.finish().map_err(|e| Thrown::new(format!("writing a snapshot file: {e}")))?;
+        out.finish().map_err(|e| Thrown::new(format!("writing a snapshot file: {e}")))
     }
 }
 
@@ -348,11 +463,11 @@ impl Gzip {
 /// leaders are read first and their entries a chunk at a time, with other work let in after each;
 /// the fingerprint is of what is written, which may differ from the leaders read if entries
 /// changed meanwhile.
-pub fn generate_pair(store: &StoreHandle, n: f64, m: f64, closed: &ClosedFn) -> Result<GeneratedFile, Thrown> {
+pub fn generate_pair(store: &StoreHandle, n: f64, m: f64, closed: &ClosedFn, spill: Option<&Path>) -> Result<GeneratedFile, Thrown> {
     let leaders = pair_leaders(&store.lock().unwrap(), n, m, closed)?;
     let mut written: Vec<StoredSubmission> = Vec::new();
-    let mut gz = Gzip::new();
-    gz.write(&format!("{{\"format\":{},\"N\":{},\"M\":{},\"records\":[", fmt::num(SNAPSHOT_FORMAT), fmt::num(n), fmt::num(m)));
+    let mut gz = Gzip::new(spill);
+    gz.write(&format!("{{\"format\":{},\"N\":{},\"M\":{},\"records\":[", fmt::num(SNAPSHOT_FORMAT), fmt::num(n), fmt::num(m)))?;
     for part in chunked(&leaders, |l| l.p) {
         let mut lines = String::new();
         {
@@ -376,12 +491,12 @@ pub fn generate_pair(store: &StoreHandle, n: f64, m: f64, closed: &ClosedFn) -> 
             }
         }
         if !lines.is_empty() {
-            gz.write(&lines);
+            gz.write(&lines)?;
         }
     }
-    gz.write("\n]}\n");
+    gz.write("\n]}\n")?;
     Ok(GeneratedFile {
-        body: gz.finish(),
+        body: gz.finish()?,
         fingerprint: fingerprint(written.iter().map(|s| (s.p, s.id, s.name.as_str(), &s.found_with, s.verification.as_str()))),
         records: written.len() as f64,
         pieces: written.iter().map(|s| s.p).sum(),
@@ -390,11 +505,11 @@ pub fn generate_pair(store: &StoreHandle, n: f64, m: f64, closed: &ClosedFn) -> 
 
 /// snapshot.ts: generateSpace. The file of a space as the database holds its entries now, by the
 /// same rules as generatePair.
-pub fn generate_space(store: &StoreHandle, spaces: &SnapshotSpaces, space: &str) -> Result<GeneratedFile, Thrown> {
+pub fn generate_space(store: &StoreHandle, spaces: &SnapshotSpaces, space: &str, spill: Option<&Path>) -> Result<GeneratedFile, Thrown> {
     let leaders = space_leaders(&store.lock().unwrap(), spaces, space)?;
     let mut written: Vec<SpaceSnapshotLeader> = Vec::new();
-    let mut gz = Gzip::new();
-    gz.write(&format!("{{\"format\":{},\"space\":{},\"records\":[", fmt::num(SNAPSHOT_FORMAT), stringify(space)));
+    let mut gz = Gzip::new(spill);
+    gz.write(&format!("{{\"format\":{},\"space\":{},\"records\":[", fmt::num(SNAPSHOT_FORMAT), stringify(space)))?;
     for part in chunked(&leaders, |l| l.p) {
         let mut lines = String::new();
         {
@@ -415,11 +530,11 @@ pub fn generate_space(store: &StoreHandle, spaces: &SnapshotSpaces, space: &str)
             }
         }
         if !lines.is_empty() {
-            gz.write(&lines);
+            gz.write(&lines)?;
         }
     }
-    gz.write("\n]}\n");
-    Ok(GeneratedFile { body: gz.finish(), fingerprint: space_fingerprint(&written), records: written.len() as f64, pieces: written.iter().map(|l| l.p).sum() })
+    gz.write("\n]}\n")?;
+    Ok(GeneratedFile { body: gz.finish()?, fingerprint: space_fingerprint(&written), records: written.len() as f64, pieces: written.iter().map(|l| l.p).sum() })
 }
 
 /// snapshot.ts: SourceOptions.
@@ -533,14 +648,16 @@ impl SnapshotSource {
                     Some(other) => store::json::stringify(other),
                     None => String::new(),
                 };
-                Box::new(move || generate_space(&store, &spaces, &space))
+                let dir = self.dir.clone();
+                Box::new(move || generate_space(&store, &spaces, &space, Some(&dir)))
             }
             Value::Object(o) => {
                 let (Some(n), Some(m)) = (o.get("N").and_then(Value::as_f64), o.get("M").and_then(Value::as_f64)) else {
                     return Err(Thrown::new("the manifest's entry has no N and M"));
                 };
                 let closed = self.closed.clone();
-                Box::new(move || generate_pair(&store, n, m, &closed))
+                let dir = self.dir.clone();
+                Box::new(move || generate_pair(&store, n, m, &closed, Some(&dir)))
             }
             _ => return Err(Thrown::new("TypeError: Cannot use 'in' operator to search for 'space'")),
         };
@@ -776,4 +893,49 @@ pub fn schedule_snapshots(opts: ScheduleOptions) -> tokio::task::JoinHandle<()> 
             wait = until_hour();
         }
     })
+}
+
+#[cfg(test)]
+mod spill_tests {
+    use super::*;
+
+    fn text() -> String {
+        (0..20_000).map(|i| format!("{{\"P\":{i},\"x\":{}}},\n", (i as f64 * 0.7311).sin())).collect()
+    }
+
+    #[test]
+    fn a_file_past_the_limit_goes_to_the_disk_with_the_same_bytes() {
+        let dir = std::env::temp_dir().join(format!("polypack-spill-test-{}", std::process::id()));
+        let text = text();
+        let mut in_memory = Gzip::new(None);
+        let mut spilled = Gzip::with_limit(Some(&dir), 4096);
+        for part in text.as_bytes().chunks(1000) {
+            let part = std::str::from_utf8(part).unwrap();
+            in_memory.write(part).unwrap();
+            spilled.write(part).unwrap();
+        }
+        let in_memory = in_memory.finish().unwrap();
+        let spilled = spilled.finish().unwrap();
+        assert!(matches!(in_memory, GeneratedBody::Memory(_)));
+        assert!(matches!(spilled, GeneratedBody::File { .. }));
+        assert!(spilled.len() > 4096);
+        assert_eq!(spilled.len(), in_memory.len());
+        assert_eq!(spilled.to_bytes().unwrap(), in_memory.to_bytes().unwrap());
+        // the file has no name: nothing is left in the directory, even while it is open
+        assert_eq!(std::fs::read_dir(&dir).unwrap().count(), 0);
+        let mut unzipped = String::new();
+        use std::io::Read;
+        flate2::read::GzDecoder::new(&spilled.to_bytes().unwrap()[..]).read_to_string(&mut unzipped).unwrap();
+        assert_eq!(unzipped, text);
+        std::fs::remove_dir_all(&dir).ok();
+    }
+
+    #[test]
+    fn a_file_under_the_limit_stays_in_memory() {
+        let dir = std::env::temp_dir().join(format!("polypack-spill-small-{}", std::process::id()));
+        let mut gz = Gzip::new(Some(&dir));
+        gz.write("{\"records\":[\n]}\n").unwrap();
+        assert!(matches!(gz.finish().unwrap(), GeneratedBody::Memory(_)));
+        assert!(!dir.exists());
+    }
 }
