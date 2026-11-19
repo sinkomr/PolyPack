@@ -490,6 +490,28 @@ body.scroll {
   font-size: 15.5px;
   margin: 22px 0 6px;
 }
+.prose h4 {
+  font-size: 14.5px;
+  margin: 18px 0 4px;
+}
+/* a row of download links, one per system, that wraps on a narrow screen */
+.prose ul.downloads {
+  list-style: none;
+  padding: 0;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.prose ul.downloads a {
+  display: inline-block;
+  padding: 6px 12px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  text-decoration: none;
+}
+.prose ul.downloads a:hover {
+  text-decoration: underline;
+}
 .prose pre {
   background: var(--panel);
   border: 1px solid var(--border);
@@ -501,6 +523,12 @@ body.scroll {
 .prose code {
   font-family: ui-monospace, Menlo, Consolas, monospace;
   font-size: 0.93em;
+}
+/* a command with a long address: wrapped on screen rather than scrolled (a scrolled block must take
+   the keyboard's focus); copying it still gives one line */
+.prose pre.wrap {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
 }
 .button-link {
   display: inline-block;

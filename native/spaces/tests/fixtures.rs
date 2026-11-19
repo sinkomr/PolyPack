@@ -4,7 +4,7 @@
 //!
 //!  - validate.jsonl: `{ case, ref }`, a configuration of a problem with the options the server
 //!    passes, and what parseSpaceConfig, validateSpaceSubmission and its Async variant answer;
-//!  - aux.jsonl: `{ case, result }`: ids, domains, catalogues of damaged record files, problems of
+//!  - auxiliary.jsonl: `{ case, result }`: ids, domains, catalogues of damaged record files, problems of
 //!    the repository's data/, stored configurations of free tori, the comparison rules, the constants.
 //!
 //! The fixtures were written under Node 24 on Linux x86-64, the production platform
@@ -106,7 +106,7 @@ fn the_checks_answer_as_the_typescript() {
 
 #[test]
 fn ids_domains_and_catalogues_answer_as_the_typescript() {
-    let list = fixtures("aux.jsonl");
+    let list = fixtures("auxiliary.jsonl");
     assert!(list.len() >= 40, "{} fixtures", list.len());
     let mut failures = Vec::new();
     let mut pow_differences = 0;
