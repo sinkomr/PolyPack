@@ -690,6 +690,13 @@ dependencies = [
 ]
 
 [[package]]
+name = "polypack-methods"
+version = "0.1.0"
+dependencies = [
+ "polypack-js",
+]
+
+[[package]]
 name = "polypack-native"
 version = "0.1.0"
 dependencies = [
@@ -713,6 +720,8 @@ name = "polypack-ndim"
 version = "0.1.0"
 dependencies = [
  "polypack-js",
+ "polypack-methods",
+ "polypack-spaceauto",
  "serde",
  "serde_json",
 ]

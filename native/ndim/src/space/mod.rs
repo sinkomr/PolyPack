@@ -1,7 +1,8 @@
 //! The nD in nD space as the server sees it (packages/ndspace): the names and ids of its problems
 //! (`catalogue`), the lower bounds (`bounds`), the domain for the spaces listing (`domain`), and the
 //! parser and the capped check of a configuration (`validate`). The package's search kernel, its
-//! lattices and contact code are not reached by the server and are not ported.
+//! lattices and contact code are not reached by the server; they are the crate's `kernel`,
+//! `lattice` and `contact` modules, for the Auto search (`auto`).
 
 pub mod bounds;
 pub mod catalogue;

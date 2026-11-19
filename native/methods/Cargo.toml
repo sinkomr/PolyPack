@@ -1,0 +1,12 @@
+[package]
+name = "polypack-methods"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+description = "PolyPack's generic search methods (basin hopping) on a family's geometry kernel, ported from packages/methods"
+
+[lib]
+name = "polypack_methods"
+
+[dependencies]
+polypack-js = { path = "../js" }
