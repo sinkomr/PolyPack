@@ -2,7 +2,7 @@ import { mkdtempSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { DatabaseSync } from "node:sqlite";
-import { HolderResponse, Holder } from "@polypack/geometry";
+import { HolderResponse, HolderRow } from "@polypack/geometry";
 import { describe, expect, it } from "vitest";
 import { createApp } from "../src/app";
 import { SqliteStore } from "../src/sqlite-store";
@@ -117,8 +117,16 @@ describe("GET /api/holder for a name that leads 30,000 problems", () => {
 
     // the page agrees with the row of /api/holders, which the server counts its own way
     const holders = await (await app.request("/api/holders")).json();
-    const row = (holders as { holders: Holder[] }).holders.find((h) => h.name === "big");
-    expect(row).toEqual({ name: "big", records: 30_000, beat_published: 0, site_bests: 30_000, pending: 0, peak: 30_000 });
+    const row = (holders as { holders: HolderRow[] }).holders.find((h) => h.name === "big");
+    expect(row).toEqual({
+      name: "big",
+      records: 30_000,
+      beat_published: 0,
+      site_bests: 30_000,
+      pending: 0,
+      peak: 30_000,
+      dimensions: { "2-in-2": 30_000 },
+    });
 
     const kept = await probed(() => ask("big"));
     expect(kept.result.body).toEqual(body);

@@ -1,11 +1,13 @@
 import * as api from "./api";
 import {
+  HOLDER_DIMENSIONS,
   HOLDER_SORT_DEFAULT,
   type PlacedHolder,
   holderHref,
   isHolderSortKey,
   nextHolderSort,
   placeHolders,
+  recordsIn,
   sortHolders,
 } from "./holder-model";
 import { el } from "./shapes-ui";
@@ -30,9 +32,8 @@ function row(h: PlacedHolder): HTMLTableRowElement {
     name,
     el("td", count(h.records), "num"),
     el("td", count(h.peak), "num"),
+    ...HOLDER_DIMENSIONS.map((d) => el("td", count(recordsIn(h, d.id)), "num")),
     el("td", count(h.beat_published), "num"),
-    el("td", count(h.site_bests), "num"),
-    el("td", count(h.pending), "num"),
   );
   return tr;
 }

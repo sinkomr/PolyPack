@@ -152,10 +152,16 @@ function damaged(space: SpaceName, c: Record<string, unknown>): unknown[] {
 /** One space: research records posted back and damaged, the site's leading entries replayed, ties, moderation. */
 function oneSpace(space: SpaceName, recs: Record_[], site: SiteEntry[]): Scenario {
   const s = new Scenario(`spaces-${space}`, "spaces: submit", {
-    about: `${space}: research records posted back, shrunk and damaged; leading entries replayed, tied, beaten, edited, removed`,
-    options: { limits: NOLIMIT },
+    about: `${space}: research records posted back, shrunk and damaged; leading entries replayed, tied, beaten, edited, removed; the record holders' counts following them`,
+    options: { limits: NOLIMIT, holdersChunk: 2 },
   });
   const pages = (id: string) => s.get(`/api/spaces/${space}/problems/${id}`).get(`/api/leaders?keys=${id}`);
+  // the record holders: counted from here on, every change of an entry moving them
+  const holders = (...names: string[]) => {
+    s.get("/api/holders", 200);
+    for (const name of names) s.get(`/api/holder?name=${enc(name)}`, 200);
+  };
+  holders();
   for (const r of recs) {
     pages(r.id);
     s.spaceSubmit(body(space, r.id, r.config));
@@ -163,6 +169,7 @@ function oneSpace(space: SpaceName, recs: Record_[], site: SiteEntry[]): Scenari
       s.spaceSubmit(body(space, r.id, scaled(space, r.id, r.config, f), { name: `scaled ${f}` }));
     pages(r.id);
   }
+  holders("ann", "scaled 0.5");
   // damage: on the first record, and on a problem whose entry could be kept (a site entry's)
   const victim = recs[0];
   if (victim) for (const c of damaged(space, victim.config)) s.spaceSubmit(body(space, victim.id, c));
@@ -180,6 +187,7 @@ function oneSpace(space: SpaceName, recs: Record_[], site: SiteEntry[]): Scenari
     pages(e.problem);
     kept++;
   }
+  holders(...new Set(site.slice(0, 3).map((e) => e.name)));
   s.get(`/api/spaces/${space}/records`, 200).get(`/api/spaces/${space}/records`, 200, { "accept-encoding": "gzip" });
   s.get(`/api/spaces/${space}/site-only`, 200).get(`/api/spaces/${space}/site-only?limit=2`);
   if (site[1]) s.get(`/api/spaces/${space}/site-only?limit=2&after=${enc(site[1].problem)}`);
@@ -188,6 +196,7 @@ function oneSpace(space: SpaceName, recs: Record_[], site: SiteEntry[]): Scenari
   // moderation
   s.post("/api/admin/spaces/remove", { id: 1 }, 401).post("/api/admin/spaces/edit", { id: 1, name: "x" }, 401);
   s.admin("/api/admin/spaces/edit", { id: 1, name: "  A <new> name ", agent_note: "edited\nnote" }).get("/api/spaces/entries/1");
+  holders("A <new> name");
   s.admin("/api/admin/spaces/edit", { id: 1 }).admin("/api/admin/spaces/edit", { id: 1, agent_note: "" }).admin("/api/admin/spaces/edit", { id: 1, config: {}, score: 0 });
   for (const b of [null, [], {}, { id: "1" }, { id: 1.5 }, { id: 1, name: "" }, { id: 1, name: 5 }, { id: 1, agent_note: 5 }, { id: 1, name: " ", agent_note: [] }, "x"])
     s.admin("/api/admin/spaces/edit", b, 400);
@@ -196,6 +205,7 @@ function oneSpace(space: SpaceName, recs: Record_[], site: SiteEntry[]): Scenari
   s.get(`/api/spaces/${space}/records`, 200);
   for (const b of [null, [], {}, { id: "1" }, { id: 1.5 }]) s.admin("/api/admin/spaces/remove", b, 400);
   s.admin("/api/admin/spaces/remove", { id: 1 }).admin("/api/admin/spaces/remove", { id: 1 }, 404).admin("/api/admin/spaces/remove", { id: 99999 }, 404);
+  holders("A <new> name");
   if (first) {
     pages(first.problem);
     s.get("/api/spaces/entries/1").get(`/api/spaces/${space}/records`, 200).get(`/api/spaces/${space}/site-only`, 200);
@@ -203,6 +213,7 @@ function oneSpace(space: SpaceName, recs: Record_[], site: SiteEntry[]): Scenari
     s.spaceSubmit(body(space, first.problem, first.config, { name: "back again" }));
     pages(first.problem);
   }
+  holders("back again");
   s.control({ flushStats: true });
   return s;
 }

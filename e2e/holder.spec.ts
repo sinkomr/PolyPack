@@ -75,7 +75,9 @@ test("a name on the holders page leads to the page of what it holds, and a pair 
 test("a name that holds nothing, no name, and an unreachable server each get a message", async ({ page }) => {
   await page.goto("/holder.html?name=Nobody%20holds%20this");
   await expect(page.getByRole("heading", { name: "Records held by Nobody holds this" })).toBeVisible();
-  await expect(page.locator("#note")).toContainText("This name leads no problem at the moment.");
+  await expect(page.locator("#note")).toContainText(
+    "This name leads no problem of 2D in 2D with polygon or disk pieces at the moment.",
+  );
   await expect(page.locator("#results")).toBeHidden();
   await expect(page.locator("#asof")).toBeHidden();
 
@@ -165,19 +167,27 @@ test("thousands of pairs are listed at once, in runs of P", async ({ page }) => 
 
 test("the heading of a column sorts the holders table by it, and again turns the order round", async ({ page }) => {
   // the list as the server would send it, by records and then by site bests
-  const holder = (name: string, records: number, site_bests: number, peak: number, beat_published: number) => ({
+  const holder = (
+    name: string,
+    records: number,
+    site_bests: number,
+    peak: number,
+    beat_published: number,
+    dimensions: Record<string, number> = {},
+  ) => ({
     name,
     records,
     beat_published,
     site_bests,
     pending: 0,
     peak,
+    dimensions,
   });
   const answer: HoldersResponse = {
     holders: [
-      holder("mia", 9, 12, 9, 4),
-      holder("Zed", 5, 5, 20, 0),
-      holder("ann", 5, 5, 6, 4),
+      holder("mia", 9, 12, 9, 4, { "2-in-2": 5, "2-on-3": 3, "3-on-4": 1 }),
+      holder("Zed", 5, 5, 20, 0, { "3-in-3": 5 }),
+      holder("ann", 5, 5, 6, 4, { "2-in-2": 5 }),
       holder("Bob", 0, 0, 11, 0),
     ],
   };
@@ -194,16 +204,23 @@ test("the heading of a column sorts the holders table by it, and again turns the
   await expect(places).toHaveText(["1", "2", "2", "4"]);
   await expect(heading("#")).toHaveAttribute("aria-sort", "ascending");
   await expect(page.locator("th[aria-sort]")).toHaveCount(1);
+  // the totals, then the records of three Dimensions (3D on 4D counts in the total only), then those beating a value
+  await expect(page.locator("#rows tr").first().locator("td")).toHaveText(["1", "mia", "9", "9", "5", "3", "0", "4"]);
 
   // a column of counts starts with its largest; the place stays with the name
-  await sortBy("Most held");
+  await sortBy("Most total records held");
   await expect(names).toHaveText(["Zed", "Bob", "mia", "ann"]);
   await expect(places).toHaveText(["2", "4", "1", "2"]);
-  await expect(heading("Most held")).toHaveAttribute("aria-sort", "descending");
+  await expect(heading("Most total records held")).toHaveAttribute("aria-sort", "descending");
   await expect(page.locator("th[aria-sort]")).toHaveCount(1);
-  await sortBy("Most held");
+  await sortBy("Most total records held");
   await expect(names).toHaveText(["ann", "mia", "Bob", "Zed"]);
-  await expect(heading("Most held")).toHaveAttribute("aria-sort", "ascending");
+  await expect(heading("Most total records held")).toHaveAttribute("aria-sort", "ascending");
+
+  // a Dimension's records, a name with none there counting as zero
+  await sortBy("3D in 3D");
+  await expect(names).toHaveText(["Zed", "mia", "ann", "Bob"]);
+  await expect(heading("3D in 3D")).toHaveAttribute("aria-sort", "descending");
 
   // equal counts stay in the order of the server
   await sortBy("Beat published");

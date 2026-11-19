@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import type { Holder } from "@polypack/geometry";
+import type { HolderRow } from "@polypack/geometry";
 import {
   HOLDER_SORT_DEFAULT,
   HOLDER_SORT_KEYS,
@@ -11,6 +11,7 @@ import {
   pRanges,
   pairHref,
   placeHolders,
+  recordsIn,
   sortHolders,
   timeOfDay,
 } from "../src/holder-model";
@@ -104,14 +105,15 @@ describe("the holders table: places and sorting", () => {
     peak = records,
     beat_published = 0,
     pending = 0,
-  ): Holder => ({ name, records, beat_published, site_bests, pending, peak });
+    dimensions: Record<string, number> = {},
+  ): HolderRow => ({ name, records, beat_published, site_bests, pending, peak, dimensions });
   // as the server sends them: by records, then by site bests
-  const LIST: Holder[] = [
-    holder("mia", 9, 12, 9, 4, 3),
-    holder("Zed", 5, 5, 20, 0, 0),
-    holder("ann", 5, 5, 6, 4, 0),
-    holder("team 10", 2, 7, 2, 1, 5),
-    holder("team 2", 2, 3, 30, 0, 1),
+  const LIST: HolderRow[] = [
+    holder("mia", 9, 12, 9, 4, 3, { "2-in-2": 5, "2-on-3": 4 }),
+    holder("Zed", 5, 5, 20, 0, 0, { "3-in-3": 5 }),
+    holder("ann", 5, 5, 6, 4, 0, { "2-in-2": 5 }),
+    holder("team 10", 2, 7, 2, 1, 5, { "2-on-3": 2 }),
+    holder("team 2", 2, 3, 30, 0, 1, { "2-in-2": 1, "3-in-3": 1 }),
     holder("Bob", 0, 0, 11, 0, 0),
   ];
   const placed = placeHolders(LIST);
@@ -150,9 +152,15 @@ describe("the holders table: places and sorting", () => {
       "mia",
       "ann",
     ]);
-    expect(names({ key: "site_bests", descending: true })).toEqual(["mia", "team 10", "Zed", "ann", "team 2", "Bob"]);
-    expect(names({ key: "pending", descending: true })).toEqual(["team 10", "mia", "team 2", "Zed", "ann", "Bob"]);
     expect(names({ key: "records", descending: true })).toEqual(names(HOLDER_SORT_DEFAULT));
+  });
+
+  it("sorts by the records of a Dimension, a Dimension a name holds nothing in counting as zero", () => {
+    expect(names({ key: "2-in-2", descending: true })).toEqual(["mia", "ann", "team 2", "Zed", "team 10", "Bob"]);
+    expect(names({ key: "2-on-3", descending: true })).toEqual(["mia", "team 10", "Zed", "ann", "team 2", "Bob"]);
+    expect(names({ key: "3-in-3", descending: false })).toEqual(["mia", "ann", "team 10", "Bob", "team 2", "Zed"]);
+    expect(recordsIn(LIST[0]!, "2-on-3")).toBe(4);
+    expect(recordsIn(LIST[0]!, "3-on-4")).toBe(0);
   });
 
   it("sorts names without regard to capitals, and digits in them as numbers", () => {
@@ -170,7 +178,7 @@ describe("the holders table: places and sorting", () => {
   });
 
   it("starts a column of counts with the largest, the name with A and the place with the first; the same column turns round", () => {
-    for (const key of ["records", "peak", "beat_published", "site_bests", "pending"] as const) {
+    for (const key of ["records", "peak", "2-in-2", "2-on-3", "3-in-3", "beat_published"] as const) {
       expect(nextHolderSort(HOLDER_SORT_DEFAULT, key)).toEqual({ key, descending: true });
       expect(nextHolderSort({ key, descending: true }, key)).toEqual({ key, descending: false });
       expect(nextHolderSort({ key, descending: false }, key)).toEqual({ key, descending: true });
@@ -183,6 +191,17 @@ describe("the holders table: places and sorting", () => {
 
   it("knows its columns", () => {
     for (const key of HOLDER_SORT_KEYS) expect(isHolderSortKey(key)).toBe(true);
-    for (const key of ["", "Name", "computed_at", undefined, null, 3]) expect(isHolderSortKey(key)).toBe(false);
+    expect(HOLDER_SORT_KEYS).toEqual([
+      "place",
+      "name",
+      "records",
+      "peak",
+      "2-in-2",
+      "2-on-3",
+      "3-in-3",
+      "beat_published",
+    ]);
+    for (const key of ["", "Name", "computed_at", "site_bests", "pending", "3-on-4", undefined, null, 3])
+      expect(isHolderSortKey(key)).toBe(false);
   });
 });

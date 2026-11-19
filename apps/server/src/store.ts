@@ -239,6 +239,12 @@ export interface SpaceStore {
   /** The leader of every space problem that has an entry, by space and problem id. */
   spaceLeaders(): Promise<SpaceLeader[]>;
   /**
+   * The leaders of the next `limit` space problems with an entry after the problem `after` (null: from the first), by
+   * space and then problem id; fewer than `limit` when the entries end. Indexed reads whose size is `limit`, so that
+   * a caller can walk every leader in pages (the holders' counts).
+   */
+  spaceLeadersAfter(after: { space: string; problem: string } | null, limit: number): Promise<SpaceLeader[]>;
+  /**
    * The leader of each of the given space problems that has an entry, in one indexed read; at most
    * GET_MANY_LIMIT problems. Problems without an entry are left out.
    */

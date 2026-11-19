@@ -7,6 +7,7 @@ import {
   Holder,
   HolderPair,
   HolderResponse,
+  HolderRow,
   HoldersResponse,
   LEADERBOARD_SIZE,
   LiteratureRecord,
@@ -1633,6 +1634,7 @@ describe("GET /api/holders", () => {
       pending,
       // counted at the first count, which is the peak of a name so far
       peak: records,
+      dimensions: records ? { "2-in-2": records } : {},
     });
     // most records first, then most site bests, then by name, capitals first
     expect(await holders()).toEqual([
@@ -1671,6 +1673,7 @@ describe("GET /api/holders", () => {
       site_bests: 2,
       pending: 1,
       peak: 1,
+      dimensions: { "2-in-2": 1 },
     });
     expect((await admin("/api/admin/review", { id: claim.body.id, decision: "confirmed" })).status).toBe(200);
     // level with ann now, and after her by name
@@ -1681,6 +1684,7 @@ describe("GET /api/holders", () => {
       site_bests: 2,
       pending: 0,
       peak: 2,
+      dimensions: { "2-in-2": 2 },
     });
     expect((await admin("/api/admin/edit", { id: two.body.id, name: "Ann" })).status).toBe(200);
     expect(await names()).toEqual(["bob:2", "Ann:1", "ann:1"]);
@@ -1763,6 +1767,7 @@ describe("GET /api/holders: peaks", () => {
       site_bests: 0,
       pending: 0,
       peak: 1,
+      dimensions: {},
     });
   });
 
@@ -2056,12 +2061,16 @@ describe("GET /api/holders: the counts kept", () => {
   // the count as it was before the counts were kept: every leader read at once, counted in one pass
   const counted = (all: ProblemLeader[], records: LiteratureRecord[]): string => {
     const literature = new Map(records.map((r) => [`${r.N}/${r.M}/${r.P}`, r]));
-    const byName = new Map<string, Omit<Holder, "peak">>();
+    const byName = new Map<string, Omit<HolderRow, "peak">>();
     for (const e of all) {
       const lit = literature.get(`${e.N}/${e.M}/${e.P}`);
       if (closedToSubmissions(lit)) continue;
       let h = byName.get(e.name);
-      if (!h) byName.set(e.name, (h = { name: e.name, records: 0, beat_published: 0, site_bests: 0, pending: 0 }));
+      if (!h)
+        byName.set(
+          e.name,
+          (h = { name: e.name, records: 0, beat_published: 0, site_bests: 0, pending: 0, dimensions: {} }),
+        );
       h.site_bests++;
       if (e.verification === "pending") h.pending++;
       else if (!lit || reachesLiterature(e.score, lit)) {
@@ -2069,10 +2078,13 @@ describe("GET /api/holders: the counts kept", () => {
         if (lit && beatsLiterature(e.score, lit)) h.beat_published++;
       }
     }
-    const list = [...byName.values()].sort(
-      (a, b) =>
-        b.records - a.records || b.site_bests - a.site_bests || (a.name < b.name ? -1 : a.name > b.name ? 1 : 0),
-    );
+    const list = [...byName.values()]
+      .sort(
+        (a, b) =>
+          b.records - a.records || b.site_bests - a.site_bests || (a.name < b.name ? -1 : a.name > b.name ? 1 : 0),
+      )
+      // every problem here is a polygon problem: of 2D in 2D
+      .map((h) => ({ ...h, dimensions: h.records ? { "2-in-2": h.records } : {} }));
     return JSON.stringify({ holders: list });
   };
   // The answer as `counted` makes it: only the names that lead something, without the peaks, which depend on the
@@ -2406,6 +2418,7 @@ describe("GET /api/holders: the counts kept", () => {
       site_bests,
       pending,
       peak: expect.any(Number),
+      dimensions: records ? { "2-in-2": records } : {},
     });
     expect(holders).toContainEqual(who("ann", 2, 2));
     expect(holders).toContainEqual(who("bob", 4, 4));
@@ -2472,7 +2485,7 @@ describe("GET /api/holders: the counts kept", () => {
       beat_published,
       site_bests: 1,
       pending,
-      peak: 0,
+      dimension: "2-in-2",
     });
     // a published value of 5 to six decimals
     const lit = published(4, 3, 5);
@@ -3150,12 +3163,15 @@ describe("GET /api/holder", () => {
       /** After a change of an administrator the answers are right at once; after a submission, once they are old. */
       const check = async (afterAdmin: boolean) => {
         if (!afterAdmin) now += 16 * MINUTE;
-        const rows = (await get("/api/holders")).body.holders as Holder[];
+        const rows = (await get("/api/holders")).body.holders as HolderRow[];
         let leads = 0;
         for (const name of NAMES) {
           const { pairs, computed_at, ...totals } = (await holder(name)).body as HolderResponse;
+          // the row without its records by Dimension, which /api/holder does not give
+          const found = rows.find((r) => r.name === name);
+          const row = found && (({ dimensions: _dimensions, ...rest }: HolderRow) => rest)(found);
           expect(totals).toEqual(
-            rows.find((r) => r.name === name) ?? {
+            row ?? {
               name,
               records: 0,
               beat_published: 0,

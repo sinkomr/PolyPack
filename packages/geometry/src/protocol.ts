@@ -137,31 +137,87 @@ export interface AtlasResponse {
 }
 
 /**
+/**
  * One name of GET /api/holders: what the leading entries submitted under exactly that name hold,
- * over the problems that are open. A claim awaiting review counts in `site_bests` and `pending`
- * only, since until it is reviewed the published value still stands.
+ * over the problems that are open, in every Dimension. A claim awaiting review counts in `site_bests` and
+ * `pending` only, since until it is reviewed the published value still stands.
  */
 export interface Holder {
   name: string;
-  /** Leading entries that are the record: at least as good as the published value (see reachesLiterature), or without one. */
+  /**
+   * Leading entries that are the record: at least as good as the published value (see reachesLiterature), or without
+   * one. In the Dimensions other than the polygon problems of 2D in 2D, a leading entry is the record when it is below
+   * the research record or the problem has none, as in GET /api/leaders.
+   */
   records: number;
-  /** Of `records`, those below the published value (see beatsLiterature). */
+  /** Of `records`, those below the published value (see beatsLiterature) or the research record. */
   beat_published: number;
   /** Leading entries, whatever their value. */
   site_bests: number;
-  /** Of `site_bests`, claims awaiting review. */
+  /** Of `site_bests`, claims awaiting review (only the polygon problems have a review). */
   pending: number;
   /**
-   * The most `records` the name has held at once. Peaks are tracked from 2026-11-05, the deployment of this
-   * field: before it, a name's peak is its `records` at the first count made after that. A name that has lost
-   * every lead stays listed with zero counts and its peak.
+   * The most `records` the name has held at once. Peaks are tracked from 2026-11-05, and over every Dimension from the
+   * deployment of the Dimensions' counts in November 2026; before that, a name's peak counts the polygon problems of
+   * 2D in 2D only. A name that has lost every
+   * lead stays listed with zero counts and its peak.
    */
   peak: number;
 }
 
+/**
+ * A row of GET /api/holders: a name's counts, and its `records` by Dimension (problemDimension's ids: "2-in-2",
+ * "2-on-3", ...), only the Dimensions with at least one, in the order of dimensionRank.
+ */
+export interface HolderRow extends Holder {
+  dimensions: Record<string, number>;
+}
+
 /** Answer of GET /api/holders, most records first. */
 export interface HoldersResponse {
-  holders: Holder[];
+  holders: HolderRow[];
+}
+
+/**
+ * The Dimension of a problem, by the id the records pages use (apps/web/src/dimension-table.ts): "2-in-2" for
+ * polygons or disks in a container (`space` null) and the curved space, "2-on-3" for surfaces, the sphere and the
+ * torus, "3-in-3" for polyhedra and balls, "3-on-4" for the boundaries of the 4D polytopes, "<d-1>-on-<d>" for those
+ * of the d-polytopes and "<d>-in-<d>" for nD; null for an id it cannot place.
+ */
+export function problemDimension(space: string | null, problem: string): string | null {
+  switch (space) {
+    case null:
+    case "curved":
+      return "2-in-2";
+    case "surface":
+    case "sphere":
+    case "torus":
+      return "2-on-3";
+    case "polyhedra":
+    case "balls":
+      return "3-in-3";
+    case "boundary": {
+      // boundary/<polytope>/<piece>/<P>: the polytopes of 4D by name (tesseract, 5cell, ..., 600cell), the others as
+      // <d>simplex, <d>cube, <d>orthoplex or <d>demicube
+      const polytope = problem.split("/")[1] ?? "";
+      const m = /^(\d+)(?:simplex|cube|orthoplex|demicube)$/.exec(polytope);
+      const d = m ? Number(m[1]) : 4;
+      return `${d - 1}-on-${d}`;
+    }
+    case "ndim": {
+      // ndim/<d>/<piece>/<container>/<P>
+      const d = Number(problem.split("/")[1]);
+      return Number.isInteger(d) && d > 0 ? `${d}-in-${d}` : null;
+    }
+    default:
+      return null;
+  }
+}
+
+/** Where a Dimension id comes in DIMENSION order: by the pieces' dimension, "in" before "on" (2-in-2, 2-on-3, 3-in-3, ...). */
+export function dimensionRank(id: string): number {
+  const m = /^(\d+)-(in|on)-\d+$/.exec(id);
+  return m ? Number(m[1]) * 2 + (m[2] === "on" ? 1 : 0) : Number.MAX_SAFE_INTEGER;
 }
 
 /** One pair of shapes in the answer of GET /api/holder: the problems of that pair a name leads. */
@@ -179,8 +235,9 @@ export interface HolderPair {
 }
 
 /**
- * Answer of GET /api/holder?name=: the totals of the name's row of GET /api/holders (all zero for a name that leads
- * nothing), when they were counted, and the problems behind them by pair of shapes, the pair with most problems first.
+ * Answer of GET /api/holder?name=: what the name leads among the polygon problems of 2D in 2D (all zero for a name that
+ * leads none), counted as GET /api/holders counts them, when they were counted, and the problems behind them by pair
+ * of shapes, the pair with most problems first. `peak` is the name's in GET /api/holders, over every Dimension.
  */
 export interface HolderResponse extends Holder {
   /** When the answer was made, as an ISO 8601 time (UTC). The server keeps an answer for a few minutes. */

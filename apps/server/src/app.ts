@@ -4,6 +4,7 @@ import {
   Holder,
   HolderPair,
   HolderResponse,
+  HolderRow,
   HoldersResponse,
   LeaderboardEntry,
   LeaderboardEvent,
@@ -17,11 +18,13 @@ import {
   areaLowerBound,
   beatsLiterature,
   closedToSubmissions,
+  dimensionRank,
   evaluate,
   isShapeCode,
   parseConfig,
   MAX_SOFTWARE_LENGTH,
   parseProvenance,
+  problemDimension,
   reachesLiterature,
   strictVerify,
 } from "@polypack/geometry";
@@ -61,7 +64,14 @@ import {
 import type { SnapshotSource } from "./snapshot";
 import { registerLeadersRoute } from "./leaders";
 import { SpacesOptions, registerSpaceRoutes } from "./spaces";
-import { EntryEdit, GET_MANY_LIMIT, ProblemLeader, Store, StoredSubmission } from "./store";
+import { EntryEdit, GET_MANY_LIMIT, ProblemLeader, SpaceLeader, Store, StoredSubmission } from "./store";
+import {
+  SpaceProblemEntry,
+  acceptsSubmissions,
+  isSpaceName,
+  parseSpaceId,
+  problemOf as spaceProblemOf,
+} from "@polypack/spaces";
 
 /** Names a submission may give as its `method`: the registered search methods. */
 const METHOD_NAMES = SOLVER_METHODS.map(([name]) => name);
@@ -162,14 +172,32 @@ export const HOLDER_CACHE_NAMES = 32;
  */
 export const HOLDER_MAX_AGE_MS = 15 * 60_000;
 
+/** What the leader of one problem adds to the counts of its name on /api/holders, and the Dimension its record counts in. */
+export interface HolderShare {
+  name: string;
+  records: number;
+  beat_published: number;
+  site_bests: number;
+  pending: number;
+  /** The problem's Dimension (problemDimension). */
+  dimension: string;
+}
+
 /**
- * What the leader `e` of a problem adds to the counts of its name on /api/holders, given the
+ * What the leader `e` of a polygon problem adds to the counts of its name on /api/holders, given the
  * problem's published record (if any); null when the problem is closed, which counts for no one.
  */
-export function holderShare(e: ProblemLeader, lit: LiteratureRecord | undefined): Holder | null {
+export function holderShare(e: ProblemLeader, lit: LiteratureRecord | undefined): HolderShare | null {
   if (closedToSubmissions(lit)) return null;
-  // a share carries no peak (0): peaks belong to the names, not to one lead
-  const share: Holder = { name: e.name, records: 0, beat_published: 0, site_bests: 1, pending: 0, peak: 0 };
+  // a share carries no peak: peaks belong to the names, not to one lead
+  const share: HolderShare = {
+    name: e.name,
+    records: 0,
+    beat_published: 0,
+    site_bests: 1,
+    pending: 0,
+    dimension: "2-in-2",
+  };
   // until a claim is reviewed, the published value it claims to beat is still the record
   if (e.verification === "pending") share.pending = 1;
   else if (!lit || reachesLiterature(e.score, lit)) {
@@ -178,6 +206,33 @@ export function holderShare(e: ProblemLeader, lit: LiteratureRecord | undefined)
   }
   return share;
 }
+
+/**
+ * What the leader `l` of a space problem adds to the counts of its name on /api/holders, given the problem as its
+ * catalogue has it (problemOf); null when the problem is closed or not of the catalogue, which counts for no one. The
+ * entry is the record when it is below the research record or the problem has none (a research record of 0 or less
+ * is none), as GET /api/leaders decides who leads; below a research record, it beats the published value.
+ */
+export function spaceHolderShare(l: SpaceLeader, p: SpaceProblemEntry | null): HolderShare | null {
+  if (!p || !acceptsSubmissions(p)) return null;
+  const dimension = problemDimension(l.space, l.problem);
+  if (dimension === null) return null;
+  const cert = p.certified?.score ?? null;
+  const published = cert !== null && cert > 0 ? cert : null;
+  const record = published === null || l.score < published;
+  return {
+    name: l.name,
+    records: record ? 1 : 0,
+    beat_published: record && published !== null ? 1 : 0,
+    site_bests: 1,
+    pending: 0,
+    dimension,
+  };
+}
+
+/** The records of a row by Dimension, in the order of dimensionRank, as GET /api/holders lists them. */
+const orderedDimensions = (dimensions: Record<string, number>): Record<string, number> =>
+  Object.fromEntries(Object.entries(dimensions).sort(([a], [b]) => dimensionRank(a) - dimensionRank(b)));
 
 /**
  * Which packing the atlas draws for one P.
@@ -459,20 +514,21 @@ export function createApp(opts: AppOptions): Hono {
     return c.body(body, 200, { "content-type": "application/json" });
   });
 
-  // Who holds how many records: the leader of every open problem, counted by the exact name it was
-  // submitted with. Counting every leader held the live server for about 20 s with 290,000 problems
+  // Who holds how many records: the leader of every open problem, in every Dimension, counted by the exact name it
+  // was submitted with. Counting every leader held the live server for about 20 s with 290,000 problems
   // (its CPU is throttled to a sixteenth of a core), and it was done again after every restart and
   // every 15 minutes. So the counts are kept. The first request builds them, HOLDERS_CHUNK problems at
   // a time with the event loop let in between, and from then on each change of an entry moves its
   // problem's share (holderShare) from the old leader to the new one. No request reads the table again.
   //
   // The invariant, whenever no page of the build and no change is in progress (they take turns, see
-  // inTurn): the counts are the sum of holderShare over the leaders of the problems up to the cursor
-  // `upTo`, in the order of (N, M, P), and over the leaders of all problems once `done`. So a change
-  // to a problem up to the cursor moves its share, the old leader out and the new one in, and a change
-  // to a problem beyond it does nothing: the page that gets there reads the problem as it is then.
-  // That is why a change during the build is neither lost in the part counted nor counted twice in the
-  // part to come.
+  // inTurn): the counts are the sum of holderShare over the leaders of the polygon problems up to the cursor
+  // `upTo`, in the order of (N, M, P), and over the leaders of all of them once `flatDone`; then, the same with
+  // spaceHolderShare over the leaders of the space problems up to `spaceUpTo`, in the order of (space, problem), and
+  // over all of them once `done`. So a change to a problem up to its cursor moves its share, the old leader out and
+  // the new one in, and a change to a problem beyond it does nothing: the page that gets there reads the problem as
+  // it is then. That is why a change during the build is neither lost in the part counted nor counted twice in the
+  // part to come. A change of a space entry takes its turn through spaceChange, which the space routes are given.
   //
   // Peaks (Holder.peak) come on top of that. A name that has held a record is never dropped: its row stays at
   // zero when it leads nothing. `peaks` holds the highest `records` known for each name and is never lowered,
@@ -485,14 +541,30 @@ export function createApp(opts: AppOptions): Hono {
     M: number;
     P: number;
   }
+  interface SpaceProblem {
+    space: string;
+    problem: string;
+  }
   interface HolderCounts {
-    byName: Map<string, Holder>;
-    /** The last problem counted, in the order the store lists them; null before the first page. */
+    byName: Map<string, HolderRow>;
+    /** The last polygon problem counted, in the order the store lists them; null before the first page. */
     upTo: Problem | null;
-    /** True once the last page is counted. */
+    /** True once the last page of polygon problems is counted. */
+    flatDone: boolean;
+    /** The last space problem counted, in the order the store lists them; null before the first page of them. */
+    spaceUpTo: SpaceProblem | null;
+    /** True once the last page is counted, of the space problems too. */
     done: boolean;
   }
-  const noCounts = (): HolderCounts => ({ byName: new Map(), upTo: null, done: false });
+  const noCounts = (): HolderCounts => ({
+    byName: new Map(),
+    upTo: null,
+    flatDone: false,
+    spaceUpTo: null,
+    done: false,
+  });
+  const spaceStore = opts.spaces?.store;
+  const spaceIndex = opts.spaces?.index;
   let counts = noCounts();
   /** The most records known for each name that has held one; only ever raised. Valid for the answer once `counts.done`. */
   const peaks = new Map<string, number>();
@@ -511,25 +583,29 @@ export function createApp(opts: AppOptions): Hono {
     return mine;
   };
 
+  /** A row with no lead, and the peak `peak`. */
+  const zeroRow = (name: string, peak: number): HolderRow => ({
+    name,
+    records: 0,
+    beat_published: 0,
+    site_bests: 0,
+    pending: 0,
+    peak,
+    dimensions: {},
+  });
   /** Adds (`sign` 1) or takes out (-1) one leader's share. */
-  const countShare = (share: Holder, sign: 1 | -1) => {
+  const countShare = (share: HolderShare, sign: 1 | -1) => {
     let h = counts.byName.get(share.name);
-    if (!h)
-      counts.byName.set(
-        share.name,
-        (h = {
-          name: share.name,
-          records: 0,
-          beat_published: 0,
-          site_bests: 0,
-          pending: 0,
-          peak: peaks.get(share.name) ?? 0,
-        }),
-      );
+    if (!h) counts.byName.set(share.name, (h = zeroRow(share.name, peaks.get(share.name) ?? 0)));
     h.records += sign * share.records;
     h.beat_published += sign * share.beat_published;
     h.site_bests += sign * share.site_bests;
     h.pending += sign * share.pending;
+    if (share.records) {
+      const left = (h.dimensions[share.dimension] ?? 0) + sign * share.records;
+      if (left) h.dimensions[share.dimension] = left;
+      else delete h.dimensions[share.dimension];
+    }
     // a name that leads no open problem is listed only if it has held a record
     if (h.site_bests === 0 && h.peak === 0) counts.byName.delete(share.name);
   };
@@ -571,9 +647,7 @@ export function createApp(opts: AppOptions): Hono {
       log(`[holders] could not read the stored peaks: ${e instanceof Error ? e.message : String(e)}`);
     }
     for (const [name, peak] of stored) if (peak > (peaks.get(name) ?? 0)) peaks.set(name, peak);
-    for (const [name, peak] of peaks)
-      if (!counts.byName.has(name))
-        counts.byName.set(name, { name, records: 0, beat_published: 0, site_bests: 0, pending: 0, peak });
+    for (const [name, peak] of peaks) if (!counts.byName.has(name)) counts.byName.set(name, zeroRow(name, peak));
     const raised: { name: string; peak: number }[] = [];
     for (const h of counts.byName.values()) {
       h.peak = Math.max(h.peak, peaks.get(h.name) ?? 0, h.records);
@@ -584,10 +658,32 @@ export function createApp(opts: AppOptions): Hono {
     await savePeaks(raised);
   };
   const shareOf = (e: ProblemLeader) => holderShare(e, literature.get(`${e.N}/${e.M}/${e.P}`));
+  /** The share of a space problem's leader, with the problem as its catalogue has it. */
+  const spaceShareOf = (l: SpaceLeader): HolderShare | null => {
+    const cat = isSpaceName(l.space) ? spaceIndex?.[l.space] : undefined;
+    if (!cat || !isSpaceName(l.space)) return null;
+    const parsed = parseSpaceId(l.space, l.problem);
+    return spaceHolderShare(l, typeof parsed === "string" ? null : spaceProblemOf(cat, parsed));
+  };
 
   /** Whether the counts include problem `p` (the build has passed it, or is done): see the invariant. */
   const counted = (p: Problem): boolean =>
-    counts.done || (counts.upTo !== null && (p.N - counts.upTo.N || p.M - counts.upTo.M || p.P - counts.upTo.P) <= 0);
+    counts.flatDone ||
+    (counts.upTo !== null && (p.N - counts.upTo.N || p.M - counts.upTo.M || p.P - counts.upTo.P) <= 0);
+  /** The same for a space problem, in the order of (space, problem). */
+  const spaceCounted = (s: SpaceProblem): boolean => {
+    if (counts.done) return true;
+    const at = counts.spaceUpTo;
+    if (at === null) return false;
+    return s.space < at.space || (s.space === at.space && s.problem <= at.problem);
+  };
+  /** True when a share leaves the counts as they are: the same name, counted the same way. */
+  const sameShare = (out: HolderShare, into: HolderShare) =>
+    out.name === into.name &&
+    out.records === into.records &&
+    out.beat_published === into.beat_published &&
+    out.pending === into.pending &&
+    out.dimension === into.dimension;
 
   /**
    * The leader of problem `p` was `old` and is `now` (either may be none): moves its share, if the
@@ -599,16 +695,13 @@ export function createApp(opts: AppOptions): Hono {
     const out = old && shareOf(old);
     const into = now && shareOf(now);
     if (!out && !into) return;
+    await sharesMoved(out, into);
+  };
+  /** Moves a share from `out` to `into` (either may be none), and raises the peak of the name that gained. Only in a turn. */
+  const sharesMoved = async (out: HolderShare | null, into: HolderShare | null): Promise<void> => {
+    if (!out && !into) return;
     // the same share (a better score of the same name, say) leaves the counts and the answer as they are
-    if (
-      out &&
-      into &&
-      out.name === into.name &&
-      out.records === into.records &&
-      out.beat_published === into.beat_published &&
-      out.pending === into.pending
-    )
-      return;
+    if (out && into && sameShare(out, into)) return;
     if (out) countShare(out, -1);
     if (into) countShare(into, 1);
     holdersBody = null;
@@ -616,6 +709,32 @@ export function createApp(opts: AppOptions): Hono {
     const raised = into && counts.done ? raisePeak(into.name) : null;
     if (raised) await savePeaks([raised]);
   };
+
+  /**
+   * Runs a change of the entries of one space problem in a turn, and moves the problem's share from its leader read
+   * before the change to the one read after it. `locate` names the problem (null: none, the change is only run); it
+   * runs in the turn, before the change. An error resets the counts, as one of changeEntry does. The space routes
+   * call it for every change of an entry: a submission, a removal, an edit.
+   */
+  const spaceChange = <T>(locate: () => Promise<SpaceProblem | null>, change: () => Promise<T>): Promise<T> =>
+    inTurn(async () => {
+      // nothing of the spaces is counted yet
+      if (!spaceStore || (!counts.done && counts.spaceUpTo === null)) return change();
+      try {
+        const at = await locate();
+        if (!at || !spaceCounted(at)) return await change();
+        const old = await spaceStore.spaceLeader(at.space, at.problem);
+        const result = await change();
+        const now = await spaceStore.spaceLeader(at.space, at.problem);
+        await sharesMoved(old && spaceShareOf(old), now && spaceShareOf(now));
+        return result;
+      } catch (e) {
+        // the change may be done and its share not moved: count again from the start
+        counts = noCounts();
+        holdersBody = null;
+        throw e;
+      }
+    });
 
   /**
    * Runs an administrator's `change` to the listed entry `id` in a turn, and moves the share of the
@@ -626,7 +745,7 @@ export function createApp(opts: AppOptions): Hono {
   const changeEntry = (id: number, moves: boolean, change: () => Promise<boolean>): Promise<boolean> =>
     inTurn(async () => {
       // nothing is counted yet, or nothing counted can change
-      if (!moves || (!counts.done && counts.upTo === null)) return change().finally(holderClear);
+      if (!moves || (!counts.flatDone && counts.upTo === null)) return change().finally(holderClear);
       try {
         const entry = await store.get(id);
         const p = entry && { N: entry.N, M: entry.M, P: entry.P };
@@ -645,23 +764,35 @@ export function createApp(opts: AppOptions): Hono {
       }
     });
 
-  // The first request counts every problem: a page of them in a turn, then a turn of the event loop.
+  // The first request counts every problem: a page of them in a turn, then a turn of the event loop. The polygon
+  // problems first, then those of the spaces.
   const holdersChunk = opts.holdersChunk ?? HOLDERS_CHUNK;
+  const flatPage = async () => {
+    const page = await store.leadersAfter(counts.upTo, holdersChunk);
+    for (const e of page) {
+      const share = shareOf(e);
+      if (share) countShare(share, 1);
+    }
+    const last = page[page.length - 1];
+    if (page.length < holdersChunk || !last) counts.flatDone = true;
+    else counts.upTo = { N: last.N, M: last.M, P: last.P };
+  };
+  const spacePage = async () => {
+    const page = spaceStore ? await spaceStore.spaceLeadersAfter(counts.spaceUpTo, holdersChunk) : [];
+    for (const l of page) {
+      const share = spaceShareOf(l);
+      if (share) countShare(share, 1);
+    }
+    const last = page[page.length - 1];
+    if (page.length < holdersChunk || !last) {
+      counts.done = true;
+      await finishPeaks();
+    } else counts.spaceUpTo = { space: last.space, problem: last.problem };
+  };
   const buildCounts = (): Promise<void> => {
     building ??= (async () => {
       while (!counts.done) {
-        await inTurn(async () => {
-          const page = await store.leadersAfter(counts.upTo, holdersChunk);
-          for (const e of page) {
-            const share = shareOf(e);
-            if (share) countShare(share, 1);
-          }
-          const last = page[page.length - 1];
-          if (page.length < holdersChunk || !last) {
-            counts.done = true;
-            await finishPeaks();
-          } else counts.upTo = { N: last.N, M: last.M, P: last.P };
-        });
+        await inTurn(() => (counts.flatDone ? spacePage() : flatPage()));
         if (!counts.done) await new Promise<void>((resolve) => setImmediate(resolve));
       }
     })().finally(() => {
@@ -671,10 +802,12 @@ export function createApp(opts: AppOptions): Hono {
   };
 
   const holdersAnswer = (): string => {
-    const list = [...counts.byName.values()].sort(
-      (a, b) =>
-        b.records - a.records || b.site_bests - a.site_bests || (a.name < b.name ? -1 : a.name > b.name ? 1 : 0),
-    );
+    const list = [...counts.byName.values()]
+      .sort(
+        (a, b) =>
+          b.records - a.records || b.site_bests - a.site_bests || (a.name < b.name ? -1 : a.name > b.name ? 1 : 0),
+      )
+      .map((h) => ({ ...h, dimensions: orderedDimensions(h.dimensions) }));
     return JSON.stringify({ holders: list } satisfies HoldersResponse);
   };
 
@@ -1230,7 +1363,7 @@ export function createApp(opts: AppOptions): Hono {
         if (!counts.done) continue;
         const h = counts.byName.get(name);
         if (h) h.peak = Math.max(h.peak, peak);
-        else counts.byName.set(name, { name, records: 0, beat_published: 0, site_bests: 0, pending: 0, peak });
+        else counts.byName.set(name, zeroRow(name, peak));
       }
       if (up.length) holdersBody = null;
       return up.length;
@@ -1292,6 +1425,7 @@ export function createApp(opts: AppOptions): Hono {
       stats: opts.stats,
       admin,
       unitsGate,
+      spaceChange,
     });
 
   // Who leads, for many problems at once (Tighter's rent checks); after the spaces, whose catalogues it reads.
