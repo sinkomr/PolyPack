@@ -9,6 +9,8 @@
 //!   curved                            polypack_curved::auto::auto_search
 //!   sphere                            polypack_sphere::auto::auto_search
 //!   torus                             polypack_torus::auto::auto_search
+//!   balls                             polypack_balls::auto::auto_search
+//!   ndim                              polypack_ndim::auto::auto_search
 //!
 //! Each has the signature `polypack_spaceauto::AutoSearch`. Which one a problem goes to is `route`,
 //! which does not need the feature.
@@ -20,6 +22,8 @@ use std::sync::Arc;
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Route {
     Curved,
+    Balls,
+    Ndim,
     Sphere,
     Torus,
     /// surface/<solid>/fold/N/P, and surface/<solid>/nofold/N/P of a solid that is not Platonic.
@@ -36,6 +40,8 @@ pub fn route(space: &str, id: &str) -> Result<Route, String> {
     }
     match space {
         "curved" => Ok(Route::Curved),
+        "balls" => Ok(Route::Balls),
+        "ndim" => Ok(Route::Ndim),
         "sphere" => Ok(Route::Sphere),
         "torus" => Ok(Route::Torus),
         "surface" => {
@@ -73,6 +79,8 @@ mod real {
     fn function(r: Route) -> AutoSearch {
         match r {
             Route::Curved => polypack_curved::auto::auto_search,
+            Route::Balls => polypack_balls::auto::auto_search,
+            Route::Ndim => polypack_ndim::auto::auto_search,
             Route::Sphere => polypack_sphere::auto::auto_search,
             Route::Torus => polypack_torus::auto::auto_search,
             Route::SurfaceAuto => polypack_surface::surface_auto::surface_auto,
@@ -104,6 +112,8 @@ mod tests {
         assert_eq!(route("surface", "surface/prism3/nofold/4/3"), Ok(Route::SurfaceAuto));
         assert!(route("sphere", "torus/sq/4/3").is_err());
         assert_eq!(route("curved", "curved/1/3/4/2"), Ok(Route::Curved));
+        assert_eq!(route("balls", "balls/ballinball/7"), Ok(Route::Balls));
+        assert_eq!(route("ndim", "ndim/4/cube/cube/6"), Ok(Route::Ndim));
         assert!(route("curved", "sphere/4/3").is_err());
     }
 }
