@@ -32,7 +32,7 @@ async function load(): Promise<void> {
   if (data === "refused") return say("The server does not take this as a name.");
   if (data.site_bests === 0)
     return say(
-      "This name leads no problem at the moment. Names are matched exactly, capitals included, and problems with a proven optimum are left out. See the",
+      "This name leads no problem of 2D in 2D with polygon or disk pieces at the moment, the problems this page lists. Names are matched exactly, capitals included, and problems with a proven optimum are left out. The other Dimensions are counted on the page of the",
       { text: "record holders.", href: "/holders.html" },
     );
   $("note").textContent = `${name} ${holderTotals(data, data.pairs.length)}`;

@@ -1,4 +1,4 @@
-import type { Holder, HolderResponse } from "@polypack/geometry";
+import type { HolderResponse, HolderRow } from "@polypack/geometry";
 
 /** How long the server may keep the page of a name before it counts again (HOLDER_MAX_AGE_MS of the server). */
 export const REFRESH_MINUTES = 15;
@@ -42,17 +42,32 @@ export function timeOfDay(iso: string, locale?: string, timeZone?: string): stri
   return at.toLocaleTimeString(locale, { hour: "2-digit", minute: "2-digit", timeZone });
 }
 
+/** The Dimensions with a column of their own in the holders table: their ids in the answer, and their names. */
+export const HOLDER_DIMENSIONS = [
+  { id: "2-in-2", label: "2D in 2D" },
+  { id: "2-on-3", label: "2D on 3D" },
+  { id: "3-in-3", label: "3D in 3D" },
+] as const;
+export type HolderDimension = (typeof HOLDER_DIMENSIONS)[number]["id"];
+
 /** The columns of the holders table, each of which the table can be sorted by. */
-export const HOLDER_SORT_KEYS = [
+export const HOLDER_SORT_KEYS: readonly HolderSortKey[] = [
   "place",
   "name",
   "records",
   "peak",
+  ...HOLDER_DIMENSIONS.map((d) => d.id),
   "beat_published",
-  "site_bests",
-  "pending",
-] as const;
-export type HolderSortKey = (typeof HOLDER_SORT_KEYS)[number];
+];
+export type HolderSortKey = "place" | "name" | "records" | "peak" | HolderDimension | "beat_published";
+
+/** A name's records in one Dimension (0 when it holds none there). */
+export const recordsIn = (h: Pick<HolderRow, "dimensions">, dimension: string): number =>
+  h.dimensions?.[dimension] ?? 0;
+
+/** The count of a row in a column of counts. */
+const countIn = (h: PlacedHolder, key: Exclude<HolderSortKey, "place" | "name">): number =>
+  key === "records" || key === "peak" || key === "beat_published" ? h[key] : recordsIn(h, key);
 
 export interface HolderSort {
   key: HolderSortKey;
@@ -67,7 +82,7 @@ export const isHolderSortKey = (key: unknown): key is HolderSortKey =>
   (HOLDER_SORT_KEYS as readonly unknown[]).includes(key);
 
 /** A name with its place in the order of the server. */
-export interface PlacedHolder extends Holder {
+export interface PlacedHolder extends HolderRow {
   place: number;
 }
 
@@ -76,7 +91,7 @@ export interface PlacedHolder extends Holder {
  * both share a place, and the next name takes the place of its row. The place stays with the name however the
  * table is sorted.
  */
-export function placeHolders(holders: readonly Holder[]): PlacedHolder[] {
+export function placeHolders(holders: readonly HolderRow[]): PlacedHolder[] {
   let place = 0;
   return holders.map((h, i) => {
     const before = holders[i - 1];
@@ -110,7 +125,7 @@ export function sortHolders(placed: readonly PlacedHolder[], sort: HolderSort): 
   const compare =
     key === "name"
       ? (a: PlacedHolder, b: PlacedHolder) => way * byName.compare(a.name, b.name)
-      : (a: PlacedHolder, b: PlacedHolder) => way * (a[key] - b[key]);
+      : (a: PlacedHolder, b: PlacedHolder) => way * (countIn(a, key) - countIn(b, key));
   // the sort of an array is stable: rows that compare equal stay as they were
   return [...placed].sort(compare);
 }

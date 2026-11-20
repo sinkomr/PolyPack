@@ -49,8 +49,10 @@ use crate::load::{LoadStats, SubmissionLine};
 use crate::pool::Pool;
 use crate::snapshot::SnapshotSource;
 use crate::spaces::{space_routes, SpaceRoute, SpaceRouteContext, SpaceRoutes, SpacesDocs, SpacesPort};
+use crate::spaces_port::SpaceProblemRef;
 use crate::store::{
-    BestOfP, Decision, EntryEdit, HolderPeak, LeaderboardEntry, NewSubmission, Pose, ProblemKey, ProblemLeader, Provenance, SqliteStore, StoredSubmission, GET_MANY_LIMIT,
+    BestOfP, Decision, EntryEdit, HolderPeak, LeaderboardEntry, NewSubmission, Pose, ProblemKey, ProblemLeader, Provenance, SpaceLeader, SpaceProblem, SqliteStore, StoredSubmission,
+    GET_MANY_LIMIT,
 };
 use crate::units_gate::{is_old_volunteer, old_client_may_read, planar_affected, units_missing_message, upgrade_message, CONVENTIONS_VERSION};
 
@@ -156,15 +158,118 @@ impl Holder {
     }
 }
 
-/// app.ts: holderShare. What the leader `e` of a problem adds to the counts of its name on
+/// protocol.ts: HolderRow. A row of GET /api/holders: a name's counts, and its `records` by
+/// Dimension, only the Dimensions with at least one (written in the order of dimension_rank).
+#[derive(Clone, Debug, PartialEq)]
+pub struct HolderRow {
+    pub name: String,
+    pub records: f64,
+    pub beat_published: f64,
+    pub site_bests: f64,
+    pub pending: f64,
+    pub peak: f64,
+    pub dimensions: IndexMap<String, f64>,
+}
+
+impl HolderRow {
+    fn zero(name: &str, peak: f64) -> HolderRow {
+        HolderRow { name: name.to_string(), records: 0.0, beat_published: 0.0, site_bests: 0.0, pending: 0.0, peak, dimensions: IndexMap::new() }
+    }
+}
+
+impl Serialize for HolderRow {
+    fn serialize<S: serde::Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
+        use serde::ser::{SerializeMap, SerializeStruct};
+        /// app.ts: orderedDimensions.
+        struct Ordered<'a>(&'a IndexMap<String, f64>);
+        impl Serialize for Ordered<'_> {
+            fn serialize<S: serde::Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
+                let mut entries: Vec<(&String, &f64)> = self.0.iter().collect();
+                // a stable sort, as the source's
+                entries.sort_by(|a, b| dimension_rank(a.0).partial_cmp(&dimension_rank(b.0)).unwrap_or(std::cmp::Ordering::Equal));
+                let mut map = serializer.serialize_map(Some(entries.len()))?;
+                for (id, n) in entries {
+                    map.serialize_entry(id, n)?;
+                }
+                map.end()
+            }
+        }
+        let mut row = serializer.serialize_struct("HolderRow", 7)?;
+        row.serialize_field("name", &self.name)?;
+        row.serialize_field("records", &self.records)?;
+        row.serialize_field("beat_published", &self.beat_published)?;
+        row.serialize_field("site_bests", &self.site_bests)?;
+        row.serialize_field("pending", &self.pending)?;
+        row.serialize_field("peak", &self.peak)?;
+        row.serialize_field("dimensions", &Ordered(&self.dimensions))?;
+        row.end()
+    }
+}
+
+/// protocol.ts: problemDimension. The Dimension of a problem, by the id the records pages use:
+/// "2-in-2" for polygons or disks in a container (`space` None) and the curved space, "2-on-3" for
+/// surfaces, the sphere and the torus, "3-in-3" for polyhedra and balls, "3-on-4" for the
+/// boundaries of the 4D polytopes, "<d-1>-on-<d>" for those of the d-polytopes and "<d>-in-<d>" for
+/// nD; None for an id it cannot place.
+pub fn problem_dimension(space: Option<&str>, problem: &str) -> Option<String> {
+    match space {
+        None | Some("curved") => Some("2-in-2".to_string()),
+        Some("surface" | "sphere" | "torus") => Some("2-on-3".to_string()),
+        Some("polyhedra" | "balls") => Some("3-in-3".to_string()),
+        Some("boundary") => {
+            // boundary/<polytope>/<piece>/<P>: the polytopes of 4D by name (tesseract, 5cell, ...,
+            // 600cell), the others as <d>simplex, <d>cube, <d>orthoplex or <d>demicube
+            let polytope = problem.split('/').nth(1).unwrap_or("");
+            let d = ["simplex", "cube", "orthoplex", "demicube"]
+                .iter()
+                .filter_map(|suffix| polytope.strip_suffix(suffix))
+                .find(|digits| !digits.is_empty() && digits.bytes().all(|b| b.is_ascii_digit()))
+                .and_then(|digits| digits.parse::<f64>().ok())
+                .unwrap_or(4.0);
+            Some(format!("{}-on-{}", fmt::num(d - 1.0), fmt::num(d)))
+        }
+        Some("ndim") => {
+            // ndim/<d>/<piece>/<container>/<P>
+            let d = problem.split('/').nth(1).and_then(|t| t.parse::<f64>().ok()).unwrap_or(f64::NAN);
+            (d.fract() == 0.0 && d > 0.0 && d <= 9_007_199_254_740_991.0).then(|| format!("{}-in-{}", fmt::num(d), fmt::num(d)))
+        }
+        _ => None,
+    }
+}
+
+/// protocol.ts: dimensionRank. Where a Dimension id comes in DIMENSION order: by the pieces'
+/// dimension, "in" before "on" (2-in-2, 2-on-3, 3-in-3, ...).
+pub fn dimension_rank(id: &str) -> f64 {
+    let parts: Vec<&str> = id.split('-').collect();
+    let digits = |t: &str| !t.is_empty() && t.bytes().all(|b| b.is_ascii_digit());
+    match parts.as_slice() {
+        [a, kind @ ("in" | "on"), b] if digits(a) && digits(b) => a.parse::<f64>().map_or(f64::MAX, |a| a * 2.0 + if *kind == "on" { 1.0 } else { 0.0 }),
+        _ => 9_007_199_254_740_991.0,
+    }
+}
+
+/// app.ts: HolderShare. What the leader of one problem adds to the counts of its name on
+/// /api/holders, and the Dimension its record counts in.
+#[derive(Clone, Debug, PartialEq)]
+pub struct HolderShare {
+    pub name: String,
+    pub records: f64,
+    pub beat_published: f64,
+    pub site_bests: f64,
+    pub pending: f64,
+    /// The problem's Dimension (problem_dimension).
+    pub dimension: String,
+}
+
+/// app.ts: holderShare. What the leader `e` of a polygon problem adds to the counts of its name on
 /// /api/holders, given the problem's published record (if any); None when the problem is closed,
 /// which counts for no one.
-pub fn holder_share(e: &ProblemLeader, lit: Option<&LiteratureRecord>) -> Option<Holder> {
+pub fn holder_share(e: &ProblemLeader, lit: Option<&LiteratureRecord>) -> Option<HolderShare> {
     if closed_to_submissions(lit) {
         return None;
     }
-    // a share carries no peak (0): peaks belong to the names, not to one lead
-    let mut share = Holder { name: e.name.clone(), records: 0.0, beat_published: 0.0, site_bests: 1.0, pending: 0.0, peak: 0.0 };
+    // a share carries no peak: peaks belong to the names, not to one lead
+    let mut share = HolderShare { name: e.name.clone(), records: 0.0, beat_published: 0.0, site_bests: 1.0, pending: 0.0, dimension: "2-in-2".to_string() };
     // until a claim is reviewed, the published value it claims to beat is still the record
     if e.verification == "pending" {
         share.pending = 1.0;
@@ -175,6 +280,78 @@ pub fn holder_share(e: &ProblemLeader, lit: Option<&LiteratureRecord>) -> Option
         }
     }
     Some(share)
+}
+
+/// app.ts: spaceHolderShare. What the leader `l` of a space problem adds to the counts of its name
+/// on /api/holders, given the problem as its catalogue has it (problemOf); None when the problem is
+/// closed or not of the catalogue, which counts for no one. The entry is the record when it is below
+/// the research record or the problem has none (a research record of 0 or less is none), as GET
+/// /api/leaders decides who leads; below a research record, it beats the published value.
+pub fn space_holder_share(l: &SpaceLeader, p: Option<&SpaceProblemRef>) -> Option<HolderShare> {
+    let p = p.filter(|p| p.accepts_submissions)?;
+    let dimension = problem_dimension(Some(&l.space), &l.problem)?;
+    let published = p.certified_score.filter(|c| *c > 0.0);
+    let record = published.is_none_or(|c| l.score < c);
+    Some(HolderShare {
+        name: l.name.clone(),
+        records: if record { 1.0 } else { 0.0 },
+        beat_published: if record && published.is_some() { 1.0 } else { 0.0 },
+        site_bests: 1.0,
+        pending: 0.0,
+        dimension,
+    })
+}
+
+/// The changes of the leaders of space problems that the holders' counts have not taken yet.
+///
+/// The source runs a change of a space entry in a turn of the counts (app.ts: spaceChange), which
+/// moves its problem's share at once. Here the space routes keep their own lock, so a change is
+/// queued instead, by the route that made it while it still holds the store's lock, and every turn
+/// of the counts takes the queue first, with the store's lock held (`take_space_moves`). So each
+/// change lies wholly before or after any page of the build, as in the source: what a turn takes
+/// happened after the turn before it, and moves the share of a problem the counts include, while a
+/// change beyond the build's cursor is left to the page that gets there. The queue is kept only
+/// while the space problems are being counted or are counted (`counting`); `lost` makes the next
+/// turn count again from the start (a change that could not be read, or a queue grown too long).
+#[derive(Default)]
+pub struct SpaceMoves {
+    counting: AtomicBool,
+    lost: AtomicBool,
+    queue: Mutex<Vec<SpaceMove>>,
+}
+
+/// One change of a space problem's leader: the leader before and after it.
+pub struct SpaceMove {
+    pub problem: SpaceProblem,
+    pub old: Option<SpaceLeader>,
+    pub now: Option<SpaceLeader>,
+}
+
+/// Most changes the queue holds; beyond them the counts are made again from the start.
+pub const SPACE_MOVES_MAX: usize = 100_000;
+
+impl SpaceMoves {
+    /// Whether a change must be queued (read its leaders before and after it). With the store's lock held.
+    pub fn counting(&self) -> bool {
+        self.counting.load(Ordering::SeqCst)
+    }
+
+    /// Queues a change of `problem`'s leader from `old` to `now`. With the store's lock held, right
+    /// after the change, and only when `counting`.
+    pub fn push(&self, problem: SpaceProblem, old: Option<SpaceLeader>, now: Option<SpaceLeader>) {
+        let mut queue = self.queue.lock().unwrap_or_else(|e| e.into_inner());
+        if queue.len() >= SPACE_MOVES_MAX {
+            queue.clear();
+            self.lost.store(true, Ordering::SeqCst);
+            return;
+        }
+        queue.push(SpaceMove { problem, old, now });
+    }
+
+    /// A change was made and its leaders could not be read: the counts must be made again.
+    pub fn lost(&self) {
+        self.lost.store(true, Ordering::SeqCst);
+    }
 }
 
 /// What the atlas draws for one P.
@@ -355,16 +532,20 @@ impl RecordsCache {
 
 /// app.ts: HolderCounts.
 struct HolderCounts {
-    by_name: IndexMap<String, Holder>,
-    /// The last problem counted, in the order the store lists them; None before the first page.
+    by_name: IndexMap<String, HolderRow>,
+    /// The last polygon problem counted, in the order the store lists them; None before the first page.
     up_to: Option<ProblemKey>,
-    /// True once the last page is counted.
+    /// True once the last page of polygon problems is counted.
+    flat_done: bool,
+    /// The last space problem counted, in the order the store lists them; None before the first page of them.
+    space_up_to: Option<SpaceProblem>,
+    /// True once the last page is counted, of the space problems too.
     done: bool,
 }
 
 impl HolderCounts {
     fn none() -> HolderCounts {
-        HolderCounts { by_name: IndexMap::new(), up_to: None, done: false }
+        HolderCounts { by_name: IndexMap::new(), up_to: None, flat_done: false, space_up_to: None, done: false }
     }
 }
 
@@ -440,6 +621,8 @@ pub struct App {
     spaces: Option<Arc<dyn SpacesPort>>,
     /// The routes of the spaces and what they keep between requests; with `spaces`.
     space_routes: Option<Arc<SpaceRoutes>>,
+    /// The changes of space entries that the holders' counts have yet to take.
+    space_moves: Arc<SpaceMoves>,
     pool: Pool,
     state: Mutex<State>,
     follow: Mutex<Follow>,
@@ -524,6 +707,7 @@ impl App {
             snapshots: opts.snapshots,
             spaces: opts.spaces,
             space_routes,
+            space_moves: Arc::new(SpaceMoves::default()),
             pool: opts.pool,
             state: Mutex::new(State {
                 records_cache: RecordsCache::default(),
@@ -623,6 +807,7 @@ impl App {
                             admin: &admin,
                             pool: &self.pool,
                             clock: &self.clock,
+                            space_moves: &self.space_moves,
                         };
                         space_routes(&ctx, method, &path, req).await
                     }
@@ -858,13 +1043,21 @@ impl App {
     // restart or a rebuild loses no row and no peak.
 
     /// app.ts: countShare. Adds (`sign` 1) or takes out (-1) one leader's share.
-    fn count_share(state: &mut State, share: &Holder, sign: f64) {
+    fn count_share(state: &mut State, share: &HolderShare, sign: f64) {
         let peak = state.peaks.get(&share.name).copied().unwrap_or(0.0);
-        let h = state.counts.by_name.entry(share.name.clone()).or_insert_with(|| Holder::zero(&share.name, peak));
+        let h = state.counts.by_name.entry(share.name.clone()).or_insert_with(|| HolderRow::zero(&share.name, peak));
         h.records += sign * share.records;
         h.beat_published += sign * share.beat_published;
         h.site_bests += sign * share.site_bests;
         h.pending += sign * share.pending;
+        if share.records != 0.0 {
+            let left = h.dimensions.get(&share.dimension).copied().unwrap_or(0.0) + sign * share.records;
+            if left != 0.0 {
+                h.dimensions.insert(share.dimension.clone(), left);
+            } else {
+                h.dimensions.shift_remove(&share.dimension);
+            }
+        }
         // a name that leads no open problem is listed only if it has held a record
         if h.site_bests == 0.0 && h.peak == 0.0 {
             state.counts.by_name.shift_remove(&share.name);
@@ -928,7 +1121,7 @@ impl App {
         }
         for (name, peak) in &state.peaks {
             if !state.counts.by_name.contains_key(name) {
-                state.counts.by_name.insert(name.clone(), Holder::zero(name, *peak));
+                state.counts.by_name.insert(name.clone(), HolderRow::zero(name, *peak));
             }
         }
         let mut raised: Vec<HolderPeak> = Vec::new();
@@ -946,14 +1139,21 @@ impl App {
     }
 
     /// app.ts: shareOf.
-    fn share_of(&self, e: &ProblemLeader) -> Option<Holder> {
+    fn share_of(&self, e: &ProblemLeader) -> Option<HolderShare> {
         holder_share(e, self.literature.get(e.n, e.m, e.p))
+    }
+
+    /// app.ts: spaceShareOf. The share of a space problem's leader, with the problem as its
+    /// catalogue has it.
+    fn space_share_of(&self, l: &SpaceLeader) -> Option<HolderShare> {
+        let spaces = self.spaces.as_ref()?;
+        space_holder_share(l, spaces.problem_of(&l.space, &l.problem).as_ref())
     }
 
     /// app.ts: counted. Whether the counts include problem `p` (the build has passed it, or is
     /// done): see the invariant.
     fn counted(state: &State, p: &ProblemKey) -> bool {
-        if state.counts.done {
+        if state.counts.flat_done {
             return true;
         }
         match &state.counts.up_to {
@@ -966,21 +1166,70 @@ impl App {
         }
     }
 
+    /// app.ts: spaceCounted. Whether the counts include the space problem `p`, in the order of
+    /// (space, problem).
+    fn space_counted(state: &State, p: &SpaceProblem) -> bool {
+        if state.counts.done {
+            return true;
+        }
+        match &state.counts.space_up_to {
+            None => false,
+            Some(at) => p.space < at.space || (p.space == at.space && p.problem <= at.problem),
+        }
+    }
+
+    /// The counts start again from the start (noCounts), and changes of space entries are no longer
+    /// queued until the build counts the space problems again.
+    fn reset_counts(&self, state: &mut State) {
+        state.counts = HolderCounts::none();
+        state.holders_body = None;
+        self.space_moves.counting.store(false, Ordering::SeqCst);
+        self.space_moves.queue.lock().unwrap_or_else(|e| e.into_inner()).clear();
+    }
+
+    /// Takes the changes of space entries queued since the last turn (SpaceMoves): moves the share
+    /// of each problem the counts include, in the order the changes were made. Called first in
+    /// every turn of the counts, with the state's and the store's locks held.
+    fn take_space_moves(&self, state: &mut State, store: &SqliteStore) {
+        if self.space_moves.lost.swap(false, Ordering::SeqCst) {
+            // a change could not be followed: count again from the start, as the source does
+            self.reset_counts(state);
+            return;
+        }
+        let queued = std::mem::take(&mut *self.space_moves.queue.lock().unwrap_or_else(|e| e.into_inner()));
+        for m in queued {
+            if !Self::space_counted(state, &m.problem) {
+                continue;
+            }
+            let out = m.old.as_ref().and_then(|l| self.space_share_of(l));
+            let into = m.now.as_ref().and_then(|l| self.space_share_of(l));
+            self.shares_moved(state, store, out, into);
+        }
+    }
+
     /// app.ts: leaderMoved. The leader of problem `p` was `old` and is `now` (either may be none):
     /// moves its share, if the counts include the problem, and raises the peak of the name that
     /// gained, stored before it returns. Only in a turn.
     fn leader_moved(&self, state: &mut State, store: &SqliteStore, p: &ProblemKey, old: Option<&ProblemLeader>, now: Option<&ProblemLeader>) {
+        // the changes of space entries made before this one come first
+        self.take_space_moves(state, store);
         if !Self::counted(state, p) {
             return;
         }
         let out = old.and_then(|e| self.share_of(e));
         let into = now.and_then(|e| self.share_of(e));
+        self.shares_moved(state, store, out, into);
+    }
+
+    /// app.ts: sharesMoved. Moves a share from `out` to `into` (either may be none), and raises the
+    /// peak of the name that gained. Only in a turn.
+    fn shares_moved(&self, state: &mut State, store: &SqliteStore, out: Option<HolderShare>, into: Option<HolderShare>) {
         if out.is_none() && into.is_none() {
             return;
         }
         // the same share (a better score of the same name, say) leaves the counts and the answer as they are
         if let (Some(o), Some(i)) = (&out, &into) {
-            if o.name == i.name && o.records == i.records && o.beat_published == i.beat_published && o.pending == i.pending {
+            if o.name == i.name && o.records == i.records && o.beat_published == i.beat_published && o.pending == i.pending && o.dimension == i.dimension {
                 return;
             }
         }
@@ -1035,7 +1284,7 @@ impl App {
             }
         };
         // nothing is counted yet, or nothing counted can change
-        if !moves || (!state.counts.done && state.counts.up_to.is_none()) {
+        if !moves || (!state.counts.flat_done && state.counts.up_to.is_none()) {
             let ok = change(&store);
             Self::holder_clear(state);
             let ok = ok?;
@@ -1059,8 +1308,7 @@ impl App {
         let result = run(state);
         if result.is_err() {
             // the change may be half done, or a leader unread: count again from the start
-            state.counts = HolderCounts::none();
-            state.holders_body = None;
+            self.reset_counts(state);
         }
         Self::holder_clear(state);
         let ok = result?;
@@ -1068,22 +1316,41 @@ impl App {
         Ok(ok)
     }
 
-    /// One page of the first count of /api/holders, in a turn.
+    /// One page of the first count of /api/holders, in a turn: the polygon problems first, then
+    /// those of the spaces.
     fn count_page(&self) -> Result<(), Thrown> {
         let mut state = self.state();
         let state = &mut *state;
+        let store = self.store();
+        self.take_space_moves(state, &store);
         if state.counts.done {
             return Ok(());
         }
-        let store = self.store();
-        let page = store.leaders_after(state.counts.up_to, self.holders_chunk)?;
-        for e in &page {
-            if let Some(share) = self.share_of(e) {
+        if !state.counts.flat_done {
+            let page = store.leaders_after(state.counts.up_to, self.holders_chunk)?;
+            for e in &page {
+                if let Some(share) = self.share_of(e) {
+                    Self::count_share(state, &share, 1.0);
+                }
+            }
+            match page.last() {
+                Some(last) if !((page.len() as f64) < self.holders_chunk) => state.counts.up_to = Some(ProblemKey { n: last.n, m: last.m, p: last.p }),
+                _ => {
+                    state.counts.flat_done = true;
+                    // from now on the changes of space entries are queued, while the store's lock is held
+                    self.space_moves.counting.store(true, Ordering::SeqCst);
+                }
+            }
+            return Ok(());
+        }
+        let page = if self.spaces.is_some() { store.space_leaders_after(state.counts.space_up_to.as_ref(), self.holders_chunk)? } else { Vec::new() };
+        for l in &page {
+            if let Some(share) = self.space_share_of(l) {
                 Self::count_share(state, &share, 1.0);
             }
         }
         match page.last() {
-            Some(last) if !((page.len() as f64) < self.holders_chunk) => state.counts.up_to = Some(ProblemKey { n: last.n, m: last.m, p: last.p }),
+            Some(last) if !((page.len() as f64) < self.holders_chunk) => state.counts.space_up_to = Some(SpaceProblem { space: last.space.clone(), problem: last.problem.clone() }),
             _ => {
                 state.counts.done = true;
                 self.finish_peaks(state, &store);
@@ -1094,38 +1361,53 @@ impl App {
 
     /// app.ts: holdersAnswer.
     fn holders_answer(state: &State) -> Bytes {
-        let mut list: Vec<&Holder> = state.counts.by_name.values().collect();
+        let mut list: Vec<&HolderRow> = state.counts.by_name.values().collect();
         list.sort_by(|a, b| {
             b.records.partial_cmp(&a.records).unwrap_or(std::cmp::Ordering::Equal).then(b.site_bests.partial_cmp(&a.site_bests).unwrap_or(std::cmp::Ordering::Equal)).then_with(|| js::cmp_utf16(&a.name, &b.name))
         });
         #[derive(Serialize)]
         struct HoldersResponse<'a> {
-            holders: Vec<&'a Holder>,
+            holders: Vec<&'a HolderRow>,
         }
         Bytes::from(to_vec(&HoldersResponse { holders: list }))
     }
 
     /// GET /api/holders
     async fn holders(self: &Arc<Self>) -> Handled {
-        // The first request counts every problem: a page of them in a turn, then other work is
-        // let in. Requests that arrive during the build wait for it.
         loop {
-            if self.state().counts.done {
-                break;
+            // The first request counts every problem: a page of them in a turn, then other work is
+            // let in. Requests that arrive during the build wait for it.
+            loop {
+                if self.state().counts.done {
+                    break;
+                }
+                let _building = self.building.lock().await;
+                while !self.state().counts.done {
+                    let app = self.clone();
+                    crate::pool::blocking(move || app.count_page()).await?;
+                    tokio::task::yield_now().await;
+                }
             }
-            let _building = self.building.lock().await;
-            while !self.state().counts.done {
-                let app = self.clone();
-                crate::pool::blocking(move || app.count_page()).await?;
-                tokio::task::yield_now().await;
+            // the changes of space entries queued since the last turn, then the answer, in a turn
+            // (a change that could not be followed starts the counts again)
+            let app = self.clone();
+            let body = crate::pool::blocking(move || -> Result<Option<Bytes>, Thrown> {
+                let mut state = app.state();
+                let state = &mut *state;
+                app.take_space_moves(state, &app.store());
+                if !state.counts.done {
+                    return Ok(None);
+                }
+                if state.holders_body.is_none() {
+                    state.holders_body = Some(Self::holders_answer(state));
+                }
+                Ok(state.holders_body.clone())
+            })
+            .await?;
+            if let Some(body) = body {
+                return Ok(Res::new(200, ResBody::Full(body)).with("content-type", "application/json"));
             }
         }
-        let mut state = self.state();
-        if state.holders_body.is_none() {
-            state.holders_body = Some(Self::holders_answer(&state));
-        }
-        let body = state.holders_body.clone().expect("made above");
-        Ok(Res::new(200, ResBody::Full(body)).with("content-type", "application/json"))
     }
 
     // The page of one name: what it leads, by pair of shapes. The problems with an entry of the
@@ -1197,6 +1479,13 @@ impl App {
                 tokio::task::yield_now().await;
             }
         }
+        // the changes of space entries queued meanwhile, which may raise the peak
+        crate::pool::blocking(|| -> Result<(), Thrown> {
+            let mut state = self.state();
+            self.take_space_moves(&mut state, &self.store());
+            Ok(())
+        })
+        .await?;
         let mut state = self.state();
         // the peak is the name's in the counts, once they are done (0 while unknown)
         if state.counts.done {
@@ -2038,7 +2327,7 @@ impl App {
                 match state.counts.by_name.get_mut(&r.name) {
                     Some(h) => h.peak = polypack_js::math::max(h.peak, r.peak),
                     None => {
-                        state.counts.by_name.insert(r.name.clone(), Holder::zero(&r.name, r.peak));
+                        state.counts.by_name.insert(r.name.clone(), HolderRow::zero(&r.name, r.peak));
                     }
                 }
             }
@@ -2147,5 +2436,76 @@ impl Drop for StreamGuard {
         if let Some(stats) = &self.app.stats {
             stats.lock().unwrap().stream(-1.0, self.keys.as_ref().map(Vec::len));
         }
+    }
+}
+
+#[cfg(test)]
+mod holder_dimension_tests {
+    use super::*;
+
+    // holders-dimensions.test.ts: "places every kind of problem in its Dimension"
+    #[test]
+    fn every_kind_of_problem_has_its_dimension() {
+        assert_eq!(problem_dimension(None, "").as_deref(), Some("2-in-2"));
+        assert_eq!(problem_dimension(Some("curved"), "curved/-1/0/0/12").as_deref(), Some("2-in-2"));
+        for space in ["surface", "sphere", "torus"] {
+            assert_eq!(problem_dimension(Some(space), "x").as_deref(), Some("2-on-3"));
+        }
+        for space in ["polyhedra", "balls"] {
+            assert_eq!(problem_dimension(Some(space), "x").as_deref(), Some("3-in-3"));
+        }
+        for p in ["tesseract", "5cell", "16cell", "24cell", "120cell", "600cell"] {
+            assert_eq!(problem_dimension(Some("boundary"), &format!("boundary/{p}/ball/9")).as_deref(), Some("3-on-4"));
+        }
+        assert_eq!(problem_dimension(Some("boundary"), "boundary/5cube/ball/9").as_deref(), Some("4-on-5"));
+        assert_eq!(problem_dimension(Some("boundary"), "boundary/7demicube/ball/9").as_deref(), Some("6-on-7"));
+        assert_eq!(problem_dimension(Some("boundary"), "boundary/10orthoplex/ball/3").as_deref(), Some("9-on-10"));
+        assert_eq!(problem_dimension(Some("ndim"), "ndim/4/cube/ball/3").as_deref(), Some("4-in-4"));
+        assert_eq!(problem_dimension(Some("ndim"), "ndim/10/cube/cube/12").as_deref(), Some("10-in-10"));
+        assert_eq!(problem_dimension(Some("ndim"), "ndim/x/cube/cube/12"), None);
+        assert_eq!(problem_dimension(Some("nowhere"), "nowhere/1"), None);
+        let mut ids = ["10-in-10", "3-on-4", "2-on-3", "9-on-10", "4-in-4", "2-in-2", "3-in-3", "x"];
+        ids.sort_by(|a, b| dimension_rank(a).partial_cmp(&dimension_rank(b)).unwrap());
+        assert_eq!(ids, ["2-in-2", "2-on-3", "3-in-3", "3-on-4", "4-in-4", "9-on-10", "10-in-10", "x"]);
+    }
+
+    #[test]
+    fn a_row_writes_its_dimensions_in_their_order() {
+        let mut row = HolderRow::zero("ann", 3.0);
+        row.records = 3.0;
+        for id in ["10-in-10", "2-on-3", "2-in-2"] {
+            row.dimensions.insert(id.to_string(), 1.0);
+        }
+        assert_eq!(
+            polypack_js::json::stringify(&row),
+            r#"{"name":"ann","records":3,"beat_published":0,"site_bests":0,"pending":0,"peak":3,"dimensions":{"2-in-2":1,"2-on-3":1,"10-in-10":1}}"#
+        );
+    }
+
+    // holders-dimensions.test.ts: spaceHolderShare
+    #[test]
+    fn a_space_lead_is_a_record_below_the_research_record_or_without_one() {
+        let lead = |score: f64| SpaceLeader { id: 1.0, space: "sphere".to_string(), problem: "sphere/3/6".to_string(), score, name: "ann".to_string(), created_at: "t".to_string() };
+        let p = |cert: Option<f64>, open: bool| SpaceProblemRef { id: "sphere/3/6".to_string(), p: 6.0, certified_score: cert, accepts_submissions: open };
+        let share = |l: SpaceLeader, p: SpaceProblemRef| space_holder_share(&l, Some(&p)).map(|s| (s.records, s.beat_published, s.site_bests, s.dimension));
+        assert_eq!(share(lead(1.0), p(Some(2.0), true)), Some((1.0, 1.0, 1.0, "2-on-3".to_string())));
+        assert_eq!(share(lead(2.0), p(Some(2.0), true)), Some((0.0, 0.0, 1.0, "2-on-3".to_string())));
+        assert_eq!(share(lead(9.0), p(None, true)), Some((1.0, 0.0, 1.0, "2-on-3".to_string())));
+        assert_eq!(share(lead(9.0), p(Some(0.0), true)), Some((1.0, 0.0, 1.0, "2-on-3".to_string())));
+        assert_eq!(share(lead(1.0), p(Some(2.0), false)), None);
+        assert_eq!(space_holder_share(&lead(1.0), None), None);
+    }
+
+    #[test]
+    fn a_queue_grown_too_long_is_dropped_and_marks_the_counts_lost() {
+        let moves = SpaceMoves::default();
+        let at = || SpaceProblem { space: "torus".to_string(), problem: "torus/sq/0/2".to_string() };
+        for _ in 0..SPACE_MOVES_MAX {
+            moves.push(at(), None, None);
+        }
+        assert!(!moves.lost.load(Ordering::SeqCst));
+        moves.push(at(), None, None);
+        assert!(moves.lost.load(Ordering::SeqCst));
+        assert!(moves.queue.lock().unwrap().is_empty());
     }
 }

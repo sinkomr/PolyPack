@@ -94,6 +94,15 @@ export interface SpaceRouteContext {
   stats?: LoadStats;
   /** null when the request carries the admin token; otherwise the refusal to send. */
   admin: (c: Context) => Response | null;
+  /**
+   * Runs a change of the entries of one problem (`locate` names it, or null) in a turn of the record holders'
+   * counts, which move the problem's share from its leader before the change to the one after it (createApp:
+   * spaceChange). Without it, the change just runs.
+   */
+  spaceChange?: <T>(
+    locate: () => Promise<{ space: string; problem: string } | null>,
+    change: () => Promise<T>,
+  ) => Promise<T>;
 }
 
 /** The nD problem of a parsed id. */
@@ -164,6 +173,14 @@ function withRaw(head: object, raw: Record<string, string | null>): string {
  */
 export function registerSpaceRoutes(app: Hono, ctx: SpaceRouteContext): void {
   const { index, store } = ctx.spaces;
+  const inHoldersTurn =
+    ctx.spaceChange ??
+    (<T>(_locate: () => Promise<{ space: string; problem: string } | null>, change: () => Promise<T>) => change());
+  /** The problem of a stored entry, for inHoldersTurn. */
+  const problemOfEntry = async (id: number) => {
+    const e = await store.spaceGet(id);
+    return e && { space: e.space, problem: e.problem };
+  };
   const gzip =
     ctx.spaces.gzip ??
     (async (data: Uint8Array) => {
@@ -471,18 +488,22 @@ export function registerSpaceRoutes(app: Hono, ctx: SpaceRouteContext): void {
         200,
       );
 
-    const { id, before, leader, kept } = await store.spaceSubmit({
-      space,
-      problem: p.id,
-      score,
-      name,
-      agent_note,
-      software,
-      method,
-      seed,
-      config: JSON.stringify(verdict.config),
-      created_at: new Date().toISOString(),
-    });
+    const { id, before, leader, kept } = await inHoldersTurn(
+      async () => ({ space, problem: p.id }),
+      () =>
+        store.spaceSubmit({
+          space,
+          problem: p.id,
+          score,
+          name,
+          agent_note,
+          software,
+          method,
+          seed,
+          config: JSON.stringify(verdict.config),
+          created_at: new Date().toISOString(),
+        }),
+    );
     if (kept || leader?.id !== before?.id) changed(space);
     if (leader?.id !== before?.id) ctx.stats?.leaderChanged();
     const leads = leader?.id === id;
@@ -598,7 +619,11 @@ export function registerSpaceRoutes(app: Hono, ctx: SpaceRouteContext): void {
     if (denied) return denied;
     const body = (await c.req.json().catch(() => null)) as { id?: unknown } | null;
     if (!body || !Number.isInteger(body.id)) return c.json({ error: 'body must be {"id": number}' }, 400);
-    const r = await store.spaceRemove(body.id as number);
+    const id = body.id as number;
+    const r = await inHoldersTurn(
+      () => problemOfEntry(id),
+      () => store.spaceRemove(id),
+    );
     if (!r) return c.json({ error: "no such space entry" }, 404);
     changed(r.space);
     ctx.log(`[spaces] entry ${body.id} (${r.problem}) removed`);
@@ -623,7 +648,12 @@ export function registerSpaceRoutes(app: Hono, ctx: SpaceRouteContext): void {
       else changes.agent_note = sanitizeText(body.agent_note, MAX_NOTE_LENGTH);
     }
     if (errors.length) return c.json({ error: errors.join("; ") }, 400);
-    const r = await store.spaceEdit(body.id as number, changes);
+    const id = body.id as number;
+    // only a new name can move a record from one name to another
+    const r = await inHoldersTurn(
+      async () => (changes.name !== undefined ? problemOfEntry(id) : null),
+      () => store.spaceEdit(id, changes),
+    );
     if (!r) return c.json({ error: "no such space entry" }, 404);
     changed(r.space);
     ctx.log(`[spaces] entry ${body.id} (${r.problem}) edited: ${Object.keys(changes).join(", ") || "nothing"}`);

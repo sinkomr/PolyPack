@@ -931,6 +931,40 @@ impl SqliteStore {
         Self::space_leaders_from_rows(&rows)
     }
 
+    /// SpaceStore.spaceLeadersAfter. The leaders of the next `limit` space problems with an entry
+    /// after the problem `after` (None: from the first), by space and then problem id; fewer than
+    /// `limit` when the entries end. Indexed reads whose size is `limit`, so that a caller can walk
+    /// every leader in pages (the holders' counts).
+    pub fn space_leaders_after(&self, after: Option<&SpaceProblem>, limit: f64) -> Result<Vec<SpaceLeader>> {
+        if !is_integer(limit) || limit < 1.0 {
+            return Err(StoreError::Range(format!("limit must be a positive integer, got {}", fmt::num(limit))));
+        }
+        // a space's name is never empty, so ("", "") is before every problem
+        let (space, problem) = after.map_or(("", ""), |a| (a.space.as_str(), a.problem.as_str()));
+        // the keys of the next `limit` problems, then their rows, so that no problem is cut in the
+        // middle; both are ranges of the listing index
+        let keys = self
+            .db
+            .prepare(
+                "SELECT space, problem FROM space_entries WHERE (space, problem) > (?, ?)
+         GROUP BY space, problem ORDER BY space, problem LIMIT ?",
+            )?
+            .all(&[Param::Text(space), Param::Text(problem), limit.into()])?;
+        let Some(last) = keys.last() else {
+            return Ok(Vec::new());
+        };
+        let (last_space, last_problem) = (last.text("space")?, last.text("problem")?);
+        let rows = self
+            .db
+            .prepare(
+                "SELECT id, space, problem, score, name, created_at FROM space_entries
+         WHERE (space, problem) > (?, ?) AND (space, problem) <= (?, ?)
+         ORDER BY space, problem, score, id",
+            )?
+            .all(&[Param::Text(space), Param::Text(problem), Param::Text(&last_space), Param::Text(&last_problem)])?;
+        Self::space_leaders_from_rows(&rows)
+    }
+
     /// SpaceStore.spaceLeaders. The leader of every space problem that has an entry, by space and problem id.
     pub fn space_leaders(&self) -> Result<Vec<SpaceLeader>> {
         let rows = self

@@ -40,7 +40,7 @@ use polypack_spaces::{
 use serde::Serialize;
 use serde_json::Value;
 
-use crate::app::{Log, StoreHandle};
+use crate::app::{Log, SpaceMoves, StoreHandle};
 use crate::clock::Clock;
 use crate::hono::{self, Handled, Req, Res, ResBody, Thrown};
 use crate::js;
@@ -48,7 +48,7 @@ use crate::limits::{address_key, sanitize_text, SubmitLimits, Submitter, MAX_BOD
 use crate::load::{LoadStats, SubmissionLine};
 use crate::pool::Pool;
 pub use crate::spaces_port::{LoadedSpaces, SpaceExhibitDoc, SpaceInfoDoc, SpaceProblemRef, SpacesDocs, SpacesPort};
-use crate::store::{NewSpaceEntry, SpaceEntryEdit, SpaceIds, SpaceLeader};
+use crate::store::{NewSpaceEntry, SpaceEntryEdit, SpaceIds, SpaceLeader, SpaceProblem, SqliteStore};
 use crate::units_gate::{space_affected, units_missing_message};
 use crate::url;
 
@@ -318,6 +318,9 @@ pub struct SpaceRouteContext<'a> {
     /// The workers on which a submission is checked.
     pub pool: &'a Pool,
     pub clock: &'a Clock,
+    /// spaces.ts: SpaceRouteContext.spaceChange. Where a change of an entry's problem leader goes
+    /// for the record holders' counts (app.rs: SpaceMoves), while the store's lock is held.
+    pub space_moves: &'a Arc<SpaceMoves>,
 }
 
 /// What `space_routes` did with a request.
@@ -560,7 +563,11 @@ async fn admin_remove(ctx: &SpaceRouteContext<'_>, req: &mut Req) -> Handled {
     crate::pool::blocking(|| {
         // the change and the forgetting of the kept listing as one step, as in the source's one turn
         let mut state = ctx.routes.state.lock().unwrap();
-        let Some(r) = ctx.store.lock().unwrap().space_remove(id)? else {
+        let removed = {
+            let store = ctx.store.lock().unwrap();
+            in_holders_turn(ctx.space_moves, &store, |store| problem_of_entry(store, id), |store| store.space_remove(id))?
+        };
+        let Some(r) = removed else {
             return Ok(hono::json_error("no such space entry", 404));
         };
         state.changed(&r.space);
@@ -610,7 +617,13 @@ async fn admin_edit(ctx: &SpaceRouteContext<'_>, req: &mut Req) -> Handled {
     }
     crate::pool::blocking(|| {
         let mut state = ctx.routes.state.lock().unwrap();
-        let Some(r) = ctx.store.lock().unwrap().space_edit(id, &changes)? else {
+        let edited = {
+            let store = ctx.store.lock().unwrap();
+            // only a new name can move a record from one name to another
+            let renames = changes.name.is_some();
+            in_holders_turn(ctx.space_moves, &store, |store| if renames { problem_of_entry(store, id) } else { Ok(None) }, |store| store.space_edit(id, &changes))?
+        };
+        let Some(r) = edited else {
             return Ok(hono::json_error("no such space entry", 404));
         };
         state.changed(&r.space);
@@ -630,6 +643,40 @@ struct Env {
     log: Log,
     stats: Option<Arc<Mutex<LoadStats>>>,
     clock: Clock,
+    space_moves: Arc<SpaceMoves>,
+}
+
+/// spaces.ts: inHoldersTurn. Runs `change` on the store, whose lock the caller holds, and when the
+/// record holders' counts take the changes of space entries (SpaceMoves::counting), queues the
+/// change of the leader of the problem `locate` names (None: none), read before and after it. A
+/// leader that cannot be read after a change was made makes the counts start again.
+fn in_holders_turn<T>(
+    moves: &SpaceMoves,
+    store: &SqliteStore,
+    locate: impl FnOnce(&SqliteStore) -> crate::store::Result<Option<SpaceProblem>>,
+    change: impl FnOnce(&SqliteStore) -> crate::store::Result<T>,
+) -> crate::store::Result<T> {
+    if !moves.counting() {
+        return change(store);
+    }
+    let Some(at) = locate(store)? else {
+        return change(store);
+    };
+    let old = store.space_leader(&at.space, &at.problem)?;
+    let result = change(store)?;
+    match store.space_leader(&at.space, &at.problem) {
+        Ok(now) => moves.push(at, old, now),
+        Err(e) => {
+            moves.lost();
+            return Err(e);
+        }
+    }
+    Ok(result)
+}
+
+/// The problem of a stored entry, for in_holders_turn.
+fn problem_of_entry(store: &SqliteStore, id: f64) -> crate::store::Result<Option<SpaceProblem>> {
+    Ok(store.space_get(id)?.map(|e| SpaceProblem { space: e.space, problem: e.problem }))
 }
 
 /// An address's check in flight: its place among `checking`, and the turn of the heavy checks when
@@ -892,18 +939,23 @@ impl Submission {
         // so that the lines are in the order of the entries
         let env = &self.env;
         let mut state = env.routes.state.lock().unwrap();
-        let stored = env.store.lock().unwrap().space_submit(&NewSpaceEntry {
-            space: space.as_str().to_string(),
-            problem: p.id.clone(),
-            score,
-            name: a.name.clone(),
-            agent_note: a.agent_note,
-            software: a.software,
-            method: a.method,
-            seed: a.seed,
-            config: config.to_json(),
-            created_at: env.clock.iso_now(),
-        })?;
+        let stored = {
+            let store = env.store.lock().unwrap();
+            let entry = NewSpaceEntry {
+                space: space.as_str().to_string(),
+                problem: p.id.clone(),
+                score,
+                name: a.name.clone(),
+                agent_note: a.agent_note,
+                software: a.software,
+                method: a.method,
+                seed: a.seed,
+                config: config.to_json(),
+                created_at: env.clock.iso_now(),
+            };
+            let at = SpaceProblem { space: space.as_str().to_string(), problem: p.id.clone() };
+            in_holders_turn(&env.space_moves, &store, |_| Ok(Some(at)), |store| store.space_submit(&entry))?
+        };
         let (id, leader) = (stored.id, &stored.leader);
         let moved = leader.as_ref().map(|l| l.id) != stored.before.as_ref().map(|l| l.id);
         if stored.kept || moved {
@@ -1106,6 +1158,7 @@ async fn submit(ctx: &SpaceRouteContext<'_>, req: &mut Req) -> Handled {
             log: ctx.log.clone(),
             stats: ctx.stats.cloned(),
             clock: ctx.clock.clone(),
+            space_moves: ctx.space_moves.clone(),
         },
         started,
         submitter,
@@ -1173,6 +1226,7 @@ mod tests {
         stats: Arc<Mutex<LoadStats>>,
         pool: Pool,
         clock: Clock,
+        space_moves: Arc<SpaceMoves>,
     }
 
     impl Rig {
@@ -1201,6 +1255,7 @@ mod tests {
                 stats,
                 pool: Pool::new(2, clock.clone()),
                 clock,
+                space_moves: Arc::new(SpaceMoves::default()),
             }
         }
 
@@ -1223,6 +1278,7 @@ mod tests {
                 admin: &|_: &Req| None,
                 pool: &self.pool,
                 clock: &self.clock,
+                space_moves: &self.space_moves,
             };
             let SpaceRoute::Answer(res) = space_routes(&ctx, "POST", "/api/spaces/submit", &mut req).await else {
                 panic!("the route did not answer");

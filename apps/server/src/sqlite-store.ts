@@ -696,6 +696,30 @@ export class SqliteStore implements Store, SpaceStore {
     return this.spaceLeadersFromRows(rows);
   }
 
+  async spaceLeadersAfter(after: { space: string; problem: string } | null, limit: number): Promise<SpaceLeader[]> {
+    if (!Number.isInteger(limit) || limit < 1) throw new RangeError(`limit must be a positive integer, got ${limit}`);
+    // a space's name is never empty, so ("", "") is before every problem
+    const from = after ?? { space: "", problem: "" };
+    // the keys of the next `limit` problems, then their rows, so that no problem is cut in the middle; both are
+    // ranges of the listing index
+    const keys = this.db
+      .prepare(
+        `SELECT space, problem FROM space_entries WHERE (space, problem) > (?, ?)
+         GROUP BY space, problem ORDER BY space, problem LIMIT ?`,
+      )
+      .all(from.space, from.problem, limit) as Row[];
+    if (!keys.length) return [];
+    const last = keys[keys.length - 1]!;
+    const rows = this.db
+      .prepare(
+        `SELECT ${SPACE_LEADER_COLUMNS} FROM space_entries
+         WHERE (space, problem) > (?, ?) AND (space, problem) <= (?, ?)
+         ORDER BY space, problem, score, id`,
+      )
+      .all(from.space, from.problem, last.space as string, last.problem as string) as Row[];
+    return this.spaceLeadersFromRows(rows);
+  }
+
   async spaceRemove(id: number): Promise<{ space: string; problem: string } | null> {
     const r = this.db.prepare("DELETE FROM space_entries WHERE id = ? RETURNING space, problem").get(id) as
       Row | undefined;

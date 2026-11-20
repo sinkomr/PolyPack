@@ -622,3 +622,96 @@ async fn a_server_with_no_space_loaded_and_one_without_spaces() {
     assert_eq!(s.get("/api/health").await.status, 200);
     assert_eq!(s.get("/api/leaders?keys=torus/sq/0/2,4/4/1").await.json(), json!({ "leaders": { "4/4/1": null }, "unknown": ["torus/sq/0/2"] }));
 }
+
+/// What a server started now on the store of `s` counts in /api/holders, without the peaks (which
+/// depend on the history of the counts) and the names that lead nothing.
+async fn holders_recounted(s: &Server, index: SpacesIndex) -> Value {
+    let spaces: Arc<dyn SpacesPort> = Arc::new(LoadedSpaces::new(index));
+    let pool = Pool::new(2, s.clock.clone());
+    let fresh = Server {
+        app: App::new(AppOptions {
+            store: s.store.clone(),
+            records: Arc::new(Literature::new(Vec::new()).expect("no records")),
+            admin_token: None,
+            submit_key: None,
+            client_ip: None,
+            log: Some(Arc::new(|_: &str| {})),
+            limits: LimitOptions::default(),
+            loop_delay: None,
+            stats: None,
+            holders_chunk: Some(1.0),
+            holder_chunk: None,
+            clock: s.clock.clone(),
+            units_gate: None,
+            snapshots: None,
+            spaces: Some(spaces),
+            pool: pool.clone(),
+        })
+        .expect("the app"),
+        clock: s.clock.clone(),
+        log: s.log.clone(),
+        store: s.store.clone(),
+        stats: s.stats.clone(),
+        pool,
+    };
+    leading(&fresh.get("/api/holders").await.json())
+}
+
+/// The rows of an answer of /api/holders that lead something, without their peaks.
+fn leading(answer: &Value) -> Value {
+    let rows: Vec<Value> = answer["holders"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .filter(|h| h["site_bests"].as_f64().unwrap() > 0.0)
+        .map(|h| {
+            let mut h = h.clone();
+            h.as_object_mut().unwrap().shift_remove("peak");
+            h
+        })
+        .collect();
+    json!(rows)
+}
+
+// holders-dimensions.test.ts: "moves a record with each submission, rename and removal of a space
+// entry, and raises the peak"
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn the_record_holders_count_the_space_entries_and_follow_each_change() {
+    let s = server(weak_torus_index());
+    let holders = || async { s.get("/api/holders").await.json() };
+    let row = |answer: &Value, name: &str| answer["holders"].as_array().unwrap().iter().find(|h| h["name"] == name).cloned();
+    assert_eq!(holders().await, json!({ "holders": [] }));
+    let admin = |path: &'static str, body: Value| s.call("POST", path, &[("authorization", "Bearer secret")], Some(body));
+
+    let first = s.submit(torus_entry(1.5, "ann")).await.json();
+    assert_eq!(first["leader"], json!(true));
+    let answer = holders().await;
+    assert_eq!(row(&answer, "ann"), Some(json!({ "name": "ann", "records": 1, "beat_published": 1, "site_bests": 1, "pending": 0, "peak": 1, "dimensions": { "2-on-3": 1 } })));
+    assert_eq!(leading(&answer), holders_recounted(&s, weak_torus_index()).await);
+
+    // a better entry of another name takes the lead
+    let better = s.submit(torus_entry(1.2, "bob")).await.json();
+    assert_eq!(better["leader"], json!(true));
+    let answer = holders().await;
+    assert_eq!(row(&answer, "ann"), Some(json!({ "name": "ann", "records": 0, "beat_published": 0, "site_bests": 0, "pending": 0, "peak": 1, "dimensions": {} })));
+    assert_eq!(row(&answer, "bob").unwrap()["dimensions"], json!({ "2-on-3": 1 }));
+    assert_eq!(leading(&answer), holders_recounted(&s, weak_torus_index()).await);
+
+    // renamed by an administrator: the record goes with the new name; a new note moves nothing
+    assert_eq!(admin("/api/admin/spaces/edit", json!({ "id": better["id"], "name": "cat" })).await.status, 200);
+    assert_eq!(admin("/api/admin/spaces/edit", json!({ "id": better["id"], "agent_note": "x" })).await.status, 200);
+    let answer = holders().await;
+    assert_eq!(row(&answer, "cat").unwrap()["records"], json!(1));
+    assert_eq!(row(&answer, "bob").unwrap()["site_bests"], json!(0));
+    assert_eq!(leading(&answer), holders_recounted(&s, weak_torus_index()).await);
+    // the page of one name counts the polygon problems, and gives the peak of every Dimension
+    let page = s.get("/api/holder?name=cat").await.json();
+    assert_eq!((page["records"].clone(), page["peak"].clone()), (json!(0), json!(1)));
+
+    // removed: the problem has no entry left
+    assert_eq!(admin("/api/admin/spaces/remove", json!({ "id": better["id"] })).await.status, 200);
+    let answer = holders().await;
+    assert_eq!(row(&answer, "cat"), Some(json!({ "name": "cat", "records": 0, "beat_published": 0, "site_bests": 0, "pending": 0, "peak": 1, "dimensions": {} })));
+    assert_eq!(leading(&answer), json!([]));
+    assert_eq!(leading(&answer), holders_recounted(&s, weak_torus_index()).await);
+}
