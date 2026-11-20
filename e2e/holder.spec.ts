@@ -242,3 +242,53 @@ test("the heading of a column sorts the holders table by it, and again turns the
   // a name still leads to its page
   await expect(names.first().getByRole("link", { name: "mia" })).toHaveAttribute("href", "/holder.html?name=mia");
 });
+
+test("on a laptop the holders table takes the width it needs, and scrolls inside its frame only past the window", async ({
+  page,
+}) => {
+  // counts and a name as long as the live site's widest
+  const row = (name: string, n: number) => ({
+    name,
+    records: n,
+    beat_published: 285,
+    site_bests: n,
+    pending: 0,
+    peak: 2 * n,
+    dimensions: { "2-in-2": n, "2-on-3": 185_946, "3-in-3": 78_025 },
+  });
+  const answer: HoldersResponse = { holders: [row("TighterGamePlayer2635100", 1_652_877), row("ann", 1_327_062)] };
+  await page.route(/\/api\/holders$/, (route) => route.fulfill({ json: answer }));
+  const measure = () =>
+    page.evaluate(() => {
+      const wrap = document.querySelector<HTMLElement>(".table-wrap")!;
+      const box = wrap.getBoundingClientRect();
+      return {
+        column: document.querySelector<HTMLElement>(".page")!.clientWidth,
+        wrap: wrap.clientWidth,
+        table: wrap.scrollWidth,
+        left: box.left,
+        right: box.right,
+        window: document.documentElement.clientWidth,
+        pageOverflow: document.documentElement.scrollWidth - document.documentElement.clientWidth,
+      };
+    });
+
+  await page.setViewportSize({ width: 1440, height: 900 });
+  await page.goto("/holders.html");
+  await expect(page.locator("#rows tr")).toHaveCount(2);
+  let m = await measure();
+  // wider than the column of text, shown whole, and inside the window
+  expect(m.table).toBeGreaterThan(m.column);
+  expect(m.table - m.wrap).toBeLessThanOrEqual(1);
+  expect(m.left).toBeGreaterThanOrEqual(0);
+  expect(m.right).toBeLessThanOrEqual(m.window);
+  expect(m.pageOverflow).toBeLessThanOrEqual(1);
+
+  // a window narrower than the table: the frame fills it, less the margins, and the table scrolls inside it
+  await page.setViewportSize({ width: 800, height: 900 });
+  m = await measure();
+  expect(m.table).toBeGreaterThan(m.wrap);
+  expect(m.left).toBeGreaterThanOrEqual(0);
+  expect(m.right).toBeLessThanOrEqual(m.window);
+  expect(m.pageOverflow).toBeLessThanOrEqual(1);
+});
