@@ -47,6 +47,9 @@ zstd = { version = "0.13", default-features = false }
 unicode-normalization = "0.1"
 # Map and Set in insertion order
 indexmap = { version = "2", features = ["serde"] }
+# The allocator of the server's binary (main.rs says why): built from its C source with the
+# compiler the image already has
+mimalloc = { version = "0.1", default-features = false }
 
 [dev-dependencies]
 # examples/load.rs speaks HTTP itself, over plain sockets
