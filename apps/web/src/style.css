@@ -568,6 +568,16 @@ body.scroll {
 .table-wrap {
   overflow-x: auto;
 }
+/* a table wider than the page's column takes the width it needs, centred on the column, up to
+   the window less its margins; past that it scrolls inside its frame */
+.table-wrap.fit {
+  position: relative;
+  left: 50%;
+  translate: -50% 0;
+  width: max-content;
+  min-width: 100%;
+  max-width: calc(100vw - 32px);
+}
 /* the pages of the records section: records across P and record holders */
 .subnav {
   display: flex;
