@@ -700,6 +700,32 @@ dependencies = [
 ]
 
 [[package]]
+name = "polypack-fresh-balls"
+version = "0.1.0"
+dependencies = [
+ "polypack-flat",
+ "polypack-spaces",
+ "serde_json",
+]
+
+[[package]]
+name = "polypack-fresh-flat"
+version = "0.1.0"
+dependencies = [
+ "polypack-flat",
+ "serde_json",
+]
+
+[[package]]
+name = "polypack-fresh-round"
+version = "0.1.0"
+dependencies = [
+ "polypack-flat",
+ "polypack-spaces",
+ "serde_json",
+]
+
+[[package]]
 name = "polypack-js"
 version = "0.1.0"
 dependencies = [

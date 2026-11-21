@@ -1,0 +1,15 @@
+[package]
+name = "polypack-fresh-round"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+description = "A search for disks at constant curvature (curved) and on the sphere, written from scratch, for comparison with the port"
+
+[[bin]]
+name = "fresh-round"
+path = "src/main.rs"
+
+[dependencies]
+polypack-flat = { path = "../flat" }
+polypack-spaces = { path = "../spaces" }
+serde_json = { version = "1", features = ["float_roundtrip"] }
