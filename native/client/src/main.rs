@@ -133,7 +133,101 @@ fn bench(args: &[String]) -> i32 {
             "stopped": outcome.stopped.as_str(),
             "check_valid": check.as_ref().map(|c| c.valid),
             "check_strict": check.as_ref().map(|c| c.strict),
+            "config": outcome.best.as_ref().map(|b| json!({
+                "N": n, "M": m, "P": p, "container_phi": b.config.phi,
+                "pieces": b.config.pieces.iter().map(|q| json!({ "x": q.x, "y": q.y, "theta": q.theta })).collect::<Vec<_>>(),
+            })),
             "trace": trace,
+        })
+    );
+    0
+}
+
+/// CPU seconds of the whole process (all its threads). A space's jobs run on threads of their own, so the
+/// calling thread's clock would not see them.
+fn process_cpu_seconds() -> f64 {
+    #[cfg(unix)]
+    {
+        let mut ts = libc::timespec { tv_sec: 0, tv_nsec: 0 };
+        // SAFETY: clock_gettime writes one timespec into the pointer given.
+        if unsafe { libc::clock_gettime(libc::CLOCK_PROCESS_CPUTIME_ID, &mut ts) } == 0 {
+            return ts.tv_sec as f64 + ts.tv_nsec as f64 * 1e-9;
+        }
+    }
+    thread_cpu_seconds()
+}
+
+/// `bench-space --id ID [--seconds S] [--seed K]`: one problem of a space from scratch with the client's own
+/// engine (one lane, no known packing, the default rule: no bound, not certified, no record), without a server.
+/// Prints the benchmark contract (native/FRESH.md). Its clock is the process's CPU time; the jobs' own
+/// deadlines are wall-clock, as in the client.
+fn bench_space(args: &[String]) -> i32 {
+    let mut id = None;
+    let mut seconds = 60.0;
+    let mut seed = 1u32;
+    let mut i = 0;
+    while i < args.len() {
+        let v = args.get(i + 1).cloned().unwrap_or_default();
+        match args[i].as_str() {
+            "--id" => id = Some(v),
+            "--seconds" => seconds = v.parse().unwrap_or(60.0),
+            "--seed" => seed = v.parse().unwrap_or(1),
+            other => {
+                eprintln!("bench-space: unknown option {other}");
+                return 2;
+            }
+        }
+        i += 2;
+    }
+    let Some(id) = id else {
+        eprintln!("bench-space needs --id");
+        return 2;
+    };
+    let space_name = match id.split('/').next().and_then(|s| polypack_spaces::SpaceName::parse(s)) {
+        Some(s) => s,
+        None => {
+            eprintln!("bench-space: {id} is not a space problem id");
+            return 2;
+        }
+    };
+    let space = space_name.as_str();
+    let searcher = match real_search::searcher() {
+        Ok(s) => s,
+        Err(e) => {
+            eprintln!("bench-space: {e}");
+            return 2;
+        }
+    };
+    let rule = space_api::Rule::default();
+    let check = |c: &serde_json::Value, claimed: f64| space_api::check_job_result(space_name, &id, c, claimed, &rule);
+    let cpu0 = process_cpu_seconds();
+    let now = move || process_cpu_seconds() - cpu0;
+    let control = Control::new();
+    let input = space_engine::SpaceSearchInput { space, id: &id, known: None, bound: None, max_seconds: seconds, lanes: 1, seed, now: &now, check: &check, low_priority: false };
+    let mut trace: Vec<serde_json::Value> = Vec::new();
+    let mut last = f64::INFINITY;
+    let wall0 = Instant::now();
+    let outcome = space_engine::search_space_problem(&input, searcher.as_ref(), &control, &mut |_r, best| {
+        if let Some(b) = best {
+            if b.score < last {
+                last = b.score;
+                trace.push(json!({ "t": now(), "best": b.score }));
+            }
+        }
+    });
+    let engine_seconds = now();
+    let verdict = outcome.best.as_ref().map(|b| space_api::check_space_config(space_name, &id, &b.config, &rule));
+    println!(
+        "{}",
+        json!({
+            "solver": "port", "id": id, "seed": seed, "seconds": seconds, "clock": "cpu",
+            "score": outcome.best.as_ref().map(|b| b.score),
+            "config": outcome.best.as_ref().map(|b| b.config.clone()),
+            "evaluations": outcome.evaluations,
+            "check_valid": verdict.as_ref().map(|v| v.valid),
+            "trace": trace,
+            "jobs": outcome.jobs, "stopped": outcome.stopped,
+            "engine_seconds": engine_seconds, "wall_seconds": wall0.elapsed().as_secs_f64(),
         })
     );
     0
@@ -143,6 +237,9 @@ fn main() {
     let args: Vec<String> = std::env::args().skip(1).collect();
     if args.first().map(|a| a.as_str()) == Some("bench") {
         std::process::exit(bench(&args[1..]));
+    }
+    if args.first().map(|a| a.as_str()) == Some("bench-space") {
+        std::process::exit(bench_space(&args[1..]));
     }
     let own_window = platform::console_is_own();
     if own_window && args.is_empty() {
