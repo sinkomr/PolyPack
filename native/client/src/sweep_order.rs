@@ -292,13 +292,16 @@ impl Dispenser {
         } else if let Some(saved) = path.as_ref().and_then(|p| std::fs::read_to_string(p).ok()).and_then(|t| serde_json::from_str::<Value>(&t).ok()) {
             let get = |key: &str| saved.get(key).and_then(Value::as_u64);
             if let (Some(sp), Some(sk)) = (get("pass"), get("loop")) {
-                pass = (sp as u32).max(1);
-                k = (sk as usize).clamp(1, order.loops());
                 if saved.get("signature").and_then(Value::as_str) == Some(order.signature()) {
+                    pass = (sp as u32).max(1);
+                    k = (sk as usize).clamp(1, order.loops());
                     low = get("index").unwrap_or(0) as usize;
                     done = saved.get("done").and_then(Value::as_array).map(|a| a.iter().filter_map(Value::as_u64).map(|x| x as usize).filter(|&x| x > low).collect()).unwrap_or_default();
                 } else {
-                    log(&format!("The sweep's options changed since the position was kept: continuing at loop {k} of pass {pass}, from its first problem"));
+                    // Other options make another list of problems: the kept loop of the old list would skip every
+                    // earlier loop of the new one (a pass of P <= 3 ends at loop 99; P <= 100 kept there did only N
+                    // 99 and 100), so start the new list from its beginning.
+                    log(&format!("The sweep's options changed since the position was kept (loop {sk} of pass {sp}): starting at loop 1 of pass 1 of the new list"));
                 }
             }
         }
@@ -644,6 +647,25 @@ mod tests {
         assert!(matches!(d.take(), Next::Wait));
         assert!(matches!(d.take(), Next::Wait));
         assert_eq!(d.position().0, 2);
+    }
+
+    #[test]
+    fn changed_options_start_the_new_list_at_loop_1() {
+        let dir = temp("changed");
+        let narrow = || Order::new(&SweepOptions { kinds: vec![SweepKind::Sphere], ..opts() }, Some(&vec![0, 3, 4]), Some(&vec![1]));
+        let wide = || Order::new(&SweepOptions { kinds: vec![SweepKind::Sphere], ..opts() }, Some(&vec![0, 3, 4]), Some(&(1..=3).collect()));
+        // the narrow list (P = 1) is swept to its last loop
+        let d = Dispenser::open(narrow(), Some(&dir), false, quiet());
+        drain(&d, 3);
+        assert_eq!(d.position(), (1, 3));
+        d.flush();
+        drop(d);
+        // the wider list (P <= 3) does not continue at loop 3: it starts at loop 1
+        let (log, lines) = collecting();
+        let d = Dispenser::open(wide(), Some(&dir), false, log);
+        assert_eq!(d.position(), (1, 1));
+        assert!(lines.lock().unwrap().iter().any(|l| l.contains("starting at loop 1 of pass 1 of the new list")));
+        let _ = std::fs::remove_dir_all(&dir);
     }
 
     #[test]
