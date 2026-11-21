@@ -55,6 +55,10 @@ jobs:
         working-directory: native
         env:
           MACOSX_DEPLOYMENT_TARGET: "11.0"
+      # the client's lock and console code differ on Windows (src/platform.rs): its tests run there too
+      - if: runner.os == 'Windows'
+        run: cargo test --release --locked -p polypack-native --bin polypack-native --target ${{ matrix.target }} -- platform:: state::
+        working-directory: native
       - name: Name the file
         shell: bash
         run: |
