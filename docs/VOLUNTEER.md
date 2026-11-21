@@ -94,7 +94,7 @@ chmod +x polypack-native
 ./polypack-native --name "your name"
 ```
 
-The other files are `polypack-native-macos-x64`, `polypack-native-linux-x64`, `polypack-native-linux-arm64` and `polypack-native-windows-x64.exe` (on Windows, `curl.exe -fLo polypack-native.exe ...` in PowerShell). A file saved from a browser works too: macOS refuses to open it until `xattr -d com.apple.quarantine polypack-native` is run, and Windows asks first (More info, then Run anyway). On Windows, write `.\polypack-native.exe` where this guide writes `./polypack-native`. To keep it running after the terminal is closed, start it on macOS and Linux with `nohup ./polypack-native --name "your name" > volunteer.log 2>&1 &`, or inside `tmux` or `screen`; on Windows, leave the PowerShell window open.
+The other files are `polypack-native-macos-x64`, `polypack-native-linux-x64`, `polypack-native-linux-arm64` and `polypack-native-windows-x64.exe` (on Windows, `curl.exe -fLo polypack-native.exe ...` in PowerShell). A file saved from a browser works too: macOS refuses to open it until `xattr -d com.apple.quarantine polypack-native` is run, and Windows asks first (More info, then Run anyway). On Windows, write `.\polypack-native.exe` where this guide writes `./polypack-native`. Started by double-clicking it, the client runs in a window of its own: it says that without `--name` it submits nothing, and when it ends it waits for Enter before Windows closes the window. To keep it running after the terminal is closed, start it on macOS and Linux with `nohup ./polypack-native --name "your name" > volunteer.log 2>&1 &`, or inside `tmux` or `screen`; on Windows, leave the PowerShell window open.
 
 To build it yourself (Rust 1.89 or newer):
 

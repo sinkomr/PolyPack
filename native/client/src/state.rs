@@ -180,3 +180,57 @@ impl StateDir {
         write_atomic(&self.space_best_path(id), &format!("{file}\n"))
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::platform::ended_pid;
+
+    fn fresh_dir(tag: &str) -> PathBuf {
+        std::env::temp_dir().join(format!("polypack-native-test-{tag}-{}-{:08x}", std::process::id(), random_u32()))
+    }
+
+    fn write_lock(dir: &Path, pid: u32, host: &str) {
+        fs::create_dir_all(dir).unwrap();
+        let lock = json!({"pid": pid, "hostname": host, "started": "2026-11-20T00:00:00.000Z", "token": "0"});
+        fs::write(dir.join("lock"), format!("{lock}\n")).unwrap();
+    }
+
+    #[test]
+    fn a_second_copy_is_refused_until_the_first_closes() {
+        let dir = fresh_dir("held");
+        let first = StateDir::open(&dir).unwrap();
+        assert!(matches!(StateDir::open(&dir), Err(OpenError::LockHeld(..))));
+        first.close();
+        StateDir::open(&dir).unwrap().close();
+        let _ = fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn a_lock_left_by_a_copy_that_ended_is_taken_over() {
+        // as when the window is closed while the client runs: the lock stays, and its process is gone
+        let dir = fresh_dir("stale");
+        write_lock(&dir, ended_pid(), &hostname());
+        let s = StateDir::open(&dir).expect("a stale lock is taken over");
+        s.close();
+        assert!(!dir.join("lock").exists());
+        let _ = fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn a_lock_of_a_running_copy_or_of_another_machine_is_kept() {
+        let dir = fresh_dir("kept");
+        // a running process other than this one
+        let (program, args): (&str, &[&str]) = if cfg!(windows) { ("ping", &["-n", "30", "127.0.0.1"]) } else { ("sleep", &["30"]) };
+        let mut other = std::process::Command::new(program).args(args).stdout(std::process::Stdio::null()).spawn().unwrap();
+        write_lock(&dir, other.id(), &hostname());
+        let held = StateDir::open(&dir);
+        other.kill().unwrap();
+        other.wait().unwrap();
+        assert!(matches!(held, Err(OpenError::LockHeld(..))));
+        // a process that has ended, on another machine sharing the directory
+        write_lock(&dir, ended_pid(), "another-machine");
+        assert!(matches!(StateDir::open(&dir), Err(OpenError::LockHeld(..))));
+        let _ = fs::remove_dir_all(&dir);
+    }
+}

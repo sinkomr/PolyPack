@@ -144,6 +144,13 @@ fn main() {
     if args.first().map(|a| a.as_str()) == Some("bench") {
         std::process::exit(bench(&args[1..]));
     }
+    let own_window = platform::console_is_own();
+    if own_window && args.is_empty() {
+        println!(
+            "polypack-native runs in a window of its own. Without --name it searches but submits nothing.\n\
+             To search under your name, start it from PowerShell instead: see https://polypack.fly.dev/volunteer.html (Windows).\n"
+        );
+    }
     let m = machine();
     let code = match parse_options(&args, &m) {
         Err(e) => {
@@ -160,5 +167,10 @@ fn main() {
         }
         Ok(Parsed::Run(o)) => volunteer::run(o),
     };
+    if own_window {
+        // Windows closes a window it opened for the client as soon as the client ends: keep it open to be read
+        println!("\nPress Enter to close this window.");
+        let _ = std::io::stdin().read_line(&mut String::new());
+    }
     std::process::exit(code);
 }

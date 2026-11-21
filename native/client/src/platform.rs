@@ -1,4 +1,4 @@
-//! What depends on the operating system: thread priority, the power source, process liveness.
+//! What depends on the operating system: thread priority, the power source, process liveness and the console window.
 
 /// Lower the calling thread's CPU priority. On Linux each thread has its own nice value; on macOS
 /// this lowers the whole process, which only lowers the idle main thread as well; on Windows the
@@ -76,11 +76,43 @@ pub fn pid_alive(pid: u32) -> bool {
         }
         return std::io::Error::last_os_error().raw_os_error() == Some(libc::EPERM);
     }
+    #[cfg(windows)]
+    unsafe {
+        use windows_sys::Win32::Foundation::{CloseHandle, GetLastError, ERROR_INVALID_PARAMETER, STILL_ACTIVE};
+        use windows_sys::Win32::System::Threading::{GetExitCodeProcess, OpenProcess, PROCESS_QUERY_LIMITED_INFORMATION};
+        // SAFETY: OpenProcess only reads its arguments; the handle it returns is closed below.
+        let handle = OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION, 0, pid);
+        if handle.is_null() {
+            // no process has this id; any other failure (access denied: another user's process) counts as alive
+            return GetLastError() != ERROR_INVALID_PARAMETER;
+        }
+        let mut code: u32 = 0;
+        // SAFETY: the handle is open and `code` outlives the call.
+        let read = GetExitCodeProcess(handle, &mut code);
+        CloseHandle(handle);
+        // a process that has ended but is still held open by someone has its exit code; an unreadable one counts as alive
+        return read == 0 || code == STILL_ACTIVE as u32;
+    }
     #[allow(unreachable_code)]
     {
         let _ = pid;
         true
     }
+}
+
+/// True when this process is the only one attached to its console window: Windows opened the window
+/// for it, as when the program is started by double-clicking it, and closes it as soon as the program
+/// ends. False elsewhere, and when the program runs in PowerShell or a Command Prompt.
+pub fn console_is_own() -> bool {
+    #[cfg(windows)]
+    unsafe {
+        use windows_sys::Win32::System::Console::GetConsoleProcessList;
+        let mut ids = [0u32; 2];
+        // SAFETY: the call writes at most `ids.len()` process ids into `ids`.
+        return GetConsoleProcessList(ids.as_mut_ptr(), ids.len() as u32) == 1;
+    }
+    #[allow(unreachable_code)]
+    false
 }
 
 pub fn hostname() -> String {
@@ -108,6 +140,18 @@ pub fn home_dir() -> std::path::PathBuf {
         .unwrap_or_else(|| std::path::PathBuf::from("."))
 }
 
+/// The id of a process that has ended and was waited for, so that no process has it (for tests).
+#[cfg(test)]
+pub fn ended_pid() -> u32 {
+    #[cfg(windows)]
+    let mut child = std::process::Command::new("cmd").args(["/C", "exit 0"]).spawn().unwrap();
+    #[cfg(not(windows))]
+    let mut child = std::process::Command::new("true").spawn().unwrap();
+    let pid = child.id();
+    child.wait().unwrap();
+    pid
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -121,5 +165,11 @@ mod tests {
         assert!(on_battery_from_supplies(&[s("BAT0", "Battery", None), s("AC", "Mains", Some("0\n"))]));
         assert!(!on_battery_from_supplies(&[s("BAT0", "Battery", None), s("AC", "Mains", Some("1\n"))]));
         assert!(!on_battery_from_supplies(&[s("BAT0", "Battery", None)]));
+    }
+
+    #[test]
+    fn a_running_process_is_alive_and_an_ended_one_is_not() {
+        assert!(pid_alive(std::process::id()));
+        assert!(!pid_alive(ended_pid()));
     }
 }
