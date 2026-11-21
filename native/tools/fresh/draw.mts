@@ -44,10 +44,10 @@ function pick<T>(pool: T[], n: number, accept: (x: T) => boolean = () => true): 
   }
   return got;
 }
-// At K = -1 the container can grow without end, so every curved problem has packings: those are drawn unscreened.
-// At K = 1 the whole space is a sphere of area 4 pi, and a container can be too small for P disks although the
-// domain's area bound allows it; the catalogue cannot say so (its research records cover polygon pieces only). A
-// K = 1 problem is drawn only if the native client's search finds a valid packing of it in 2 CPU seconds
+// A curved problem can have no packing although the domain's area bound allows it: at K = 1 the whole space is a
+// sphere of area 4 pi, and at K = -1 a polygon container's area stays below (M - 2) pi however large it grows, so
+// near that limit P disks may not fit. The catalogue cannot say so (its research records cover polygon pieces
+// only). A curved problem is drawn only if the native client's search finds a valid packing of it in 2 CPU seconds
 // (--no-screen skips this). The screen is conservative towards the fresh solver: a problem only it could pack is
 // left out. 5 problems are drawn at K = -1 and 3 at K = 1.
 const bin = resolve(import.meta.dirname, "../../target/release/polypack-native");
@@ -102,7 +102,7 @@ for (const b of BALLS_PROBLEMS.filter((b) => b.piece === "ball"))
 
 const curvedNeg = curved.filter((id) => id.startsWith("curved/-1/"));
 const curvedPos = curved.filter((id) => id.startsWith("curved/1/"));
-const drawn = [...pick(flat, 10), ...pick(curvedNeg, 5), ...pick(curvedPos, 3, feasible), ...pick(sphere, 6), ...pick(balls, 8)];
+const drawn = [...pick(flat, 10), ...pick(curvedNeg, 5, feasible), ...pick(curvedPos, 3, feasible), ...pick(sphere, 6), ...pick(balls, 8)];
 console.error(`candidates: flat ${flat.length}, curved ${curved.length}, sphere ${sphere.length}, balls ${balls.length}`);
 writeFileSync(resolve(root, out), JSON.stringify(drawn, null, 1) + "\n");
 console.error(`wrote ${drawn.length} problems to ${out}`);
