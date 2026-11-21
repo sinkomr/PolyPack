@@ -29,10 +29,18 @@
         packing only when it beats the site's current best. Then it draws the next problem.
       </p>
 
-      <h3>Download</h3>
+      <h3>Download and run, step by step</h3>
       <p>
-        There are two clients. Both run on a computer (macOS, Linux or Windows) from a terminal; neither runs on a
-        phone. They search the same problems with the same methods and submit the same way.
+        There are two clients. Both run on a computer (macOS, Linux or Windows), not on a phone. They search the same
+        problems with the same methods and submit the same way. The native client is the easier one to start: it is a
+        single program with nothing else to install. The JavaScript client needs Node.js.
+      </p>
+      <p>
+        Both are programs that you start by typing a command in a terminal: PowerShell on Windows, Terminal on macOS.
+        The terminal window then shows what the client is doing. Do not double-click the files. On Windows,
+        double-clicking polypack-volunteer.mjs opens it in Notepad, which shows the program's code and does not run it.
+        Double-clicking the native client opens a window that closes as soon as the client stops, before you can read
+        what it said.
       </p>
 
       <h4>The native client: faster</h4>
@@ -49,61 +57,139 @@
         <li><a href="https://github.com/sinkomr/PolyPack/releases/download/native/polypack-native-windows-x64.exe">Windows, x86-64</a></li>
       </ul>
       <p>
-        The files are not signed, so download them in a terminal, where the system does not hold them back. Pick your
-        system: each block downloads the client, tries it for a minute without submitting anything, then runs it.
+        Open the steps for your system. They download the client with a command rather than with these links: the
+        files are not signed, and Windows and macOS hold back unsigned programs saved from a browser.
       </p>
       <details class="os">
-        <summary>macOS, Apple silicon</summary>
-        <p class="note">In Terminal (Applications, Utilities). A Mac whose About This Mac shows a Chip (Apple M1 or later) is Apple silicon; one that shows a Processor (Intel) is Intel.</p>
-        <pre class="wrap"><code>curl -fLo polypack-native \
-  https://github.com/sinkomr/PolyPack/releases/download/native/polypack-native-macos-arm64
-chmod +x polypack-native
-./polypack-native --once --minutes-per-problem 1
-./polypack-native --name "your name"</code></pre>
+        <summary>Windows</summary>
+        <p class="note">Windows 10 or 11 on an Intel or AMD processor (x86-64), which is almost every Windows PC.</p>
+        <ol class="steps">
+          <li>
+            Open PowerShell: press the Windows key, type <code>powershell</code> and press Enter. A window opens with a
+            line such as <code>PS C:\Users\you&gt;</code>. This is the prompt: PowerShell is waiting for a command, and it
+            is in your user folder (<code>C:\Users\you</code>). The client will be saved in that folder.
+          </li>
+          <li>
+            Download the client. Copy this line, paste it into PowerShell (right-click in the window, or Ctrl+V) and
+            press Enter. When the prompt comes back, the client is saved as polypack-native.exe.
+            <pre class="wrap"><code>curl.exe -fLo polypack-native.exe https://github.com/sinkomr/PolyPack/releases/download/native/polypack-native-windows-x64.exe</code></pre>
+          </li>
+          <li>
+            Try it for a minute. This searches one problem and submits nothing. It prints what it is doing, and after
+            about a minute it stops and the prompt comes back.
+            <pre class="wrap"><code>.\polypack-native.exe --once --minutes-per-problem 1</code></pre>
+          </li>
+          <li>
+            Run it under your name. Replace <i>your name</i> with the name your records should carry, and keep the
+            quotes. It keeps searching until you stop it. Leave the window open; you can minimise it.
+            <pre class="wrap"><code>.\polypack-native.exe --name "your name"</code></pre>
+          </li>
+          <li>
+            To stop it, click in the window and press Ctrl+C. It submits its best packing if that beats the current
+            leader, then stops. Close the window only once the prompt has come back.
+          </li>
+          <li>
+            Next time, open PowerShell as in step 1 and run the command of step 4 again. The client stays in your user
+            folder, so there is no need to download it again.
+          </li>
+        </ol>
       </details>
       <details class="os">
-        <summary>macOS, Intel</summary>
-        <p class="note">In Terminal (Applications, Utilities).</p>
-        <pre class="wrap"><code>curl -fLo polypack-native \
-  https://github.com/sinkomr/PolyPack/releases/download/native/polypack-native-macos-x64
-chmod +x polypack-native
-./polypack-native --once --minutes-per-problem 1
-./polypack-native --name "your name"</code></pre>
+        <summary>macOS</summary>
+        <ol class="steps">
+          <li>
+            Find out which Mac you have: Apple menu, About This Mac. If it shows a Chip (Apple M1 or later), it is Apple
+            silicon. If it shows a Processor (Intel), it is Intel.
+          </li>
+          <li>
+            Open Terminal: press Command-Space, type <code>terminal</code> and press Return. (Terminal is also in
+            Applications, Utilities.) A window opens with a line ending in <code>%</code>. This is the prompt: Terminal is
+            waiting for a command, and it is in your home folder (<code>/Users/you</code>). The client will be saved in
+            that folder.
+          </li>
+          <li>
+            Download the client. Copy the line for your Mac, paste it into Terminal (Command-V) and press Return. When the
+            prompt comes back, the client is saved as polypack-native.
+            <p class="note">Apple silicon:</p>
+            <pre class="wrap"><code>curl -fLo polypack-native https://github.com/sinkomr/PolyPack/releases/download/native/polypack-native-macos-arm64</code></pre>
+            <p class="note">Intel:</p>
+            <pre class="wrap"><code>curl -fLo polypack-native https://github.com/sinkomr/PolyPack/releases/download/native/polypack-native-macos-x64</code></pre>
+          </li>
+          <li>
+            Allow the file to run as a program:
+            <pre class="wrap"><code>chmod +x polypack-native</code></pre>
+          </li>
+          <li>
+            Try it for a minute. This searches one problem and submits nothing. It prints what it is doing, and after
+            about a minute it stops and the prompt comes back.
+            <pre class="wrap"><code>./polypack-native --once --minutes-per-problem 1</code></pre>
+          </li>
+          <li>
+            Run it under your name. Replace <i>your name</i> with the name your records should carry, and keep the
+            quotes. It keeps searching until you stop it. Leave the window open; you can minimise it.
+            <pre class="wrap"><code>./polypack-native --name "your name"</code></pre>
+          </li>
+          <li>
+            To stop it, click in the window and press Control-C (Control, not Command). It submits its best packing if
+            that beats the current leader, then stops.
+          </li>
+          <li>
+            Next time, open Terminal and run the command of step 6 again. To keep it running after Terminal is closed,
+            start it this way instead; what it prints goes to the file volunteer.log:
+            <pre class="wrap"><code>nohup ./polypack-native --name "your name" &gt; volunteer.log 2&gt;&amp;1 &amp;</code></pre>
+          </li>
+        </ol>
       </details>
       <details class="os">
-        <summary>Linux, x86-64</summary>
-        <p class="note">In a terminal. <code>uname -m</code> prints <code>x86_64</code> on these machines. The build is static: it runs on any distribution.</p>
-        <pre class="wrap"><code>curl -fLo polypack-native \
-  https://github.com/sinkomr/PolyPack/releases/download/native/polypack-native-linux-x64
-chmod +x polypack-native
-./polypack-native --once --minutes-per-problem 1
-./polypack-native --name "your name"</code></pre>
-      </details>
-      <details class="os">
-        <summary>Linux, ARM 64-bit</summary>
-        <p class="note">In a terminal. <code>uname -m</code> prints <code>aarch64</code> on these machines (a Raspberry Pi 4 or 5 with a 64-bit system, for one).</p>
-        <pre class="wrap"><code>curl -fLo polypack-native \
-  https://github.com/sinkomr/PolyPack/releases/download/native/polypack-native-linux-arm64
-chmod +x polypack-native
-./polypack-native --once --minutes-per-problem 1
-./polypack-native --name "your name"</code></pre>
-      </details>
-      <details class="os">
-        <summary>Windows, x86-64</summary>
-        <p class="note">In PowerShell (from the Start menu). Write <code>.\polypack-native.exe</code> wherever this page writes <code>./polypack-native</code>.</p>
-        <pre class="wrap"><code>curl.exe -fLo polypack-native.exe `
-  https://github.com/sinkomr/PolyPack/releases/download/native/polypack-native-windows-x64.exe
-.\polypack-native.exe --once --minutes-per-problem 1
-.\polypack-native.exe --name "your name"</code></pre>
+        <summary>Linux</summary>
+        <ol class="steps">
+          <li>
+            Open a terminal (on Ubuntu, press Ctrl+Alt+T). It starts in your home folder (<code>/home/you</code>), where
+            the client will be saved.
+          </li>
+          <li>
+            Find out which processor you have:
+            <pre class="wrap"><code>uname -m</code></pre>
+            <code>x86_64</code> means the x86-64 build; <code>aarch64</code> means the ARM 64-bit build (a Raspberry Pi 4
+            or 5 with a 64-bit system, for one). Both builds are static: they run on any distribution.
+          </li>
+          <li>
+            Download the client. Copy the line for your processor, paste it into the terminal (Ctrl+Shift+V in most
+            terminals) and press Enter.
+            <p class="note">x86_64:</p>
+            <pre class="wrap"><code>curl -fLo polypack-native https://github.com/sinkomr/PolyPack/releases/download/native/polypack-native-linux-x64</code></pre>
+            <p class="note">aarch64:</p>
+            <pre class="wrap"><code>curl -fLo polypack-native https://github.com/sinkomr/PolyPack/releases/download/native/polypack-native-linux-arm64</code></pre>
+          </li>
+          <li>
+            Allow the file to run as a program:
+            <pre class="wrap"><code>chmod +x polypack-native</code></pre>
+          </li>
+          <li>
+            Try it for a minute. This searches one problem and submits nothing.
+            <pre class="wrap"><code>./polypack-native --once --minutes-per-problem 1</code></pre>
+          </li>
+          <li>
+            Run it under your name, keeping the quotes. It keeps searching until you stop it with Ctrl+C.
+            <pre class="wrap"><code>./polypack-native --name "your name"</code></pre>
+          </li>
+          <li>
+            To keep it running after the terminal is closed, start it this way instead; what it prints goes to the file
+            volunteer.log:
+            <pre class="wrap"><code>nohup ./polypack-native --name "your name" &gt; volunteer.log 2&gt;&amp;1 &amp;</code></pre>
+          </li>
+        </ol>
       </details>
       <p class="note">
-        A file saved from the browser works too. macOS then refuses to open it until you run
-        <code>xattr -d com.apple.quarantine polypack-native</code>; Windows asks first (More info, then Run anyway).
-        The files' SHA-256 sums are in
-        <a href="https://github.com/sinkomr/PolyPack/releases/download/native/SHA256SUMS">SHA256SUMS</a>, and the source is in the repository's <code>native/client</code>.
-        It takes the options described below. To keep it running after the terminal is closed, on macOS and Linux start
-        it with <code>nohup ./polypack-native --name "your name" &gt; volunteer.log 2&gt;&amp;1 &amp;</code> (its output goes to
-        volunteer.log); on Windows leave the PowerShell window open, minimised.
+        Saved the client from the browser instead? It is then in your Downloads folder under the name it has above (for
+        example polypack-native-windows-x64.exe). In the terminal, first go to that folder with <code>cd Downloads</code>,
+        then use that name in the commands, for example <code>.\polypack-native-windows-x64.exe --name "your name"</code>.
+        Windows asks before running it the first time: choose More info, then Run anyway. On macOS and Linux run
+        <code>chmod +x</code> on it as in the steps, and on macOS also
+        <code>xattr -d com.apple.quarantine polypack-native-macos-arm64</code> (with your file's name), or macOS refuses to
+        open it. The files' SHA-256 sums are in
+        <a href="https://github.com/sinkomr/PolyPack/releases/download/native/SHA256SUMS">SHA256SUMS</a>, and the source is
+        in the repository's <code>native/client</code>. It takes the options described below.
       </p>
 
       <h4>The JavaScript client</h4>
@@ -114,9 +200,113 @@ chmod +x polypack-native
       </p>
       <p id="file-info" class="note" hidden></p>
       <p>
-        It is one file that runs with <a href="https://nodejs.org/">Node.js</a> 24 or newer. It needs no installation,
-        account or key. It is readable JavaScript rather than minified, so you can see what runs on your machine.
+        It is one file that runs with <a href="https://nodejs.org/">Node.js</a> 24 or newer. It needs no other
+        installation, account or key. It is readable JavaScript rather than minified, so you can see what runs on your
+        machine. Open the steps for your system.
       </p>
+      <details class="os">
+        <summary>Windows</summary>
+        <ol class="steps">
+          <li>
+            Install Node.js. On <a href="https://nodejs.org/">nodejs.org</a>, download the LTS version's Windows Installer
+            (.msi). Open the downloaded file and click Next on each screen, keeping the settings it suggests: it installs
+            Node.js in <code>C:\Program Files\nodejs</code> and adds that folder to the PATH, the list of folders where
+            PowerShell looks for programs. Leave the box for the tools for native modules unticked; the client does not
+            need them. When Windows asks whether to allow the installer to make changes, choose Yes.
+          </li>
+          <li>
+            Open PowerShell: press the Windows key, type <code>powershell</code> and press Enter. If a PowerShell window
+            was already open, close it and open a new one: only a window opened after the install finds Node.js. The
+            window shows a prompt such as <code>PS C:\Users\you&gt;</code>: PowerShell is waiting for a command, in your
+            user folder (<code>C:\Users\you</code>).
+          </li>
+          <li>
+            Check Node.js. Type this and press Enter; it should print v24.0.0 or a higher version. If PowerShell says
+            node is not recognised, close the window, open a new one and try again.
+            <pre class="wrap"><code>node --version</code></pre>
+          </li>
+          <li>
+            Download the client into your user folder. Copy this line, paste it into PowerShell (right-click in the
+            window, or Ctrl+V) and press Enter:
+            <pre class="wrap"><code>curl.exe -fLo polypack-volunteer.mjs https://polypack.fly.dev/downloads/polypack-volunteer.mjs</code></pre>
+            If you used the download button instead, the file is in your Downloads folder: run <code>cd Downloads</code>
+            first.
+          </li>
+          <li>
+            Try it for a minute. This searches one problem and submits nothing:
+            <pre class="wrap"><code>node polypack-volunteer.mjs --once --minutes-per-problem 1</code></pre>
+          </li>
+          <li>
+            Run it under your name. Replace <i>your name</i> with the name your records should carry, and keep the
+            quotes. Leave the window open; you can minimise it.
+            <pre class="wrap"><code>node polypack-volunteer.mjs --name "your name"</code></pre>
+          </li>
+          <li>
+            To stop it, click in the window and press Ctrl+C. Next time, open PowerShell and run the command of step 6
+            again.
+          </li>
+        </ol>
+      </details>
+      <details class="os">
+        <summary>macOS</summary>
+        <ol class="steps">
+          <li>
+            Install Node.js. On <a href="https://nodejs.org/">nodejs.org</a>, download the LTS version's macOS Installer
+            (.pkg). Open the downloaded file and click Continue, then Install, keeping the settings it suggests; it asks
+            for your Mac's password. It installs Node.js in <code>/usr/local/bin</code>, where Terminal finds it. (With
+            Homebrew, <code>brew install node</code> does the same.)
+          </li>
+          <li>
+            Open Terminal: press Command-Space, type <code>terminal</code> and press Return. If a Terminal window was
+            already open, open a new one. It starts in your home folder (<code>/Users/you</code>).
+          </li>
+          <li>
+            Check Node.js. It should print v24.0.0 or a higher version.
+            <pre class="wrap"><code>node --version</code></pre>
+          </li>
+          <li>
+            Download the client into your home folder. Copy this line, paste it into Terminal (Command-V) and press
+            Return:
+            <pre class="wrap"><code>curl -fLo polypack-volunteer.mjs https://polypack.fly.dev/downloads/polypack-volunteer.mjs</code></pre>
+            If you used the download button instead, the file is in your Downloads folder: run <code>cd Downloads</code>
+            first.
+          </li>
+          <li>
+            Try it for a minute. This searches one problem and submits nothing:
+            <pre class="wrap"><code>node polypack-volunteer.mjs --once --minutes-per-problem 1</code></pre>
+          </li>
+          <li>
+            Run it under your name, keeping the quotes. Leave the window open; you can minimise it.
+            <pre class="wrap"><code>node polypack-volunteer.mjs --name "your name"</code></pre>
+          </li>
+          <li>To stop it, click in the window and press Control-C (Control, not Command).</li>
+        </ol>
+      </details>
+      <details class="os">
+        <summary>Linux</summary>
+        <ol class="steps">
+          <li>
+            Install Node.js. The version in a distribution's own packages is often older than 24. nodejs.org installs
+            it with nvm, in your home folder and without administrator rights. In a terminal (on Ubuntu, Ctrl+Alt+T):
+            <pre class="wrap"><code>curl -o- https://raw.githubusercontent.com/nvm-sh/nvm/v0.40.3/install.sh | bash</code></pre>
+            Close the terminal, open a new one, and install Node.js 24:
+            <pre class="wrap"><code>nvm install 24</code></pre>
+          </li>
+          <li>
+            Check Node.js. It should print v24.0.0 or a higher version.
+            <pre class="wrap"><code>node --version</code></pre>
+          </li>
+          <li>
+            Download the client into your home folder:
+            <pre class="wrap"><code>curl -fLo polypack-volunteer.mjs https://polypack.fly.dev/downloads/polypack-volunteer.mjs</code></pre>
+          </li>
+          <li>
+            Try it for a minute, then run it under your name, keeping the quotes. Ctrl+C stops it.
+            <pre class="wrap"><code>node polypack-volunteer.mjs --once --minutes-per-problem 1</code></pre>
+            <pre class="wrap"><code>node polypack-volunteer.mjs --name "your name"</code></pre>
+          </li>
+        </ol>
+      </details>
 
       <h3>Run it</h3>
       <pre><code>node polypack-volunteer.mjs --name "your name"</code></pre>

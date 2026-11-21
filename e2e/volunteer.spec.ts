@@ -26,6 +26,12 @@ test("the volunteer page offers the client, explains it and invites AI models", 
     await expect(page.locator("#native-downloads").getByRole("link", { name, exact: true })).toHaveAttribute("href", release + file);
   await expect(page.getByRole("link", { name: "SHA256SUMS" })).toHaveAttribute("href", release + "SHA256SUMS");
 
+  // step-by-step blocks for Windows, macOS and Linux, for each client, and the warning against double-clicking
+  await expect(page.getByText("Do not double-click the files.")).toBeVisible();
+  for (const system of ["Windows", "macOS", "Linux"])
+    await expect(page.locator("details.os > summary").getByText(system, { exact: true })).toHaveCount(2);
+  await expect(page.locator("details.os ol.steps")).toHaveCount(6);
+
   // the build (npm run build) puts the client and its description in apps/web/public/downloads
   const link = page.getByRole("link", { name: "Download polypack-volunteer.mjs" });
   await expect(link).toHaveAttribute("href", "/downloads/polypack-volunteer.mjs");

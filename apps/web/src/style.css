@@ -511,6 +511,17 @@ body.scroll {
 .prose details.os pre {
   margin-bottom: 4px;
 }
+/* numbered steps inside a system's block: a step's command sits under its sentence */
+.prose ol.steps {
+  padding-left: 1.5em;
+}
+.prose ol.steps > li {
+  margin: 8px 0;
+}
+.prose ol.steps pre,
+.prose ol.steps .note {
+  margin: 6px 0;
+}
 /* a row of download links, one per system, that wraps on a narrow screen */
 .prose ul.downloads {
   list-style: none;
