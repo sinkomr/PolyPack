@@ -9,7 +9,14 @@ description = "A search for disks at constant curvature (curved) and on the sphe
 name = "fresh-round"
 path = "src/main.rs"
 
+[lib]
+name = "polypack_fresh_round"
+path = "src/lib.rs"
+
 [dependencies]
 polypack-flat = { path = "../flat" }
 polypack-spaces = { path = "../spaces" }
+# definitions only (container shapes, curvature functions, max P, sphere centres): the search is in this crate
+polypack-curved = { path = "../curved" }
+polypack-sphere = { path = "../sphere" }
 serde_json = { version = "1", features = ["float_roundtrip"] }

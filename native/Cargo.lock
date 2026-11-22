@@ -703,6 +703,7 @@ dependencies = [
 name = "polypack-fresh-balls"
 version = "0.1.0"
 dependencies = [
+ "polypack-balls",
  "polypack-flat",
  "polypack-spaces",
  "serde_json",
@@ -720,8 +721,10 @@ dependencies = [
 name = "polypack-fresh-round"
 version = "0.1.0"
 dependencies = [
+ "polypack-curved",
  "polypack-flat",
  "polypack-spaces",
+ "polypack-sphere",
  "serde_json",
 ]
 
