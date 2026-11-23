@@ -35,6 +35,7 @@ pub mod js;
 pub mod leaders;
 pub mod limits;
 pub mod load;
+pub mod name_filter;
 pub mod node;
 pub mod pool;
 pub mod serve_static;

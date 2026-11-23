@@ -45,6 +45,7 @@ import {
   sanitizeText,
 } from "./limits";
 import { LoadStats } from "./load";
+import { NAME_REFUSED, nameFilter } from "./name-filter";
 import { UNITS_MISSING_MESSAGE, spaceAffected } from "./units-gate";
 import { SpaceEntryEdit, SpaceLeader, SpaceStore } from "./store";
 
@@ -336,6 +337,7 @@ export function registerSpaceRoutes(app: Hono, ctx: SpaceRouteContext): void {
     const errors: string[] = [];
     const name = typeof body.name === "string" ? sanitizeText(body.name, MAX_NAME_LENGTH) : "";
     if (!name) errors.push("name is required");
+    else if (nameFilter().refuses(name)) errors.push(NAME_REFUSED);
     const optionalText = (key: string, max: number, truncate: boolean): string | null => {
       const v = body[key];
       if (v === undefined || v === null) return null;

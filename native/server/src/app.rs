@@ -46,6 +46,7 @@ use crate::limits::{
     MAX_NAME_LENGTH, MAX_NOTE_LENGTH, MAX_REPORTED_OVERLAPS, OVERLOAD_DELAY_MS, OVERLOAD_RETRY_S, SNAPSHOT_FILES_PER_HOUR, SUBMISSIONS_PER_MINUTE, SUBMIT_KEY_HEADER, VERIFY_MS_PER_MINUTE,
 };
 use crate::load::{LoadStats, SubmissionLine};
+use crate::name_filter::{name_filter, NAME_REFUSED};
 use crate::pool::Pool;
 use crate::snapshot::SnapshotSource;
 use crate::spaces::{space_routes, SpaceRoute, SpaceRouteContext, SpaceRoutes, SpacesDocs, SpacesPort};
@@ -1873,6 +1874,9 @@ impl App {
         let name = sanitize_text(config.name.as_deref().unwrap_or(""), MAX_NAME_LENGTH);
         if name.is_empty() {
             return Ok(self.reject(sub, 400, vec!["name is required".to_string()], None, None, problem));
+        }
+        if name_filter().refuses(&name) {
+            return Ok(self.reject(sub, 400, vec![NAME_REFUSED.to_string()], None, None, problem));
         }
 
         // The score is always recomputed here: the smallest container at the container_phi sent (0
