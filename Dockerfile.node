@@ -30,6 +30,8 @@ COPY tsconfig.base.json ./
 COPY packages packages
 COPY apps apps
 COPY data/records.json data/records.json
+# the names entries may not carry (apps/server/src/name-filter.ts), shared with the Rust server
+COPY native/server/data/names.json native/server/data/names.json
 # the new spaces' research records (served by /api/spaces); their certificates and raw runs stay out
 COPY data/surface/records.json data/surface/records.json
 COPY data/curved/records.json data/curved/records.json

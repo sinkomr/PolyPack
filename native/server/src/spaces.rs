@@ -46,6 +46,7 @@ use crate::hono::{self, Handled, Req, Res, ResBody, Thrown};
 use crate::js;
 use crate::limits::{address_key, sanitize_text, SubmitLimits, Submitter, MAX_BODY_BYTES, MAX_NAME_LENGTH, MAX_NOTE_LENGTH, OVERLOAD_RETRY_S, SUBMIT_KEY_HEADER};
 use crate::load::{LoadStats, SubmissionLine};
+use crate::name_filter::{name_filter, NAME_REFUSED};
 use crate::pool::Pool;
 pub use crate::spaces_port::{LoadedSpaces, SpaceExhibitDoc, SpaceInfoDoc, SpaceProblemRef, SpacesDocs, SpacesPort};
 use crate::store::{NewSpaceEntry, SpaceEntryEdit, SpaceIds, SpaceLeader, SpaceProblem, SqliteStore};
@@ -853,6 +854,8 @@ impl Submission {
         let name = body.get("name").and_then(Value::as_str).map_or(String::new(), |s| sanitize_text(s, MAX_NAME_LENGTH));
         if name.is_empty() {
             errors.push("name is required".to_string());
+        } else if name_filter().refuses(&name) {
+            errors.push(NAME_REFUSED.to_string());
         }
         let mut optional_text = |key: &str, max: usize, truncate: bool| -> Option<String> {
             let v = match body.get(key) {

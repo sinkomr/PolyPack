@@ -2,6 +2,7 @@ import { DatabaseSync } from "node:sqlite";
 import { LeaderboardEntry, SCORE_TIE } from "@polypack/geometry";
 import { blobFromJson, encodePieces, packPieces, PIECE_BYTES, readPieces } from "./pieces";
 import { EPOCH_DIAMETER, UnitsReport, migrateUnits, setUnitsEpoch, unitsEpoch } from "./units-migration";
+import { ANONYMOUS, nameFilter } from "./name-filter";
 import {
   EntryEdit,
   GET_MANY_LIMIT,
@@ -235,6 +236,42 @@ export class SqliteStore implements Store, SpaceStore {
       const report = migrateUnits(this.db);
       this.unitsReport = report;
       opts.log?.(`units: converted to diameter units in ${report.ms.toFixed(0)} ms: ${JSON.stringify(report)}`);
+    }
+    this.removeNames(opts.log);
+  }
+
+  /**
+   * The names of names.json's `removed` list leave the site (see name-filter.ts): their entries, polygon and space,
+   * take the name ANONYMOUS and their peaks are forgotten, in one transaction. Each of them has held a record, so it
+   * has a row in holder_peaks, and only those rows are looked at: a database with nothing to remove spends one read of
+   * that small table. The space entries are found through their listing index, which holds the name, instead of the
+   * table, whose rows carry the configurations. A removed name cannot submit again (the submit routes refuse it).
+   */
+  private removeNames(log?: (msg: string) => void): void {
+    const filter = nameFilter();
+    const names = (this.db.prepare("SELECT name FROM holder_peaks ORDER BY name").all() as Row[])
+      .map((r) => r.name as string)
+      .filter((n) => filter.isRemoved(n));
+    if (names.length === 0) return;
+    const marks = names.map(() => "?").join(", ");
+    this.db.exec("BEGIN IMMEDIATE");
+    try {
+      const entries = this.db.prepare(`UPDATE submissions SET name = ? WHERE name IN (${marks})`).run(ANONYMOUS, ...names);
+      const spaceEntries = this.db
+        .prepare(
+          `UPDATE space_entries SET name = ? WHERE id IN ` +
+            `(SELECT id FROM space_entries INDEXED BY space_entries_listing WHERE name IN (${marks}))`,
+        )
+        .run(ANONYMOUS, ...names);
+      this.db.prepare(`DELETE FROM holder_peaks WHERE name IN (${marks})`).run(...names);
+      this.db.exec("COMMIT");
+      log?.(
+        `names: ${names.length} removed name(s) left the site; ${Number(entries.changes)} entries and ` +
+          `${Number(spaceEntries.changes)} space entries are now named ${ANONYMOUS}`,
+      );
+    } catch (e) {
+      this.db.exec("ROLLBACK");
+      throw e;
     }
   }
 

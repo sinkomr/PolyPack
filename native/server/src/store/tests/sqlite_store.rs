@@ -747,3 +747,35 @@ fn is_answered_from_the_index_of_names_alone_which_a_database_without_it_gains_o
     assert_eq!(prepared.len(), 1);
     assert!(prepared[0].contains("WHERE name = ? AND (n, m, p) > (?, ?, ?) AND verification != 'rejected'"));
 }
+
+// name-filter.test.ts: "names their entries Anonymous and forgets their peaks when it opens, once"
+#[test]
+fn removed_names_leave_the_site_when_the_store_opens() {
+    let dir = TempDir::new("names-");
+    let path = dir.file("db.sqlite");
+    {
+        let store = open(&path);
+        store.insert(&entry(4.0, 4.0, 1.0, 1.0, "Cumfart")).unwrap();
+        store.insert(&entry(4.0, 4.0, 1.0, 1.0, "Ann")).unwrap();
+        for name in ["Cumfart", "Ann"] {
+            store
+                .db()
+                .prepare("INSERT INTO space_entries (space, problem, score, name, agent_note, created_at, config) VALUES ('torus', 'x', 1, ?, '', '', '{}')")
+                .unwrap()
+                .run(&[name.into()])
+                .unwrap();
+        }
+        store.raise_holder_peaks(&[HolderPeak { name: "Cumfart".into(), peak: 25.0 }, HolderPeak { name: "Ann".into(), peak: 3.0 }]).unwrap();
+    }
+    let (store, logs) = open_logged(&path);
+    let names = |table: &str| -> Vec<String> {
+        store.db().prepare(&format!("SELECT name FROM {table} ORDER BY id")).unwrap().all(&[]).unwrap().iter().map(|r| r.text("name").unwrap()).collect()
+    };
+    assert_eq!(names("submissions"), ["Anonymous", "Ann"]);
+    assert_eq!(names("space_entries"), ["Anonymous", "Ann"]);
+    assert_eq!(store.holder_peaks().unwrap(), vec![HolderPeak { name: "Ann".into(), peak: 3.0 }]);
+    assert_eq!(logs, ["names: 1 removed name(s) left the site; 1 entries and 1 space entries are now named Anonymous"]);
+    drop(store);
+    let (_, logs) = open_logged(&path);
+    assert!(logs.is_empty(), "{logs:?}");
+}

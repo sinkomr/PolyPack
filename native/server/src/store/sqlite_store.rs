@@ -20,6 +20,7 @@ use super::units_migration::{
     json_source, migrate_units, set_units_epoch, units_epoch, SpaceIds, UnitsReport, EPOCH_DIAMETER,
 };
 use super::Clock;
+use crate::name_filter::{name_filter, ANONYMOUS};
 use polypack_js::fmt;
 
 // `pieces` is declared TEXT NOT NULL, as it was created; new rows store a BLOB in it (see
@@ -223,7 +224,7 @@ pub struct SqliteStore {
 impl SqliteStore {
     /// The source's constructor: opens (or creates) the database and brings an older one up to the
     /// current schema in place.
-    pub fn open(path: &str, opts: OpenOptions<'_>) -> Result<SqliteStore> {
+    pub fn open(path: &str, mut opts: OpenOptions<'_>) -> Result<SqliteStore> {
         let db = Db::open(path)?;
         db.set_tracer(opts.tracer);
         let mut store = SqliteStore { db, units_report: None, clock: opts.clock };
@@ -270,7 +271,7 @@ impl SqliteStore {
             set_units_epoch(db, EPOCH_DIAMETER)?;
         } else if opts.migrate_units && units_epoch(db)? < EPOCH_DIAMETER {
             let report = migrate_units(db, false, opts.spaces, store.clock.as_ref())?;
-            if let Some(log) = opts.log {
+            if let Some(log) = opts.log.as_mut() {
                 log(&format!(
                     "units: converted to diameter units in {} ms: {}",
                     fmt::fixed(report.ms, 0),
@@ -279,7 +280,62 @@ impl SqliteStore {
             }
             store.units_report = Some(report);
         }
+        store.remove_names(opts.log)?;
         Ok(store)
+    }
+
+    /// sqlite-store.ts: removeNames. The names of names.json's `removed` list leave the site (see
+    /// name_filter.rs): their entries, polygon and space, take the name ANONYMOUS and their peaks are
+    /// forgotten, in one transaction. Each of them has held a record, so it has a row in holder_peaks,
+    /// and only those rows are looked at: a database with nothing to remove spends one read of that
+    /// small table. The space entries are found through their listing index, which holds the name,
+    /// instead of the table, whose rows carry the configurations. A removed name cannot submit again
+    /// (the submit routes refuse it).
+    fn remove_names(&self, log: Option<&mut dyn FnMut(&str)>) -> Result<()> {
+        let filter = name_filter();
+        let mut names: Vec<String> = Vec::new();
+        for r in self.db.prepare("SELECT name FROM holder_peaks ORDER BY name")?.all(&[])? {
+            let name = r.text("name")?;
+            if filter.is_removed(&name) {
+                names.push(name);
+            }
+        }
+        if names.is_empty() {
+            return Ok(());
+        }
+        let marks = vec!["?"; names.len()].join(", ");
+        let named: Vec<Param<'_>> = names.iter().map(Param::from).collect();
+        let renamed: Vec<Param<'_>> = std::iter::once(Param::from(ANONYMOUS)).chain(named.iter().copied()).collect();
+        self.db.exec("BEGIN IMMEDIATE")?;
+        let run = || -> Result<(f64, f64)> {
+            let entries = self.db.prepare(&format!("UPDATE submissions SET name = ? WHERE name IN ({marks})"))?.run(&renamed)?;
+            let space_entries = self
+                .db
+                .prepare(&format!(
+                    "UPDATE space_entries SET name = ? WHERE id IN (SELECT id FROM space_entries INDEXED BY space_entries_listing WHERE name IN ({marks}))"
+                ))?
+                .run(&renamed)?;
+            self.db.prepare(&format!("DELETE FROM holder_peaks WHERE name IN ({marks})"))?.run(&named)?;
+            self.db.exec("COMMIT")?;
+            Ok((entries.changes, space_entries.changes))
+        };
+        match run() {
+            Ok((entries, space_entries)) => {
+                if let Some(log) = log {
+                    log(&format!(
+                        "names: {} removed name(s) left the site; {} entries and {} space entries are now named {ANONYMOUS}",
+                        names.len(),
+                        fmt::num(entries),
+                        fmt::num(space_entries)
+                    ));
+                }
+                Ok(())
+            }
+            Err(e) => {
+                self.db.exec("ROLLBACK")?;
+                Err(e)
+            }
+        }
     }
 
     /// The connection, as the source's tests and tools reach `store.db`.
