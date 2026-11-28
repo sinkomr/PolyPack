@@ -30,6 +30,10 @@ best-so-far improvements with CPU time). `run.py` turns the port's flat `bench` 
   A curved problem is kept only if the native client's search finds a packing of it in 2 CPU seconds (the domain's area
   bound cannot tell that a small hyperbolic or spherical container holds fewer disks); the screen skips problems the port
   cannot start on, so build `polypack-native` first (`--no-screen` skips it). `--seed` and `--out` are options.
+- `draw-flat-wide.mts` writes `problems-flat-wide.json` (seed 20261128): 16 flat problems with many-sided pieces
+  or containers (5 with N >= 17 and M <= 8, 5 with M >= 9 and N <= 16, 3 with both, 3 with N in 9..16 and
+  M <= 8; P in 5..50 with probability 0.8, else 51..120), only problems that accept submissions. Run it with
+  `run.py --problems native/tools/fresh/problems-flat-wide.json --solvers js,port,fresh`.
 - `run.py` runs problem x solver x seed (seeds 1, 2, 3; solvers `--solvers js,port,fresh`), shuffled with a fixed
   seed, `--concurrency` at once (default 5), a per-run wall `--timeout` (default 2 x seconds + 60 s). It appends one
   JSON line per run (exit code, wall time, stderr tail on failure, the result) and skips runs already in the file,

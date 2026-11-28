@@ -1,5 +1,6 @@
 //! The client's entry point (`polypack_spaceauto::FreshSearch`): one whole search of one flat problem
-//! `flat/<N>/<M>/<P>` (N = 0 or 3 to 16 sides, M = 0 or 3 to 100, P = 2 to 500) on the calling thread.
+//! `flat/<N>/<M>/<P>` (N and M = 0 or 3 to 100 sides, P = 2 to 500: every flat problem) on the calling
+//! thread.
 //! The search is `Search::run`, the same as the binary's; this adds the client's stop flag and wall
 //! deadline to the places where it reads its CPU clock, and reports each checked improvement.
 
@@ -17,7 +18,7 @@ pub fn parse_id(id: &str) -> Option<(usize, usize, usize)> {
         return None;
     }
     let (n, m, p) = (parts[1].parse::<usize>().ok()?, parts[2].parse::<usize>().ok()?, parts[3].parse::<usize>().ok()?);
-    let ok = (n == 0 || (3..=16).contains(&n)) && (m == 0 || (3..=100).contains(&m)) && (2..=500).contains(&p);
+    let ok = (n == 0 || (3..=100).contains(&n)) && (m == 0 || (3..=100).contains(&m)) && (2..=500).contains(&p);
     ok.then_some((n, m, p))
 }
 

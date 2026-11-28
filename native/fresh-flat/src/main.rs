@@ -11,15 +11,7 @@ fn main() {
     let seed: u64 = get("--seed").and_then(|s| s.parse().ok()).unwrap_or(1);
     let seconds: f64 = get("--seconds").and_then(|s| s.parse().ok()).unwrap_or(60.0);
     let evals: Option<u64> = get("--evals").and_then(|s| s.parse().ok());
-    let parts: Vec<&str> = id.split('/').collect();
-    let parsed = if parts.len() == 4 && parts[0] == "flat" {
-        match (parts[1].parse::<usize>(), parts[2].parse::<usize>(), parts[3].parse::<usize>()) {
-            (Ok(n), Ok(m), Ok(p)) if (n == 0 || (3..=16).contains(&n)) && (m == 0 || (3..=100).contains(&m)) && (2..=500).contains(&p) => Some((n, m, p)),
-            _ => None,
-        }
-    } else {
-        None
-    };
+    let parsed = polypack_fresh_flat::fresh::parse_id(&id);
     let Some((n, m, p)) = parsed else {
         println!("{}", json!({"solver": "fresh-flat", "id": id, "seed": seed, "seconds": seconds, "clock": "cpu", "score": null, "config": null, "evaluations": 0, "check_valid": null, "trace": [], "error": "unsupported id"}));
         return;

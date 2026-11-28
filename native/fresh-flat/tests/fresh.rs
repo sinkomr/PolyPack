@@ -57,7 +57,18 @@ fn the_wall_deadline_ends_a_run_and_ids_are_checked() {
     assert!(t.elapsed().as_secs_f64() < 1.1, "{:?}", t.elapsed());
     assert_eq!(res.stopped, "deadline");
     assert!(res.config.is_some());
-    for id in ["flat/17/4/9", "flat/0/4/1", "flat/0/4/501", "flat/4/6", "sphere/0/9", "flat/1/4/9"] {
+    // every N and M up to 100 is searched: many-sided pieces in a many-sided container
+    for (id, p) in [("flat/100/97/9", 9), ("flat/37/0/20", 20), ("flat/3/100/30", 30)] {
+        assert!(polypack_fresh_flat::fresh::handles(id));
+        let t = Instant::now();
+        let res = fresh_search(&job(id, &stop, 120.0, Duration::from_millis(800)), &mut |_, _| {}).unwrap();
+        assert!(t.elapsed().as_secs_f64() < 1.1, "{id}: {:?}", t.elapsed());
+        assert_eq!(res.stopped, "deadline");
+        let chk = server_check(&config_of(res.config.as_ref().expect("a packing")), p);
+        assert!(chk.valid && chk.strict, "{id}");
+        assert_eq!(chk.score, res.score);
+    }
+    for id in ["flat/101/4/9", "flat/4/101/9", "flat/2/4/9", "flat/4/2/9", "flat/0/4/1", "flat/0/4/501", "flat/4/6", "sphere/0/9", "flat/1/4/9"] {
         assert!(fresh_search(&job(id, &stop, 1.0, Duration::from_secs(5)), &mut |_, _| {}).is_err(), "{id}");
     }
 }
