@@ -72,12 +72,13 @@ pub fn run(job: &FreshJob, on_improve: &mut dyn FnMut(f64, &Value)) -> Result<Ru
     search.run();
     let st = &search.stats;
     let stats = format!(
-        "evals {} (polish {}) hops {} accepted {} same {} polishes {} restarts {} improvements {} checks {} refused {} relax {} iters {} rebuilds {}",
+        "evals {} (polish {}) hops {} accepted {} same {} aborted {} polishes {} restarts {} improvements {} checks {} refused {} relax {} iters {} rebuilds {}",
         search.model.evals,
         st.polish_evals,
         st.hops,
         st.accepted,
         st.same,
+        st.aborted,
         st.polishes,
         st.restarts,
         st.improvements,
@@ -86,6 +87,9 @@ pub fn run(job: &FreshJob, on_improve: &mut dyn FnMut(f64, &Value)) -> Result<Ru
         search.model.stat_relax,
         search.model.stat_iters,
         search.model.stat_rebuilds
+    ) + &format!(
+        " moves won/tried {}",
+        (0..search.move_wins.len()).map(|k| format!("{}/{}", search.move_wins[k] - 1.0, search.move_tries[k] - 2.0)).collect::<Vec<_>>().join(" ")
     );
     let reason = if search.model.budget.reason.is_empty() { "cpu" } else { search.model.budget.reason };
     let score = if search.best_s.is_finite() { Some(search.best_s) } else { None };

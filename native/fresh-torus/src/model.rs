@@ -50,6 +50,8 @@ pub struct Relaxed {
     pub iters: u32,
     /// Stopped near the anchor (a return to its basin).
     pub same: bool,
+    /// Given up at `abort_it` iterations (the energy was still above `abort_level`).
+    pub aborted: bool,
 }
 
 pub struct Model<'a> {
@@ -87,6 +89,14 @@ pub struct Model<'a> {
     pub stat_rebuilds: u64,
     pub stat_iters: u64,
     pub stat_relax: u64,
+    /// Iterations of the current relaxation (all its rounds); a relaxation whose energy is still above
+    /// `abort_level` after `abort_it` of them is given up (0: never).
+    pub hop_it: u32,
+    pub abort_it: u32,
+    pub abort_level: f64,
+    pub aborted: bool,
+    /// Energies at iterations 25, 50, 100, 200, 400 of the last relaxation (development traces).
+    pub marks: [f64; 5],
     cells: Vec<Vec<u32>>,
 }
 
@@ -214,6 +224,11 @@ impl<'a> Model<'a> {
             stat_rebuilds: 0,
             stat_iters: 0,
             stat_relax: 0,
+            hop_it: 0,
+            abort_it: 0,
+            abort_level: f64::INFINITY,
+            aborted: false,
+            marks: [f64::NAN; 5],
             cells: Vec::new(),
             sh,
         }
@@ -411,6 +426,9 @@ impl<'a> Model<'a> {
     /// line with a fresh separating-axis line first (after a perturbation).
     pub fn relax(&mut self, lb: &mut Lbfgs, sol: &mut Sol, tol: &Tol, check_lines: bool) -> Relaxed {
         self.same = false;
+        self.aborted = false;
+        self.hop_it = 0;
+        self.marks = [f64::NAN; 5];
         self.stat_relax += 1;
         let mut left = tol.max_iter;
         let mut iters = 0u32;
@@ -427,14 +445,14 @@ impl<'a> Model<'a> {
             iters += out.iters;
             left = left.saturating_sub(out.iters);
             e = out.f;
-            if out.exit == Exit::Hook && self.rebuild && !self.budget.done && !self.same && left > 0 {
+            if out.exit == Exit::Hook && self.rebuild && !self.budget.done && !self.same && !self.aborted && left > 0 {
                 self.stat_rebuilds += 1;
                 continue;
             }
             break;
         }
         self.stat_iters += iters as u64;
-        Relaxed { e, iters, same: self.same }
+        Relaxed { e, iters, same: self.same, aborted: self.aborted }
     }
 
     /// The energy of `sol` as it is (lines as stored, or separating-axis lines), with the per-piece shares in
@@ -615,6 +633,19 @@ impl Objective for Model<'_> {
         let contact = 2.0 * self.sh.big_r;
         if sig * (self.cut - 2.0 * dm2.sqrt()) < contact * (1.0 + 1e-9) {
             self.rebuild = true;
+            return true;
+        }
+        self.hop_it += 1;
+        match self.hop_it {
+            25 => self.marks[0] = _f,
+            50 => self.marks[1] = _f,
+            100 => self.marks[2] = _f,
+            200 => self.marks[3] = _f,
+            400 => self.marks[4] = _f,
+            _ => {}
+        }
+        if self.hop_it == self.abort_it && _f > self.abort_level {
+            self.aborted = true;
             return true;
         }
         if self.anchor_r > 0.0 && iter >= 8 && iter % 4 == 0 && self.near_anchor(x) {

@@ -34,11 +34,19 @@ pub struct Params {
     /// Consecutive rejections before a restart, as a + b P.
     pub fail_a: f64,
     pub fail_b: f64,
-    /// Relative precision of the polish.
+    /// Relative precision of the polish of candidates, and of the deep polish of the best (once per chain and at
+    /// the end).
     pub polish_tol: f64,
+    pub deep_tol: f64,
     /// An accepted hop is polished when its repaired score is below best (1 + promise).
     pub promise: f64,
     pub memory: usize,
+    /// The exploring relaxation stops when an iteration lowers E by at most rel E, `patience` times in a row.
+    pub explore_rel: f64,
+    pub explore_patience: f64,
+    /// A hop whose energy is still above abort_level times the current one after abort_it iterations is given up.
+    pub abort_it: f64,
+    pub abort_level: f64,
     /// The secant trial stays this fraction of the step below the estimate.
     pub margin: f64,
     /// Bracket widths (relative) below which the polish relaxes with the early and the fine tolerance.
@@ -48,7 +56,7 @@ pub struct Params {
 
 impl Params {
     pub fn new() -> Params {
-        let mut p = Params { eps: 1e-3, fail_a: 40.0, fail_b: 3.0, polish_tol: 2e-13, promise: 5e-3, memory: 7, margin: 2e-3, coarse: 1e-4, medium: 1e-7 };
+        let mut p = Params { eps: 1e-3, fail_a: 40.0, fail_b: 3.0, polish_tol: 1e-9, deep_tol: 2e-13, promise: 5e-3, memory: 7, margin: 2e-3, coarse: 1e-4, medium: 1e-7, explore_rel: 1e-6, explore_patience: 4.0, abort_it: 200.0, abort_level: 10.0 };
         // development only: FRESH_PARAMS="eps=1e-3,promise=1e-3"
         if let Ok(v) = std::env::var("FRESH_PARAMS") {
             for kv in v.split(',') {
@@ -59,9 +67,14 @@ impl Params {
                     "fail_a" => p.fail_a = val,
                     "fail_b" => p.fail_b = val,
                     "polish_tol" => p.polish_tol = val,
+                    "deep_tol" => p.deep_tol = val,
                     "promise" => p.promise = val,
                     "memory" => p.memory = val as usize,
                     "margin" => p.margin = val,
+                    "explore_rel" => p.explore_rel = val,
+                    "explore_patience" => p.explore_patience = val,
+                    "abort_it" => p.abort_it = val,
+                    "abort_level" => p.abort_level = val,
                     "coarse" => p.coarse = val,
                     "medium" => p.medium = val,
                     _ => {}
@@ -89,6 +102,7 @@ pub struct Stats {
     pub polish_evals: u64,
     pub checks: u64,
     pub refused: u64,
+    pub aborted: u64,
 }
 
 /// Number of perturbation kinds.
@@ -118,14 +132,18 @@ pub struct Search<'a, 'c> {
     explore: Tol,
     polish_early: Tol,
     polish_fine: Tol,
-    best_e: f64,
-    move_wins: [f64; NM],
-    move_tries: [f64; NM],
+    pub move_wins: [f64; NM],
+    pub move_tries: [f64; NM],
     /// A lower bound on the score: reaching it ends the search.
     pub bound: f64,
     pub debug: bool,
     lattices: Vec<Arrangement>,
     idx: Vec<usize>,
+    /// The best packing has had its deep polish.
+    best_deep: bool,
+    hop_trace: bool,
+    /// The energy of the best packing at the hopping score.
+    best_e: f64,
     /// The slope of sqrt(E) against the score below the jamming score, from the last polish (0: none yet).
     slope: f64,
 }
@@ -196,7 +214,7 @@ impl<'a, 'c> Search<'a, 'c> {
         let sh = Shape::new(n);
         let prm = Params::new();
         let width = 2.0 * sh.apo;
-        let explore = Tol { e_stop: 1e-26, rel: 1e-6, patience: 4, gtol: 1e-13, max_iter: 3000, max_step: 0.25 * width };
+        let explore = Tol { e_stop: 1e-26, rel: prm.explore_rel, patience: prm.explore_patience as u32, gtol: 1e-13, max_iter: 3000, max_step: 0.25 * width };
         let polish_early = Tol { e_stop: 1e-27, rel: 1e-9, patience: 3, gtol: 1e-15, max_iter: 3000, max_step: 0.1 * width };
         let polish_fine = Tol { e_stop: 1e-27, rel: 1e-13, patience: 4, gtol: 1e-15, max_iter: 4000, max_step: 0.1 * width };
         let bound = lower_bound(fam, &sh, p);
@@ -218,13 +236,15 @@ impl<'a, 'c> Search<'a, 'c> {
             explore,
             polish_early,
             polish_fine,
-            best_e: 0.0,
             move_wins: [1.0; NM],
             move_tries: [2.0; NM],
             bound,
             debug: std::env::var("FRESH_DEBUG").is_ok(),
             lattices: Vec::new(),
             idx: Vec::new(),
+            best_deep: false,
+            hop_trace: std::env::var("FRESH_HOPS").is_ok(),
+            best_e: 0.0,
             slope: 0.0,
             sh,
         }
@@ -294,6 +314,7 @@ impl<'a, 'c> Search<'a, 'c> {
                     if score < self.best_s {
                         self.best_s = score;
                         self.best = c;
+                        self.best_deep = false;
                         let t = self.model.budget.elapsed();
                         self.trace.push((t, score));
                         self.stats.improvements += 1;
@@ -335,13 +356,12 @@ impl<'a, 'c> Search<'a, 'c> {
 
     /// Drives x towards its jamming score (see the module notes). `known` is an infeasible trial already made
     /// (score, energy) for this x. Returns the best valid packing found (repaired), or None.
-    fn polish(&mut self, x: &mut Sol, known: Option<(f64, f64)>) -> Option<Sol> {
+    fn polish(&mut self, x: &mut Sol, known: Option<(f64, f64)>, tol_rel: f64, eta0: f64, target: f64) -> Option<Sol> {
         let ev0 = self.model.evals;
         self.stats.polishes += 1;
         let mut hi_sol = Sol::new(self.p);
         let mut rep = Sol::new(self.p);
         let mut hi = self.repair(x, &mut hi_sol);
-        let tol_rel = self.prm.polish_tol;
         let mut pts: [(f64, f64); 2] = [(0.0, 0.0); 2];
         let mut npts = 0usize;
         let mut lo = 0.0f64;
@@ -352,7 +372,7 @@ impl<'a, 'c> Search<'a, 'c> {
                 lo = s;
             }
         }
-        let mut eta = 1e-4;
+        let mut eta = eta0;
         let mut feas = f64::INFINITY;
         // after a trial lands on the feasible side, the next secant step is shortened (and lengthened again after
         // an infeasible one), so that the trials close in on s* from below where sqrt(E) carries information
@@ -438,13 +458,13 @@ impl<'a, 'c> Search<'a, 'c> {
             if hi.min(feas) - lo <= tol_rel * hi {
                 break;
             }
-            if lo >= self.best_s {
+            if lo >= target {
                 break;
             }
-            if npts == 2 && hi > self.best_s {
+            if npts == 2 && hi > target {
                 let (s1, g1) = pts[0];
                 let (s2, g2) = pts[1];
-                if g1 > g2 && s2 > s1 && s2 + g2 * (s2 - s1) / (g1 - g2) > self.best_s * (1.0 + 2e-5) {
+                if g1 > g2 && s2 > s1 && s2 + g2 * (s2 - s1) / (g1 - g2) > target * (1.0 + 2e-5) {
                     break;
                 }
             }
@@ -460,6 +480,35 @@ impl<'a, 'c> Search<'a, 'c> {
         }
     }
 
+    /// Polishes the best packing to the deep precision (once per best). True when it improved.
+    fn deep_polish(&mut self) -> bool {
+        if self.best_deep || !self.best_s.is_finite() {
+            return false;
+        }
+        self.best_deep = true;
+        let mut x = self.best.clone();
+        let tol = self.prm.deep_tol;
+        if let Some(h) = self.polish(&mut x, None, tol, 4.0 * self.prm.polish_tol, self.best_s) {
+            if h.s < self.best_s {
+                let ok = self.offer(&h);
+                self.best_deep = true;
+                return ok;
+            }
+        }
+        false
+    }
+
+    /// True when only the reserve kept for the final deep polish is left (3 % of the budget).
+    fn near_end(&self) -> bool {
+        let b = &self.model.budget;
+        if b.max_evals != u64::MAX && self.model.evals + b.max_evals / 33 >= b.max_evals {
+            return true;
+        }
+        let total = b.cpu_end - b.t0;
+        let reserve = (0.03 * total).clamp(0.02, 0.5);
+        polypack_flat::clock::thread_cpu_seconds() >= b.cpu_end - reserve
+    }
+
     /// Polishes a copy of an arrangement relaxed at score st with energy e when its repair is near the best, and
     /// offers the result; true when it became the best.
     fn try_polish(&mut self, cur: &Sol, st: f64, e: f64) -> bool {
@@ -467,7 +516,8 @@ impl<'a, 'c> Search<'a, 'c> {
         let r = self.repair(cur, &mut rep);
         if r < self.best_s * (1.0 + self.prm.promise) {
             let mut y = cur.clone();
-            if let Some(h) = self.polish(&mut y, Some((st, e))) {
+            let target = self.best_s;
+            if let Some(h) = self.polish(&mut y, Some((st, e)), self.prm.polish_tol, 1e-4, target) {
                 if h.s < self.best_s {
                     return self.offer(&h);
                 }
@@ -476,7 +526,7 @@ impl<'a, 'c> Search<'a, 'c> {
         false
     }
 
-    /// The chain restarts at the best packing, relaxed at the hopping score best (1 - eps).
+    /// The chain goes on from the best packing, relaxed at the hopping score best (1 - eps).
     fn from_best(&mut self, cur: &mut Sol) -> (f64, f64) {
         cur.copy_from(&self.best);
         let st = self.best.s * (1.0 - self.prm.eps);
@@ -485,6 +535,7 @@ impl<'a, 'c> Search<'a, 'c> {
         let tol = self.explore;
         let e = self.relax(cur, &tol, false).e;
         self.best_e = e;
+        canonicalize(cur, self.free());
         (st, e)
     }
 
@@ -824,7 +875,7 @@ impl<'a, 'c> Search<'a, 'c> {
                 return;
             }
             let mut x = c.clone();
-            if let Some(h) = self.polish(&mut x, None) {
+            if let Some(h) = self.polish(&mut x, None, self.prm.polish_tol, 1e-4, self.best_s) {
                 if h.s < self.best_s {
                     self.offer(&h);
                 }
@@ -850,19 +901,18 @@ impl<'a, 'c> Search<'a, 'c> {
         }
         let mut cur = Sol::new(p);
         let mut y = Sol::new(p);
-        // a random start at the best's score, compressed and polished
+        // a random start at the best's hopping score, compressed and polished; then the chain from the best
         {
             let st = self.best.s * (1.0 - self.prm.eps);
             self.restart(1, st, &mut cur);
             let tol = self.explore;
             let e = self.relax(&mut cur, &tol, true).e;
             self.try_polish(&cur, st, e);
-        }
-        if self.done() {
-            return;
+            if self.done() {
+                return;
+            }
         }
         let (mut st, mut cur_e) = self.from_best(&mut cur);
-        canonicalize(&mut cur, self.free());
         self.set_anchor(&cur);
         let mut fails = 0u64;
         let mut restart_kind = 0usize;
@@ -871,13 +921,23 @@ impl<'a, 'c> Search<'a, 'c> {
             if self.done() {
                 break;
             }
+            if !self.best_deep && self.near_end() {
+                if self.deep_polish() {
+                    (st, cur_e) = self.from_best(&mut cur);
+                    self.set_anchor(&cur);
+                }
+                continue;
+            }
             self.stats.hops += 1;
             let kind = self.perturb(&cur, &mut y);
             self.move_tries[kind] += 1.0;
             self.model.anchor_r = anchor_r;
+            self.model.abort_it = self.prm.abort_it as u32;
+            self.model.abort_level = self.prm.abort_level * cur_e;
             let tol = self.explore;
             let out = self.relax(&mut y, &tol, true);
             self.model.anchor_r = 0.0;
+            self.model.abort_it = 0;
             let e = out.e;
             if self.done() {
                 break;
@@ -885,7 +945,25 @@ impl<'a, 'c> Search<'a, 'c> {
             if out.same {
                 self.stats.same += 1;
             }
-            if !out.same && e < cur_e * (1.0 - SAME) {
+            if self.hop_trace {
+                let m = self.model.marks;
+                eprintln!(
+                    "hop kind {kind} it {} same {} acc {} | {:.3} {:.3} {:.3} {:.3} {:.3} final {:.4}",
+                    out.iters,
+                    out.same as u8,
+                    (!out.same && e < cur_e * (1.0 - SAME)) as u8,
+                    m[0] / cur_e,
+                    m[1] / cur_e,
+                    m[2] / cur_e,
+                    m[3] / cur_e,
+                    m[4] / cur_e,
+                    e / cur_e
+                );
+            }
+            if out.aborted {
+                self.stats.aborted += 1;
+            }
+            if !out.same && !out.aborted && e < cur_e * (1.0 - SAME) {
                 self.stats.accepted += 1;
                 self.move_wins[kind] += 1.0;
                 fails = 0;
@@ -894,7 +972,6 @@ impl<'a, 'c> Search<'a, 'c> {
                 cur_e = e;
                 if (e - self.best_e).abs() > SAME * self.best_e && self.try_polish(&cur, st, e) {
                     (st, cur_e) = self.from_best(&mut cur);
-                    canonicalize(&mut cur, self.free());
                 }
                 if self.done() {
                     break;
@@ -905,11 +982,20 @@ impl<'a, 'c> Search<'a, 'c> {
             }
             let limit = (self.prm.fail_a + self.prm.fail_b * p as f64) as u64;
             if fails >= limit {
+                if self.deep_polish() {
+                    (st, cur_e) = self.from_best(&mut cur);
+                    self.set_anchor(&cur);
+                    fails = 0;
+                    continue;
+                }
+                if self.done() {
+                    break;
+                }
+                // a restart at the best's hopping score: the new arrangement descends at the same level
                 self.stats.restarts += 1;
                 fails = 0;
                 restart_kind = (restart_kind + 1) % 4;
-                let k = restart_kind;
-                self.restart(k, st, &mut cur);
+                self.restart(restart_kind, st, &mut cur);
                 let tol = self.explore;
                 cur_e = self.relax(&mut cur, &tol, true).e;
                 if self.done() {
