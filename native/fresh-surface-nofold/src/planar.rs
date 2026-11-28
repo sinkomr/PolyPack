@@ -14,7 +14,9 @@ use crate::lattice::{lattices, Lattice};
 use crate::lbfgs::Lbfgs;
 use crate::model::{Budget, Model, Sol};
 use crate::rng::Rng;
+use std::cell::OnceCell;
 use std::f64::consts::PI;
+use std::rc::Rc;
 
 #[derive(Clone, Debug)]
 pub struct Params {
@@ -29,6 +31,8 @@ pub struct Params {
     pub abort_margin: f64,
     pub polish_share: f64,
     pub lat_cands: usize,
+    /// An epoch's final packing is polished when its soft scale is within this share of the best.
+    pub near_window: f64,
     /// Start kinds: random, aligned, lattice, elite, neighbour.
     pub start_w: [f64; 5],
     /// Moves: shake all, relocate, shake a neighbourhood, turn, turn over, copy a neighbour's angle.
@@ -49,6 +53,7 @@ impl Params {
             abort_margin: 0.02,
             polish_share: 0.25,
             lat_cands: 40,
+            near_window: 0.01,
             start_w: [1.0, 1.0, 1.5, 1.0, 1.0],
             move_w: [1.0; 6],
         };
@@ -71,6 +76,7 @@ impl Params {
                     "abort_m" => p.abort_margin = f,
                     "share" => p.polish_share = f,
                     "latc" => p.lat_cands = f as usize,
+                    "near" => p.near_window = f,
                     "s_rand" => p.start_w[0] = f,
                     "s_align" => p.start_w[1] = f,
                     "s_lat" => p.start_w[2] = f,
@@ -98,7 +104,9 @@ pub struct FaceSearch {
     lb: Lbfgs,
     pub rng: Rng,
     pub prm: Params,
-    lats: Vec<Lattice>,
+    /// The periodic arrangements of the piece, computed when a lattice start first needs them and shared
+    /// by the run's face searches.
+    lats: Rc<OnceCell<Vec<Lattice>>>,
     in_epoch: bool,
     cur: Sol,
     cand: Sol,
@@ -127,7 +135,7 @@ pub struct FaceSearch {
 }
 
 impl FaceSearch {
-    pub fn new(pc: &Piece, ct: &Container, k: usize, seed: u64, lats: Vec<Lattice>) -> FaceSearch {
+    pub fn new(pc: &Piece, ct: &Container, k: usize, seed: u64, lats: Rc<OnceCell<Vec<Lattice>>>) -> FaceSearch {
         let dim = if pc.n == 0 { 2 } else { 3 };
         let poly = pc.n > 0;
         let prm = Params::for_problem(k);
@@ -209,6 +217,26 @@ impl FaceSearch {
     fn end_epoch(&mut self, bud: &mut Budget) {
         self.in_epoch = false;
         self.deep_polish(bud);
+        // the epoch's own packing, polished all the way: near ties at the exploring pressure rank
+        // either way once hard, and only packings below the best soft scale were polished so far
+        if self.cur.s <= self.best_explore * (1.0 + self.prm.near_window) && !bud.exhausted {
+            let e0 = bud.evals;
+            let mut pol = std::mem::replace(&mut self.pol, Sol::new(0, 0, false));
+            pol.copy_from(&self.cur);
+            let mut w = self.prm.w_quick;
+            while w >= self.prm.w_final * 0.999 && !bud.exhausted {
+                self.model.local_min(&mut self.lb, bud, &mut pol, w, 4000, w * 1e-3, false);
+                w *= self.prm.ladder;
+            }
+            if !bud.exhausted {
+                let got = self.finish(&pol);
+                if self.debug {
+                    eprintln!("    [k={}] epoch polish soft {:.9} -> {:?}", self.k, self.cur.s, got);
+                }
+            }
+            self.pol = pol;
+            self.polish_evals += bud.evals - e0;
+        }
         self.epochs_since_best += 1;
         if self.debug {
             eprintln!("    [k={}] epoch end kind {} soft {:.6} best {:?}", self.k, self.cur_kind, self.cur.s, self.best.as_ref().map(|b| b.s));
@@ -217,7 +245,7 @@ impl FaceSearch {
 
     fn pick_start(&mut self, hints: &Hints) -> usize {
         let mut w = self.prm.start_w;
-        if self.k < 3 || self.lats.is_empty() {
+        if self.k < 3 {
             w[2] = 0.0;
         }
         if self.best.is_none() {
@@ -368,9 +396,14 @@ impl FaceSearch {
     }
 
     fn lattice_start(&mut self, sol: &mut Sol) {
-        let nl = self.lats.len();
+        let pc = self.model.pc.clone();
+        let lats = self.lats.get_or_init(|| lattices(&pc));
+        let nl = lats.len();
+        if nl == 0 {
+            return self.random_start(sol, true);
+        }
         let li = if nl == 1 || self.rng.chance(0.6) { 0 } else { self.rng.below(nl) };
-        let lat = self.lats[li].clone();
+        let lat = lats[li].clone();
         let mut top: Vec<(f64, f64, f64, f64)> = Vec::new();
         let mut buf: Vec<(f64, [f64; 3])> = Vec::new();
         for _ in 0..self.prm.lat_cands.max(1) {
@@ -387,9 +420,12 @@ impl FaceSearch {
             let fit = self.patch(&lat, turn, ox, oy, &mut buf);
             top.push((fit, turn, ox, oy));
         }
-        top.sort_by(|a, b| a.0.partial_cmp(&b.0).unwrap());
+        top.sort_by(|a, b| a.0.total_cmp(&b.0));
         let pick = if self.rng.chance(0.5) { 0 } else { self.rng.below(top.len().min(3)) };
-        let (_, turn, ox, oy) = top[pick];
+        let (fit, turn, ox, oy) = top[pick];
+        if !fit.is_finite() {
+            return self.random_start(sol, true);
+        }
         self.patch(&lat, turn, ox, oy, &mut buf);
         let dim = self.dim;
         for i in 0..self.k {
@@ -432,7 +468,7 @@ impl FaceSearch {
         if buf.len() < k {
             return f64::INFINITY;
         }
-        buf.select_nth_unstable_by(k - 1, |a, b| a.0.partial_cmp(&b.0).unwrap());
+        buf.select_nth_unstable_by(k - 1, |a, b| a.0.total_cmp(&b.0));
         buf[k - 1].0
     }
 
@@ -680,7 +716,11 @@ impl FaceSearch {
         pol.copy_from(&self.best_pol);
         let mut w = self.deep_w;
         while w >= self.prm.w_final * 0.999 && !bud.exhausted {
-            self.model.local_min(&mut self.lb, bud, &mut pol, w, 4000, w * 1e-3, false);
+            let it0 = self.model.stat_iters;
+            let ex = self.model.local_min(&mut self.lb, bud, &mut pol, w, 4000, w * 1e-3, false);
+            if self.debug {
+                eprintln!("      stage w {:.0e}: {:?} after {} iterations, soft {:.12} E {:.3e}", w, ex, self.model.stat_iters - it0, pol.s, self.model.last_e);
+            }
             w *= self.prm.ladder;
         }
         if !bud.exhausted {
@@ -710,8 +750,4 @@ impl FaceSearch {
         Some(s)
     }
 
-    /// The lattices this search draws starts from.
-    pub fn lattices_of(pc: &Piece) -> Vec<Lattice> {
-        lattices(pc)
-    }
 }

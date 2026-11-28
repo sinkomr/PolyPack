@@ -100,7 +100,8 @@ pub fn lattices(pc: &Piece) -> Vec<Lattice> {
     }
     let period = pc.period;
     let mut out: Vec<Lattice> = Vec::new();
-    let na = 8;
+    // many-sided pieces are nearly disks: a few turns suffice
+    let na = if pc.n > 12 { 2 } else { 8 };
     let nox = 16;
     for ia in 0..na {
         let ta = period * ia as f64 / na as f64;
@@ -139,7 +140,7 @@ pub fn lattices(pc: &Piece) -> Vec<Lattice> {
         }
     }
     out.retain(|l| l.density.is_finite() && l.density <= 1.0 + 1e-9 && valid(pc, l));
-    out.sort_by(|a, b| b.density.partial_cmp(&a.density).unwrap());
+    out.sort_by(|a, b| b.density.total_cmp(&a.density));
     // keep distinct densities
     let mut kept: Vec<Lattice> = Vec::new();
     for l in out {

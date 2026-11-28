@@ -31,12 +31,18 @@ use polypack_flat::clock::thread_cpu_seconds;
 use polypack_spaces::{validate_space_submission, SpaceName, SpaceValidateOptions};
 use polypack_surface::{validate_nofold, SurfaceConfig, SurfacePose, ValidateOptions};
 use serde_json::{json, Value};
+use std::cell::OnceCell;
+use std::rc::Rc;
 use std::f64::consts::PI;
 
 /// One face problem: k pieces on one face of class c.
 struct Pair {
-    /// Best valid packing (site units, k pieces), checked on its face.
+    /// Best packing (site units, k pieces), repaired exactly.
     best: Option<Packing>,
+    /// Whether `best` passed the validator's check on its face (done when an assignment first uses it).
+    checked: bool,
+    /// Whether `best` is the constructive grid packing (a poor start for the neighbours).
+    grid: bool,
     search: Option<FaceSearch>,
     lb: f64,
 }
@@ -84,7 +90,7 @@ pub struct Engine<'a> {
     pub bud: Budget<'a>,
     t0: f64,
     seed: u64,
-    lats: Option<Vec<Lattice>>,
+    lats: Rc<OnceCell<Vec<Lattice>>>,
     pub tune: Tuning,
     pub best_score: f64,
     pub best_config: Option<Value>,
@@ -102,24 +108,25 @@ pub struct Engine<'a> {
     reserve_done: bool,
 }
 
-/// A hexagonal grid of the pieces' bounding circles in the face, the k cells that need the least scale,
-/// repaired: a valid packing of any face problem, built at once.
-pub fn grid_packing(pc: &Piece, ct: &crate::geom::Container, k: usize) -> Option<Packing> {
+/// A hexagonal grid of the pieces' bounding circles in the face, for k = 1..=kmax the k cells that need the
+/// least scale (of a few turns and shifts of the grid), repaired: a valid packing of every face problem of
+/// the class, built at once. Entry k - 1 is the packing of k pieces.
+pub fn grid_packings(pc: &Piece, ct: &crate::geom::Container, kmax: usize) -> Vec<Option<Packing>> {
     let r = pc.r_site;
     let d = 2.0 * r * (1.0 + 1e-6);
     let cell = d * d * 3f64.sqrt() / 2.0;
-    let reach = 2.0 * (k as f64 * cell / PI).sqrt() + 3.0 * d;
+    let reach = 2.0 * (kmax as f64 * cell / PI).sqrt() + 3.0 * d;
     let mut turns: Vec<f64> = ct.psi.iter().map(|p| p + PI / 2.0).take(6).collect();
     turns.push(0.0);
     let offsets = [(0.0, 0.0), (0.5, 0.0), (0.25, 0.5), (0.5, 0.5)];
-    let mut best: Option<(f64, Vec<[f64; 3]>)> = None;
     let rows = (reach / (d * 3f64.sqrt() / 2.0)).ceil() as i64 + 1;
     let cols = (reach / d).ceil() as i64 + 1;
-    let mut buf: Vec<(f64, [f64; 3])> = Vec::new();
+    // every turn and shift: its cells sorted by the scale each needs
+    let mut lists: Vec<Vec<(f64, [f64; 3])>> = Vec::new();
     for &turn in &turns {
         let (sn, cs) = turn.sin_cos();
         for &(fu, fv) in &offsets {
-            buf.clear();
+            let mut buf: Vec<(f64, [f64; 3])> = Vec::new();
             for j in -rows..=rows {
                 for i in -cols..=cols {
                     let lx = (i as f64 + 0.5 * j as f64 + fu) * d;
@@ -137,25 +144,24 @@ pub fn grid_packing(pc: &Piece, ct: &crate::geom::Container, k: usize) -> Option
                     buf.push((g, [x, y, 0.0]));
                 }
             }
-            if buf.len() < k {
-                continue;
-            }
-            buf.select_nth_unstable_by(k - 1, |a, b| a.0.partial_cmp(&b.0).unwrap());
-            let s = buf[k - 1].0;
-            if best.as_ref().is_none_or(|b| s < b.0) {
-                best = Some((s, buf[..k].iter().map(|b| b.1).collect()));
-            }
+            buf.sort_by(|a, b| a.0.total_cmp(&b.0));
+            lists.push(buf);
         }
     }
-    let (_, q) = best?;
-    repair(pc, ct, &q)
+    (1..=kmax)
+        .map(|k| {
+            let best = lists.iter().filter(|l| l.len() >= k).min_by(|a, b| a[k - 1].0.total_cmp(&b[k - 1].0))?;
+            let q: Vec<[f64; 3]> = best[..k].iter().map(|c| c.1).collect();
+            repair(pc, ct, &q)
+        })
+        .collect()
 }
 
 impl<'a> Engine<'a> {
     pub fn new(prob: Problem, seed: u64, bud: Budget<'a>, t0: f64) -> Engine<'a> {
         let mut pairs = Vec::with_capacity(prob.classes.len());
         for (c, cl) in prob.classes.iter().enumerate() {
-            pairs.push((1..=cl.kmax).map(|k| Pair { best: None, search: None, lb: prob.lower_bound(c, k) }).collect());
+            pairs.push((1..=cl.kmax).map(|k| Pair { best: None, checked: false, grid: false, search: None, lb: prob.lower_bound(c, k) }).collect());
         }
         let reserve_evals = if bud.eval_limit != u64::MAX { (bud.eval_limit as f64 * 0.03) as u64 } else { 0 };
         let total = bud.deadline - t0;
@@ -166,7 +172,7 @@ impl<'a> Engine<'a> {
             bud,
             t0,
             seed,
-            lats: None,
+            lats: Rc::new(OnceCell::new()),
             tune: Tuning::new(),
             best_score: f64::INFINITY,
             best_config: None,
@@ -193,30 +199,57 @@ impl<'a> Engine<'a> {
         validate_nofold(&cfg, &opts).ok
     }
 
-    /// Offers a packing of k pieces of class c (site units): kept when valid on its face and better.
-    fn offer(&mut self, c: usize, p: Packing) -> bool {
+    /// Offers a repaired packing of k pieces of class c (site units): kept when better. It is checked on
+    /// its face when an assignment first uses it.
+    fn offer(&mut self, c: usize, p: Packing, grid: bool) -> bool {
         let k = p.q.len();
         if k == 0 || k > self.prob.classes[c].kmax {
             return false;
         }
-        let pair = &self.pairs[c][k - 1];
+        let pair = &mut self.pairs[c][k - 1];
         if pair.best.as_ref().is_some_and(|b| b.s <= p.s) {
             return false;
         }
-        if !self.face_ok(c, &p) {
-            self.check_failures += 1;
-            if self.debug {
-                eprintln!("face check refused class {c} k {k} s {}", p.s);
-            }
-            return false;
-        }
-        let pair = &mut self.pairs[c][k - 1];
         if let Some(fs) = pair.search.as_mut() {
             fs.offer(&p);
             fs.improved = false;
         }
         pair.best = Some(p);
+        pair.checked = false;
+        pair.grid = grid;
         true
+    }
+
+    /// The best assignment whose face packings all pass the check on their faces: a packing that fails
+    /// (which no run has shown) is dropped, and the assignment is computed again.
+    fn checked_assignment(&mut self) -> Option<(f64, Vec<(usize, usize)>)> {
+        loop {
+            let (s, loads) = self.assignment()?;
+            let mut dropped = false;
+            for (c, &(load, src)) in loads.iter().enumerate() {
+                if load == 0 || self.pairs[c][src - 1].checked {
+                    continue;
+                }
+                let ok = self.face_ok(c, self.pairs[c][src - 1].best.as_ref().unwrap());
+                let pair = &mut self.pairs[c][src - 1];
+                if ok {
+                    pair.checked = true;
+                } else {
+                    self.check_failures += 1;
+                    if self.debug {
+                        eprintln!("face check refused class {c} k {src}");
+                    }
+                    pair.best = None;
+                    if let Some(fs) = pair.search.as_mut() {
+                        fs.best = None;
+                    }
+                    dropped = true;
+                }
+            }
+            if !dropped {
+                return Some((s, loads));
+            }
+        }
     }
 
     /// U_c(k): the least scale of a known packing of at least k pieces of class c, and which k' holds it.
@@ -255,7 +288,7 @@ impl<'a> Engine<'a> {
             }
             env.push(row);
         }
-        cands.sort_by(|a, b| a.partial_cmp(b).unwrap());
+        cands.sort_by(|a, b| a.total_cmp(b));
         cands.dedup();
         for &s in &cands {
             let mut cap = 0usize;
@@ -321,7 +354,11 @@ impl<'a> Engine<'a> {
 
     /// Recomputes the best assignment; checks and records it when it beats the best.
     fn update_global(&mut self) {
-        let Some((s, loads)) = self.assignment() else { return };
+        match self.assignment() {
+            Some((s, _)) if s < self.best_score => {}
+            _ => return,
+        }
+        let Some((s, loads)) = self.checked_assignment() else { return };
         if !(s < self.best_score) {
             return;
         }
@@ -382,7 +419,7 @@ impl<'a> Engine<'a> {
             let c = self.prob.face_class[f];
             let cont = self.prob.classes[c].cont.clone();
             if let Some(p) = repair(&self.prob.piece, &cont, &q) {
-                self.offer(c, p);
+                self.offer(c, p, false);
             }
         }
     }
@@ -485,11 +522,8 @@ impl<'a> Engine<'a> {
         out
     }
 
-    fn lattices(&mut self) -> Vec<Lattice> {
-        if self.lats.is_none() {
-            self.lats = Some(FaceSearch::lattices_of(&self.prob.piece));
-        }
-        self.lats.clone().unwrap()
+    fn lattices(&mut self) -> Rc<OnceCell<Vec<Lattice>>> {
+        self.lats.clone()
     }
 
     fn near_end(&mut self) -> bool {
@@ -508,7 +542,7 @@ impl<'a> Engine<'a> {
         }
         fs.improved = false;
         let Some(p) = fs.best.clone() else { return };
-        if self.offer(c, p) {
+        if self.offer(c, p, false) {
             self.update_global();
         }
     }
@@ -517,10 +551,8 @@ impl<'a> Engine<'a> {
         // a valid packing of every face problem at once, and so of the problem
         for c in 0..self.prob.classes.len() {
             let cont = self.prob.classes[c].cont.clone();
-            for k in 1..=self.prob.classes[c].kmax {
-                if let Some(p) = grid_packing(&self.prob.piece, &cont, k) {
-                    self.offer(c, p);
-                }
+            for p in grid_packings(&self.prob.piece, &cont, self.prob.classes[c].kmax).into_iter().flatten() {
+                self.offer(c, p, true);
             }
         }
         self.update_global();
@@ -576,8 +608,9 @@ impl<'a> Engine<'a> {
         }
         let until = self.bud.evals + self.slice_len(k);
         let km = self.prob.classes[c].kmax;
-        let fewer = if k >= 2 { self.pairs[c][k - 2].best.clone() } else { None };
-        let more = if k < km { self.pairs[c][k].best.clone() } else { None };
+        // the neighbours' packings seed starts once they have been searched (a grid packing is a poor start)
+        let fewer = if k >= 2 && !self.pairs[c][k - 2].grid { self.pairs[c][k - 2].best.clone() } else { None };
+        let more = if k < km && !self.pairs[c][k].grid { self.pairs[c][k].best.clone() } else { None };
         let hints = Hints { fewer: fewer.as_ref(), more: more.as_ref() };
         let mut fs = self.pairs[c][k - 1].search.take().unwrap();
         fs.work(&mut self.bud, until, &hints);

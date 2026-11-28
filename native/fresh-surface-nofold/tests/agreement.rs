@@ -1,7 +1,7 @@
 //! The solver's own geometry against the validator's: pair separation, containment depth, the fit scale,
 //! repair, the face classes and their maps, and the gradient of the objective.
 
-use fresh_surface_nofold::geom::{repair, Container, Piece, MARGIN};
+use fresh_surface_nofold::geom::{margin, repair, Container, Piece};
 use fresh_surface_nofold::model::{Model, Sol};
 use fresh_surface_nofold::rng::Rng;
 use fresh_surface_nofold::solid::Problem;
@@ -96,7 +96,7 @@ fn containment_agrees_with_validator() {
                     if fit > 0.0 {
                         let d = validator_depth(solid, n, fit, f, p);
                         assert!(d.abs() <= 1e-12 * (1.0 + fit), "{solid_name} face {f} n={n}: depth at fit {d}");
-                        let d = validator_depth(solid, n, cont.fit(&pc, p[0], p[1], p[2], r, MARGIN), f, p);
+                        let d = validator_depth(solid, n, cont.fit(&pc, p[0], p[1], p[2], r, margin(r)), f, p);
                         assert!(d >= 0.0, "{solid_name} face {f} n={n}: depth with margin {d}");
                     }
                 }

@@ -256,10 +256,13 @@ pub struct Packing {
     pub q: Vec<[f64; 3]>,
 }
 
-/// Separation margin (site units) that a repaired packing keeps between pieces and to the walls, so that
-/// rounding in the validator's own computation and in the transfer to other faces cannot make it invalid
-/// at the strict tolerance 1e-11.
-pub const MARGIN: f64 = 2e-12;
+/// Separation margin (site units) that a repaired packing keeps between pieces and to the walls, for
+/// pieces of bounding radius r: about a hundred times the rounding of the validator's own computation at
+/// these coordinates (a few r), so that the packing passes the check even at tolerance 0, and the transfer to
+/// other faces cannot spoil it; it costs about 1e-13 of the score.
+pub fn margin(r: f64) -> f64 {
+    1e-13 * r.max(1.0)
+}
 
 /// The least pair separation of a packing (site units, bounding radius r); pairs whose centres are
 /// farther apart than two bounding radii are separated and skipped.
@@ -280,22 +283,23 @@ pub fn min_separation(pc: &Piece, r: f64, q: &[[f64; 3]]) -> f64 {
 }
 
 /// Turns any arrangement (site units) into a valid packing: spreads the centres about the origin by
-/// 1 + lambda (doubling lambda) until every pair is separated by MARGIN (a separation never decreases
+/// 1 + lambda (doubling lambda) until every pair is separated by the margin (a separation never decreases
 /// under the spread when the overlap is less than the pieces' width), then takes the smallest scale
-/// that holds every piece with MARGIN to spare. None if the spread fails.
+/// that holds every piece with the margin to spare. None if the spread fails.
 pub fn repair(pc: &Piece, cont: &Container, q: &[[f64; 3]]) -> Option<Packing> {
     let r = pc.r_site;
+    let mg = margin(r);
     let mut out: Vec<[f64; 3]> = q.iter().map(|p| [p[0], p[1], reduce_angle(p[2], pc.period)]).collect();
     let ms = min_separation(pc, r, &out);
-    if !(ms >= MARGIN) {
-        let mut lam = ((MARGIN - ms).max(1e-15) / (2.0 * r * pc.inr)) * 1.5;
+    if !(ms >= mg) {
+        let mut lam = ((mg - ms).max(1e-15) / (2.0 * r * pc.inr)) * 1.5;
         let mut ok = false;
         for _ in 0..90 {
             for (o, p) in out.iter_mut().zip(q) {
                 o[0] = p[0] * (1.0 + lam);
                 o[1] = p[1] * (1.0 + lam);
             }
-            if min_separation(pc, r, &out) >= MARGIN {
+            if min_separation(pc, r, &out) >= mg {
                 ok = true;
                 break;
             }
@@ -307,7 +311,7 @@ pub fn repair(pc: &Piece, cont: &Container, q: &[[f64; 3]]) -> Option<Packing> {
     }
     let mut s = 0.0f64;
     for p in &out {
-        s = s.max(cont.fit(pc, p[0], p[1], p[2], r, MARGIN));
+        s = s.max(cont.fit(pc, p[0], p[1], p[2], r, mg));
     }
     // the validator recomputes the walls at s with its own rounding
     s *= 1.0 + 4.0 * f64::EPSILON;
