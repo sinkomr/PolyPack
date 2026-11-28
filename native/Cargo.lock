@@ -732,6 +732,17 @@ dependencies = [
 ]
 
 [[package]]
+name = "polypack-fresh-surface-nofold"
+version = "0.1.0"
+dependencies = [
+ "polypack-flat",
+ "polypack-spaceauto",
+ "polypack-spaces",
+ "polypack-surface",
+ "serde_json",
+]
+
+[[package]]
 name = "polypack-js"
 version = "0.1.0"
 dependencies = [
