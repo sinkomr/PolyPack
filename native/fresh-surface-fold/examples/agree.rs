@@ -76,7 +76,7 @@ fn main() {
                     }
                     mu = j;
                 }
-                if !(jam > 1e-3) {
+                if jam.partial_cmp(&1e-3) != Some(std::cmp::Ordering::Greater) {
                     continue;
                 }
                 m_tot += 1;

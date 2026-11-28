@@ -128,7 +128,7 @@ fn jamming_scale_agrees_with_the_validator() {
                     cfg.push(Pose { f: f as u32, x, y, t: wrap_angle(rng.uniform() * 7.0, n) });
                 }
                 let j = jam(&mut model, &cfg);
-                if !(j > 1e-3) {
+                if j.partial_cmp(&1e-3) != Some(std::cmp::Ordering::Greater) {
                     continue;
                 }
                 total += 1;

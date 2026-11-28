@@ -10,12 +10,15 @@
 //!   jamming scale for the poses as they are (model.rs, `jam_scale`) is a valid scale. It stops when the
 //!   valid and the infeasible scale meet to 1e-13, or as soon as it cannot beat the best.
 //! - *Frontier basin hopping*. At a scale a little above the best packing's (mu_best (1 + delta)), perturb
-//!   the current arrangement, relax, keep it when its energy is lower; an arrangement whose energy
-//!   reaches zero there beats the best: polish it, check it, record it and move the scale up. After
-//!   `patience` failed hops in a row, restart (from random centres, or from the best shaken hard).
-//! - *Check*. Only polished packings that beat the best are checked, with the server's check; the score
-//!   is the one it computes. A packing the check refuses is enlarged by 1e-9, 1e-7, 1e-5 and checked
-//!   again before it is dropped.
+//!   the current arrangement, relax (stopping early when the hop is clearly worse or back where it
+//!   started), keep it when its energy is lower; an arrangement whose energy reaches zero there beats the
+//!   best: *climb* (relax at growing scales while it fits, each repaired), check, record, move the scale
+//!   up and widen delta (x1.5). After `patience` failed hops in a row delta is divided by 4, down to
+//!   `delta_min`; then the chain's best is polished and the search restarts (random centres, or the best
+//!   shaken by 1-3 moves).
+//! - *Check*. Only packings that beat the best are checked, with the server's check; the score is the one
+//!   it computes. A packing the check refuses is enlarged by 1e-9, 1e-7, 1e-5 and checked again before it
+//!   is dropped.
 
 use crate::geo::Rig;
 use crate::model::{wrap_angle, Budget, Model, Pose, RelaxOpts};
@@ -36,11 +39,13 @@ pub struct Params {
     pub hop_iter: usize,
     pub polish_iter: usize,
     pub gtol: f64,
+    pub climb: bool,
+    pub start_polish: bool,
 }
 
 impl Params {
     pub fn for_problem(_prob: &Problem) -> Params {
-        Params { delta: 2e-3, delta_min: 2e-4, delta_max: 0.03, patience0: 30, patience1: 2, hop_iter: 3000, polish_iter: 2500, gtol: 1e-13 }
+        Params { delta: 2e-3, delta_min: env_num("FRESH_DMIN", 2e-4), delta_max: env_num("FRESH_DMAX", 0.03), patience0: 30, patience1: 2, hop_iter: 3000, polish_iter: 2500, gtol: 1e-13, climb: env_flag("FRESH_CLIMB", true), start_polish: env_flag("FRESH_STARTPOL", true) }
     }
 }
 
@@ -70,8 +75,8 @@ pub struct Stats {
     pub checks: u64,
     pub refused: u64,
     pub restarts: u64,
-    pub moves_tried: [u64; 6],
-    pub moves_won: [u64; 6],
+    pub moves_tried: [u64; 7],
+    pub moves_won: [u64; 7],
 }
 
 pub struct Search<'a, 'b> {
@@ -89,9 +94,11 @@ pub struct Search<'a, 'b> {
     debug: bool,
     debug_polish: bool,
     debug_hops: bool,
-    move_w: [f64; 6],
+    move_w: [f64; 7],
     /// the frontier gap, adapted
     delta: f64,
+    /// the best was polished once near the end of the budget
+    final_polished: bool,
 }
 
 impl<'a, 'b> Search<'a, 'b> {
@@ -115,8 +122,9 @@ impl<'a, 'b> Search<'a, 'b> {
             debug: std::env::var("FRESH_DEBUG").is_ok(),
             debug_polish: std::env::var("FRESH_DEBUG_POLISH").is_ok(),
             debug_hops: std::env::var("FRESH_DEBUG_HOPS").is_ok(),
-            move_w: [1.0; 6],
-            delta: 4e-3,
+            move_w: [1.0; 7],
+            delta: env_num("FRESH_D0", 4e-3),
+            final_polished: false,
         })
     }
 
@@ -187,7 +195,31 @@ impl<'a, 'b> Search<'a, 'b> {
             let q = self.hole(&cfg, i, 8);
             cfg[i] = q;
         }
+        // polygons, half the starts: an edge of each piece parallel to its face's nearest edge
+        let n = self.prob.n;
+        if n > 0 && self.rng.uniform() < 0.5 {
+            for q in cfg.iter_mut() {
+                let a = self.edge_angle(q);
+                let flip = if n % 2 == 1 && self.rng.uniform() < 0.5 { PI / n as f64 } else { 0.0 };
+                q.t = wrap_angle(a + flip, n);
+            }
+        }
         cfg
+    }
+
+    /// The angle that puts an edge of the piece parallel to the nearest edge of its face.
+    fn edge_angle(&self, q: &Pose) -> f64 {
+        let n = self.prob.n.max(3) as f64;
+        let fc = &self.model.geo.faces[q.f as usize];
+        let mut best = (f64::INFINITY, 0.0);
+        for k in 0..fc.m {
+            let d = fc.off[k] - (fc.nx[k] * q.x + fc.ny[k] * q.y);
+            if d < best.0 {
+                let j = (k + 1) % fc.m;
+                best = (d, (fc.vy[j] - fc.vy[k]).atan2(fc.vx[j] - fc.vx[k]));
+            }
+        }
+        best.1 - PI - PI / n
     }
 
     // ---------------------------------------------------------------- repair, polish, check
@@ -392,8 +424,24 @@ impl<'a, 'b> Search<'a, 'b> {
             2 => {
                 // re-seat 1 to 3 pieces in holes
                 let k = 1 + self.rng.below(3.min(p));
-                for _ in 0..k {
-                    let i = self.rng.below(p);
+                // half the time the first is the most squeezed piece
+                let first = if p > 1 && self.rng.uniform() < 0.5 {
+                    let mu = self.model.mu;
+                    let sq = self.model.squeeze(cfg, mu);
+                    let (i, &v) = sq.iter().enumerate().max_by(|a, b| a.1.total_cmp(b.1)).unwrap();
+                    if v > 0.0 {
+                        Some(i)
+                    } else {
+                        None
+                    }
+                } else {
+                    None
+                };
+                for s in 0..k {
+                    let i = match first {
+                        Some(f) if s == 0 => f,
+                        _ => self.rng.below(p),
+                    };
                     let q = self.hole(cfg, i, 24);
                     cfg[i] = q;
                 }
@@ -418,7 +466,7 @@ impl<'a, 'b> Search<'a, 'b> {
                     }
                 }
             }
-            _ => {
+            5 => {
                 // small shake of everything, angles too
                 let amp = 0.05 * r;
                 for i in 0..p {
@@ -431,11 +479,66 @@ impl<'a, 'b> Search<'a, 'b> {
                     cfg[i] = q;
                 }
             }
+            _ => {
+                // polygons: turn a piece to its neighbour's developed angle (odd N: or upside down), or
+                // an edge of it parallel to its face's nearest edge; disks: a small shift
+                let i = self.rng.below(p);
+                if n == 0 {
+                    let mut q = cfg[i];
+                    let (dx, dy) = (0.15 * r * self.rng.normal(), 0.15 * r * self.rng.normal());
+                    self.displace(&mut q, dx, dy);
+                    cfg[i] = q;
+                } else if self.rng.uniform() < 0.5 && p > 1 {
+                    if let Some(a) = self.neighbour_angle(cfg, i) {
+                        let flip = if n % 2 == 1 && self.rng.uniform() < 0.5 { PI / n as f64 } else { 0.0 };
+                        cfg[i].t = wrap_angle(a + flip, n);
+                    }
+                } else {
+                    let a = self.edge_angle(&cfg[i]);
+                    cfg[i].t = wrap_angle(a, n);
+                }
+            }
         }
         mv
     }
 
+    /// The developed angle of the nearest other piece seen from piece i (in i's face frame).
+    fn neighbour_angle(&mut self, cfg: &[Pose], i: usize) -> Option<f64> {
+        let q = cfg[i];
+        let reach = 2.2 * self.model.sh.r1 * self.model.mu.max(1e-3);
+        let mut nodes = Vec::new();
+        self.model.geo.chains(q.f as usize, q.x, q.y, reach, 400, &mut nodes);
+        let mut best: Option<(f64, f64)> = None;
+        for node in &nodes {
+            for (j, r) in cfg.iter().enumerate() {
+                if j == i || r.f != node.face {
+                    continue;
+                }
+                let (px, py) = node.t.apply(r.x, r.y);
+                let d = (px - q.x).hypot(py - q.y);
+                if d < reach && node.sees(q.x, q.y, px, py, 1e-9) && best.is_none_or(|b| d < b.0) {
+                    best = Some((d, r.t + node.t.ang));
+                }
+            }
+        }
+        best.map(|b| b.1)
+    }
+
     // ---------------------------------------------------------------- the schedule
+
+    /// A start relaxed at `mu0`, or at smaller scales until it fits; its exact jamming scale.
+    fn start_relax(&mut self, cfg: &mut [Pose], mu0: f64) -> f64 {
+        let mut mu = mu0;
+        let ro = RelaxOpts { max_iter: 2000, gtol: self.params.gtol, stall_rel: 1e-9, watch: None };
+        for _ in 0..12 {
+            let e = self.model.relax_with(cfg, mu, &ro, &mut self.budget);
+            if e <= 1e-24 * mu * mu || self.budget.spent() {
+                break;
+            }
+            mu *= 0.93;
+        }
+        self.repair(cfg, mu)
+    }
 
     fn start_from(&mut self, mut cfg: Vec<Pose>, mu0: f64) {
         if self.best.is_none() {
@@ -445,11 +548,9 @@ impl<'a, 'b> Search<'a, 'b> {
                 self.fallback(&cfg, r);
             }
         }
-        let mu = self.polish(&mut cfg, mu0);
-        if mu > self.best_mu() {
-            if !self.offer(&cfg, mu) && self.best.is_none() {
-                self.fallback(&cfg, mu);
-            }
+        let mu = if self.params.start_polish { self.polish(&mut cfg, mu0) } else { self.start_relax(&mut cfg, mu0) };
+        if mu > self.best_mu() && !self.offer(&cfg, mu) && self.best.is_none() {
+            self.fallback(&cfg, mu);
         }
         if self.best.is_none() && !self.budget.spent() {
             self.fallback(&cfg, mu.max(1e-3));
@@ -485,6 +586,18 @@ impl<'a, 'b> Search<'a, 'b> {
         best
     }
 
+    /// Near the end of the budget: the best, polished precisely (its last digits), once.
+    fn final_polish(&mut self) {
+        self.final_polished = true;
+        if let Some(b) = self.best.clone() {
+            let mut c = b.cfg.clone();
+            let m = self.polish(&mut c, b.mu * (1.0 + 1e-5));
+            if m > self.best_mu() {
+                self.offer(&c, m);
+            }
+        }
+    }
+
     /// Frontier basin hopping from (cfg, mu_cfg) until patience runs out, then the precise polish of
     /// the chain's best.
     fn hop_from(&mut self, cfg: Vec<Pose>, mu_cfg: f64) {
@@ -509,6 +622,9 @@ impl<'a, 'b> Search<'a, 'b> {
                 }
                 break;
             }
+            if !self.final_polished && self.budget.fraction() > 0.9 {
+                self.final_polish();
+            }
             let mut cand = cur.clone();
             let mv = self.perturb(&mut cand);
             self.stats.hops += 1;
@@ -527,7 +643,7 @@ impl<'a, 'b> Search<'a, 'b> {
                 self.stats.frontier += 1;
                 self.stats.moves_won[mv] += 1;
                 self.move_w[mv] = (self.move_w[mv] * 1.1).min(4.0);
-                let mu = self.climb(&mut cand, mu_h, delta);
+                let mu = if self.params.climb { self.climb(&mut cand, mu_h, delta) } else { self.repair(&cand, mu_h) };
                 if mu > self.best_mu() {
                     self.offer(&cand, mu);
                 }
@@ -571,9 +687,18 @@ impl<'a, 'b> Search<'a, 'b> {
         if let Some(v) = start {
             if let Some((_, poses)) = poses_of(v, self.work) {
                 if poses.len() == self.p() && poses.iter().all(|q| (q.f as usize) < self.model.geo.faces.len()) {
-                    if let Some(score) = (self.checker)(v) {
+                    // checked directly: the start is the first best, not an improvement to report
+                    if let Some(score) = crate::check(&self.prob.id, v) {
                         let t = self.budget.now() - self.t0;
-                        let cfg: Vec<Pose> = poses.iter().map(|q| Pose { t: wrap_angle(q.t, self.prob.n), ..*q }).collect();
+                        let geo = &self.model.geo;
+                        let n = self.prob.n;
+                        let cfg: Vec<Pose> = poses
+                            .iter()
+                            .map(|q| {
+                                let (f, x, y, m) = geo.locate(q.f as usize, q.x, q.y);
+                                Pose { f: f as u32, x, y, t: wrap_angle(q.t + m.ang, n) }
+                            })
+                            .collect();
                         self.trace.push((t, score));
                         self.best = Some(Best { cfg, mu: self.work / score, score, config: v.clone() });
                     }
@@ -611,6 +736,19 @@ impl<'a, 'b> Search<'a, 'b> {
         let stopped = if self.budget.halt_evals { "evals" } else { "cpu" };
         Report { best: self.best, trace: self.trace, evaluations: self.budget.evals, stopped }
     }
+}
+
+/// A development switch from the environment (default when unset).
+pub fn env_flag(name: &str, default: bool) -> bool {
+    match std::env::var(name) {
+        Ok(v) => v != "0",
+        Err(_) => default,
+    }
+}
+
+/// A development number from the environment.
+pub fn env_num(name: &str, default: f64) -> f64 {
+    std::env::var(name).ok().and_then(|v| v.parse().ok()).unwrap_or(default)
 }
 
 #[inline]

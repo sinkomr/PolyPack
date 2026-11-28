@@ -103,6 +103,13 @@ impl Shape {
         // direction in the piece's own frame
         let lx = cs * ux + sn * uy;
         let ly = -sn * ux + cs * uy;
+        if self.n <= 16 {
+            let mut h = f64::NEG_INFINITY;
+            for k in 0..self.n {
+                h = h.max(lx * self.bx[k] + ly * self.by[k]);
+            }
+            return h;
+        }
         let a = ly.atan2(lx) - PI / 2.0;
         let mut t = a % self.step;
         if t < 0.0 {
@@ -198,11 +205,13 @@ pub struct Budget<'a> {
     pub halted: bool,
     pub halt_evals: bool,
     tick: u32,
+    start: f64,
 }
 
 impl<'a> Budget<'a> {
     pub fn new(deadline: f64, max_evals: Option<u64>, clock: &'a dyn Fn() -> f64) -> Budget<'a> {
-        Budget { deadline, max_evals: max_evals.unwrap_or(u64::MAX), evals: 0, clock, halted: false, halt_evals: false, tick: 0 }
+        let start = clock();
+        Budget { deadline, max_evals: max_evals.unwrap_or(u64::MAX), evals: 0, clock, halted: false, halt_evals: false, tick: 0, start }
     }
     /// True once the budget is spent (the clock is read every 32 calls).
     #[inline]
@@ -223,6 +232,17 @@ impl<'a> Budget<'a> {
             }
         }
         self.halted
+    }
+    /// The share of the budget used: evaluations when they are capped (so that a run stays a function of
+    /// its evaluation budget), else CPU time.
+    pub fn fraction(&self) -> f64 {
+        if self.max_evals < u64::MAX {
+            return self.evals as f64 / self.max_evals as f64;
+        }
+        if !self.deadline.is_finite() {
+            return 0.0;
+        }
+        ((self.clock)() - self.start) / (self.deadline - self.start).max(1e-9)
     }
     pub fn now(&self) -> f64 {
         (self.clock)()
@@ -333,7 +353,7 @@ impl Model {
                 let fc = &self.geo.faces[node.face as usize];
                 for k in 0..fc.m {
                     let (vx, vy) = node.t.apply(fc.vx[k], fc.vy[k]);
-                    let d = (vx - cx).hypot(vy - cy);
+                    let d = ((vx - cx) * (vx - cx) + (vy - cy) * (vy - cy)).sqrt();
                     if d >= ccut || !node.sees(cx, cy, vx, vy, tol) {
                         continue;
                     }
@@ -353,7 +373,7 @@ impl Model {
                     }
                     let r = &cfg[j];
                     let (px, py) = node.t.apply(r.x, r.y);
-                    let d = (px - cx).hypot(py - cy);
+                    let d = ((px - cx) * (px - cx) + (py - cy) * (py - cy)).sqrt();
                     if d >= pcut || !node.sees(cx, cy, px, py, tol) {
                         continue;
                     }
@@ -624,7 +644,7 @@ impl Model {
             let (dx, dy) = (qx - cix, qy - ciy);
             let o = off + pr.line as usize;
             let (a, b, beta) = (x[o], x[o + 1], x[o + 2]);
-            let wn = a.hypot(b).max(1e-300);
+            let wn = (a * a + b * b).sqrt().max(1e-300);
             let (ux, uy) = (a / wn, b / wn);
             let ud2 = 0.5 * (ux * dx + uy * dy);
             let (ci_c, ci_s) = (self.cs[i], self.sn[i]);
@@ -712,7 +732,7 @@ impl Model {
             let i = c.i as usize;
             let o = off + c.line as usize;
             let (a, b) = (x[o], x[o + 1]);
-            let wn = a.hypot(b).max(1e-300);
+            let wn = (a * a + b * b).sqrt().max(1e-300);
             let (ux, uy) = (a / wn, b / wn);
             let (rx, ry) = (x[3 * i] - c.vx, x[3 * i + 1] - c.vy);
             let c0 = ux * rx + uy * ry;
@@ -918,6 +938,28 @@ impl Model {
     }
 
     /// The energy of `cfg` at `mu` without minimising (a fresh build).
+    /// How squeezed each piece of `cfg` is at scale `mu`: the sum over its images of the squared
+    /// scale it is short of fitting (a fresh build).
+    pub fn squeeze(&mut self, cfg: &[Pose], mu: f64) -> Vec<f64> {
+        self.build(cfg, mu);
+        let mut out = vec![0.0; self.p];
+        for pr in &self.pairs {
+            let m = self.pair_jam(cfg, pr);
+            if m < mu {
+                let d = (mu - m) * (mu - m);
+                out[pr.i as usize] += d;
+                out[pr.j as usize] += d;
+            }
+        }
+        for c in &self.cones {
+            let m = self.cone_jam(cfg, c);
+            if m < mu {
+                out[c.i as usize] += (mu - m) * (mu - m);
+            }
+        }
+        out
+    }
+
     pub fn energy_of(&mut self, cfg: &[Pose], mu: f64) -> f64 {
         self.build(cfg, mu);
         let nvar = self.nvar;

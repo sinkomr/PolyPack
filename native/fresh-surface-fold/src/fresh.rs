@@ -2,7 +2,7 @@
 //! `surface/<solid>/fold/<N>/<P>` on the calling thread. The search reads its CPU clock through a
 //! closure; this adapter hands it a clock that jumps to the deadline when the client's stop flag is set
 //! or the wall deadline has passed, so the search ends as it ends at its CPU deadline. Each checked
-//! improvement is reported as it is recorded. A valid `start` is the first best: nothing worse is
+//! improvement is reported as it is recorded. A valid `start` is the first best (not reported): nothing worse is
 //! returned.
 
 use crate::model::Budget;

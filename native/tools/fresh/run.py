@@ -27,7 +27,7 @@ BIN = ROOT / "native" / "target" / "release"
 
 def family(pid):
     head = pid.split("/")[0]
-    return head if head in ("flat", "curved", "sphere", "balls") else "other"
+    return head if head in ("flat", "curved", "sphere", "balls", "surface") else "other"
 
 
 def command(solver, pid, seconds, seed):
