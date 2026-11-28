@@ -1,0 +1,121 @@
+//! fresh-polyhedra: a search for P congruent convex polyhedra in the smallest scaled polyhedron
+//! (`polyhedra/<piece>in<container>/<P>`) or ball (`balls/<solid>inball/<P>`), written from scratch for the
+//! fresh-solvers benchmark (native/FRESH.md). The method is in README.md and search.rs.
+
+pub mod energy;
+pub mod lbfgs;
+pub mod model;
+pub mod repair;
+pub mod rng;
+pub mod search;
+
+use lbfgs::Budget;
+use model::Problem;
+use polypack_flat::clock::thread_cpu_seconds;
+use polypack_spaceauto::{FreshJob, FreshResult};
+use repair::{check_or_enlarge, Packing};
+use serde_json::Value;
+
+/// What a run gives: the best checked packing and the trace of checked improvements.
+pub struct RunOutput {
+    pub score: Option<f64>,
+    pub config: Option<Value>,
+    pub evaluations: u64,
+    /// (CPU seconds, best score) at each checked improvement.
+    pub trace: Vec<(f64, f64)>,
+    pub stats: String,
+    /// Why it ended: "cpu", "deadline", "stop", "evals" or "bound".
+    pub stopped: String,
+}
+
+/// One search of a problem: `budget` bounds it, `start` (a valid configuration) is where it begins, and
+/// `on_improve(score, config)` is called at each checked improvement after the start.
+fn run(
+    prob: &Problem,
+    seed: u64,
+    budget: Budget,
+    start: Option<&Value>,
+    verbose: bool,
+    on_improve: &mut dyn FnMut(f64, &Value),
+) -> RunOutput {
+    let t0 = budget.t0;
+    let mut trace: Vec<(f64, f64)> = Vec::new();
+    let mut best: Option<(f64, Value)> = None;
+    // a start counts only when it is a valid configuration of this problem
+    let start_pk = start.and_then(|v| {
+        let score = repair::check(prob, v).or_else(|| repair::check_default(prob, v))?;
+        let pk = Packing::from_json(v)?;
+        (pk.poses.len() == prob.p).then_some((pk, score, v.clone()))
+    });
+    if let Some((_, score, cfg)) = &start_pk {
+        best = Some((*score, cfg.clone()));
+    }
+    let mut search = search::Search::new(prob, seed, budget);
+    {
+        let mut offer = |pk: &Packing| -> Option<f64> {
+            let (score, cfg, _) = check_or_enlarge(prob, pk)?;
+            if best.as_ref().is_none_or(|b| score < b.0) {
+                let t = thread_cpu_seconds() - t0;
+                trace.push((t, score));
+                if verbose {
+                    eprintln!("t {t:.3} best {score:.12}");
+                }
+                on_improve(score, &cfg);
+                best = Some((score, cfg));
+            }
+            Some(score)
+        };
+        search.run(start_pk.as_ref().map(|(pk, score, _)| (pk, *score)), &mut offer);
+    }
+    let st = &search.stats;
+    let stats = format!(
+        "evals {} (polish {}) hops {} (same {}, iters {}) accepted {} polishes {} restarts {} improvements {} segments {} rebuilds {} moves {:?} wins {:?} cpu {:.2}",
+        search.en.evals,
+        st.polish_evals,
+        st.hops,
+        st.same,
+        st.hop_iters,
+        st.accepted,
+        st.polishes,
+        st.restarts,
+        st.improvements,
+        st.segments,
+        search.en.rebuilds,
+        st.moves,
+        st.wins,
+        thread_cpu_seconds() - t0
+    );
+    let mut stopped = search.budget.reason.to_string();
+    if stopped.is_empty() {
+        stopped = "cpu".to_string();
+    }
+    let (score, config) = match best {
+        Some((s, c)) => (Some(s), Some(c)),
+        None => (None, None),
+    };
+    RunOutput { score, config, evaluations: search.en.evals, trace, stats, stopped }
+}
+
+/// One run from scratch on a problem id, for the command line (native/FRESH.md).
+pub fn solve(id: &str, seed: u64, seconds: f64, max_evals: u64, verbose: bool) -> Result<RunOutput, String> {
+    let prob = Problem::parse(id)?;
+    let budget = Budget::new(max_evals, seconds);
+    Ok(run(&prob, seed, budget, None, verbose, &mut |_, _| {}))
+}
+
+/// The fresh engines' entry point (polypack_spaceauto::fresh): one whole search of a polyhedra problem or of
+/// solids in a ball. Err for any other id.
+pub fn fresh_search(job: &FreshJob, on_improve: &mut dyn FnMut(f64, &Value)) -> Result<FreshResult, String> {
+    let prob = Problem::parse(job.id)?;
+    let mut budget = Budget::new(job.max_evals.unwrap_or(u64::MAX), job.cpu_seconds);
+    budget.deadline = Some(job.deadline);
+    budget.stop = Some(job.stop);
+    let out = run(&prob, job.seed, budget, job.start, false, on_improve);
+    Ok(FreshResult {
+        config: out.config,
+        score: out.score,
+        evaluations: out.evaluations,
+        stopped: out.stopped,
+        method: "fresh polyhedra".to_string(),
+    })
+}

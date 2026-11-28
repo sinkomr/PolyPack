@@ -1,0 +1,24 @@
+[package]
+name = "polypack-fresh-polyhedra"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+description = "A search for congruent convex polyhedra in a scaled polyhedron or a ball, written from scratch, for comparison with the port"
+
+[lib]
+name = "fresh_polyhedra"
+path = "src/lib.rs"
+
+[[bin]]
+name = "fresh-polyhedra"
+path = "src/main.rs"
+
+[dependencies]
+polypack-flat = { path = "../flat" }
+# definitions only: the solids (vertices, face planes), the problem ids, the volume bound, and the check
+polypack-polyhedra = { path = "../polyhedra" }
+polypack-balls = { path = "../balls" }
+polypack-spaces = { path = "../spaces" }
+# the fresh engines' interface (FreshJob, FreshResult)
+polypack-spaceauto = { path = "../spaceauto" }
+serde_json = { version = "1", features = ["float_roundtrip"] }
