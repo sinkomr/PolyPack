@@ -82,7 +82,8 @@ spreads the centres about the face centre by 1 + lambda (doubling) until every p
 of 1e-13 max(1, R), then takes the least scale that holds every piece with that margin. A face packing that an
 assignment uses is first checked on its face with the validator's nofold check at tolerance 1e-11; the
 assembled packing is checked with `validate_space_submission` with `no_record` (strict, tolerance 1e-11, which
-implies the default check) before it enters the trace, `on_improve` or the result. A constructive packing of
+implies the default check) before it enters the trace, `on_improve` or the result; an improvement smaller than
+1e-12 of the score (a repolish of the same packing) is not recorded. A constructive packing of
 every face problem (the k cells of a hexagonal grid of bounding circles that need the least scale, of 7 turns
 and 4 shifts) gives a valid packing of any problem within milliseconds.
 
@@ -165,7 +166,9 @@ are 6.8 to 8.9 times fresh's.
 - Tuning (5 CPU seconds, seeds 1 and 2, 16 harder problems with 4 to 40 pieces per face; R the best of all
   variants' runs): the defaults reached R(1 + 1e-4) in 32 of 32 runs (median 0.025 s) and R(1 + 1e-6) in 31.
   Exploring at w = 0.01 or 0.1, shorter epochs (40 + 1.5 k), more lattice starts, or no polishing of each
-  epoch's final packing were each worse at 5 s (mean gap 2.6e-7 to 1.5e-4 against 6.9e-8). The slowest problem
+  epoch's final packing were each worse at 5 s (mean gap 2.6e-7 to 1.5e-4 against 6.9e-8). A move that turns a piece
+  so that an edge lies flush with its nearest wall (`mv_snap=1`) was not better on six structured problems (3
+  seeds, 5 s: within 1e-6 of R in 14 of 18 runs against 16 of 18), so it is off. The slowest problem
   was square_pyramid/4/60, where 9 squares in a triangle at 3 + 4/sqrt(3) (load 9 on the triangles and 24 on the
   square) took 2.8 and 3.6 s to find.
 
@@ -184,7 +187,8 @@ are 6.8 to 8.9 times fresh's.
 `FSN_DEBUG=1` prints the improvements of the whole packing, the starts, polishes and epoch ends of the face
 problems on stderr; `--verbose` prints per face problem the evaluations, starts, hops, best scale and starts
 that won. Tuning overrides (environment, development only): `FSN_PARAMS="w=0.03,wq=1e-5,fails_k=3,hole=0.5,
-gtol=0.01,abort_it=50,abort_m=0.02,share=0.25,latc=40,near=0.01,s_rand=1,s_align=1,s_lat=1.5,s_elite=1,s_nb=1"`
+gtol=0.01,abort_it=50,abort_m=0.02,share=0.25,latc=40,near=0.01,s_rand=1,s_align=1,s_lat=1.5,s_elite=1,s_nb=1,
+mv_copy=1,mv_snap=0"`
 (face searches, `planar.rs: Params`) and `FSN_TUNE="slice=3000,slice_k=300,min_slices=3,g0=0.01"` (the
 schedule, `search.rs: Tuning`). `examples/lat.rs` prints the densities of the periodic arrangements.
 

@@ -35,8 +35,9 @@ pub struct Params {
     pub near_window: f64,
     /// Start kinds: random, aligned, lattice, elite, neighbour.
     pub start_w: [f64; 5],
-    /// Moves: shake all, relocate, shake a neighbourhood, turn, turn over, copy a neighbour's angle.
-    pub move_w: [f64; 6],
+    /// Moves: shake all, relocate, shake a neighbourhood, turn, turn over, copy a neighbour's angle, set
+    /// an edge of a piece flush with its nearest wall.
+    pub move_w: [f64; 7],
 }
 
 impl Params {
@@ -55,7 +56,8 @@ impl Params {
             lat_cands: 40,
             near_window: 0.01,
             start_w: [1.0, 1.0, 1.5, 1.0, 1.0],
-            move_w: [1.0; 6],
+            // the flush move (6) measured no better on structured problems: off unless asked for
+            move_w: [1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 0.0],
         };
         if let Ok(v) = std::env::var("FSN_PARAMS") {
             for kv in v.split(',') {
@@ -82,6 +84,8 @@ impl Params {
                     "s_lat" => p.start_w[2] = f,
                     "s_elite" => p.start_w[3] = f,
                     "s_nb" => p.start_w[4] = f,
+                    "mv_snap" => p.move_w[6] = f,
+                    "mv_copy" => p.move_w[5] = f,
                     _ => {}
                 }
             }
@@ -566,17 +570,25 @@ impl FaceSearch {
     }
 
     fn perturb(&mut self, sol: &mut Sol) -> usize {
-        let nk = if self.dim == 3 { 6 } else { 3 };
-        let nk = if self.k == 1 { nk.min(if self.dim == 3 { 5 } else { 2 }) } else { nk };
-        let total: f64 = self.prm.move_w[..nk].iter().sum();
+        let mut w = self.prm.move_w;
+        if self.dim == 2 {
+            // angles mean nothing for disks
+            w[3..].iter_mut().for_each(|v| *v = 0.0);
+        }
+        if self.k == 1 {
+            w[5] = 0.0;
+        }
+        let total: f64 = w.iter().sum();
         let mut x = self.rng.uniform() * total;
-        let mut kind = nk - 1;
-        for k in 0..nk {
-            if x < self.prm.move_w[k] {
+        let mut kind = 0;
+        for (k, &wk) in w.iter().enumerate() {
+            if wk > 0.0 {
                 kind = k;
-                break;
+                if x < wk {
+                    break;
+                }
+                x -= wk;
             }
-            x -= self.prm.move_w[k];
         }
         self.apply_move(sol, kind)
     }
@@ -641,6 +653,23 @@ impl FaceSearch {
             4 => {
                 let i = self.rng.below(k);
                 sol.q[3 * i + 2] += 0.5 * period;
+            }
+            6 => {
+                // an edge of one piece flush with the wall it is nearest to (the nearest such angle)
+                let i = self.rng.below(k);
+                let ct = &self.model.ct;
+                let (x, y) = (sol.q[3 * i], sol.q[3 * i + 1]);
+                let mut near = (f64::INFINITY, 0);
+                for e in 0..ct.m {
+                    let d = sol.s * ct.h[e] - (ct.nx[e] * x + ct.ny[e] * y);
+                    if d < near.0 {
+                        near = (d, e);
+                    }
+                }
+                let n = self.model.pc.n as f64;
+                let base = ct.psi[near.1] - PI / 2.0 - PI / n;
+                let j = ((sol.q[3 * i + 2] - base) / period).round();
+                sol.q[3 * i + 2] = base + j * period;
             }
             _ => {
                 let i = self.rng.below(k);

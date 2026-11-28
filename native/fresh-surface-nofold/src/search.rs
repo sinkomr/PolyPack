@@ -355,11 +355,11 @@ impl<'a> Engine<'a> {
     /// Recomputes the best assignment; checks and records it when it beats the best.
     fn update_global(&mut self) {
         match self.assignment() {
-            Some((s, _)) if s < self.best_score => {}
+            Some((s, _)) if s < self.best_score * (1.0 - 1e-12) => {}
             _ => return,
         }
         let Some((s, loads)) = self.checked_assignment() else { return };
-        if !(s < self.best_score) {
+        if !(s < self.best_score * (1.0 - 1e-12)) {
             return;
         }
         let cfg = self.assemble(s, &loads);
