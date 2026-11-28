@@ -74,6 +74,8 @@ pub struct Energy {
     pub rebuilds: u64,
     /// Per-piece energy share of the last `per_piece` call.
     per: Vec<f64>,
+    graph: Option<Graph>,
+    walk: Walk,
     // scratch for rebuild
     new_pairs: Vec<[u32; 2]>,
     new_planes: Vec<f64>,
@@ -110,9 +112,132 @@ fn side<const CUBIC: bool>(vx: &[f64], vy: &[f64], vz: &[f64], ul: [f64; 3], c0:
     (e, 2.0 * s, [2.0 * a, 2.0 * b, 2.0 * c])
 }
 
+/// The piece's vertex-edge graph (CSR), for pieces with many vertices: the vertices of a convex polytope above any
+/// level of a linear function are connected through its edges and include its maximum, which a walk that always
+/// steps up reaches from any vertex. So a side's violating vertices are found by climbing to the support vertex and
+/// spreading from it, instead of projecting every vertex.
+#[derive(Clone, Debug, Default)]
+struct Graph {
+    start: Vec<u32>,
+    adj: Vec<u32>,
+    /// Starting points of the climb: the vertices extreme along +-x, +-y, +-z.
+    probes: Vec<u32>,
+}
+
+/// Scratch of the walks: visit stamps and a stack.
+#[derive(Clone, Debug, Default)]
+struct Walk {
+    mark: Vec<u32>,
+    stamp: u32,
+    stack: Vec<u32>,
+}
+
+/// `side` by the graph (see Graph): the same sums over the vertices with c0 + ul . v > 0.
+#[inline]
+fn side_walk<const CUBIC: bool>(vx: &[f64], vy: &[f64], vz: &[f64], g: &Graph, w: &mut Walk, ul: [f64; 3], c0: f64) -> (f64, f64, [f64; 3]) {
+    let proj = |k: usize| ul[0] * vx[k] + ul[1] * vy[k] + ul[2] * vz[k];
+    let mut best = g.probes[0] as usize;
+    let mut bv = proj(best);
+    for &pb in &g.probes[1..] {
+        let v = proj(pb as usize);
+        if v > bv {
+            bv = v;
+            best = pb as usize;
+        }
+    }
+    loop {
+        let mut next = best;
+        for &nb in &g.adj[g.start[best] as usize..g.start[best + 1] as usize] {
+            let v = proj(nb as usize);
+            if v > bv {
+                bv = v;
+                next = nb as usize;
+            }
+        }
+        if next == best {
+            break;
+        }
+        best = next;
+    }
+    if c0 + bv <= 0.0 {
+        return (0.0, 0.0, [0.0; 3]);
+    }
+    w.stamp = w.stamp.wrapping_add(1);
+    if w.stamp == 0 {
+        w.mark.iter_mut().for_each(|m| *m = 0);
+        w.stamp = 1;
+    }
+    let stamp = w.stamp;
+    w.stack.clear();
+    w.stack.push(best as u32);
+    w.mark[best] = stamp;
+    let (mut e, mut s, mut a, mut b, mut c) = (0.0, 0.0, 0.0, 0.0, 0.0);
+    while let Some(v) = w.stack.pop() {
+        let v = v as usize;
+        let r = c0 + proj(v);
+        let (pe, hw) = pen::<CUBIC>(r);
+        e += pe;
+        s += hw;
+        a += hw * vx[v];
+        b += hw * vy[v];
+        c += hw * vz[v];
+        for &nb in &g.adj[g.start[v] as usize..g.start[v + 1] as usize] {
+            let nb = nb as usize;
+            if w.mark[nb] != stamp {
+                w.mark[nb] = stamp;
+                if c0 + proj(nb) > 0.0 {
+                    w.stack.push(nb as u32);
+                }
+            }
+        }
+    }
+    (e, 2.0 * s, [2.0 * a, 2.0 * b, 2.0 * c])
+}
+
+/// Vertices at least this many: sides are found by walking the graph.
+const WALK_MIN_VERTICES: usize = 20;
+
 #[inline(always)]
 fn cross(a: [f64; 3], b: [f64; 3]) -> [f64; 3] {
     [a[1] * b[2] - a[2] * b[1], a[2] * b[0] - a[0] * b[2], a[0] * b[1] - a[1] * b[0]]
+}
+
+/// The piece's graph when it has many vertices (and the walk is enabled: FRESH_WALK=0 disables it).
+fn build_graph(piece: &Piece) -> Option<Graph> {
+    if piece.nv < WALK_MIN_VERTICES || std::env::var("FRESH_WALK").is_ok_and(|v| v == "0") {
+        return None;
+    }
+    Some(build_graph_any(piece))
+}
+
+fn build_graph_any(piece: &Piece) -> Graph {
+    let nv = piece.nv;
+    let mut nbs: Vec<Vec<u32>> = vec![Vec::new(); nv];
+    for &[a, b] in &piece.solid.edges {
+        nbs[a].push(b as u32);
+        nbs[b].push(a as u32);
+    }
+    let mut g = Graph::default();
+    g.start.push(0);
+    for l in &nbs {
+        g.adj.extend_from_slice(l);
+        g.start.push(g.adj.len() as u32);
+    }
+    for d in 0..3 {
+        for sign in [1.0, -1.0] {
+            let mut best = (f64::NEG_INFINITY, 0usize);
+            for k in 0..nv {
+                let v = sign * [piece.vx[k], piece.vy[k], piece.vz[k]][d];
+                if v > best.0 {
+                    best = (v, k);
+                }
+            }
+            if !g.probes.contains(&(best.1 as u32)) {
+                g.probes.push(best.1 as u32);
+            }
+        }
+    }
+    g
 }
 
 impl Energy {
@@ -155,9 +280,25 @@ impl Energy {
             evals: 0,
             rebuilds: 0,
             per: vec![0.0; p],
+            graph: build_graph(piece),
+            walk: Walk { mark: vec![0; piece.nv], stamp: 0, stack: Vec::new() },
             new_pairs: Vec::new(),
             new_planes: Vec::new(),
         }
+    }
+
+    /// Finds violating vertices by walking the piece's graph (true) or by projecting every vertex (false); the
+    /// walk is on by default for pieces with many vertices. The two give the same energy and gradient.
+    pub fn set_walk(&mut self, on: bool, piece: &Piece) {
+        self.graph = if on {
+            let mut g = build_graph_any(piece);
+            if g.probes.is_empty() {
+                g.probes.push(0);
+            }
+            Some(g)
+        } else {
+            None
+        };
     }
 
     /// Number of variables of a state with `npairs` listed pairs.
@@ -240,6 +381,8 @@ impl Energy {
         let mut energy = 0.0;
         let base = 7 * p;
         let (vx, vy, vz) = (&self.vx[..], &self.vy[..], &self.vz[..]);
+        let mut walk = std::mem::take(&mut self.walk);
+        let graph = self.graph.as_ref();
         // pairs
         for (k, pr) in self.pairs.iter().enumerate() {
             let i = pr[0] as usize;
@@ -269,13 +412,20 @@ impl Energy {
             if ca + 1.0 > 0.0 {
                 let ul = rt_mul(&self.rots[i], u);
                 if ca + self.reach(ul) > 0.0 {
-                    (ea, sa, sva) = side::<CUBIC>(vx, vy, vz, ul, ca);
+                    (ea, sa, sva) = match graph {
+                        Some(gr) => side_walk::<CUBIC>(vx, vy, vz, gr, &mut walk, ul, ca),
+                        None => side::<CUBIC>(vx, vy, vz, ul, ca),
+                    };
                 }
             }
             if cb + 1.0 > 0.0 {
                 let ul = rt_mul(&self.rots[j], u);
                 if cb + self.reach(ul) > 0.0 {
-                    (eb, sb, svb) = side::<CUBIC>(vx, vy, vz, [-ul[0], -ul[1], -ul[2]], cb);
+                    let nl = [-ul[0], -ul[1], -ul[2]];
+                    (eb, sb, svb) = match graph {
+                        Some(gr) => side_walk::<CUBIC>(vx, vy, vz, gr, &mut walk, nl, cb),
+                        None => side::<CUBIC>(vx, vy, vz, nl, cb),
+                    };
                 }
             }
             if sa == 0.0 && sb == 0.0 {
@@ -364,7 +514,10 @@ impl Energy {
                     if c0 + self.reach(ul) <= 0.0 {
                         continue;
                     }
-                    let (ei, si, svi) = side::<CUBIC>(vx, vy, vz, ul, c0);
+                    let (ei, si, svi) = match graph {
+                        Some(gr) => side_walk::<CUBIC>(vx, vy, vz, gr, &mut walk, ul, c0),
+                        None => side::<CUBIC>(vx, vy, vz, ul, c0),
+                    };
                     if si == 0.0 {
                         continue;
                     }
@@ -381,6 +534,7 @@ impl Energy {
                 }
             }
         }
+        self.walk = walk;
         // the quaternions' gradients from the torques
         for i in 0..p {
             let t = self.tq[i];

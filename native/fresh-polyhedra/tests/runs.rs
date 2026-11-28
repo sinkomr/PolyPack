@@ -57,7 +57,7 @@ fn short_runs_give_valid_packings_with_an_improving_trace() {
 
 #[test]
 fn runs_with_an_evaluation_budget_are_reproducible() {
-    for id in ["polyhedra/tetintet/7", "polyhedra/pr5inj03/4", "balls/cubinball/6"] {
+    for id in ["polyhedra/tetintet/7", "polyhedra/pr5inj03/4", "balls/cubinball/6", "polyhedra/octincub/40"] {
         let a = solve(id, 3, 1e6, 40_000, false).unwrap();
         let b = solve(id, 3, 1e6, 40_000, false).unwrap();
         assert_eq!(a.evaluations, b.evaluations, "{id}");

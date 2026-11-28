@@ -86,6 +86,40 @@ fn gradient_matches_finite_differences() {
     }
 }
 
+/// Walking the piece's graph for the violating vertices gives the energy and gradient of projecting every vertex.
+#[test]
+fn graph_walk_matches_the_full_scan() {
+    let mut rng = Rng::new(13);
+    for id in ["polyhedra/tidincub/6", "polyhedra/j71inico/5", "polyhedra/sndinsnd/4", "polyhedra/tetincub/7", "balls/phcinball/5", "polyhedra/pr12l3inj45/6"] {
+        let Ok(prob) = Problem::parse(id) else { panic!("{id}") };
+        let mut a = Energy::new(&prob.piece, &prob.cont, prob.p);
+        let mut b = Energy::new(&prob.piece, &prob.cont, prob.p);
+        a.set_walk(true, &prob.piece);
+        b.set_walk(false, &prob.piece);
+        for round in 0..6 {
+            let s = prob.size_at_density(0.4 + 0.1 * round as f64);
+            let mut st = random_state(&prob, s, &mut rng);
+            a.s = s;
+            b.s = s;
+            a.rebuild(&mut st, None);
+            for v in st.x[7 * prob.p..].iter_mut() {
+                *v += 0.05 * rng.range(-1.0, 1.0);
+            }
+            b.pairs = st.pairs.clone();
+            a.pairs = st.pairs.clone();
+            let n = st.x.len();
+            let (mut ga, mut gb) = (vec![0.0; n], vec![0.0; n]);
+            let ea = a.eval(&st.x, &mut ga);
+            let eb = b.eval(&st.x, &mut gb);
+            assert!(eb > 0.0);
+            assert!((ea - eb).abs() <= 1e-12 * eb, "{id}: {ea} vs {eb}");
+            for k in 0..n {
+                assert!((ga[k] - gb[k]).abs() <= 1e-10 * (1.0 + gb[k].abs()), "{id}: gradient {k}: {} vs {}", ga[k], gb[k]);
+            }
+        }
+    }
+}
+
 /// The overlap the planes measure is never less than the validator's penetration depth, and a pair the planes
 /// show apart is apart for the validator; the size the search computes holds every vertex at the validator's
 /// wall gap of zero.

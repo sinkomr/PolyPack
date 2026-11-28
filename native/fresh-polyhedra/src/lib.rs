@@ -51,6 +51,8 @@ fn run(
         best = Some((*score, cfg.clone()));
     }
     let seconds = budget.seconds;
+    // with an evaluation budget the run must be a function of (id, seed, budget): no decisions on the clock
+    let timed = budget.max_evals == u64::MAX;
     let mut search = search::Search::new(prob, seed, budget);
     {
         // the check's cost per tight pair (CPU seconds) and when the last check ended
@@ -60,12 +62,12 @@ fn run(
             let now = thread_cpu_seconds() - t0;
             let cost = unit * (pk.tight + 1) as f64;
             // a polish's trial on the way: not when checks would take more than a fifth of the time
-            if ctx.interim && now - last_end < 4.0 * cost {
+            if timed && ctx.interim && now - last_end < 4.0 * cost {
                 return None;
             }
             // not a check that would end long after the budget (large problems: a check takes up to ~0.5 s)
             let remaining = (seconds - now).max(0.0);
-            if (ctx.stopped || remaining < 2.0 * cost) && 2.0 * cost - remaining > 0.15 {
+            if timed && (ctx.stopped || remaining < 2.0 * cost) && 2.0 * cost - remaining > 0.15 {
                 return None;
             }
             let c0 = thread_cpu_seconds();
