@@ -1,0 +1,22 @@
+[package]
+name = "polypack-fresh-surface-fold"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+description = "A search for regular polygons and disks folded over the surface of a convex solid (surface fold), written from scratch, for comparison with the port"
+
+[[bin]]
+name = "fresh-surface-fold"
+path = "src/main.rs"
+
+[lib]
+name = "polypack_fresh_surface_fold"
+path = "src/lib.rs"
+
+[dependencies]
+polypack-flat = { path = "../flat" }
+polypack-spaceauto = { path = "../spaceauto" }
+polypack-spaces = { path = "../spaces" }
+# definitions only (the solids' faces, gluing, frames, the domain's lower bound): the search is in this crate
+polypack-surface = { path = "../surface" }
+serde_json = { version = "1", features = ["float_roundtrip"] }

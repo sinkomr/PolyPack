@@ -24,6 +24,7 @@ polypack-fresh-balls = { path = "../fresh-balls", optional = true }
 polypack-fresh-polyhedra = { path = "../fresh-polyhedra", optional = true }
 polypack-fresh-torus = { path = "../fresh-torus", optional = true }
 polypack-fresh-surface-nofold = { path = "../fresh-surface-nofold", optional = true }
+polypack-fresh-surface-fold = { path = "../fresh-surface-fold", optional = true }
 # the searches of the kinds beyond Flat (their crates' auto modules), behind the real-search feature
 polypack-curved = { path = "../curved", optional = true }
 polypack-boundary = { path = "../boundary", optional = true }
@@ -51,7 +52,7 @@ real-search = [
     "dep:polypack-ndim",
 ]
 # the from-scratch searches (src/fresh_engines.rs): --engine auto uses them where one handles a problem
-fresh-engines = ["dep:polypack-fresh-flat", "dep:polypack-fresh-round", "dep:polypack-fresh-balls", "dep:polypack-fresh-polyhedra", "dep:polypack-fresh-torus", "dep:polypack-fresh-surface-nofold"]
+fresh-engines = ["dep:polypack-fresh-flat", "dep:polypack-fresh-round", "dep:polypack-fresh-balls", "dep:polypack-fresh-polyhedra", "dep:polypack-fresh-torus", "dep:polypack-fresh-surface-nofold", "dep:polypack-fresh-surface-fold"]
 
 [target.'cfg(unix)'.dependencies]
 libc = "0.2"

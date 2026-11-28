@@ -34,7 +34,7 @@ def command(solver, pid, seconds, seed):
     fam = family(pid)
     if solver == "fresh":
         if fam == "surface":
-            exe = {"nofold": "fresh-surface-nofold"}[pid.split("/")[2]]
+            exe = {"nofold": "fresh-surface-nofold", "fold": "fresh-surface-fold"}[pid.split("/")[2]]
         else:
             exe = {"flat": "fresh-flat", "curved": "fresh-round", "sphere": "fresh-round", "balls": "fresh-balls", "polyhedra": "fresh-polyhedra", "torus": "fresh-torus"}[fam]
             if fam == "balls" and not pid.split("/")[1].startswith("ballin"):

@@ -51,6 +51,8 @@ pub fn builtin() -> Vec<Engine> {
         engines.push(Engine { name: "fresh-torus", method: "fresh torus", claims: fresh_torus::handles, search: fresh_torus::fresh_search });
         // surface/<solid>/nofold/<N>/<P>
         engines.push(Engine { name: "fresh-surface-nofold", method: "fresh surface nofold", claims: fresh_surface_nofold::fresh::handles, search: fresh_surface_nofold::fresh::fresh_search });
+        // surface/<solid>/fold/<N>/<P>
+        engines.push(Engine { name: "fresh-surface-fold", method: "fresh surface fold", claims: polypack_fresh_surface_fold::fresh::handles, search: polypack_fresh_surface_fold::fresh::fresh_search });
     }
     engines
 }
@@ -478,11 +480,11 @@ pub mod tests {
         let engines = builtin();
         #[cfg(feature = "fresh-engines")]
         {
-            for id in ["flat/4/6/12", "flat/0/0/5", "flat/17/4/12", "flat/100/100/500", "flat/3/97/2", "sphere/0/20", "curved/-1/0/0/9", "curved/1/0/6/6", "balls/ballinball/13", "balls/ballincub/9", "balls/cubinball/5", "polyhedra/cubintet/5", "torus/sq/0/5", "torus/free/40/12", "surface/cube/nofold/0/3", "surface/snub_cube/nofold/40/12"] {
+            for id in ["flat/4/6/12", "flat/0/0/5", "flat/17/4/12", "flat/100/100/500", "flat/3/97/2", "sphere/0/20", "curved/-1/0/0/9", "curved/1/0/6/6", "balls/ballinball/13", "balls/ballincub/9", "balls/cubinball/5", "polyhedra/cubintet/5", "torus/sq/0/5", "torus/free/40/12", "surface/cube/nofold/0/3", "surface/snub_cube/nofold/40/12", "surface/cube/fold/0/3", "surface/snub_cube/fold/40/12"] {
                 assert!(claimed(&engines, id), "{id}");
             }
-            // the engines' own limits: flat P of at least 2, curvature +-1; no surface fold engine yet
-            for id in ["flat/101/4/12", "flat/4/6/1", "curved/0.5/0/0/9", "sphere/4/12", "surface/cube/fold/0/3"] {
+            // the engines' own limits: flat P of at least 2, curvature +-1, sphere disks only
+            for id in ["flat/101/4/12", "flat/4/6/1", "curved/0.5/0/0/9", "sphere/4/12"] {
                 assert!(!claimed(&engines, id), "{id}");
             }
         }
