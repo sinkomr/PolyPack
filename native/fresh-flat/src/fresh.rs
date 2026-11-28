@@ -21,6 +21,11 @@ pub fn parse_id(id: &str) -> Option<(usize, usize, usize)> {
     ok.then_some((n, m, p))
 }
 
+/// True when `fresh_search` searches this id.
+pub fn handles(id: &str) -> bool {
+    parse_id(id).is_some()
+}
+
 /// The submission format of a flat configuration.
 pub fn config_json(cfg: &Config, n: usize, m: usize, p: usize) -> Value {
     let pieces: Vec<Value> = cfg.pieces.iter().map(|q| json!({"x": q.x, "y": q.y, "theta": q.theta})).collect();

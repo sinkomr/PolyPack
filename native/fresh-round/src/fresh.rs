@@ -24,6 +24,11 @@ pub fn handles(problem: &Problem) -> bool {
     }
 }
 
+/// True when `fresh_search` searches this id.
+pub fn handles_id(id: &str) -> bool {
+    Problem::parse(id).is_some_and(|p| handles(&p))
+}
+
 fn run(problem: &Problem, seed: u64, budget: Budget, params: Params, clock: &dyn Fn() -> f64, checker: &mut dyn FnMut(&Value) -> Option<f64>) -> Report {
     match *problem {
         Problem::Curved { k, m, p } => Search::new(Curved::new(k, m, p), seed, budget, params, clock, checker).run(),

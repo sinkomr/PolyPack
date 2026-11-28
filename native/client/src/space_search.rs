@@ -14,10 +14,14 @@ use crate::space_api::{
 };
 use crate::space_engine::{search_space_problem, Candidate, SpaceSearchInput};
 use crate::state::random_u32;
+use crate::fresh_engines::{self, Event, FreshRun};
+use crate::sweep_order::Taken;
 use crate::volunteer::{log, Current, Searched, Shared, SOFTWARE, UNITS};
 use polypack_flat::validate::improves_on;
 use polypack_flat::Control;
 use polypack_spaces::{parse_space_id, SpaceName};
+use crate::options::EngineChoice;
+use crate::space_engine::{Known, SpaceOutcome};
 use serde_json::{json, Value};
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::{Arc, Mutex};
@@ -71,10 +75,64 @@ fn leader_ref(l: &Option<BestRef>) -> Value {
     l.as_ref().map_or(Value::Null, |l| json!({ "id": l.id, "score": l.score, "source": l.source, "name": l.name }))
 }
 
-/// Searches one problem and submits its best if it qualifies.
-pub(crate) fn search_space(s: &Arc<Shared>, space_name: SpaceName, id: &str, lanes: usize) -> Searched {
+/// A space problem searched by a fresh engine, one job per lane (fresh_engines.rs); None when no engine handles
+/// it: the port searches it.
+#[allow(clippy::too_many_arguments)]
+fn space_fresh(
+    s: &Arc<Shared>,
+    space_name: SpaceName,
+    id: &str,
+    cur: &Arc<Current>,
+    known: Option<&Known>,
+    bound: Option<f64>,
+    rule: &Rule,
+    lanes: usize,
+    seconds: f64,
+    seed: u32,
+    sub: &str,
+) -> Option<SpaceOutcome> {
+    if !fresh_engines::claimed(&s.fresh, id) {
+        return None;
+    }
+    let check = |c: &Value, claimed: f64| check_job_result(space_name, id, c, claimed, rule);
+    let run = FreshRun { id, lanes, seed, seconds, halt: &cur.halt, start: known.map(|k| &k.config), bound, low_priority: s.o.low_priority, check: &check };
+    log(&format!("{sub}searching with the fresh engine on {lanes} lane(s)"));
+    let on_event = |e: Event| match e {
+        Event::Best(f) => {
+            let mut cb = cur.best.lock().unwrap();
+            // improvements below 1e-9 relative are rounding: not worth a line
+            if cb.map_or(true, |x| f.score < x * (1.0 - 1e-9)) {
+                *cb = Some(f.score);
+                let vs = cur.leader.lock().unwrap().map_or(String::new(), |l| format!(", {} against the best", relative_percent(f.score, l)));
+                log(&format!("{sub}best so far {} ({}, fresh, seed {}){vs}", format_score(f.score), f.method, f.seed));
+            }
+        }
+        Event::Rejected { seed, why } => log(&format!("{sub}a lane's packing was not used (seed {seed}): {}", clean_text(why, 200))),
+        Event::Lost { seed, why } => log(&format!("{sub}a lane failed (seed {seed}): {}", clean_text(why, 200))),
+        Event::LaneDone => {
+            cur.jobs.fetch_add(1, Ordering::Relaxed);
+        }
+    };
+    let out = fresh_engines::search(&s.fresh, &run, &on_event)?;
+    let best = out.best.map(|f| Candidate { config: f.config, score: f.score, seed: f.seed, method: f.method, kind: "fresh", time_s: seconds, evals: None });
+    let stopped = match out.stopped {
+        "halted" if s.stopped() => "aborted",
+        "halted" => "paused",
+        "bound" => "bound",
+        _ => "time",
+    };
+    Some(SpaceOutcome { best, jobs: out.jobs, evaluations: out.evaluations, stopped, crashed: out.crashed })
+}
+
+/// Searches one problem and submits its best if it qualifies. `tag` is the sweep's position of the problem.
+pub(crate) fn search_space(s: &Arc<Shared>, space_name: SpaceName, id: &str, lanes: usize, tag: Option<&Taken>) -> Searched {
     let space = space_name.as_str();
     let label = id.to_string();
+    if s.o.engine == EngineChoice::Fresh && !fresh_engines::claimed(&s.fresh, id) {
+        // no fresh engine handles it: nothing is read, and it is not drawn again
+        s.skip_until.lock().unwrap().insert(id.to_string(), i64::MAX);
+        return Searched::Held;
+    }
     let Some(searcher) = s.searcher.clone() else {
         log(&format!("{id}: this build has no search for {space}; skipping it"));
         return Searched::Skipped;
@@ -112,6 +170,12 @@ pub(crate) fn search_space(s: &Arc<Shared>, space_name: SpaceName, id: &str, lan
     if s.o.open_only && info.best_score.is_some() {
         return Searched::Held;
     }
+    if let (Some(sw), Some(name), Some(l)) = (&s.sweep, s.o.name.as_deref(), &info.site_best) {
+        if !sw.o.include_own && crate::answers::stored_name(&l.name) == crate::answers::stored_name(name) {
+            log(&format!("{label} is led by \"{}\" (entry #{}, {}): skipping it (--include-own searches it again)", clean_text(&l.name, 60), l.id, format_score(l.score)));
+            return Searched::Skipped;
+        }
+    }
     let before = best_ref(&info);
     let known = build_known(&info);
     let rule = Rule { bound: info.bound, certified: info.certified.as_ref().map(|c| c.0), no_record: info.no_record };
@@ -129,10 +193,12 @@ pub(crate) fn search_space(s: &Arc<Shared>, space_name: SpaceName, id: &str, lan
         jobs: AtomicUsize::new(0),
         best: Mutex::new(None),
         leader: Mutex::new(info.best_score),
+        halt: std::sync::atomic::AtomicBool::new(s.stopped() || s.paused.load(Ordering::Relaxed)),
     });
     s.currents.lock().unwrap().push(cur.clone());
     log(&format!(
-        "Searching {label}: best {}, lower bound {}; starting from {}; up to {} on {lanes} thread(s)",
+        "Searching {label}{}: best {}, lower bound {}; starting from {}; up to {} on {lanes} thread(s)",
+        tag.map_or(String::new(), |t| format!(" (pass {}, loop {}, problem {} of {})", t.pass, t.k, t.index + 1, t.size)),
         before.as_ref().map_or("none".into(), |b| format!(
             "{} ({})",
             format_score(b.score),
@@ -147,7 +213,8 @@ pub(crate) fn search_space(s: &Arc<Shared>, space_name: SpaceName, id: &str, lan
     let now = || s.clock.now();
     let input = SpaceSearchInput { space, id, known: known.as_ref(), bound: info.bound, max_seconds, lanes, seed: engine_seed, now: &now, check: &check, low_priority: s.o.low_priority };
     let started_at = s.clock.now();
-    let outcome = search_space_problem(&input, searcher.as_ref(), &control, &mut |r, best| {
+    let fresh_outcome = space_fresh(s, space_name, id, &cur, known.as_ref(), info.bound, &rule, lanes, max_seconds, engine_seed, &sub);
+    let outcome = fresh_outcome.unwrap_or_else(|| search_space_problem(&input, searcher.as_ref(), &control, &mut |r, best| {
         cur.jobs.fetch_add(1, Ordering::Relaxed);
         if !r.valid {
             if let Some(why) = r.reason.as_deref().filter(|_| r.failed || r.score.is_none()) {
@@ -167,7 +234,7 @@ pub(crate) fn search_space(s: &Arc<Shared>, space_name: SpaceName, id: &str, lan
                 log(&format!("{sub}best so far {} ({}, {}, seed {}){vs}", format_score(b.score), b.method, b.kind, b.seed));
             }
         }
-    });
+    }));
     let active = s.clock.now() - started_at;
     s.currents.lock().unwrap().retain(|c| !Arc::ptr_eq(c, &cur));
     let mut stopped = outcome.stopped.to_string();
@@ -303,6 +370,7 @@ pub(crate) fn search_space(s: &Arc<Shared>, space_name: SpaceName, id: &str, lan
         "space": space,
         "id": id,
         "P": parsed.p,
+        "sweep": tag.map_or(Value::Null, |t| json!({ "pass": t.pass, "loop": t.k, "index": t.index })),
         "priority": null,
         "leader_before": leader_ref(&before),
         "leader_after": leader_ref(&after),

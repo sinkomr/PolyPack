@@ -13,11 +13,17 @@ path = "src/main.rs"
 polypack-flat = { path = "../flat" }
 polypack-spaces = { path = "../spaces" }
 polypack-spaceauto = { path = "../spaceauto" }
+# the catalogues of the 3D-in-3D sweep (polypack-spaces already needs them)
+polypack-polyhedra = { path = "../polyhedra" }
+polypack-balls = { path = "../balls" }
+# the fresh engines (src/fresh_engines.rs), behind the fresh-engines feature. A new engine is a crate here and
+# one line in fresh_engines.rs (TODO: polypack-fresh-polyhedra, polypack-fresh-torus)
+polypack-fresh-flat = { path = "../fresh-flat", optional = true }
+polypack-fresh-round = { path = "../fresh-round", optional = true }
+polypack-fresh-balls = { path = "../fresh-balls", optional = true }
 # the searches of the kinds beyond Flat (their crates' auto modules), behind the real-search feature
 polypack-curved = { path = "../curved", optional = true }
 polypack-boundary = { path = "../boundary", optional = true }
-polypack-polyhedra = { path = "../polyhedra", optional = true }
-polypack-balls = { path = "../balls", optional = true }
 polypack-ndim = { path = "../ndim", optional = true }
 polypack-sphere = { path = "../sphere", optional = true }
 polypack-torus = { path = "../torus", optional = true }
@@ -29,7 +35,7 @@ ctrlc = "3"
 
 [features]
 # HTTPS through rustls (ring); without it the client speaks plain HTTP only (a local server)
-default = ["tls", "real-search"]
+default = ["tls", "real-search", "fresh-engines"]
 tls = ["ureq/tls"]
 # calls the Auto searches of the kinds beyond Flat (src/real_search.rs); without it --dimensions
 # refuses to start
@@ -39,10 +45,10 @@ real-search = [
     "dep:polypack-torus",
     "dep:polypack-surface",
     "dep:polypack-boundary",
-    "dep:polypack-polyhedra",
-    "dep:polypack-balls",
     "dep:polypack-ndim",
 ]
+# the from-scratch searches (src/fresh_engines.rs): --engine auto uses them where one handles a problem
+fresh-engines = ["dep:polypack-fresh-flat", "dep:polypack-fresh-round", "dep:polypack-fresh-balls"]
 
 [target.'cfg(unix)'.dependencies]
 libc = "0.2"

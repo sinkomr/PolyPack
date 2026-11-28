@@ -7,6 +7,14 @@ use crate::{solve_with, Halt};
 use polypack_spaceauto::{FreshJob, FreshResult};
 use serde_json::Value;
 
+/// True when `fresh_search` searches this id.
+pub fn handles(id: &str) -> bool {
+    match polypack_balls::parse_balls_id(id) {
+        Ok(parsed) => parsed.problem.piece == "ball" && parsed.p >= 2 && crate::shape::Shape::of_name(&parsed.problem.container).is_ok(),
+        Err(_) => false,
+    }
+}
+
 /// Searches `job.id` until the CPU budget, the wall deadline, the stop flag or the evaluation budget
 /// ends it. `job.start` is not used. Err for an id this engine does not handle (any piece but a ball).
 pub fn fresh_search(job: &FreshJob, on_improve: &mut dyn FnMut(f64, &Value)) -> Result<FreshResult, String> {

@@ -6,7 +6,9 @@
 mod answers;
 mod engine;
 mod format;
+mod fresh_engines;
 mod http;
+mod known;
 mod memory;
 mod options;
 mod pick;
@@ -17,6 +19,11 @@ mod space_api;
 mod space_engine;
 mod space_search;
 mod state;
+mod sweep;
+mod sweep_order;
+mod sweep_order3;
+#[cfg(test)]
+mod sweep_tests;
 mod target;
 mod volunteer;
 

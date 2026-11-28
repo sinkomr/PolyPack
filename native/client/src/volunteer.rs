@@ -11,12 +11,14 @@
 
 use crate::answers::{clean_text, describe_answer, read_problem_info, read_stored_entry, read_submit_response, stored_name, ProblemInfo, SiteBest};
 use crate::engine::{search, Candidate, Known, SearchInput, ThreadRunner};
+use crate::fresh_engines::{self, Engine};
 use crate::format::{format_duration, format_score, iso_now, now_ms, relative_percent, timestamp};
 use crate::http::{read_submit_key, sleep_unless, Answer, Api, Pacer, SubmitCheck, SubmitOutcome, KEYED_SUBMISSIONS_PER_MINUTE, SUBMISSIONS_PER_MINUTE, SUBMISSION_WINDOW_MS};
 use crate::memory::Memory;
-use crate::options::Options;
+use crate::options::{EngineChoice, Options};
 use crate::pick::{draw_once, draw_problem, kinds_for, note_search, prune_recent, Drawn, Kind};
 use crate::space_engine::SpaceSearcher;
+use crate::sweep::SweepState;
 use crate::state::{random_u32, StateDir};
 use crate::target::{is_lazy, leaderboard_verdict, load_targets, read_budget_seconds, stop_early, BudgetCache, Filters, TargetPool, Verdict, BUDGETS_FILE};
 use polypack_flat::clock::ClockKind;
@@ -89,6 +91,8 @@ pub(crate) struct Current {
     pub(crate) jobs: AtomicUsize,
     pub(crate) best: Mutex<Option<f64>>,
     pub(crate) leader: Mutex<Option<f64>>,
+    /// Set by a stop or a pause: the fresh engines' lanes end at once and the problem is finished with its best so far.
+    pub(crate) halt: AtomicBool,
 }
 
 pub(crate) enum Searched {
@@ -116,17 +120,17 @@ fn format_margin(r: f64) -> String {
 pub(crate) struct Shared {
     pub(crate) o: Options,
     pub(crate) clock: ActiveClock,
-    stop: Arc<AtomicBool>,
-    hard: Arc<AtomicBool>,
+    pub(crate) stop: Arc<AtomicBool>,
+    pub(crate) hard: Arc<AtomicBool>,
     pub(crate) paused: AtomicBool,
-    stop_reason: Mutex<Option<String>>,
-    upgrade: Mutex<Option<String>>,
+    pub(crate) stop_reason: Mutex<Option<String>>,
+    pub(crate) upgrade: Mutex<Option<String>>,
     pub(crate) reader: Api,
     pub(crate) submitter: Api,
     pub(crate) state: Mutex<StateDir>,
     memory: Mutex<Memory>,
     recent: Mutex<HashMap<String, i64>>,
-    skip_until: Mutex<HashMap<String, i64>>,
+    pub(crate) skip_until: Mutex<HashMap<String, i64>>,
     in_flight: Mutex<HashSet<String>>,
     pub(crate) currents: Mutex<Vec<Arc<Current>>>,
     rng: Mutex<Rng>,
@@ -134,13 +138,17 @@ pub(crate) struct Shared {
     kinds: Vec<Kind>,
     /// The kinds' own searches (real_search.rs); None without --dimensions.
     pub(crate) searcher: Option<Arc<dyn SpaceSearcher>>,
+    /// The fresh engines (fresh_engines.rs); empty with --engine port.
+    pub(crate) fresh: Vec<Engine>,
+    /// The sweep's order, position and lists (sweep.rs); None when problems are drawn at random.
+    pub(crate) sweep: Option<SweepState>,
     /// Target mode's list and the leaders' search times (--target-max-budget).
     targets: Mutex<Option<TargetPool>>,
     budgets: Mutex<Option<BudgetCache>>,
     reloading: AtomicBool,
     held_skipped: AtomicUsize,
     pub(crate) counts: Mutex<[usize; 4]>,
-    started: Instant,
+    pub(crate) started: Instant,
 }
 
 impl Shared {
@@ -148,7 +156,7 @@ impl Shared {
         self.stop.load(Ordering::Relaxed)
     }
 
-    fn request_stop(&self, why: &str) {
+    pub(crate) fn request_stop(&self, why: &str) {
         let mut reason = self.stop_reason.lock().unwrap();
         if reason.is_some() {
             return;
@@ -170,6 +178,7 @@ impl Shared {
         self.stop.store(true, Ordering::Relaxed);
         for c in self.currents.lock().unwrap().iter() {
             c.control.aborted.store(true, Ordering::Relaxed);
+            c.halt.store(true, Ordering::Relaxed);
         }
         let hard = self.hard.clone();
         std::thread::spawn(move || {
@@ -178,7 +187,7 @@ impl Shared {
         });
     }
 
-    fn set_paused(&self, paused: bool) {
+    pub(crate) fn set_paused(&self, paused: bool) {
         if self.paused.swap(paused, Ordering::Relaxed) == paused {
             return;
         }
@@ -189,6 +198,10 @@ impl Shared {
         }
         for c in self.currents.lock().unwrap().iter() {
             c.control.paused.store(paused, Ordering::Relaxed);
+            if paused {
+                // a fresh engine's search cannot be held: it ends with its best so far
+                c.halt.store(true, Ordering::Relaxed);
+            }
         }
     }
 
@@ -200,7 +213,7 @@ impl Shared {
     }
 
     /// Stops at the --hours limit; before a new problem also when too little is left.
-    fn check_deadline(&self, starting: bool) -> bool {
+    pub(crate) fn check_deadline(&self, starting: bool) -> bool {
         if !self.o.hours.is_finite() || self.stop_reason.lock().unwrap().is_some() {
             return self.stop_reason.lock().unwrap().is_some();
         }
@@ -290,7 +303,33 @@ fn and_list(xs: &[String]) -> String {
     }
 }
 
+/// What the client runs on: the searches of the kinds beyond Flat, the fresh engines, and whether it
+/// installs the Ctrl-C handler. The tests give fakes.
+pub struct Deps {
+    /// None: `real_search::searcher()` when --dimensions or a sweep needs one.
+    pub searcher: Option<Arc<dyn SpaceSearcher>>,
+    /// None: `fresh_engines::builtin()` (none with --engine port).
+    pub engines: Option<Vec<Engine>>,
+    pub signals: bool,
+}
+
 pub fn run(o: Options) -> i32 {
+    run_with(o, Deps { searcher: None, engines: None, signals: true })
+}
+
+pub fn run_with(o: Options, deps: Deps) -> i32 {
+    // the sweep's problems must exist before the state directory is taken
+    let sweep_order = o.sweep.as_ref().map(|sw| crate::sweep_order::Order::new(sw, o.n.as_ref(), o.p.as_ref()));
+    if let Some(order) = &sweep_order {
+        if order.is_empty() {
+            log(&format!(
+                "No {} problem passes {}, --kinds, --solids and --P, --max-P together: there is nothing to search.",
+                order.name(),
+                o.sweep.as_ref().map_or("", |sw| sw.mode.flag())
+            ));
+            return 1;
+        }
+    }
     // read before anything else, so that a wrong file stops the client at once
     let submit_key = match &o.key_file {
         Some(path) => match read_submit_key(path) {
@@ -344,17 +383,36 @@ pub fn run(o: Options) -> i32 {
     let logger: Arc<dyn Fn(&str) + Send + Sync> = Arc::new(|m: &str| log(m));
     let reader = Api::new(&o.base, &user_agent, stop.clone(), pacer.clone(), logger.clone(), on_upgrade.clone());
     let submitter = Api::new(&o.base, &user_agent, hard.clone(), pacer, logger, on_upgrade).with_submit_key(submit_key.clone(), on_key_refused);
-    let kinds = kinds_for(&o);
-    let searcher = if o.dimensions.is_some() {
+    let kinds = if o.sweep.is_some() { Vec::new() } else { kinds_for(&o) };
+    let searcher = if let Some(fake) = deps.searcher.clone() {
+        Some(fake)
+    } else if o.dimensions.is_some() || o.sweep.is_some() {
         match crate::real_search::searcher() {
             Ok(s) => Some(s),
             Err(why) => {
-                log(&format!("Cannot search {}: {why}", o.dimensions.iter().flatten().map(|d| d.as_str()).collect::<Vec<_>>().join(", ")));
+                let what = match &o.sweep {
+                    Some(sw) => sw.mode.flag().to_string(),
+                    None => o.dimensions.iter().flatten().map(|d| d.as_str()).collect::<Vec<_>>().join(", "),
+                };
+                log(&format!("Cannot search {what}: {why}"));
                 return 1;
             }
         }
     } else {
         None
+    };
+    let fresh = match (o.engine, deps.engines) {
+        (EngineChoice::Port, _) => Vec::new(),
+        (_, Some(engines)) => engines,
+        (_, None) => fresh_engines::builtin(),
+    };
+    let signals = deps.signals;
+    let sweep = match (&o.sweep, sweep_order) {
+        (Some(sw), Some(order)) => {
+            let logger: Arc<dyn Fn(&str) + Send + Sync> = Arc::new(|m: &str| log(m));
+            Some(SweepState::open(order, sw.clone(), &o.state_dir, logger))
+        }
+        _ => None,
     };
     let shared = Arc::new(Shared {
         clock: ActiveClock::new(),
@@ -374,6 +432,8 @@ pub fn run(o: Options) -> i32 {
         rng: Mutex::new(Rng::new(random_u32())),
         kinds,
         searcher,
+        fresh,
+        sweep,
         targets: Mutex::new(None),
         budgets: Mutex::new(None),
         reloading: AtomicBool::new(false),
@@ -384,6 +444,9 @@ pub fn run(o: Options) -> i32 {
     });
     *shared_cell.lock().unwrap() = Some(Arc::downgrade(&shared));
     banner(&shared);
+    if let Some(sw) = &shared.sweep {
+        sw.load_known(&shared);
+    }
     if let Some(holder) = shared.o.target_holder.clone() {
         let o = &shared.o;
         let filters = Filters { n: o.n.clone(), m: o.m.clone(), p: o.p.clone() };
@@ -417,7 +480,7 @@ pub fn run(o: Options) -> i32 {
     }
 
     // Ctrl-C: the first stops, the second exits at once
-    {
+    if signals {
         let s = shared.clone();
         let _ = ctrlc::set_handler(move || {
             if s.stop_reason.lock().unwrap().is_some() {
@@ -429,7 +492,7 @@ pub fn run(o: Options) -> i32 {
         });
     }
     let done = Arc::new(AtomicBool::new(false));
-    if shared.o.battery_pause {
+    if shared.o.battery_pause && signals {
         let s = shared.clone();
         let d = done.clone();
         std::thread::spawn(move || {
@@ -473,7 +536,7 @@ pub fn run(o: Options) -> i32 {
     let code = if let Some((0, total, holder)) = targets_left {
         log(&format!("None of the {total} problem(s) \"{holder}\" leads passes --N, --M and --P: there is nothing to search."));
         1
-    } else if shared.kinds.is_empty() {
+    } else if shared.sweep.is_none() && shared.kinds.is_empty() {
         log(&format!(
             "No problem passes --N, --M, --P and --max-P together{}: there is nothing to search.",
             if shared.o.dimensions.is_some() { " in the kinds chosen" } else { "" }
@@ -485,7 +548,7 @@ pub fn run(o: Options) -> i32 {
             .into_iter()
             .map(|lanes| {
                 let s = shared.clone();
-                std::thread::spawn(move || slot(&s, lanes))
+                std::thread::spawn(move || if s.sweep.is_some() { crate::sweep::slot(&s, lanes) } else { slot(&s, lanes) })
             })
             .collect();
         let codes: Vec<i32> = handles.into_iter().map(|h| h.join().unwrap_or(1)).collect();
@@ -497,15 +560,18 @@ pub fn run(o: Options) -> i32 {
         log(&format!("This client ({}) is out of date: {up} Download the current client and start it again.", env!("CARGO_PKG_VERSION")));
     }
     let c = *shared.counts.lock().unwrap();
-    log(&format!(
-        "Stopped after {}: {} problem(s) searched, {} submission(s) sent, {} accepted, {} took the lead. State is in {}.",
-        format_duration(shared.started.elapsed().as_secs_f64()),
-        c[0],
-        c[1],
-        c[2],
-        c[3],
-        shared.o.state_dir.display()
-    ));
+    match &shared.sweep {
+        Some(sw) => sw.final_log(&shared, c),
+        None => log(&format!(
+            "Stopped after {}: {} problem(s) searched, {} submission(s) sent, {} accepted, {} took the lead. State is in {}.",
+            format_duration(shared.started.elapsed().as_secs_f64()),
+            c[0],
+            c[1],
+            c[2],
+            c[3],
+            shared.o.state_dir.display()
+        )),
+    }
     shared.save_memory();
     shared.state.lock().unwrap().close();
     if shared.upgrade.lock().unwrap().is_some() {
@@ -566,6 +632,18 @@ fn banner(s: &Shared) {
         if o.battery_pause { "pauses on battery power" } else { "keeps running on battery power" },
         if o.hours.is_finite() { format!("; stops after {} h", o.hours) } else { String::new() },
     ));
+    log(&match o.engine {
+        EngineChoice::Port => "Engines: the ports of the TypeScript searches only (--engine port)".to_string(),
+        choice => {
+            let names: Vec<&str> = s.fresh.iter().map(|e| e.name).collect();
+            format!(
+                "Engines: the fresh engines ({}) where one handles a problem, {} (--engine {})",
+                names.join(", "),
+                if choice == EngineChoice::Fresh { "and no other problem is searched" } else { "else the port" },
+                choice.name()
+            )
+        }
+    });
     if let Some(holder) = &o.target_holder {
         log(&format!(
             "Target mode: targets {holder}'s {}{}; stops ≥{} s once ahead by {}; ≤{} s each",
@@ -578,6 +656,8 @@ fn banner(s: &Shared) {
             format_margin(o.target_margin),
             (o.minutes_per_problem * 60.0).max(1.0)
         ));
+    } else if let Some(sw) = &s.sweep {
+        sw.banner(s);
     } else {
         let total: f64 = s.kinds.iter().map(Kind::size).sum();
         let parts: Vec<String> = s.kinds.iter().map(|k| format!("{} {}", k.size(), k.name())).collect();
@@ -605,7 +685,11 @@ fn status(s: &Shared) {
     for cur in &currents {
         log(&format!("Status: {} on {} thread(s)", describe(cur), cur.lanes));
     }
-    log(&format!("Status: {} of {} problems being searched; {} submission(s) accepted{paused}", currents.len(), s.o.parallel_problems, c[2]));
+    let position = s.sweep.as_ref().map_or(String::new(), |sw| {
+        let (pass, k) = sw.dispenser.position();
+        format!("loop {k} of pass {pass}; ")
+    });
+    log(&format!("Status: {position}{} of {} problems being searched; {} submission(s) accepted{paused}", currents.len(), s.o.parallel_problems, c[2]));
 }
 
 /// One problem after another on `lanes` threads, until the client stops.
@@ -663,7 +747,7 @@ fn slot(s: &Arc<Shared>, lanes: usize) -> i32 {
         };
         let outcome = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| match &drawn {
             Drawn::Flat(problem) => search_one(s, *problem, lanes),
-            Drawn::Space { space, id } => crate::space_search::search_space(s, *space, id, lanes),
+            Drawn::Space { space, id } => crate::space_search::search_space(s, *space, id, lanes, None),
         }));
         s.in_flight.lock().unwrap().remove(&key);
         let searched = match outcome {
@@ -864,7 +948,12 @@ fn candidate_of_file(v: &Value, problem: &Problem) -> Option<Candidate> {
     let config = v.get("config")?;
     let pieces = crate::answers::read_pieces(config.get("pieces")?, problem.p)?;
     let phi = config.get("container_phi").and_then(|x| x.as_f64()).unwrap_or(0.0);
-    let method = Method::from_name(v.get("method")?.as_str()?)?;
+    let method_text = v.get("method")?.as_str()?;
+    let (method, label) = match Method::from_name(method_text) {
+        Some(m) => (m, None),
+        // a fresh engine's ("fresh flat"): the method is a placeholder, the text is the label
+        None => (Method::Seed, Some(method_text.to_string())),
+    };
     let budget = v.get("budget");
     Some(Candidate {
         config: Config { n: problem.n, m: problem.m, pieces, phi },
@@ -887,6 +976,7 @@ fn candidate_of_file(v: &Value, problem: &Problem) -> Option<Candidate> {
             },
         },
         params: v.get("params").cloned().unwrap_or(Value::Null),
+        label,
     })
 }
 
@@ -903,7 +993,7 @@ fn best_file_of(c: &Candidate, problem: &Problem) -> Value {
         "N": problem.n, "M": problem.m, "P": problem.p,
         "score": c.score,
         "strict": true,
-        "method": c.job.method.name(),
+        "method": c.method_name(),
         "params": c.params,
         "seed": c.job.seed,
         "budget": budget,
@@ -918,6 +1008,24 @@ fn best_file_of(c: &Candidate, problem: &Problem) -> Value {
 
 /// The body of POST /api/submit.
 fn submission_body(c: &Candidate, problem: &Problem, name: &str, note: &str) -> Value {
+    if let Some(method) = &c.label {
+        // the server accepts a `method` only when it is one of PolyPack's registered optimizers: a fresh engine's
+        // packing is declared as made by an external program, named in `software`
+        let software: String = format!("{SOFTWARE} ({method})").chars().take(80).collect();
+        let mut body = json!({
+            "N": problem.n, "M": problem.m, "P": problem.p,
+            "pieces": pieces_json(&c.config.pieces),
+            "container_phi": c.config.phi,
+            "units": UNITS,
+            "name": name,
+            "found_with": "external",
+            "software": software,
+        });
+        if !note.is_empty() {
+            body["agent_note"] = json!(note);
+        }
+        return body;
+    }
     let mut body = json!({
         "N": problem.n, "M": problem.m, "P": problem.p,
         "pieces": pieces_json(&c.config.pieces),
@@ -926,7 +1034,7 @@ fn submission_body(c: &Candidate, problem: &Problem, name: &str, note: &str) -> 
         "units": UNITS,
         "name": name,
         "found_with": "optimizer",
-        "method": c.job.method.name(),
+        "method": c.method_name(),
         "seed": c.job.seed,
         "software": SOFTWARE,
     });
@@ -959,10 +1067,90 @@ fn check_stored(info: &ProblemInfo, name: &str, score: f64) -> SubmitCheck {
     SubmitCheck::Absent
 }
 
+/// A flat packing in the submission format.
+fn flat_config_json(c: &Config, problem: &Problem) -> Value {
+    json!({ "N": problem.n, "M": problem.m, "P": problem.p, "container_phi": c.phi, "pieces": pieces_json(&c.pieces) })
+}
+
+/// A fresh engine's flat packing as a configuration of the problem.
+fn flat_config_of(problem: &Problem, v: &Value) -> Option<Config> {
+    let pieces = crate::answers::read_pieces(v.get("pieces")?, problem.p)?;
+    let phi = v.get("container_phi").and_then(|x| x.as_f64()).unwrap_or(0.0);
+    Some(Config { n: problem.n, m: problem.m, pieces, phi })
+}
+
+/// The client's check of a fresh engine's flat packing: the server's rule, strict, and the score the engine claims.
+fn flat_check(problem: &Problem, v: &Value, claimed: f64) -> Result<f64, String> {
+    let config = flat_config_of(problem, v).ok_or("malformed packing")?;
+    let check = server_check(&canonical(&config), problem.p);
+    if !(check.valid && check.strict) {
+        return Err(format!("not valid and strict by the server's rule ({})", check.reasons.first().map_or("unchecked", |r| r.as_str())));
+    }
+    let score = check.score.ok_or("the rule computes no score")?;
+    if (score - claimed).abs() > SCORE_TIE * score.max(claimed) {
+        return Err(format!("the rule's score {score} is not the engine's {claimed}"));
+    }
+    Ok(score)
+}
+
+/// A flat problem searched by a fresh engine, one job per lane (fresh_engines.rs); None when no engine handles
+/// it: the port searches it.
+#[allow(clippy::too_many_arguments)]
+fn flat_fresh(s: &Arc<Shared>, problem: &Problem, cur: &Arc<Current>, known: Option<&(Known, &'static str)>, lanes: usize, seconds: f64, seed: u32, sub: &str) -> Option<crate::engine::SearchOutcome> {
+    use crate::fresh_engines::{search as fresh_search, Event, FreshRun};
+    let id = fresh_engines::flat_id(problem.n, problem.m, problem.p);
+    if !fresh_engines::claimed(&s.fresh, &id) {
+        return None;
+    }
+    let start = known.map(|k| flat_config_json(&k.0.config, problem));
+    let check = |c: &Value, claimed: f64| flat_check(problem, c, claimed);
+    let run = FreshRun { id: &id, lanes, seed, seconds, halt: &cur.halt, start: start.as_ref(), bound: None, low_priority: s.o.low_priority, check: &check };
+    log(&format!("{sub}searching with the fresh engine on {lanes} lane(s)"));
+    let on_event = |e: Event| match e {
+        Event::Best(f) => {
+            let mut cb = cur.best.lock().unwrap();
+            if cb.map_or(true, |x| f.score < x * (1.0 - 1e-9)) {
+                *cb = Some(f.score);
+                let vs = cur.leader.lock().unwrap().map_or(String::new(), |l| format!(", {} against the leader", relative_percent(f.score, l)));
+                log(&format!("{sub}best so far {} ({}, fresh, seed {}){vs}", format_score(f.score), f.method, f.seed));
+            }
+        }
+        Event::Rejected { seed, why } => log(&format!("{sub}a lane's packing was not used (seed {seed}): {}", clean_text(why, 200))),
+        Event::Lost { seed, why } => log(&format!("{sub}a lane failed (seed {seed}): {}", clean_text(why, 200))),
+        Event::LaneDone => {
+            cur.jobs.fetch_add(1, Ordering::Relaxed);
+        }
+    };
+    let out = fresh_search(&s.fresh, &run, &on_event)?;
+    let best = out.best.and_then(|f| {
+        let config = flat_config_of(problem, &f.config)?;
+        Some(Candidate {
+            config,
+            score: f.score,
+            strict: true,
+            job: crate::engine::Job { problem: *problem, method: Method::Seed, params: Value::Null, seed: f.seed, time_s: seconds, evals: None, start: None, final_polish: true, kind: "fresh" },
+            params: Value::Null,
+            label: Some(f.method),
+        })
+    });
+    let stopped = match out.stopped {
+        "halted" if s.stopped() => crate::engine::Stop::Aborted,
+        "halted" => crate::engine::Stop::Paused,
+        "bound" => crate::engine::Stop::Bound,
+        _ => crate::engine::Stop::Time,
+    };
+    Some(crate::engine::SearchOutcome { best, jobs: out.jobs, stopped, memory: s.memory.lock().unwrap().clone(), evaluations: out.evaluations })
+}
+
 /// Searches one problem and submits its best if it qualifies.
 fn search_one(s: &Arc<Shared>, problem: Problem, lanes: usize) -> Searched {
     let key = problem.key();
     let label = problem.label();
+    if s.o.engine == EngineChoice::Fresh && !fresh_engines::claimed(&s.fresh, &fresh_engines::flat_id(problem.n, problem.m, problem.p)) {
+        // nothing is read or drawn again: no fresh engine handles it
+        s.skip_until.lock().unwrap().insert(key, i64::MAX);
+        return Searched::Held;
+    }
     if s.target_mode() && !s.o.target_any_entry {
         if let Some(r) = first_entry_gate(s, &problem, &label) {
             return r;
@@ -1047,6 +1235,7 @@ fn search_one(s: &Arc<Shared>, problem: Problem, lanes: usize) -> Searched {
         jobs: AtomicUsize::new(0),
         best: Mutex::new(None),
         leader: Mutex::new(leader.as_ref().map(|l| l.score)),
+        halt: AtomicBool::new(s.stopped() || s.paused.load(Ordering::Relaxed)),
     });
     s.currents.lock().unwrap().push(cur.clone());
     log(&format!(
@@ -1061,8 +1250,9 @@ fn search_one(s: &Arc<Shared>, problem: Problem, lanes: usize) -> Searched {
         },
         format_duration(max_seconds)
     ));
-    let memory = s.memory.lock().unwrap().clone();
     let sub = s.sub(&label);
+    let fresh_outcome = flat_fresh(s, &problem, &cur, known.as_ref(), lanes, max_seconds, engine_seed, &sub);
+    let memory = s.memory.lock().unwrap().clone();
     let mut on_result = |_r: &crate::engine::JobResult, best: Option<&Candidate>| {
         cur.jobs.fetch_add(1, Ordering::Relaxed);
         if let Some(b) = best {
@@ -1071,7 +1261,7 @@ fn search_one(s: &Arc<Shared>, problem: Problem, lanes: usize) -> Searched {
             if cb.map_or(true, |x| b.score < x * (1.0 - 1e-9)) {
                 *cb = Some(b.score);
                 let vs = cur.leader.lock().unwrap().map_or(String::new(), |l| format!(", {} against the leader", relative_percent(b.score, l)));
-                log(&format!("{sub}best so far {} ({}, {}, seed {}){vs}", format_score(b.score), b.job.method.name(), b.job.kind, b.job.seed));
+                log(&format!("{sub}best so far {} ({}, {}, seed {}){vs}", format_score(b.score), b.method_name(), b.job.kind, b.job.seed));
             }
         }
     };
@@ -1084,7 +1274,7 @@ fn search_one(s: &Arc<Shared>, problem: Problem, lanes: usize) -> Searched {
     let early = AtomicBool::new(false);
     let finished = AtomicBool::new(false);
     let target_leader = if s.target_mode() { leader.as_ref().map(|l| l.score) } else { None };
-    let outcome = std::thread::scope(|scope| {
+    let outcome = if let Some(done) = fresh_outcome { done } else { std::thread::scope(|scope| {
         if let Some(leader_score) = target_leader {
             let (cur, control, early, finished, sub) = (&cur, &control, &early, &finished, &sub);
             scope.spawn(move || {
@@ -1129,7 +1319,7 @@ fn search_one(s: &Arc<Shared>, problem: Problem, lanes: usize) -> Searched {
         );
         finished.store(true, Ordering::Relaxed);
         outcome
-    });
+    }) };
     let active = s.clock.now() - started_at;
     s.currents.lock().unwrap().retain(|c| !Arc::ptr_eq(c, &cur));
     *s.memory.lock().unwrap() = outcome.memory.clone();
@@ -1261,7 +1451,7 @@ fn search_one(s: &Arc<Shared>, problem: Problem, lanes: usize) -> Searched {
         if let Some(e) = c.job.evals {
             budget["evals"] = json!(e);
         }
-        json!({ "score": c.score, "method": c.job.method.name(), "seed": c.job.seed, "kind": c.job.kind, "budget": budget, "from": from })
+        json!({ "score": c.score, "method": c.method_name(), "seed": c.job.seed, "kind": c.job.kind, "budget": budget, "from": from })
     });
     let line = json!({
         "time": iso_now(),
@@ -1295,7 +1485,7 @@ fn search_one(s: &Arc<Shared>, problem: Problem, lanes: usize) -> Searched {
         Some((c, from)) => format!(
             "best {} ({}, seed {}{}) vs {}",
             format_score(c.score),
-            c.job.method.name(),
+            c.method_name(),
             c.job.seed,
             if *from == "file" { ", from an earlier search" } else { "" },
             leader.as_ref().map_or("no leader".into(), |l| format!("leader {} ({})", format_score(l.score), relative_percent(c.score, l.score)))
@@ -1309,4 +1499,50 @@ fn search_one(s: &Arc<Shared>, problem: Problem, lanes: usize) -> Searched {
         text.unwrap_or(if offer.is_none() { "nothing to submit".into() } else { decision })
     ));
     Searched::Done(true)
+}
+
+#[cfg(all(test, feature = "fresh-engines"))]
+mod tests {
+    use super::*;
+    use polypack_spaceauto::FreshJob;
+
+    #[test]
+    fn a_fresh_engines_flat_packing_passes_the_clients_check_and_is_submitted_as_external() {
+        let problem = Problem::new(4, 6, 6);
+        let id = fresh_engines::flat_id(problem.n, problem.m, problem.p);
+        assert_eq!(id, "flat/4/6/6");
+        let stop = AtomicBool::new(false);
+        let job = FreshJob { id: &id, seed: 5, cpu_seconds: 1.0, deadline: Instant::now() + Duration::from_secs(10), stop: &stop, start: None, max_evals: None };
+        let mut last = None;
+        let r = polypack_fresh_flat::fresh::fresh_search(&job, &mut |s, c| last = Some((s, c.clone()))).unwrap();
+        let (config, score) = (r.config.unwrap(), r.score.unwrap());
+        assert_eq!(last.map(|l| l.0), Some(score));
+        // the client's check accepts it with the engine's score, and the configuration reads back
+        assert_eq!(flat_check(&problem, &config, score), Ok(score));
+        assert!(flat_check(&problem, &config, score * 0.9).is_err());
+        let cfg = flat_config_of(&problem, &config).unwrap();
+        assert_eq!(cfg.pieces.len(), 6);
+        assert!(flat_check(&problem, &json!({"pieces": []}), 1.0).is_err());
+        // the submission: external, the method in `software`, none of the optimizer's fields
+        let cand = Candidate {
+            config: cfg,
+            score,
+            strict: true,
+            job: crate::engine::Job { problem, method: Method::Seed, params: Value::Null, seed: 5, time_s: 1.0, evals: None, start: None, final_polish: true, kind: "fresh" },
+            params: Value::Null,
+            label: Some(r.method.clone()),
+        };
+        let body = submission_body(&cand, &problem, "me", "a note");
+        assert_eq!(body["found_with"].as_str(), Some("external"));
+        assert_eq!(body["software"].as_str(), Some(format!("{SOFTWARE} (fresh flat)").as_str()));
+        for k in ["method", "seed", "budget", "method_params"] {
+            assert!(body.get(k).is_none(), "{k}");
+        }
+        assert_eq!((body["N"].as_u64(), body["M"].as_u64(), body["P"].as_u64(), body["agent_note"].as_str()), (Some(4), Some(6), Some(6), Some("a note")));
+        assert_eq!(cand.method_name(), "fresh flat");
+        // a saved best of such an engine is read back with its label
+        let file = best_file_of(&cand, &problem);
+        let back = candidate_of_file(&file, &problem).unwrap();
+        assert_eq!((back.method_name(), back.score), ("fresh flat", score));
+    }
 }
