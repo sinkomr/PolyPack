@@ -49,6 +49,8 @@ pub fn builtin() -> Vec<Engine> {
         engines.push(Engine { name: "fresh-polyhedra", method: "fresh polyhedra", claims: fresh_polyhedra::handles, search: fresh_polyhedra::fresh_search });
         // torus/<family>/<N>/<P>
         engines.push(Engine { name: "fresh-torus", method: "fresh torus", claims: fresh_torus::handles, search: fresh_torus::fresh_search });
+        // surface/<solid>/nofold/<N>/<P>
+        engines.push(Engine { name: "fresh-surface-nofold", method: "fresh surface nofold", claims: fresh_surface_nofold::fresh::handles, search: fresh_surface_nofold::fresh::fresh_search });
     }
     engines
 }
@@ -476,10 +478,10 @@ pub mod tests {
         let engines = builtin();
         #[cfg(feature = "fresh-engines")]
         {
-            for id in ["flat/4/6/12", "flat/0/0/5", "sphere/0/20", "curved/-1/0/0/9", "curved/1/0/6/6", "balls/ballinball/13", "balls/ballincub/9", "balls/cubinball/5", "polyhedra/cubintet/5", "torus/sq/0/5", "torus/free/40/12"] {
+            for id in ["flat/4/6/12", "flat/0/0/5", "sphere/0/20", "curved/-1/0/0/9", "curved/1/0/6/6", "balls/ballinball/13", "balls/ballincub/9", "balls/cubinball/5", "polyhedra/cubintet/5", "torus/sq/0/5", "torus/free/40/12", "surface/cube/nofold/0/3", "surface/snub_cube/nofold/40/12"] {
                 assert!(claimed(&engines, id), "{id}");
             }
-            // the engines' own limits: pieces of up to 16 sides, curvature +-1; no surface engine yet
+            // the engines' own limits: pieces of up to 16 sides, curvature +-1; no surface fold engine yet
             for id in ["flat/17/4/12", "flat/4/6/1", "curved/0.5/0/0/9", "sphere/4/12", "surface/cube/fold/0/3"] {
                 assert!(!claimed(&engines, id), "{id}");
             }
