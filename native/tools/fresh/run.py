@@ -33,6 +33,8 @@ def family(pid):
 def command(solver, pid, seconds, seed):
     fam = family(pid)
     if solver == "fresh":
+        if pid.startswith("surface/") and pid.split("/")[2] == "fold":
+            return [str(BIN / "fresh-surface-fold"), "--id", pid, "--seconds", str(seconds), "--seed", str(seed)]
         exe = {"flat": "fresh-flat", "curved": "fresh-round", "sphere": "fresh-round", "balls": "fresh-balls"}[fam]
         return [str(BIN / exe), "--id", pid, "--seconds", str(seconds), "--seed", str(seed)]
     if solver == "port":
