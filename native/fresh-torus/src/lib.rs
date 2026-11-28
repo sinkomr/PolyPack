@@ -11,6 +11,10 @@
 //! It reads only the problem definitions (the id, conventions and score) and calls the server's check
 //! (`polypack_spaces::validate_space_submission`) on candidates, never in its loops.
 
+// `!(a > b)` is deliberate where a NaN must take the safe branch; index loops over several parallel arrays read
+// better than zipped iterators here.
+#![allow(clippy::neg_cmp_op_on_partial_ord, clippy::needless_range_loop, clippy::too_many_arguments, clippy::manual_is_multiple_of)]
+
 pub mod budget;
 pub mod geom;
 pub mod lattice;

@@ -191,7 +191,7 @@ impl<'a> Model<'a> {
     pub fn new(sh: Shape, fam: Family, p: usize, budget: Budget<'a>) -> Model<'a> {
         let poly = sh.n > 0;
         let free = fam == Family::Free;
-        let skin = if poly { (0.5 * sh.big_r).min(1.0).max(0.3) } else { 0.3 };
+        let skin = if poly { (0.5 * sh.big_r).clamp(0.3, 1.0) } else { 0.3 };
         Model {
             p,
             fam,

@@ -535,7 +535,7 @@ impl<'a, 'c> Search<'a, 'c> {
     }
 
     /// The chain goes on from the best packing, relaxed at the hopping score best (1 - eps).
-    fn from_best(&mut self, cur: &mut Sol) -> (f64, f64) {
+    fn chain_from_best(&mut self, cur: &mut Sol) -> (f64, f64) {
         cur.copy_from(&self.best);
         let st = self.best.s * (1.0 - self.prm.eps);
         cur.rescale_to(st);
@@ -920,7 +920,7 @@ impl<'a, 'c> Search<'a, 'c> {
                 return;
             }
         }
-        let (mut st, mut cur_e) = self.from_best(&mut cur);
+        let (mut st, mut cur_e) = self.chain_from_best(&mut cur);
         self.set_anchor(&cur);
         let mut fails = 0u64;
         let mut restart_kind = 0usize;
@@ -931,7 +931,7 @@ impl<'a, 'c> Search<'a, 'c> {
             }
             if !self.best_deep && self.near_end() {
                 if self.deep_polish() {
-                    (st, cur_e) = self.from_best(&mut cur);
+                    (st, cur_e) = self.chain_from_best(&mut cur);
                     self.set_anchor(&cur);
                 }
                 continue;
@@ -979,7 +979,7 @@ impl<'a, 'c> Search<'a, 'c> {
                 canonicalize(&mut cur, self.free());
                 cur_e = e;
                 if (e - self.best_e).abs() > SAME * self.best_e && self.try_polish(&cur, st, e) {
-                    (st, cur_e) = self.from_best(&mut cur);
+                    (st, cur_e) = self.chain_from_best(&mut cur);
                 }
                 if self.done() {
                     break;
@@ -991,7 +991,7 @@ impl<'a, 'c> Search<'a, 'c> {
             let limit = (self.prm.fail_a + self.prm.fail_b * p as f64) as u64;
             if fails >= limit {
                 if self.deep_polish() {
-                    (st, cur_e) = self.from_best(&mut cur);
+                    (st, cur_e) = self.chain_from_best(&mut cur);
                     self.set_anchor(&cur);
                     fails = 0;
                     continue;
@@ -1010,7 +1010,7 @@ impl<'a, 'c> Search<'a, 'c> {
                     break;
                 }
                 if (cur_e - self.best_e).abs() > SAME * self.best_e && self.try_polish(&cur, st, cur_e) {
-                    (st, cur_e) = self.from_best(&mut cur);
+                    (st, cur_e) = self.chain_from_best(&mut cur);
                 }
                 canonicalize(&mut cur, self.free());
                 if self.done() {
