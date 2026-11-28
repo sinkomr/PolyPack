@@ -45,9 +45,8 @@ pub fn builtin() -> Vec<Engine> {
         engines.push(Engine { name: "fresh-flat", method: "fresh flat", claims: polypack_fresh_flat::fresh::handles, search: polypack_fresh_flat::fresh::fresh_search });
         engines.push(Engine { name: "fresh-round", method: "fresh round", claims: polypack_fresh_round::fresh::handles_id, search: polypack_fresh_round::fresh::fresh_search });
         engines.push(Engine { name: "fresh-balls", method: "fresh balls", claims: fresh_balls::fresh::handles, search: fresh_balls::fresh::fresh_search });
-        // TODO(fresh-polyhedra): polyhedra/<piece>in<container>/<P> and balls/<solid>inball/<P>: add the crate
-        // polypack-fresh-polyhedra (client/Cargo.toml, optional, in the fresh-engines feature) and
-        //     engines.push(Engine { name: "fresh-polyhedra", method: "fresh polyhedra", claims: polypack_fresh_polyhedra::fresh::handles, search: polypack_fresh_polyhedra::fresh::fresh_search });
+        // polyhedra/<piece>in<container>/<P> and balls/<solid>inball/<P>
+        engines.push(Engine { name: "fresh-polyhedra", method: "fresh polyhedra", claims: fresh_polyhedra::handles, search: fresh_polyhedra::fresh_search });
         // TODO(fresh-torus): torus/<family>/<N>/<P>: the same with polypack-fresh-torus
         //     engines.push(Engine { name: "fresh-torus", method: "fresh torus", claims: polypack_fresh_torus::fresh::handles, search: polypack_fresh_torus::fresh::fresh_search });
     }
@@ -477,11 +476,11 @@ pub mod tests {
         let engines = builtin();
         #[cfg(feature = "fresh-engines")]
         {
-            for id in ["flat/4/6/12", "flat/0/0/5", "sphere/0/20", "curved/-1/0/0/9", "curved/1/0/6/6", "balls/ballinball/13", "balls/ballincub/9"] {
+            for id in ["flat/4/6/12", "flat/0/0/5", "sphere/0/20", "curved/-1/0/0/9", "curved/1/0/6/6", "balls/ballinball/13", "balls/ballincub/9", "balls/cubinball/5", "polyhedra/cubintet/5"] {
                 assert!(claimed(&engines, id), "{id}");
             }
-            // the engines' own limits: pieces of up to 16 sides, curvature +-1, balls only as pieces
-            for id in ["flat/17/4/12", "flat/4/6/1", "curved/0.5/0/0/9", "sphere/4/12", "balls/cubinball/5", "polyhedra/cubintet/5", "torus/sq/0/5", "surface/cube/fold/0/3"] {
+            // the engines' own limits: pieces of up to 16 sides, curvature +-1; no torus or surface engine yet
+            for id in ["flat/17/4/12", "flat/4/6/1", "curved/0.5/0/0/9", "sphere/4/12", "torus/sq/0/5", "surface/cube/fold/0/3"] {
                 assert!(!claimed(&engines, id), "{id}");
             }
         }

@@ -17,10 +17,11 @@ polypack-spaceauto = { path = "../spaceauto" }
 polypack-polyhedra = { path = "../polyhedra" }
 polypack-balls = { path = "../balls" }
 # the fresh engines (src/fresh_engines.rs), behind the fresh-engines feature. A new engine is a crate here and
-# one line in fresh_engines.rs (TODO: polypack-fresh-polyhedra, polypack-fresh-torus)
+# one line in fresh_engines.rs (TODO: polypack-fresh-torus)
 polypack-fresh-flat = { path = "../fresh-flat", optional = true }
 polypack-fresh-round = { path = "../fresh-round", optional = true }
 polypack-fresh-balls = { path = "../fresh-balls", optional = true }
+polypack-fresh-polyhedra = { path = "../fresh-polyhedra", optional = true }
 # the searches of the kinds beyond Flat (their crates' auto modules), behind the real-search feature
 polypack-curved = { path = "../curved", optional = true }
 polypack-boundary = { path = "../boundary", optional = true }
@@ -48,7 +49,7 @@ real-search = [
     "dep:polypack-ndim",
 ]
 # the from-scratch searches (src/fresh_engines.rs): --engine auto uses them where one handles a problem
-fresh-engines = ["dep:polypack-fresh-flat", "dep:polypack-fresh-round", "dep:polypack-fresh-balls"]
+fresh-engines = ["dep:polypack-fresh-flat", "dep:polypack-fresh-round", "dep:polypack-fresh-balls", "dep:polypack-fresh-polyhedra"]
 
 [target.'cfg(unix)'.dependencies]
 libc = "0.2"

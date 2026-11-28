@@ -137,6 +137,18 @@ pub fn solve(id: &str, seed: u64, seconds: f64, max_evals: u64, verbose: bool) -
     Ok(run(&prob, seed, budget, None, verbose, &mut |_, _| {}))
 }
 
+/// True for the ids this engine searches, from the id alone: `polyhedra/<pair>/<P>` and
+/// `balls/<solid>inball/<P>` (balls in a ball or a solid are fresh-balls'). `fresh_search` may still answer
+/// Err for one of them (an unknown code), and the client then falls back to the port.
+pub fn handles(id: &str) -> bool {
+    let parts: Vec<&str> = id.split('/').collect();
+    match parts.as_slice() {
+        ["polyhedra", code, p] => code.contains("in") && p.parse::<usize>().is_ok(),
+        ["balls", code, p] => code.ends_with("inball") && !code.starts_with("ballin") && p.parse::<usize>().is_ok(),
+        _ => false,
+    }
+}
+
 /// The fresh engines' entry point (polypack_spaceauto::fresh): one whole search of a polyhedra problem or of
 /// solids in a ball. Err for any other id.
 pub fn fresh_search(job: &FreshJob, on_improve: &mut dyn FnMut(f64, &Value)) -> Result<FreshResult, String> {
@@ -152,4 +164,17 @@ pub fn fresh_search(job: &FreshJob, on_improve: &mut dyn FnMut(f64, &Value)) -> 
         stopped: out.stopped,
         method: "fresh polyhedra".to_string(),
     })
+}
+
+#[cfg(test)]
+mod handles_tests {
+    #[test]
+    fn claims_polyhedra_and_solids_in_a_ball_only() {
+        assert!(super::handles("polyhedra/cubintet/7"));
+        assert!(super::handles("balls/tetinball/12"));
+        assert!(!super::handles("balls/ballinball/12"));
+        assert!(!super::handles("balls/ballincub/12"));
+        assert!(!super::handles("sphere/0/12"));
+        assert!(!super::handles("polyhedra/cubintet/x"));
+    }
 }
