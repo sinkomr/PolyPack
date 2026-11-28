@@ -102,3 +102,100 @@ and 4 shifts) gives a valid packing of any problem within milliseconds.
   reported score, above the lower bound, with an improving trace that ends at it; runs with an evaluation
   budget repeat exactly; `handles` accepts exactly the nofold ids; the stop flag and the wall deadline end
   `fresh_search` within 0.2 s; a valid start is never returned worse and nothing at or above it is reported.
+
+## Measurements
+
+Machine: a 4-core Xeon VM (2.1 GHz) shared with three other agents' builds and benchmarks; load averages 4 to 7
+during these runs. All clocks are CPU time, so the load mostly stretches wall time, but contention (shared
+caches, the port's wall-clock job deadlines) adds noise of perhaps tens of percent to any single time below, and
+the port and the JavaScript ran at a different time from fresh. The coordinator's quiet run is the one to trust.
+
+### Harness, 20 CPU seconds (measured)
+
+`native/tools/fresh/problems-surface-nofold.json` (14 problems drawn by `draw-surface-nofold.mts`, seed
+20261128: Platonic 2, Archimedean 2, Catalan 3, prisms 2, antiprisms 1, Johnson 4; disks, triangles to
+octagons, 66-, 72- and 95-gons; P from 5 to 72). `run.py --solvers fresh,port,js --seeds 1,2 --seconds 20
+--concurrency 1`, then `validate.mts` and `analyze.py --times 1,5,20`. R is the best final score of any run
+(all three solvers). Every fresh and port packing passed the server's TypeScript validators with a matching
+score; the JavaScript found no packing on the two icosahedron problems.
+
+| solver | valid | reach 1e-2 | median t | reach 1e-3 | median t | reach 1e-4 | median t | mean gap at 1 s | at 5 s | at 20 s |
+|---|---|---|---|---|---|---|---|---|---|---|
+| fresh | 28/28 | 28/28 | 0.0074 s | 28/28 | 0.0074 s | 28/28 | 0.0074 s | 1.3e-7 | 3.7e-8 | 1.1e-8 |
+| port | 28/28 | 11/28 | 0.76 s | 11/28 | 0.76 s | 11/28 | 0.76 s | 0.64 | 1.23 | 1.15 |
+| js | 24/28 | 7/28 | 0.87 s | 6/28 | 0.86 s | 6/28 | 0.86 s | 1.14 | 1.38 | 1.37 |
+
+Geometric mean of the speed ratio where both reach the target: fresh is 208x faster than the port to 1e-2, 240x
+to 1e-3 and 229x to 1e-4 (11 pairs each; 17 more reached by fresh only, none by the port only), and about 300x
+faster than the JavaScript. The port's and the JavaScript's traces are recorded when a job ends (coarse; this
+favours fresh by up to a job length, about 0.4 s), but most of their misses are final gaps of 16 % to 790 %.
+
+Per problem: final gap to R and CPU seconds to R(1 + 1e-2), R(1 + 1e-3), R(1 + 1e-4) ("-": not reached).
+
+| problem | R | fresh s1 | fresh s2 | port s1 | port s2 | js s1 | js s2 |
+|---|---|---|---|---|---|---|---|
+| pentagonal_bipyramid/0/12 | 2.732050808 | 1.2e-12 (0.003, 0.003, 0.003) | 1.2e-12 (0.003, 0.003, 0.003) | 0 (0.79, 0.79, 0.79) | 2e-16 (0.80, 0.80, 0.80) | 2e-16 (0.86, 0.86, 0.86) | 0 (0.86, 0.86, 0.86) |
+| triakis_octahedron/0/41 | 1.334903985 | 2e-16 (0.003, 0.003, 0.003) | 0 (0.003, 0.003, 0.003) | 1.6e-1 (-, -, -) | 1.6e-1 (-, -, -) | 3.7e-1 (-, -, -) | 1.6e-1 (-, -, -) |
+| icosahedron/0/6 | 1.732050808 | 2.1e-13 (0.002, 0.002, 0.002) | 2.1e-13 (0.002, 0.002, 0.002) | 0 (0.75, 0.75, 0.75) | 2e-16 (0.74, 0.74, 0.74) | no packing | no packing |
+| antiprism9/3/5 | 0.6659146177 | 0 (0.023, 0.029, 0.029) | 3e-15 (0.007, 0.007, 0.007) | 1.1e-6 (1.40, 4.58, 4.58) | 6.6e-7 (1.46, 2.80, 2.80) | 1.8e-6 (3.39, 5.01, 8.25) | 2.6e-7 (1.71, 3.33, 3.33) |
+| prism11/7/30 | 2.361416975 | 0 (0.046, 0.113, 0.442) | 3.1e-7 (0.080, 0.080, 0.198) | 5.6e-1 (-, -, -) | 5.6e-1 (-, -, -) | 5.6e-1 (-, -, -) | 5.6e-1 (-, -, -) |
+| truncated_octahedron/4/5 | 0.7886751346 | 1.5e-13 (0.002, 0.002, 0.002) | 1.5e-13 (0.003, 0.003, 0.003) | 0 (0.75, 0.75, 0.75) | 2e-15 (0.67, 0.67, 0.67) | 0 (0.85, 0.85, 0.85) | 2e-15 (0.87, 0.87, 0.87) |
+| pentagonal_gyrocupolarotunda/3/51 | 1.224744871 | 0 (0.055, 0.055, 0.055) | 0 (0.033, 0.033, 0.033) | 6.3e-1 (-, -, -) | 6.3e-1 (-, -, -) | 6.3e-1 (-, -, -) | 6.3e-1 (-, -, -) |
+| cuboctahedron/5/32 | 3.102525012 | 4e-15 (0.018, 0.018, 0.037) | 0 (0.010, 0.020, 0.020) | 2.9e-1 (-, -, -) | 3.3e-1 (-, -, -) | 2.9e-1 (-, -, -) | 2.9e-1 (-, -, -) |
+| triakis_tetrahedron/66/7 | 23.2155815 | 0 (0.002, 0.002, 0.003) | 3e-15 (0.002, 0.002, 0.003) | 8e-11 (4.72, 4.72, 4.72) | 3.0e-1 (-, -, -) | 4.4e-3 (5.09, -, -) | 3.0e-1 (-, -, -) |
+| prism7/0/19 | 1.381057826 | 0 (0.006, 0.006, 0.006) | 2e-15 (0.006, 0.006, 0.006) | 1.6e-2 (-, -, -) | 1.6e-2 (-, -, -) | 1.9e-2 (-, -, -) | 2.4e-1 (-, -, -) |
+| disdyakis_dodecahedron/8/59 | 3.558379744 | 9e-15 (0.008, 0.008, 0.008) | 0 (0.004, 0.004, 0.004) | 4.1e-1 (-, -, -) | 4.1e-1 (-, -, -) | 4.1e-1 (-, -, -) | 4.1e-1 (-, -, -) |
+| pentagonal_orthobirotunda/72/44 | 37.96943967 | 0 (0.010, 0.010, 0.010) | 5e-15 (0.014, 0.014, 0.014) | 6.1 (-, -, -) | 5.8 (-, -, -) | 6.2 (-, -, -) | 5.9 (-, -, -) |
+| icosahedron/5/72 | 5.219832801 | 2.2e-12 (0.022, 0.022, 0.022) | 2.1e-12 (0.032, 0.032, 0.032) | 0 (0.74, 0.74, 0.74) | 2e-14 (0.76, 0.76, 0.76) | no packing | no packing |
+| augmented_hexagonal_prism/95/39 | 60.47326332 | 2e-14 (0.064, 0.064, 0.064) | 0 (0.065, 0.065, 0.065) | 7.9 (-, -, -) | 7.8 (-, -, -) | 7.9 (-, -, -) | 7.8 (-, -, -) |
+
+Where the port ties fresh (the Platonic problems and the one-piece-per-face problems), its packings sit at the
+exact optimum to rounding, while fresh's keep the repair margin (gaps of 1e-13 to 2e-12, far below the site's tie
+tolerance of 1e-9). On the many-sided pieces on Johnson solids the port's and the JavaScript's 20-second results
+are 6.8 to 8.9 times fresh's.
+
+### Other measurements
+
+- Fresh against the port on 30 more ids drawn at random (all families, N in {0, 3..8, 9..100}, P 2..50), 3 CPU
+  seconds each, seed 1: fresh's score is never above the port's; equal (to 1e-11) on 7, below on 23, by up to
+  a factor 8.5 (antiprism8/64/37: 35.28 against 299.15; antiprism11/66/20: 23.06 against 171.58).
+- Robustness: every one of the 141 solids once with a random N and P, plus N in {0, 3, 100} with P in {1, 100}
+  on five solids with few faces (171 ids, 0.1 s each), and 150 more random ids (0.15 s): every run ended within
+  its budget with a packing that passed the check; the first valid packing came within 12 ms on every id.
+- Tuning (5 CPU seconds, seeds 1 and 2, 16 harder problems with 4 to 40 pieces per face; R the best of all
+  variants' runs): the defaults reached R(1 + 1e-4) in 32 of 32 runs (median 0.025 s) and R(1 + 1e-6) in 31.
+  Exploring at w = 0.01 or 0.1, shorter epochs (40 + 1.5 k), more lattice starts, or no polishing of each
+  epoch's final packing were each worse at 5 s (mean gap 2.6e-7 to 1.5e-4 against 6.9e-8). The slowest problem
+  was square_pyramid/4/60, where 9 squares in a triangle at 3 + 4/sqrt(3) (load 9 on the triangles and 24 on the
+  square) took 2.8 and 3.6 s to find.
+
+## Weak spots
+
+- Structured optima of a few pieces that random and lattice starts reach rarely, such as 9 squares in a
+  triangle (seconds, see above), and the hard face problems with many pieces (15 pentagons in a triangle, 12
+  heptagons in a square): seeds still differ by 1e-7 to 1e-6 after 5 seconds.
+- Many-sided pieces (N >= 30) have nearly free rotations, so packings that differ only in angles have nearly
+  equal scales: seeds differ by about 1e-6 on 100-gons with 10 pieces per face.
+- The lower bounds are weak (area, and one piece in the incircle), so a run stops early ("bound") only when a
+  face holds one piece that fits the incircle exactly; otherwise it searches to the end of its budget.
+
+## Development knobs
+
+`FSN_DEBUG=1` prints the improvements of the whole packing, the starts, polishes and epoch ends of the face
+problems on stderr; `--verbose` prints per face problem the evaluations, starts, hops, best scale and starts
+that won. Tuning overrides (environment, development only): `FSN_PARAMS="w=0.03,wq=1e-5,fails_k=3,hole=0.5,
+gtol=0.01,abort_it=50,abort_m=0.02,share=0.25,latc=40,near=0.01,s_rand=1,s_align=1,s_lat=1.5,s_elite=1,s_nb=1"`
+(face searches, `planar.rs: Params`) and `FSN_TUNE="slice=3000,slice_k=300,min_slices=3,g0=0.01"` (the
+schedule, `search.rs: Tuning`). `examples/lat.rs` prints the densities of the periodic arrangements.
+
+## Files
+
+- `src/solid.rs`: the id, face classes and the maps between their frames, lower bounds.
+- `src/geom.rs`: the piece and the face polygon, exact separation and fit, repair.
+- `src/model.rs`: the objective, its gradient and the local minimisation driver; the run's budget.
+- `src/lbfgs.rs`, `src/rng.rs`: the minimiser and the generator (adapted from `native/fresh-flat`).
+- `src/lattice.rs`: periodic arrangements for starts.
+- `src/planar.rs`: the search of one face problem.
+- `src/search.rs`: the assignment, the schedule, the constructive packings, the check.
+- `src/fresh.rs`, `src/main.rs`: the client's entry point and the command line.
+- `tests/agreement.rs`, `tests/runs.rs`: see Tests.
