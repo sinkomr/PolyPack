@@ -11,7 +11,7 @@ in a ball or a solid (`balls/ballin*`) are fresh-balls' and answer `Err`.
     fresh-polyhedra --id polyhedra/tetintet/8 --seconds 20 --seed 1 [--evals E] [--verbose]
 
 The library entry point is `fresh_polyhedra::fresh_search(&FreshJob, on_improve)` (`polypack_spaceauto::fresh`): CPU
-budget, wall deadline, stop flag (all read at least every 128 evaluations), evaluation budget, and an optional valid
+budget, wall deadline, stop flag (read about every 5 ms of work), evaluation budget, and an optional valid
 `start` that the search begins from and never returns worse than (a start that fails the check is ignored).
 
 Development switches (not used by the harness): `FRESH_PARAMS="eps=2e-3,spread=5,..."` overrides the search parameters
@@ -125,7 +125,8 @@ All pass (`cargo test --release`, 2026-11-28).
 Harness `native/tools/fresh` (`run.py`, `validate.mts`, `analyze.py`), 20 CPU seconds per run, seeds 1 and 2, two
 runs at a time, 2026-11-28 on a 4-core Linux container **shared with two other agents' builds and benchmarks: load
 average 4 to 8**, so a 20 s run took 20 to 37 s of wall time. The port and js runs were made once, earlier the same
-day, under the same conditions; fresh is the final build. R is the best final score of any run of the problem (all
+day, under the same conditions; fresh is commit 66678b2 (the later commits change only tests, this README and how
+often the clock is read, not the search). R is the best final score of any run of the problem (all
 three solvers). Every final packing below passed the server's TypeScript validators with matching scores
 (`ts_valid`, `ts_score_match`); the port produced none in 5 runs. [CALC from the harness output]
 

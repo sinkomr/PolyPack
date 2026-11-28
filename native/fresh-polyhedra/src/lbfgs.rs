@@ -9,7 +9,8 @@ use std::sync::atomic::{AtomicBool, Ordering};
 use std::time::Instant;
 
 /// The budget of a run: evaluations, CPU seconds of this thread, and optionally a wall deadline and a stop flag.
-/// `poll` reads the clocks every 128 evaluations.
+/// `poll` reads the clocks about every 5 ms of work (every 128 evaluations at most, every one at least: an
+/// evaluation of 500 complex pieces takes milliseconds).
 pub struct Budget<'a> {
     pub max_evals: u64,
     pub seconds: f64,
@@ -20,11 +21,22 @@ pub struct Budget<'a> {
     /// Why it stopped: "cpu", "deadline", "stop", "evals" (or set by the search: "bound").
     pub reason: &'static str,
     next_poll: u64,
+    last_poll: (u64, f64),
 }
 
 impl<'a> Budget<'a> {
     pub fn new(max_evals: u64, seconds: f64) -> Budget<'a> {
-        Budget { max_evals, seconds, t0: thread_cpu_seconds(), deadline: None, stop: None, stopped: false, reason: "", next_poll: 0 }
+        Budget {
+            max_evals,
+            seconds,
+            t0: thread_cpu_seconds(),
+            deadline: None,
+            stop: None,
+            stopped: false,
+            reason: "",
+            next_poll: 0,
+            last_poll: (0, 0.0),
+        }
     }
     /// CPU seconds since the start.
     pub fn elapsed(&self) -> f64 {
@@ -39,17 +51,27 @@ impl<'a> Budget<'a> {
             self.stopped = true;
             self.reason = "evals";
         } else if evals >= self.next_poll {
-            self.next_poll = evals + 128;
-            self.check_clocks();
+            let now = self.elapsed();
+            let (e0, t0) = self.last_poll;
+            let per = if evals > e0 { (now - t0) / (evals - e0) as f64 } else { 0.0 };
+            let step = if per > 0.0 { (0.005 / per).clamp(1.0, 128.0) as u64 } else { 16 };
+            self.last_poll = (evals, now);
+            self.next_poll = evals + step;
+            self.check_clocks_at(now);
         }
         self.stopped
     }
     /// Reads the clocks now.
     pub fn check_clocks(&mut self) -> bool {
+        let now = self.elapsed();
+        self.check_clocks_at(now)
+    }
+
+    fn check_clocks_at(&mut self, now: f64) -> bool {
         if self.stopped {
             return true;
         }
-        if self.elapsed() >= self.seconds {
+        if now >= self.seconds {
             self.stopped = true;
             self.reason = "cpu";
         } else if self.stop.is_some_and(|s| s.load(Ordering::Relaxed)) {
