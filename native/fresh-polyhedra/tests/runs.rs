@@ -141,3 +141,26 @@ fn a_valid_start_is_never_returned_worse() {
     let res = fresh_search(&job(id, 0.3, far, &stop, Some(&big)), &mut |_, _| {}).unwrap();
     assert!(res.score.unwrap() < s * 1.5);
 }
+
+/// A valid packing comes at once for any pair of solids and any P: the constructive lattice packing (and its check)
+/// with no search time.
+#[test]
+fn every_pair_gets_a_valid_packing_at_once() {
+    use polypack_flat::clock::thread_cpu_seconds;
+    let codes: Vec<&str> = polypack_polyhedra::SOLID_NAMES_LIST.iter().map(|s| s.code.as_str()).collect();
+    let mut rng = fresh_polyhedra::rng::Rng::new(77);
+    for k in 0..60 {
+        let p = [2, 7, 500][k % 3];
+        let id = if k % 5 == 4 {
+            format!("balls/{}inball/{}", codes[rng.below(codes.len())], p.min(100))
+        } else {
+            format!("polyhedra/{}in{}/{}", codes[rng.below(codes.len())], codes[rng.below(codes.len())], p)
+        };
+        let t0 = thread_cpu_seconds();
+        let out = solve(&id, 1, 0.0, u64::MAX, false).unwrap();
+        let t = thread_cpu_seconds() - t0;
+        let cfg = out.config.as_ref().unwrap_or_else(|| panic!("{id}: no packing"));
+        assert_eq!(checked(&id, cfg), out.score, "{id}");
+        assert!(t < 2.0, "{id}: {t} s to the first packing");
+    }
+}

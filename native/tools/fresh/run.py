@@ -5,7 +5,7 @@
     python3 native/tools/fresh/run.py --only sphere/0/30 --solvers port,js --seeds 1 --seconds 20
 
 Solvers: js (apps/volunteer + packages/spaces searched through tsx), port (native/target/release/polypack-native
-bench / bench-space), fresh (native/target/release/fresh-{flat,round,balls}). One thread each, CPU-time clocks.
+bench / bench-space), fresh (native/target/release/fresh-{flat,round,balls,polyhedra}). One thread each, CPU-time clocks.
 Appends one JSON line per run to --out and skips the runs already in it (resumable; a failed run is kept and not
 repeated unless --retry-failed). Standard library only.
 """
