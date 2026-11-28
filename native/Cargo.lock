@@ -720,6 +720,18 @@ dependencies = [
 ]
 
 [[package]]
+name = "polypack-fresh-polyhedra"
+version = "0.1.0"
+dependencies = [
+ "polypack-balls",
+ "polypack-flat",
+ "polypack-polyhedra",
+ "polypack-spaceauto",
+ "polypack-spaces",
+ "serde_json",
+]
+
+[[package]]
 name = "polypack-fresh-round"
 version = "0.1.0"
 dependencies = [
