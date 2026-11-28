@@ -122,7 +122,7 @@ impl Default for Params {
             refine_eps: 0.0,
             eps_spread: 4.0,
             interim: 1e-3,
-            local_r: 4.0,
+            local_r: 3.0,
             local_min_p: 24.0,
             polish_dear: 1500,
             hc: 1.0,

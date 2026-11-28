@@ -36,7 +36,10 @@ with X = c + R(q) v. E = 0 exactly when every pair is separated by its plane and
 are then disjoint (touching allowed) and contained. The gradient is exact: per vertex term, the centre gets the
 derivative and the piece a torque, and the torque becomes the quaternion's gradient by
 dE/dq = 2 [-tau . q_v, w tau + tau x q_v] / |q|^2. A side whose piece's bounding box (in its own frame) cannot reach
-the plane is skipped without looking at its vertices. A pair is listed when the circumscribed balls come within a
+the plane is skipped without looking at its vertices; for pieces with 20 or more vertices the violating vertices are
+found by climbing the vertex-edge graph to the support vertex and spreading from it (on a convex polytope the vertices
+above any level of a linear function are connected and include the maximum), 1.3 to 2.5 times faster than
+projecting every vertex. (A cubic penalty, max(0, r)^3, was tried: worse.) A pair is listed when the circumscribed balls come within a
 skin (0.6) of each other and the pieces are not already apart by the skin along the line of centres or along their
 former plane; every point of a piece has moved by at most |dc| + 2 |dq| since the list was built, so the list stays
 exact until that bound reaches half the skin, which each evaluation checks.
@@ -46,7 +49,9 @@ move per step. Since the planes are variables, the variable vector changes with 
 segments, and when a trial step leaves the list's range the step is shortened, taken, and the list rebuilt there
 (planes of pairs that stay listed are kept; a new pair's plane is the best of the line of centres and the face normals
 of both pieces). Stopping rules: E below a floor (about (1e-13)^2), a small relative decrease per iteration several
-times in a row, or a small decrease over a window of 40 iterations.
+times in a row, or a decrease of less than 1e-3 relative over a window of 40 iterations. The last matters: near
+jamming, E typically settles within a few hundred iterations and then creeps down by about 1e-4 per hundred (slow
+collective sliding), which kept the polish's trials running to their iteration caps before.
 
 **Repair and check** (`repair.rs`). Any arrangement becomes a valid packing in true units with the validator's own
 rotation and vertex formula: every pair closer than twice the circumradius gets a separating direction (its plane,
@@ -66,22 +71,34 @@ no relaxation: a valid packing in milliseconds for every pair of solids and ever
 **Polish** (`search.rs: polish`). The jamming size s* of an arrangement: relaxed at s < s*, E is about k (s* - s)^2,
 so sqrt(E) is close to linear in s; each trial relaxes at a size just below the secant estimate of s* from the two
 latest infeasible trials, and every trial's repair is a valid upper bound. Trials are coarse while the bounds are far
-apart and precise at the end; the polish stops when the bounds meet (1e-12 relative), or as soon as the arrangement
-cannot beat the best. The jammed state reached depends on the size the polish approaches from, so a new best is
-compressed by 1e-4, relaxed and polished again while that improves it ("refine").
+apart and precise at the end; the polish stops when the bounds meet (1e-12 relative; 1e-9 once a trial takes more
+than 1500 evaluations), or as soon as the arrangement cannot beat the best. Long polishes offer their trial packings
+that beat the best by 1e-3 on the way (large problems show progress).
 
 **Search** (`search.rs: run`). After the first packing: the lattice packing polished (P >= 20), then a random start
 compressed at density 0.35, then monotonic basin hopping on E at a size held eps below the best: perturb, relax,
-accept when E is lower; an accepted arrangement whose repair is near the best is polished, and a polished packing
-below the best is checked and becomes the best. Moves, chosen with probabilities that follow their recent success:
+accept when E is lower (by 1e-3 relative); an accepted arrangement whose repair is within 1 % of the best is polished,
+and a polished packing below the best is checked and becomes the best. The jammed state a polish reaches depends on
+the size it approaches from (relaxing the best packing of j46inbp9/2 at 1e-3 or 2e-3 below it and polishing gives a
+neighbouring state 1.9e-6 worse; at 1e-4 or 1e-2 below, the same one), so each chain hops at its own compression
+eps = 2e-3 times 4^u, u uniform in [-1, 1]. (Re-polishing every new best from 1e-4 below was tried: it cost more
+than it found.) Moves, chosen with probabilities that follow their recent success:
 jitter every piece (centres and orientations), jitter a cluster, move 1-3 pieces (the most squeezed by energy share, or
 random ones) to the emptiest of 24 sampled places with random orientations, turn one piece (by a large angle or to a
 random orientation), swap two neighbours' orientations, align a piece (the container's frame, a neighbour's
-orientation, or that turned half a turn). A hop that relaxes back near the current arrangement stops early. After
-30 + 2P rejections the chain restarts from the best shaken, from random poses, or from a lattice (close-packed balls or
-stacked boxes in the canonical frame, a container face's frame or a random one), each chain at its own eps. Long
-polishes report trial packings that beat the best by 1e-3 on the way, so that large problems show progress. The run
-stops with "bound" when it reaches the problem's lower bound.
+orientation, or that turned half a turn). A hop that relaxes back near the current arrangement stops early. With 24 or more pieces, a move of a few pieces
+is first relaxed with only the pieces within 1.5 circumdiameters of them free (the other terms are constant), and an
+accepted hop is then relaxed whole. After 30 + 2P rejections the chain restarts from the best shaken, from random
+poses, or from a lattice (close-packed balls or stacked boxes in the canonical frame, a container face's frame or a
+random one). The run stops with "bound" when it reaches the problem's lower bound.
+
+**Checks and the clock** (`lib.rs`). Every improvement is checked (strict options) before it is reported. A check of
+a jammed packing of many complex pieces is not free (P = 300 truncated icosidodecahedra in a cube: 0.39 s strict, 0.19
+s default), so its cost is estimated from the pairs closer than 1e-3 (where the validator's separating-axis test runs
+in full): a polish's trial on the way is not checked when checks would take more than a fifth of the time, and no
+check is started that would end more than 0.15 s past the CPU budget or after a stop (the improvement is then lost
+rather than the budget overrun). Runs with an evaluation budget make none of these decisions, so they stay
+reproducible.
 
 ## Tests
 
