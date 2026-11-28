@@ -7,6 +7,9 @@
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::time::Instant;
 
+pub mod fresh;
+pub use fresh::{FreshJob, FreshResult, FreshSearch};
+
 /// One search job on one 2D-on-3D problem.
 pub struct AutoJob<'a> {
     /// The problem id as the server writes it, e.g. "sphere/4/12".

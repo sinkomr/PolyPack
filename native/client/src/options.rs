@@ -53,6 +53,108 @@ pub struct Options {
     pub dimensions: Option<Vec<SpaceName>>,
     /// --only-dimensions (or --only-spaces): no flat problem is drawn.
     pub only_dimensions: bool,
+    /// --engine: the fresh engines (fresh_engines.rs) where one handles a problem, the line-by-line ports, or
+    /// the fresh engine where there is one and the port elsewhere (the default).
+    pub engine: EngineChoice,
+    /// A sweep (--sweep-2d-on-3d, --sweep-3d-in-3d; sweep.rs) instead of random draws; None for the draws.
+    pub sweep: Option<SweepOptions>,
+}
+
+/// Which searches run a problem (--engine).
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum EngineChoice {
+    /// A fresh engine where one handles the problem, else the port.
+    Auto,
+    /// Only fresh engines: a problem none of them handles is not searched.
+    Fresh,
+    /// Only the ports.
+    Port,
+}
+
+impl EngineChoice {
+    pub fn name(self) -> &'static str {
+        match self {
+            EngineChoice::Auto => "auto",
+            EngineChoice::Fresh => "fresh",
+            EngineChoice::Port => "port",
+        }
+    }
+}
+
+/// The two sweeps.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum SweepMode {
+    /// Surface, sphere and torus: loop k = max(P, rank of N).
+    TwoDOnThreeD,
+    /// Polyhedra and balls: loop k = max(P - 1, piece rank, container rank).
+    ThreeDInThreeD,
+}
+
+impl SweepMode {
+    pub fn flag(self) -> &'static str {
+        match self {
+            SweepMode::TwoDOnThreeD => "--sweep-2d-on-3d",
+            SweepMode::ThreeDInThreeD => "--sweep-3d-in-3d",
+        }
+    }
+}
+
+/// The spaces a sweep covers, in the order it visits them within one P and shape (balls before polyhedra).
+#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
+pub enum SweepKind {
+    Surface,
+    Sphere,
+    Torus,
+    Balls,
+    Polyhedra,
+}
+
+impl SweepKind {
+    pub const ALL_2D: [SweepKind; 3] = [SweepKind::Surface, SweepKind::Sphere, SweepKind::Torus];
+    pub const ALL_3D: [SweepKind; 2] = [SweepKind::Balls, SweepKind::Polyhedra];
+
+    pub fn name(self) -> &'static str {
+        match self {
+            SweepKind::Surface => "surface",
+            SweepKind::Sphere => "sphere",
+            SweepKind::Torus => "torus",
+            SweepKind::Balls => "balls",
+            SweepKind::Polyhedra => "polyhedra",
+        }
+    }
+
+    pub fn space(self) -> SpaceName {
+        match self {
+            SweepKind::Surface => SpaceName::Surface,
+            SweepKind::Sphere => SpaceName::Sphere,
+            SweepKind::Torus => SpaceName::Torus,
+            SweepKind::Balls => SpaceName::Balls,
+            SweepKind::Polyhedra => SpaceName::Polyhedra,
+        }
+    }
+}
+
+/// The options of a sweep. The flat options --N (2D only), --P and --max-P also narrow it; --M does not apply.
+#[derive(Clone, Debug, PartialEq)]
+pub struct SweepOptions {
+    pub mode: SweepMode,
+    /// The kinds to search, in the sweep's order.
+    pub kinds: Vec<SweepKind>,
+    /// "fold" and "nofold", in that order (2D).
+    pub surface_modes: Vec<String>,
+    /// The solids to search, in catalogue order: the surface catalogue's (2D) or the polyhedra catalogue's (3D);
+    /// None for every solid. The ball of the 3D sweep is always in.
+    pub solids: Option<Vec<String>>,
+    /// Only shape codes up to this one (2D; the disk, 0, always passes).
+    pub max_n: Option<u32>,
+    /// Start over from the first loop of the first pass.
+    pub restart: bool,
+    /// Also search problems the user already leads.
+    pub include_own: bool,
+    /// Only problems with no best at all, neither a site entry nor a research record (--open-only).
+    pub open_only: bool,
+    /// Stop at the end of the current pass instead of starting the next (--one-pass).
+    pub one_pass: bool,
 }
 
 #[derive(Clone, Debug, PartialEq)]
@@ -103,7 +205,19 @@ Usage: polypack-native [options]
                            (default: all)
   --max-P K                shorthand for --P 1-K; with both, the numbers in both
   --open-only              skip problems that already have a leader: only first entries are made
-                           (not with --target-holder)
+                           (with a sweep: skip problems with any best, a site entry or a research record,
+                           from the server's bulk lists, without reading them) (not with --target-holder)
+  --engine fresh|port|auto which search runs a problem (default auto). The fresh engines are searches
+                           written from scratch, far faster than the ports of the TypeScript searches, for
+                           every flat problem (flat/N/M/P, P of at least 2), disks at curvature
+                           +-1 and on the sphere (curved/K/0/M/P, sphere/0/P), balls in a ball or a
+                           solid (balls/ballin<container>/P), polyhedra in polyhedra and solids in a ball
+                           (polyhedra/<pair>/P, balls/<solid>inball/P), the torus (torus/F/N/P) and
+                           the surface in both modes (surface/<solid>/fold|nofold/N/P).
+                           auto: a fresh engine where one handles the
+                           problem, else the port; fresh: only those problems; port: the ports only.
+                           A fresh engine's problem ends early once its best has not improved (by 1e-6)
+                           for the longest of 5 s, a tenth of the budget and half the time spent
   --dry-run                search, but never submit
   --note TEXT              free text shown with your entries (at most {MAX_NOTE_LENGTH} characters)
   --state DIR              where the client keeps its state (default {state})
@@ -128,6 +242,42 @@ polytope or ball). The API calls these kinds spaces.
   --spaces LIST            the same as --dimensions (its earlier name)
   --only-dimensions        search only the kinds given with --dimensions
   --only-spaces            the same as --only-dimensions
+
+Sweeps (personal build): instead of drawing problems at random, go through a family of problems from
+easy to hard, in loops 1, 2, 3 ... Loop k covers the problems whose largest rank is k; within a loop
+the order is by P, then the shapes' ranks, then kind. The position is kept in the state directory
+(sweep.json), so a restart goes on where it stopped; a changed option list starts the new list at
+loop 1; after the last loop a second pass starts at loop 1. A problem that is closed or unknown to
+the server is skipped, and so is one the --name already leads (unless --include-own). The server's
+bulk lists of problems with a best (/api/spaces/:space/records and /site-only, read again every
+hour) let --open-only pass over problems with a best without reading them. One submission is sent
+at a time. A sweep takes no --dimensions, --M or --target-holder.
+
+  --sweep-2d-on-3d         surface, sphere and torus: loop k = max(P, rank of N), N ranked disk first
+                           (N = 0, 3, 4, 5 ... have rank 1, 2, 3, 4 ...); within a loop by P, then N,
+                           then kind (surface, sphere, torus), then solid in catalogue order, then
+                           mode (fold, nofold) or torus family (sq, hex, free)
+  --sweep-3d-in-3d         polyhedra and balls: loop k = max(P - 1, piece rank, container rank), P from 2;
+                           the shapes are ranked simple to complex, the ball first (rank 1), then the
+                           solids in the polyhedra catalogue's order (Platonic, Archimedean, Catalan,
+                           prisms, antiprisms ... Johnson: rank 2, 3, ...). balls/ballin<solid>/P has
+                           piece rank 1, balls/<solid>inball/P container rank 1,
+                           polyhedra/<piece>in<container>/P both solids' ranks. Within a loop by P, then
+                           piece rank, then container rank, then kind (balls before polyhedra)
+  --kinds LIST             the kinds to sweep: surface,sphere,torus (default: all three) with
+                           --sweep-2d-on-3d; polyhedra,balls (default: both) with --sweep-3d-in-3d
+  --surface-modes LIST     of fold,nofold (default: both) (2D)
+  --solids LIST            solids, by name or group: the surface catalogue's (cube, snub_cube,
+                           square_pyramid ...; groups platonic, archimedean, catalan, johnson) with
+                           --sweep-2d-on-3d; the polyhedra catalogue's (cube, truncated_cube, prism3 ...;
+                           groups platonic, archimedean, catalan, prisms, antiprisms, johnson, and also
+                           bipyramids, trapezohedra, elongated_prisms) with --sweep-3d-in-3d, where the
+                           ball is always swept too (default: every solid)
+  --max-N K                only shape codes N up to K, the disk always (2D)
+                           (--N LIST (2D), --P LIST and --max-P K narrow a sweep too)
+  --sweep-restart          forget the kept position and start again at loop 1 of pass 1
+  --include-own            also search problems the --name already leads (default: skip them)
+  --one-pass               stop when the current pass is complete instead of starting the next one
 
 Target mode: re-search the low-effort records of one holder.
 
@@ -290,6 +440,11 @@ const VALUE_OPTIONS: &[&str] = &[
     "target-margin",
     "dimensions",
     "spaces",
+    "engine",
+    "kinds",
+    "surface-modes",
+    "solids",
+    "max-N",
 ];
 const FLAG_OPTIONS: &[&str] = &[
     "dry-run",
@@ -303,7 +458,14 @@ const FLAG_OPTIONS: &[&str] = &[
     "target-include-unknown",
     "only-dimensions",
     "only-spaces",
+    "sweep-2d-on-3d",
+    "sweep-3d-in-3d",
+    "sweep-restart",
+    "include-own",
+    "one-pass",
 ];
+/// Options that only a sweep takes.
+const SWEEP_ONLY: &[&str] = &["kinds", "surface-modes", "solids", "max-N", "sweep-restart", "include-own", "one-pass"];
 /// The JavaScript client's choice of a generic method for the other kinds: this client runs each
 /// kind's own search.
 const UNSUPPORTED: &[&str] = &["space-method", "space-params"];
@@ -472,6 +634,16 @@ pub fn parse_options(argv: &[String], machine: &Machine) -> Result<Parsed, Optio
         )));
     }
     let p = parse_pieces(get("P").as_deref(), get("max-P").as_deref())?;
+    let engine = match get("engine").as_deref().map(str::trim) {
+        None | Some("auto") => EngineChoice::Auto,
+        Some("fresh") => EngineChoice::Fresh,
+        Some("port") => EngineChoice::Port,
+        Some(other) => return Err(OptionError(format!("--engine must be fresh, port or auto, not \"{other}\""))),
+    };
+    if target_holder.is_some() && engine == EngineChoice::Fresh {
+        return Err(OptionError("--engine fresh does not apply to --target-holder: target mode searches with the ports (its early stop is theirs); use --engine port or auto".into()));
+    }
+    let sweep = parse_sweep(&pairs, &get, &flag, open_only, target_holder.is_some(), dimensions.is_some())?;
     let mut state_dir = match get("state") {
         Some(s) => PathBuf::from(s),
         None => machine.home.join(".polypack-native"),
@@ -529,7 +701,160 @@ pub fn parse_options(argv: &[String], machine: &Machine) -> Result<Parsed, Optio
         target_margin,
         dimensions,
         only_dimensions,
+        engine,
+        sweep,
     }))
+}
+
+/// "surface,torus" into the kinds of `allowed` it names, in the order of `allowed`.
+fn parse_names(what: &str, text: &str, allowed: &[&str]) -> Result<Vec<String>, OptionError> {
+    let mut chosen = std::collections::BTreeSet::new();
+    for part in text.split(',').map(|s| s.trim()) {
+        match allowed.iter().position(|a| *a == part) {
+            Some(i) => {
+                chosen.insert(i);
+            }
+            None => return Err(OptionError(format!("--{what}: \"{part}\" is not one of {}", allowed.join(", ")))),
+        }
+    }
+    Ok(chosen.into_iter().map(|i| allowed[i].to_string()).collect())
+}
+
+/// --solids of --sweep-2d-on-3d: names of the surface catalogue and its groups, in catalogue order.
+fn parse_surface_solids(text: &str) -> Result<Vec<String>, OptionError> {
+    let all = polypack_spaces::surface_solids();
+    let mut chosen = vec![false; all.len()];
+    for part in text.split(',').map(|s| s.trim()) {
+        let group: Option<&[String]> = match part {
+            "platonic" => Some(polypack_spaces::surface_platonic()),
+            "archimedean" => Some(polypack_spaces::surface_archimedean()),
+            "catalan" => Some(polypack_spaces::surface_catalan()),
+            "johnson" => Some(polypack_spaces::surface_johnson()),
+            _ => None,
+        };
+        if let Some(g) = group {
+            for s in g {
+                chosen[all.iter().position(|a| a == s).unwrap()] = true;
+            }
+        } else if let Some(i) = all.iter().position(|a| a == part) {
+            chosen[i] = true;
+        } else {
+            return Err(OptionError(format!(
+                "--solids: \"{part}\" is not a solid of the surface catalogue (a name such as cube or snub_cube, or one of platonic, archimedean, catalan, johnson)"
+            )));
+        }
+    }
+    Ok(all.iter().zip(chosen).filter(|(_, c)| *c).map(|(s, _)| s.clone()).collect())
+}
+
+/// --solids of --sweep-3d-in-3d: names of the polyhedra catalogue and its groups, in catalogue order.
+fn parse_polyhedra_solids(text: &str) -> Result<Vec<String>, OptionError> {
+    use polypack_polyhedra::{SolidFamily, SOLID_NAMES_LIST};
+    let mut chosen = vec![false; SOLID_NAMES_LIST.len()];
+    for part in text.split(',').map(|s| s.trim()) {
+        let family = match part {
+            "platonic" => Some(SolidFamily::Platonic),
+            "archimedean" => Some(SolidFamily::Archimedean),
+            "catalan" => Some(SolidFamily::Catalan),
+            "prisms" => Some(SolidFamily::Prism),
+            "antiprisms" => Some(SolidFamily::Antiprism),
+            "johnson" => Some(SolidFamily::Johnson),
+            "bipyramids" => Some(SolidFamily::Bipyramid),
+            "trapezohedra" => Some(SolidFamily::Trapezohedron),
+            "elongated_prisms" => Some(SolidFamily::ElongatedPrism),
+            _ => None,
+        };
+        if let Some(f) = family {
+            for (i, s) in SOLID_NAMES_LIST.iter().enumerate() {
+                if s.family == f {
+                    chosen[i] = true;
+                }
+            }
+        } else if let Some(i) = SOLID_NAMES_LIST.iter().position(|s| s.name == part) {
+            chosen[i] = true;
+        } else {
+            return Err(OptionError(format!(
+                "--solids: \"{part}\" is not a solid of the polyhedra catalogue (a name such as cube, truncated_cube or prism3, or one of platonic, archimedean, catalan, prisms, antiprisms, johnson, bipyramids, trapezohedra, elongated_prisms)"
+            )));
+        }
+    }
+    Ok(SOLID_NAMES_LIST.iter().zip(chosen).filter(|(_, c)| *c).map(|(s, _)| s.name.clone()).collect())
+}
+
+/// The sweep options, when a sweep is asked for; an error for an option that needs one.
+fn parse_sweep(
+    pairs: &[(String, String)],
+    get: &dyn Fn(&str) -> Option<String>,
+    flag: &dyn Fn(&str) -> bool,
+    open_only: bool,
+    target: bool,
+    dimensions: bool,
+) -> Result<Option<SweepOptions>, OptionError> {
+    let (two, three) = (flag("sweep-2d-on-3d"), flag("sweep-3d-in-3d"));
+    if !two && !three {
+        if let Some((key, _)) = pairs.iter().find(|(key, _)| SWEEP_ONLY.contains(&key.as_str())) {
+            return Err(OptionError(format!("--{key} needs --sweep-2d-on-3d or --sweep-3d-in-3d")));
+        }
+        return Ok(None);
+    }
+    if two && three {
+        return Err(OptionError("--sweep-2d-on-3d and --sweep-3d-in-3d are two sweeps: run one process for each, with its own --state directory".into()));
+    }
+    let mode = if two { SweepMode::TwoDOnThreeD } else { SweepMode::ThreeDInThreeD };
+    let flag_name = mode.flag();
+    if target {
+        return Err(OptionError(format!("{flag_name} cannot be combined with --target-holder")));
+    }
+    if dimensions {
+        return Err(OptionError(format!("{flag_name} chooses its kinds itself (--kinds): leave out --dimensions and --spaces")));
+    }
+    if flag("only-dimensions") || flag("only-spaces") {
+        return Err(OptionError(format!("{flag_name} does not take --only-dimensions or --only-spaces")));
+    }
+    if pairs.iter().any(|(key, _)| key == "M") {
+        return Err(OptionError(format!("--M does not apply to {flag_name} (the containers are the sweep's own); --P and --max-P do")));
+    }
+    let (all_kinds, kind_names): (&[SweepKind], &[&str]) = match mode {
+        SweepMode::TwoDOnThreeD => (&SweepKind::ALL_2D, &["surface", "sphere", "torus"]),
+        SweepMode::ThreeDInThreeD => (&SweepKind::ALL_3D, &["balls", "polyhedra"]),
+    };
+    let names = match get("kinds") {
+        Some(v) => parse_names("kinds", &v, kind_names)?,
+        None => kind_names.iter().map(|s| s.to_string()).collect(),
+    };
+    let kinds: Vec<SweepKind> = all_kinds.iter().copied().filter(|k| names.iter().any(|n| n == k.name())).collect();
+    let (surface_modes, max_n) = match mode {
+        SweepMode::TwoDOnThreeD => {
+            let modes = match get("surface-modes") {
+                Some(v) => parse_names("surface-modes", &v, &["fold", "nofold"])?,
+                None => vec!["fold".into(), "nofold".into()],
+            };
+            let max_n = match get("max-N") {
+                Some(v) => match v.trim().parse::<u32>() {
+                    Ok(k) if k <= MAX_SIDES && v.trim().len() <= 3 => Some(k),
+                    _ => return Err(OptionError(format!("--max-N must be an integer from 0 to {MAX_SIDES}"))),
+                },
+                None => None,
+            };
+            (modes, max_n)
+        }
+        SweepMode::ThreeDInThreeD => {
+            for key in ["surface-modes", "max-N", "N"] {
+                if pairs.iter().any(|(k, _)| k == key) {
+                    return Err(OptionError(format!("--{key} does not apply to --sweep-3d-in-3d (its shapes are the ball and the polyhedra catalogue's solids; see --solids)")));
+                }
+            }
+            (Vec::new(), None)
+        }
+    };
+    let solids = match get("solids") {
+        Some(v) => Some(match mode {
+            SweepMode::TwoDOnThreeD => parse_surface_solids(&v)?,
+            SweepMode::ThreeDInThreeD => parse_polyhedra_solids(&v)?,
+        }),
+        None => None,
+    };
+    Ok(Some(SweepOptions { mode, kinds, surface_modes, solids, max_n, restart: flag("sweep-restart"), include_own: flag("include-own"), open_only, one_pass: flag("one-pass") }))
 }
 
 #[cfg(test)]
@@ -610,5 +935,56 @@ mod tests {
         assert!(run(&["--dimensions", "torus", "--only-dimensions", "--N", "4"]).unwrap_err().contains("leaves out"));
         assert!(run(&["--dimensions", "torus", "--target-holder", "x"]).unwrap_err().contains("flat problems only"));
         assert!(run(&["--space-method", "x"]).unwrap_err().contains("Auto"));
+    }
+
+    #[test]
+    fn engine_and_sweep_options() {
+        let run = |a: &[&str]| match parse_options(&args(a), &machine()) {
+            Ok(Parsed::Run(o)) => Ok(o),
+            Ok(_) => panic!(),
+            Err(e) => Err(e.0),
+        };
+        assert_eq!(run(&[]).unwrap().engine, EngineChoice::Auto);
+        assert_eq!(run(&["--engine", "fresh"]).unwrap().engine, EngineChoice::Fresh);
+        assert_eq!(run(&["--engine=port"]).unwrap().engine, EngineChoice::Port);
+        assert!(run(&["--engine", "fast"]).unwrap_err().contains("fresh, port or auto"));
+        assert!(run(&["--engine", "fresh", "--target-holder", "jg"]).is_err());
+        assert!(run(&["--engine", "auto", "--target-holder", "jg"]).is_ok());
+        assert_eq!(run(&[]).unwrap().sweep, None);
+        // the 2D sweep
+        let o = run(&["--sweep-2d-on-3d"]).unwrap().sweep.unwrap();
+        assert_eq!((o.mode, o.kinds.clone()), (SweepMode::TwoDOnThreeD, SweepKind::ALL_2D.to_vec()));
+        assert_eq!((o.surface_modes.len(), o.solids.is_none(), o.restart, o.include_own, o.open_only, o.one_pass), (2, true, false, false, false, false));
+        let o = run(&["--sweep-2d-on-3d", "--kinds", "torus,surface", "--surface-modes=nofold", "--solids", "snub_cube,cube", "--max-N", "6", "--sweep-restart", "--include-own", "--open-only", "--one-pass"]).unwrap().sweep.unwrap();
+        assert_eq!(o.kinds, vec![SweepKind::Surface, SweepKind::Torus]);
+        assert_eq!((o.surface_modes, o.solids, o.max_n), (vec!["nofold".to_string()], Some(vec!["cube".to_string(), "snub_cube".to_string()]), Some(6)));
+        assert!(o.restart && o.include_own && o.open_only && o.one_pass);
+        assert_eq!(run(&["--sweep-2d-on-3d", "--solids", "platonic"]).unwrap().sweep.unwrap().solids.unwrap().len(), 5);
+        assert!(run(&["--sweep-2d-on-3d", "--kinds", "polyhedra"]).is_err());
+        assert!(run(&["--sweep-2d-on-3d", "--solids", "cub"]).is_err());
+        assert!(run(&["--sweep-2d-on-3d", "--M", "4"]).is_err());
+        assert_eq!(run(&["--sweep-2d-on-3d", "--max-P", "5"]).unwrap().p, Some(vec![1, 2, 3, 4, 5]));
+        // the 3D sweep
+        let o = run(&["--sweep-3d-in-3d"]).unwrap().sweep.unwrap();
+        assert_eq!((o.mode, o.kinds.clone()), (SweepMode::ThreeDInThreeD, vec![SweepKind::Balls, SweepKind::Polyhedra]));
+        let o = run(&["--sweep-3d-in-3d", "--kinds", "polyhedra,balls", "--solids", "platonic,truncated_cube,prisms", "--P", "2-5"]).unwrap();
+        let names = o.sweep.as_ref().unwrap().solids.clone().unwrap();
+        assert_eq!(&names[..6], ["tetrahedron", "cube", "octahedron", "dodecahedron", "icosahedron", "truncated_cube"]);
+        assert!(names.contains(&"prism3".to_string()) && !names.contains(&"antiprism3".to_string()) && !names.contains(&"snub_cube".to_string()));
+        assert_eq!(o.sweep.as_ref().unwrap().kinds, vec![SweepKind::Balls, SweepKind::Polyhedra]);
+        assert_eq!(run(&["--sweep-3d-in-3d", "--kinds", "polyhedra"]).unwrap().sweep.unwrap().kinds, vec![SweepKind::Polyhedra]);
+        assert!(run(&["--sweep-3d-in-3d", "--solids", "antiprisms"]).unwrap().sweep.unwrap().solids.unwrap().iter().all(|s| s.starts_with("antiprism")));
+        assert!(run(&["--sweep-3d-in-3d", "--kinds", "surface"]).is_err());
+        assert!(run(&["--sweep-3d-in-3d", "--solids", "snub_cube_x"]).is_err());
+        assert!(run(&["--sweep-3d-in-3d", "--N", "4"]).is_err());
+        assert!(run(&["--sweep-3d-in-3d", "--max-N", "4"]).is_err());
+        assert!(run(&["--sweep-3d-in-3d", "--M", "4"]).is_err());
+        // the two sweeps and the other modes exclude each other
+        assert!(run(&["--sweep-3d-in-3d", "--sweep-2d-on-3d"]).unwrap_err().contains("two sweeps"));
+        assert!(run(&["--sweep-2d-on-3d", "--target-holder", "jg"]).is_err());
+        assert!(run(&["--sweep-3d-in-3d", "--dimensions", "balls"]).is_err());
+        assert!(run(&["--kinds", "sphere"]).unwrap_err().contains("needs --sweep-2d-on-3d or --sweep-3d-in-3d"));
+        assert!(run(&["--include-own"]).is_err());
+        assert!(run(&["--one-pass"]).is_err());
     }
 }

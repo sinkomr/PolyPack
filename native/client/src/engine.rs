@@ -66,6 +66,15 @@ pub struct Candidate {
     pub strict: bool,
     pub job: Job,
     pub params: Value,
+    /// The method text of a fresh engine's result ("fresh flat"); None for a method of the engine's own.
+    pub label: Option<String>,
+}
+
+impl Candidate {
+    /// The method a submission records.
+    pub fn method_name(&self) -> &str {
+        self.label.as_deref().unwrap_or_else(|| self.job.method.name())
+    }
 }
 
 /// Runs one job to its end (or until `control` aborts it).
@@ -362,6 +371,8 @@ pub enum Stop {
     Stagnation,
     Aborted,
     Bound,
+    /// A fresh engine's search ended by a pause (battery power) with its best so far.
+    Paused,
 }
 
 impl Stop {
@@ -371,6 +382,7 @@ impl Stop {
             Stop::Stagnation => "stagnation",
             Stop::Aborted => "aborted",
             Stop::Bound => "bound",
+            Stop::Paused => "paused",
         }
     }
 }
@@ -621,7 +633,7 @@ pub fn search(input: SearchInput, runner: &mut dyn Runner) -> SearchOutcome {
                     } else {
                         let before = best.as_ref().map_or(f64::INFINITY, |b| b.score).min(known.as_ref().map_or(f64::INFINITY, |k| k.score));
                         if best.as_ref().map_or(true, |b| score < b.score) {
-                            best = Some(Candidate { config: config.clone(), score, strict: true, job: flight.job.clone(), params: result.params.clone() });
+                            best = Some(Candidate { config: config.clone(), score, strict: true, job: flight.job.clone(), params: result.params.clone(), label: None });
                             best_from_known = flight.from_known;
                         }
                         if !before.is_finite() || (before - score) / before > policy::MIN_IMPROVEMENT {
@@ -698,7 +710,7 @@ pub fn search(input: SearchInput, runner: &mut dyn Runner) -> SearchOutcome {
                 if result.valid && result.strict {
                     if let (Some(config), Some(score)) = (&result.best, result.score) {
                         if best.as_ref().map_or(true, |b| score < b.score) {
-                            best = Some(Candidate { config: config.clone(), score, strict: true, job: flight.job.clone(), params: result.params.clone() });
+                            best = Some(Candidate { config: config.clone(), score, strict: true, job: flight.job.clone(), params: result.params.clone(), label: None });
                         }
                     }
                 }

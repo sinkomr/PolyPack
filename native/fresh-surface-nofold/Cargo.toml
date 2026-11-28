@@ -1,0 +1,24 @@
+[package]
+name = "polypack-fresh-surface-nofold"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+description = "A search for surface problems in the nofold mode (pieces inside the faces of a convex solid), written from scratch, for comparison with the port"
+
+[lib]
+name = "fresh_surface_nofold"
+path = "src/lib.rs"
+
+[[bin]]
+name = "fresh-surface-nofold"
+path = "src/main.rs"
+
+[dependencies]
+# the CPU clock
+polypack-flat = { path = "../flat" }
+polypack-spaceauto = { path = "../spaceauto" }
+# definitions only (the solids' faces in their frames) and the validator's nofold check
+polypack-surface = { path = "../surface" }
+# the server's check of a whole configuration
+polypack-spaces = { path = "../spaces" }
+serde_json = { version = "1", features = ["float_roundtrip"] }

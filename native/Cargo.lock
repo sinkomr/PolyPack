@@ -700,6 +700,83 @@ dependencies = [
 ]
 
 [[package]]
+name = "polypack-fresh-balls"
+version = "0.1.0"
+dependencies = [
+ "polypack-balls",
+ "polypack-flat",
+ "polypack-spaceauto",
+ "polypack-spaces",
+ "serde_json",
+]
+
+[[package]]
+name = "polypack-fresh-flat"
+version = "0.1.0"
+dependencies = [
+ "polypack-flat",
+ "polypack-spaceauto",
+ "serde_json",
+]
+
+[[package]]
+name = "polypack-fresh-polyhedra"
+version = "0.1.0"
+dependencies = [
+ "polypack-balls",
+ "polypack-flat",
+ "polypack-polyhedra",
+ "polypack-spaceauto",
+ "polypack-spaces",
+ "serde_json",
+]
+
+[[package]]
+name = "polypack-fresh-round"
+version = "0.1.0"
+dependencies = [
+ "polypack-curved",
+ "polypack-flat",
+ "polypack-spaceauto",
+ "polypack-spaces",
+ "polypack-sphere",
+ "serde_json",
+]
+
+[[package]]
+name = "polypack-fresh-surface-fold"
+version = "0.1.0"
+dependencies = [
+ "polypack-flat",
+ "polypack-spaceauto",
+ "polypack-spaces",
+ "polypack-surface",
+ "serde_json",
+]
+
+[[package]]
+name = "polypack-fresh-surface-nofold"
+version = "0.1.0"
+dependencies = [
+ "polypack-flat",
+ "polypack-spaceauto",
+ "polypack-spaces",
+ "polypack-surface",
+ "serde_json",
+]
+
+[[package]]
+name = "polypack-fresh-torus"
+version = "0.1.0"
+dependencies = [
+ "polypack-flat",
+ "polypack-spaceauto",
+ "polypack-spaces",
+ "polypack-torus",
+ "serde_json",
+]
+
+[[package]]
 name = "polypack-js"
 version = "0.1.0"
 dependencies = [
@@ -725,6 +802,13 @@ dependencies = [
  "polypack-boundary",
  "polypack-curved",
  "polypack-flat",
+ "polypack-fresh-balls",
+ "polypack-fresh-flat",
+ "polypack-fresh-polyhedra",
+ "polypack-fresh-round",
+ "polypack-fresh-surface-fold",
+ "polypack-fresh-surface-nofold",
+ "polypack-fresh-torus",
  "polypack-ndim",
  "polypack-polyhedra",
  "polypack-spaceauto",
