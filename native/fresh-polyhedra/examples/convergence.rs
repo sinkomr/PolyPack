@@ -13,7 +13,7 @@ fn main() {
     let prob = Problem::parse(&id).unwrap();
     let budget = Budget::new(u64::MAX, secs);
     let mut s = Search::new(&prob, 1, budget);
-    s.run(None, &mut |pk| Some(pk.s));
+    s.run(None, &mut |pk, _| Some(pk.s));
     println!("{id}: best {:.12} after {secs} s", s.best_s);
     s.budget = Budget::new(u64::MAX, 1e9);
     let ev0 = s.en.evals;
@@ -38,7 +38,7 @@ fn main() {
         let mut total = 0;
         let ev0 = s.en.evals;
         for chunk in 0..12 {
-            let tol = Tol { e_stop: 1e-30, rel: 0.0, patience: 1000, gtol: 0.0, max_iter: 250, max_step: 0.05 };
+            let tol = Tol { e_stop: 1e-30, rel: 0.0, patience: 1000, gtol: 0.0, max_iter: 250, max_step: 0.05, window: 0, window_rel: 0.0 };
             let out = s.relax(&mut st, target, &tol);
             total += out.iters;
             line += &format!(" {}:{:.2e}", total, out.e);

@@ -24,6 +24,9 @@ use serde_json::{json, Value};
 pub struct Packing {
     pub s: f64,
     pub poses: Vec<[f64; 7]>,
+    /// Pairs apart by less than 1e-3 along their direction (the validator's separating-axis test runs in full on
+    /// such pairs): an estimate of the check's work.
+    pub tight: usize,
 }
 
 impl Packing {
@@ -49,7 +52,8 @@ impl Packing {
             }
             poses.push(pose);
         }
-        Some(Packing { s, poses })
+        let tight = poses.len() * 6;
+        Some(Packing { s, poses, tight })
     }
 }
 
@@ -107,6 +111,7 @@ pub struct Repairer {
     rots: Vec<[f64; 9]>,
     verts: Vec<Vec<f64>>,
     tmp: Vec<f64>,
+    gaps: Vec<(f64, f64)>,
 }
 
 impl Repairer {
@@ -140,6 +145,7 @@ impl Repairer {
         let base = 7 * p;
         let mut lambda = 1.0f64;
         let mut k = 0usize;
+        self.gaps.clear();
         let np = st.pairs.len();
         for i in 0..p {
             for j in i + 1..p {
@@ -197,11 +203,12 @@ impl Repairer {
                     }
                 }
                 let Some((u, gap)) = best else { continue };
+                let dd = dot(u, dc);
+                self.gaps.push((gap, dd));
                 let delta = -gap;
                 if delta + margin <= 0.0 {
                     continue;
                 }
-                let dd = dot(u, dc);
                 let l = if dd > 1e-9 * rho { 1.0 + (delta + margin) / dd } else { reach / d2.sqrt().max(1e-300) };
                 let l = l.min(reach / d2.sqrt().max(1e-300));
                 lambda = lambda.max(l);
@@ -220,7 +227,8 @@ impl Repairer {
             world(prob, &poses[i], &self.rots[i], &mut self.tmp);
             s = s.max(size_needed(prob, &self.tmp));
         }
-        Packing { s: s * (1.0 + 1e-14), poses }
+        let tight = self.gaps.iter().filter(|(g, d)| g + (lambda - 1.0) * d < 1e-3).count();
+        Packing { s: s * (1.0 + 1e-14), poses, tight }
     }
 }
 

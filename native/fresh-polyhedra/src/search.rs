@@ -28,8 +28,18 @@ use crate::model::{dot, qexp, qmul, qnormalize, r_mul, rot, rt_mul, Problem};
 use crate::repair::{Packing, Repairer};
 use crate::rng::Rng;
 
-/// The checked score of a packing offered (None when the check refused it even after enlarging).
-pub type Offer<'a> = dyn FnMut(&Packing) -> Option<f64> + 'a;
+/// What the search tells the check about a packing it offers.
+#[derive(Clone, Copy, Debug)]
+pub struct OfferCtx {
+    /// A trial of a polish still running (the caller may skip it to save the check's time).
+    pub interim: bool,
+    /// The budget is spent (the caller may skip a check that would run long past it).
+    pub stopped: bool,
+}
+
+/// The checked score of a packing offered (None when the check refused it even after enlarging, or the caller
+/// skipped it).
+pub type Offer<'a> = dyn FnMut(&Packing, OfferCtx) -> Option<f64> + 'a;
 
 #[derive(Clone, Copy, Debug)]
 pub struct Params {
@@ -59,6 +69,19 @@ pub struct Params {
     /// Largest move of a variable per L-BFGS step: polishing, exploring.
     pub polish_step: f64,
     pub explore_step: f64,
+    /// Windowed stopping rules (see lbfgs::Tol): polishing, exploring.
+    pub polish_window: u32,
+    pub polish_window_rel: f64,
+    pub explore_window: u32,
+    pub explore_window_rel: f64,
+    /// Relaxed energies at one size within this relative difference are taken for the same basin.
+    pub same: f64,
+    /// Compression of a new best before it is polished again (0: no refinement).
+    pub refine_eps: f64,
+    /// Each chain hops at eps times spread^u, u uniform in [-1, 1] (1: always eps).
+    pub eps_spread: f64,
+    /// A polish offers a trial packing on the way when it beats the best by this much (relative).
+    pub interim: f64,
     /// Preconditioner factors: centres, quaternions, plane directions, plane offsets.
     pub hc: f64,
     pub hq: f64,
@@ -85,6 +108,14 @@ impl Default for Params {
             polish_iter: 6000,
             polish_step: 0.05,
             explore_step: 0.15,
+            polish_window: 40,
+            polish_window_rel: 1e-3,
+            explore_window: 40,
+            explore_window_rel: 1e-3,
+            same: 1e-3,
+            refine_eps: 0.0,
+            eps_spread: 4.0,
+            interim: 1e-3,
             hc: 1.0,
             hq: 1.0,
             hw: 1.0,
@@ -110,6 +141,14 @@ impl Default for Params {
                     "pearly" => p.polish_early_rel = val,
                     "piter" => p.polish_iter = val as u32,
                     "pstep" => p.polish_step = val,
+                    "pwin" => p.polish_window = val as u32,
+                    "pwrel" => p.polish_window_rel = val,
+                    "ewin" => p.explore_window = val as u32,
+                    "ewrel" => p.explore_window_rel = val,
+                    "same" => p.same = val,
+                    "refine" => p.refine_eps = val,
+                    "spread" => p.eps_spread = val,
+                    "interim" => p.interim = val,
                     "estep" => p.explore_step = val,
                     "power" => p.power = val,
                     "hc" => p.hc = val,
@@ -136,18 +175,19 @@ pub struct Stats {
     pub same: u64,
     pub segments: u64,
     pub polish_trials: u64,
+    pub refines: u64,
+    pub refined: u64,
     pub polish_capped: u64,
     pub moves: [u64; NMOVES],
     pub wins: [u64; NMOVES],
 }
 
-const NMOVES: usize = 6;
+const NMOVES: usize = 7;
 
-const EXPLORE: Tol = Tol { e_stop: 1e-26, rel: 1e-6, patience: 4, gtol: 1e-14, max_iter: 4000, max_step: 0.15 };
-const POLISH_EARLY: Tol = Tol { e_stop: 1e-28, rel: 1e-9, patience: 3, gtol: 1e-16, max_iter: 4000, max_step: 0.05 };
-const POLISH: Tol = Tol { e_stop: 1e-28, rel: 1e-13, patience: 4, gtol: 1e-16, max_iter: 6000, max_step: 0.05 };
-/// Relaxed energies at one size within this relative difference are taken for the same basin.
-const SAME: f64 = 2e-5;
+const EXPLORE: Tol = Tol { e_stop: 1e-26, rel: 1e-6, patience: 4, gtol: 1e-14, max_iter: 4000, max_step: 0.15, window: 0, window_rel: 0.0 };
+const POLISH_EARLY: Tol =
+    Tol { e_stop: 1e-28, rel: 1e-9, patience: 3, gtol: 1e-16, max_iter: 4000, max_step: 0.05, window: 0, window_rel: 0.0 };
+const POLISH: Tol = Tol { e_stop: 1e-28, rel: 1e-13, patience: 4, gtol: 1e-16, max_iter: 6000, max_step: 0.05, window: 0, window_rel: 0.0 };
 /// A hop that comes back within this distance of the current arrangement is a return to its basin.
 const ANCHOR_R: f64 = 0.01;
 
@@ -193,6 +233,8 @@ impl<'a> Search<'a> {
             e_stop: 1e-13f64.powf(pw),
             gtol: 1e-14f64.powf(pw - 1.0),
             max_step: params.explore_step,
+            window: params.explore_window,
+            window_rel: params.explore_window_rel,
             ..EXPLORE
         };
         let polish_early = Tol {
@@ -201,6 +243,8 @@ impl<'a> Search<'a> {
             rel: params.polish_early_rel,
             max_iter: params.polish_iter,
             max_step: params.polish_step,
+            window: params.polish_window,
+            window_rel: params.polish_window_rel,
             ..POLISH_EARLY
         };
         let polish_tol = Tol {
@@ -209,6 +253,8 @@ impl<'a> Search<'a> {
             rel: params.polish_rel,
             max_iter: params.polish_iter,
             max_step: params.polish_step,
+            window: params.polish_window,
+            window_rel: params.polish_window_rel,
             ..POLISH
         };
         Search {
@@ -364,13 +410,19 @@ impl<'a> Search<'a> {
     /// already made (size, energy). Leaves the best valid packing found in `hi_pack` (its state in `hi_state`) and
     /// returns its size.
     pub fn polish(&mut self, x: &mut State, known: Option<(f64, f64)>) -> f64 {
+        self.polish_with(x, known, None)
+    }
+
+    /// `polish`, offering on the way every trial packing that beats the best by more than `params.interim`
+    /// (relative): a long polish of many pieces then reports its progress.
+    pub fn polish_with(&mut self, x: &mut State, known: Option<(f64, f64)>, offer: Option<&mut Offer>) -> f64 {
         let ev0 = self.en.evals;
-        let hi = self.polish_inner(x, known);
+        let hi = self.polish_inner(x, known, offer);
         self.stats.polish_evals += self.en.evals - ev0;
         hi
     }
 
-    fn polish_inner(&mut self, x: &mut State, known: Option<(f64, f64)>) -> f64 {
+    fn polish_inner(&mut self, x: &mut State, known: Option<(f64, f64)>, mut offer: Option<&mut Offer>) -> f64 {
         self.stats.polishes += 1;
         let prob = self.prob;
         self.hi_pack = self.rep.repair(prob, x, 1.0);
@@ -437,6 +489,11 @@ impl<'a> Search<'a> {
                 hi = r.s;
                 self.hi_pack = r;
                 self.hi_state.clone_from(x);
+                if let Some(o) = offer.as_deref_mut() {
+                    if hi < self.best_s * (1.0 - self.params.interim) {
+                        self.offer_hi_ctx(o, true);
+                    }
+                }
             }
             if e > self.polish_tol.e_stop {
                 if st > lo {
@@ -484,6 +541,14 @@ impl<'a> Search<'a> {
         hi
     }
 
+    /// The state of a packing (true units), without planes.
+    pub fn state_from_packing(&self, pk: &Packing) -> State {
+        let empty = State { x: vec![0.0; 7 * self.p], pairs: Vec::new() };
+        let mut st = State::default();
+        self.state_of_packing(pk, &empty, &mut st);
+        st
+    }
+
     /// Development: polishes the best arrangement again (no check) and keeps the result when it is smaller.
     pub fn repolish_best(&mut self) -> f64 {
         let mut x = self.best.clone();
@@ -499,8 +564,13 @@ impl<'a> Search<'a> {
 
     /// Offers `hi_pack` when it beats the best; true when it became the best.
     fn offer_hi(&mut self, offer: &mut Offer) -> bool {
+        self.offer_hi_ctx(offer, false)
+    }
+
+    fn offer_hi_ctx(&mut self, offer: &mut Offer, interim: bool) -> bool {
         if self.hi_pack.s < self.best_s * (1.0 - 1e-14) {
-            if let Some(checked) = offer(&self.hi_pack) {
+            let ctx = OfferCtx { interim, stopped: self.budget.stopped };
+            if let Some(checked) = offer(&self.hi_pack, ctx) {
                 if checked < self.best_s {
                     self.best_s = checked;
                     let mut b = std::mem::take(&mut self.best);
@@ -784,7 +854,7 @@ impl<'a> Search<'a> {
         let mut tot = 0.0;
         for k in 0..NMOVES {
             w[k] = 0.1 + self.move_wins[k] / self.move_tries[k];
-            if k == 5 && self.p < 2 {
+            if (k == 5 || k == 6) && self.p < 2 {
                 w[k] = 0.0;
             }
             tot += w[k];
@@ -929,6 +999,52 @@ impl<'a> Search<'a> {
                 }
                 self.mark_dirty(j);
             }
+            6 => {
+                // align a piece (a squeezed one or a random one): the container's frame, a neighbour's orientation,
+                // or a neighbour's turned half a turn about one of its own axes
+                self.per_piece(cur, s);
+                let j = if self.rng.uniform() < 0.5 { self.squeezed() } else { self.rng.below(p) };
+                let pick = self.rng.below(3);
+                let q = if pick == 0 && !self.prob.cont.ball {
+                    [1.0, 0.0, 0.0, 0.0]
+                } else {
+                    // the nearest of a few random others
+                    let mut nb = (f64::INFINITY, (j + 1) % p);
+                    for _ in 0..4 {
+                        let k = self.rng.below(p);
+                        if k == j {
+                            continue;
+                        }
+                        let dx = cur.x[7 * k] - cur.x[7 * j];
+                        let dy = cur.x[7 * k + 1] - cur.x[7 * j + 1];
+                        let dz = cur.x[7 * k + 2] - cur.x[7 * j + 2];
+                        let d2 = dx * dx + dy * dy + dz * dz;
+                        if d2 < nb.0 {
+                            nb = (d2, k);
+                        }
+                    }
+                    let k = nb.1;
+                    let qk = [cur.x[7 * k + 3], cur.x[7 * k + 4], cur.x[7 * k + 5], cur.x[7 * k + 6]];
+                    if pick == 2 {
+                        let axis = match self.rng.below(3) {
+                            0 => [1.0, 0.0, 0.0],
+                            1 => [0.0, 1.0, 0.0],
+                            _ => [0.0, 0.0, 1.0],
+                        };
+                        // q_k turned by pi about its own axis: q_k (0, axis)
+                        qmul(qk, [0.0, axis[0], axis[1], axis[2]])
+                    } else {
+                        qk
+                    }
+                };
+                let mut q = q;
+                qnormalize(&mut q);
+                y.x[7 * j + 3..7 * j + 7].copy_from_slice(&q);
+                for d in 0..3 {
+                    y.x[7 * j + d] += 0.05 * self.rng.range(-1.0, 1.0);
+                }
+                self.mark_dirty(j);
+            }
             _ => {
                 // swap the orientations of two neighbours
                 let i = self.rng.below(p);
@@ -988,8 +1104,10 @@ impl<'a> Search<'a> {
         if p >= 20 {
             cur.clone_from(&first);
             self.mark_all_dirty();
-            self.polish(&mut cur, None);
-            self.offer_hi(offer);
+            self.polish_with(&mut cur, None, Some(&mut *offer));
+            if self.offer_hi(offer) {
+                self.refine(&mut y, offer);
+            }
         }
         // a random start compressed at a density guess, polished
         if !self.stopped() {
@@ -998,8 +1116,10 @@ impl<'a> Search<'a> {
             self.mark_all_dirty();
             let tol = self.explore;
             let e = self.relax(&mut cur, st0, &tol).e;
-            self.polish(&mut cur, (e > self.polish_tol.e_stop).then_some((st0, e)));
-            self.offer_hi(offer);
+            self.polish_with(&mut cur, (e > self.polish_tol.e_stop).then_some((st0, e)), Some(&mut *offer));
+            if self.offer_hi(offer) {
+                self.refine(&mut y, offer);
+            }
         }
         if self.stopped() || !self.best_s.is_finite() {
             return;
@@ -1030,14 +1150,14 @@ impl<'a> Search<'a> {
                 self.stats.same += 1;
             }
             self.stats.hop_iters += out.iters as u64;
-            if !out.same && e < cur_e * (1.0 - SAME) {
+            if !out.same && e < cur_e * (1.0 - self.params.same) {
                 self.stats.accepted += 1;
                 self.stats.wins[kind] += 1;
                 self.move_wins[kind] += 1.0;
                 fails = 0;
                 std::mem::swap(&mut cur, &mut y);
                 cur_e = e;
-                if (e - self.best_e).abs() > SAME * self.best_e && self.try_polish(&mut cur, &mut y, st, e, offer) {
+                if (e - self.best_e).abs() > self.params.same * self.best_e && self.try_polish(&mut cur, &mut y, st, e, offer) {
                     self.from_best(&mut cur, &mut st, &mut cur_e);
                 }
                 self.set_anchor(&mut cur, st);
@@ -1049,6 +1169,10 @@ impl<'a> Search<'a> {
                 self.stats.restarts += 1;
                 fails = 0;
                 restart_kind = (restart_kind + 1) % 4;
+                if self.params.eps_spread > 1.0 {
+                    // a new hopping size for the new chain
+                    self.from_best(&mut cur, &mut st, &mut cur_e);
+                }
                 match restart_kind {
                     0 => {
                         cur.clone_from(&self.best);
@@ -1067,7 +1191,7 @@ impl<'a> Search<'a> {
                 self.mark_all_dirty();
                 let tol = self.explore;
                 cur_e = self.relax(&mut cur, st, &tol).e;
-                if (cur_e - self.best_e).abs() > SAME * self.best_e && self.try_polish(&mut cur, &mut y, st, cur_e, offer) {
+                if (cur_e - self.best_e).abs() > self.params.same * self.best_e && self.try_polish(&mut cur, &mut y, st, cur_e, offer) {
                     self.from_best(&mut cur, &mut st, &mut cur_e);
                 }
                 self.set_anchor(&mut cur, st);
@@ -1086,16 +1210,49 @@ impl<'a> Search<'a> {
         let r = self.rep.repair(self.prob, cur, 1.0);
         if r.s < self.best_s * (1.0 + self.params.promise) {
             y.clone_from(cur);
-            self.polish(y, Some((st, e)));
-            return self.offer_hi(offer);
+            self.polish_with(y, Some((st, e)), Some(&mut *offer));
+            if self.offer_hi(offer) {
+                self.refine(y, offer);
+                return true;
+            }
         }
         false
+    }
+
+    /// The jammed state a polish reaches depends on the size it approaches from: a new best is compressed by a
+    /// hair (refine_eps), relaxed and polished again, as long as that improves it (a few times at most).
+    fn refine(&mut self, y: &mut State, offer: &mut Offer) {
+        let f = self.params.refine_eps;
+        if f <= 0.0 {
+            return;
+        }
+        for _ in 0..4 {
+            if self.stopped() {
+                return;
+            }
+            y.clone_from(&self.best);
+            let st = self.best_s * (1.0 - f);
+            scale_centres(y, 1.0 - f, self.p);
+            let tol = self.explore;
+            let e = self.relax(y, st, &tol).e;
+            self.stats.refines += 1;
+            self.polish_with(y, (e > self.polish_tol.e_stop).then_some((st, e)), Some(&mut *offer));
+            if !self.offer_hi(offer) {
+                return;
+            }
+            self.stats.refined += 1;
+        }
     }
 
     /// Restarts the chain at the best packing, relaxed at the hopping size best (1 - eps).
     fn from_best(&mut self, cur: &mut State, st: &mut f64, cur_e: &mut f64) {
         cur.clone_from(&self.best);
-        *st = self.best_s * (1.0 - self.params.eps);
+        let eps = if self.params.eps_spread > 1.0 {
+            self.params.eps * self.params.eps_spread.powf(self.rng.range(-1.0, 1.0))
+        } else {
+            self.params.eps
+        };
+        *st = self.best_s * (1.0 - eps);
         scale_centres(cur, *st / self.best_s, self.p);
         let tol = self.explore;
         *cur_e = self.relax(cur, *st, &tol).e;

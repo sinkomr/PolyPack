@@ -50,10 +50,36 @@ fn run(
     if let Some((_, score, cfg)) = &start_pk {
         best = Some((*score, cfg.clone()));
     }
+    let seconds = budget.seconds;
     let mut search = search::Search::new(prob, seed, budget);
     {
-        let mut offer = |pk: &Packing| -> Option<f64> {
-            let (score, cfg, _) = check_or_enlarge(prob, pk)?;
+        // the check's cost per tight pair (CPU seconds) and when the last check ended
+        let mut unit = 0.0f64;
+        let mut last_end = f64::NEG_INFINITY;
+        let mut offer = |pk: &Packing, ctx: search::OfferCtx| -> Option<f64> {
+            let now = thread_cpu_seconds() - t0;
+            let cost = unit * (pk.tight + 1) as f64;
+            // a polish's trial on the way: not when checks would take more than a fifth of the time
+            if ctx.interim && now - last_end < 4.0 * cost {
+                return None;
+            }
+            // not a check that would end long after the budget (large problems: a check takes up to ~0.5 s)
+            let remaining = (seconds - now).max(0.0);
+            if (ctx.stopped || remaining < 2.0 * cost) && 2.0 * cost - remaining > 0.15 {
+                return None;
+            }
+            let c0 = thread_cpu_seconds();
+            let checked = check_or_enlarge(prob, pk);
+            let c1 = thread_cpu_seconds();
+            if verbose {
+                eprintln!("check at {now:.3}: {:.3} s (estimate {cost:.3}, {} tight pairs, interim {}, stopped {})", c1 - c0, pk.tight, ctx.interim, ctx.stopped);
+            }
+            // a check with few tight pairs is mostly its fixed part: it sets the unit only when there is none yet
+            if pk.tight >= 8 || unit == 0.0 {
+                unit = (c1 - c0) / (pk.tight + 1) as f64;
+            }
+            last_end = c1 - t0;
+            let (score, cfg, _) = checked?;
             if best.as_ref().is_none_or(|b| score < b.0) {
                 let t = thread_cpu_seconds() - t0;
                 trace.push((t, score));
@@ -69,7 +95,7 @@ fn run(
     }
     let st = &search.stats;
     let stats = format!(
-        "evals {} (polish {} in {} trials, {} capped) hops {} (same {}, iters {}) accepted {} polishes {} restarts {} improvements {} segments {} rebuilds {} moves {:?} wins {:?} capped steps {} cpu {:.2}",
+        "evals {} (polish {} in {} trials, {} capped) hops {} (same {}, iters {}) accepted {} polishes {} restarts {} improvements {} segments {} rebuilds {} moves {:?} wins {:?} capped steps {} refines {} ({} better) cpu {:.2}",
         search.en.evals,
         st.polish_evals,
         st.polish_trials,
@@ -86,6 +112,8 @@ fn run(
         st.moves,
         st.wins,
         search.opt.capped_steps,
+        st.refines,
+        st.refined,
         thread_cpu_seconds() - t0
     );
     let mut stopped = search.budget.reason.to_string();

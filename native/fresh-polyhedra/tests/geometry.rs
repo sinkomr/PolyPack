@@ -162,7 +162,7 @@ fn relaxed_and_repaired_packings_are_valid() {
             let raw = rep.repair(&prob, &st, 1.0);
             let cfg = raw.to_json();
             assert!(check(&prob, &cfg).is_some(), "{id}: repaired raw arrangement refused");
-            let tol = Tol { e_stop: 1e-28, rel: 1e-13, patience: 6, gtol: 1e-16, max_iter: 20000, max_step: 0.1 };
+            let tol = Tol { e_stop: 1e-28, rel: 1e-13, patience: 6, gtol: 1e-16, max_iter: 20000, max_step: 0.1, window: 0, window_rel: 0.0 };
             let e = search.relax(&mut st, s, &tol).e;
             let pk = rep.repair(&prob, &st, 1.0);
             let cfg = pk.to_json();

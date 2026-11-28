@@ -5,9 +5,11 @@
 //! e_k, at x[7P + 4k..7P + 4k + 4]. The plane is {y : u . (y - m) = e} with m = (c_i + c_j) / 2, so that it
 //! moves with the pair. Piece i should lie on its negative side and piece j on its positive side.
 //!
-//!     E = sum_pairs [ sum_{a in i} max(0, u . (X_a - m) - e)^2 + sum_{b in j} max(0, e - u . (X_b - m))^2 ]
-//!       + sum_i sum_{vertices X of i} sum_g max(0, N_g . X - s b_g)^2        (polyhedral container)
-//!       + sum_i sum_{vertices X of i} max(0, |X| - s beta)^2                  (ball container)
+//! ```text
+//! E = sum_pairs [ sum_{a in i} max(0, u . (X_a - m) - e)^2 + sum_{b in j} max(0, e - u . (X_b - m))^2 ]
+//!   + sum_i sum_{vertices X of i} sum_g max(0, N_g . X - s b_g)^2        (polyhedral container)
+//!   + sum_i sum_{vertices X of i} max(0, |X| - s beta)^2                  (ball container)
+//! ```
 //!
 //! with X = c + R(q) v. E = 0 exactly when every listed pair is separated by its plane and every vertex is in the
 //! container; then the pieces are disjoint (touching allowed) and contained. At a positive E, the overlap of a pair

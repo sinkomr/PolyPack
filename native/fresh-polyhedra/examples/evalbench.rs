@@ -15,7 +15,7 @@ fn main() {
     let mut st = fresh_polyhedra::energy::State::default();
     let s0 = prob.size_at_density(0.5);
     s.start_random(s0, &mut st);
-    let tol = Tol { e_stop: 0.0, rel: 1e-9, patience: 3, gtol: 0.0, max_iter: 300, max_step: 0.15 };
+    let tol = Tol { e_stop: 0.0, rel: 1e-9, patience: 3, gtol: 0.0, max_iter: 300, max_step: 0.15, window: 0, window_rel: 0.0 };
     let t0 = thread_cpu_seconds();
     let ev0 = s.en.evals;
     let out = s.relax(&mut st, s0, &tol);

@@ -75,6 +75,9 @@ pub struct Tol {
     pub max_iter: u32,
     /// Largest move of one variable in one step.
     pub max_step: f64,
+    /// Stop when E has decreased by at most window_rel * E over the last `window` iterations (0: never).
+    pub window: u32,
+    pub window_rel: f64,
 }
 
 pub struct Outcome {
@@ -186,6 +189,7 @@ impl Lbfgs {
         let mut iters = 0u32;
         let mut same = false;
         let mut stale = false;
+        let mut e_mark = e;
         loop {
             if e <= tol.e_stop || iters >= tol.max_iter || budget.poll(en.evals) {
                 break;
@@ -318,6 +322,12 @@ impl Lbfgs {
             if self.anchor_r2 > 0.0 && iters >= 8 && iters % 4 == 0 && self.near_anchor() {
                 same = true;
                 break;
+            }
+            if tol.window > 0 && iters % tol.window == 0 {
+                if e_mark - e <= tol.window_rel * e {
+                    break;
+                }
+                e_mark = e;
             }
             if dec <= tol.rel * e {
                 small += 1;
