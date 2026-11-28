@@ -2,7 +2,7 @@
 //! alternating "vertex up" and "vertex down", stacked with the offset that packs the rows closest.
 //! Every spacing is found by bisection on the exact separation, so an arrangement has no overlap.
 
-use crate::geom::Shape;
+use crate::geom::{sat_sep, Shape};
 use std::f64::consts::PI;
 
 #[derive(Clone, Debug)]
@@ -25,60 +25,16 @@ impl Lattice {
     }
 }
 
-/// A piece orientation: vertex offsets from the centre and outward edge normals.
-struct Oriented {
-    off: Vec<[f64; 2]>,
-    nrm: Vec<[f64; 2]>,
-}
-
-fn oriented(sh: &Shape, th: f64) -> Oriented {
-    let n = sh.n;
-    let mut off = vec![[0.0; 2]; n];
-    sh.vertices(0.0, 0.0, th, &mut off);
-    let nrm = (0..n)
-        .map(|k| {
-            let a = th + PI / 2.0 + PI / n as f64 + 2.0 * PI * k as f64 / n as f64;
-            [a.cos(), a.sin()]
-        })
-        .collect();
-    Oriented { off, nrm }
-}
-
-/// The separating-axis separation of two oriented pieces at centres pa and pb (as `sat_sep`, without
-/// trigonometry).
-fn sep_oriented(sh: &Shape, a: &Oriented, pa: [f64; 2], b: &Oriented, pb: [f64; 2]) -> f64 {
-    let dx = pb[0] - pa[0];
-    let dy = pb[1] - pa[1];
-    if sh.n == 0 {
-        return (dx * dx + dy * dy).sqrt() - 1.0;
-    }
-    let mut best = f64::NEG_INFINITY;
-    for u in a.nrm.iter().chain(b.nrm.iter()) {
-        let (mut amin, mut amax, mut bmin, mut bmax) = (f64::INFINITY, f64::NEG_INFINITY, f64::INFINITY, f64::NEG_INFINITY);
-        for o in &a.off {
-            let t = u[0] * o[0] + u[1] * o[1];
-            amin = amin.min(t);
-            amax = amax.max(t);
-        }
-        let ud = u[0] * dx + u[1] * dy;
-        for o in &b.off {
-            let t = u[0] * o[0] + u[1] * o[1] + ud;
-            bmin = bmin.min(t);
-            bmax = bmax.max(t);
-        }
-        best = best.max(bmin - amax).max(amin - bmax);
-    }
-    best
-}
-
-fn clear(sh: &Shape, a: &Oriented, pa: [f64; 2], b: &Oriented, pb: [f64; 2]) -> bool {
+/// True when two pieces of fixed orientations ta, tb at centres pa, pb are apart (exact separation,
+/// `geom::sat_sep`, at least 1e-12).
+fn clear(sh: &Shape, ta: f64, pa: [f64; 2], tb: f64, pb: [f64; 2]) -> bool {
     let dx = pb[0] - pa[0];
     let dy = pb[1] - pa[1];
     let reach = 2.0 * sh.big_r;
     if dx * dx + dy * dy >= reach * reach {
         return true;
     }
-    sep_oriented(sh, a, pa, b, pb) >= 1e-12
+    sat_sep(sh, [pa[0], pa[1], ta], [pb[0], pb[1], tb]) >= 1e-12
 }
 
 /// Smallest t in [lo, hi] (hi feasible) with feasible(t), by bisection.
@@ -98,7 +54,6 @@ fn bisect(mut lo: f64, mut hi: f64, mut feasible: impl FnMut(f64) -> bool) -> f6
 fn build(sh: &Shape, thetas: &[f64], ys: &[f64]) -> Lattice {
     let r = sh.big_r;
     let ne = thetas.len();
-    let ori: Vec<Oriented> = thetas.iter().map(|&t| oriented(sh, t)).collect();
     let xy = |m: [f64; 3]| [m[0], m[1]];
     // consecutive elements of a row, each as close as it can be to the previous one
     let mut motif: Vec<[f64; 3]> = Vec::with_capacity(ne);
@@ -109,7 +64,7 @@ fn build(sh: &Shape, thetas: &[f64], ys: &[f64]) -> Lattice {
         let th = thetas[e];
         let dx = bisect(0.0, 2.0 * r + 1e-9, |d| {
             let cand = [prev[0] + d, y];
-            (0..e).all(|a| clear(sh, &ori[a], xy(motif[a]), &ori[e], cand))
+            (0..e).all(|a| clear(sh, thetas[a], xy(motif[a]), thetas[e], cand))
         });
         motif.push([prev[0] + dx, y, th]);
     }
@@ -117,7 +72,7 @@ fn build(sh: &Shape, thetas: &[f64], ys: &[f64]) -> Lattice {
     let last = motif[ne - 1];
     let first = motif[0];
     let period = bisect(0.0, last[0] - first[0] + 2.0 * r + 1e-9, |pd| {
-        (0..ne).all(|a| (0..ne).all(|b| clear(sh, &ori[a], xy(motif[a]), &ori[b], [motif[b][0] + pd, motif[b][1]])))
+        (0..ne).all(|a| (0..ne).all(|b| clear(sh, thetas[a], xy(motif[a]), thetas[b], [motif[b][0] + pd, motif[b][1]])))
     })
     .max(last[0] - first[0] + 1e-12);
     // stack: for a range of horizontal shifts, the smallest vertical offset clearing the row
@@ -126,7 +81,7 @@ fn build(sh: &Shape, thetas: &[f64], ys: &[f64]) -> Lattice {
             for a in 0..ne {
                 for b in 0..ne {
                     let pb = [motif[b][0] + k as f64 * period + sx, motif[b][1] + sy];
-                    if !clear(sh, &ori[a], xy(motif[a]), &ori[b], pb) {
+                    if !clear(sh, thetas[a], xy(motif[a]), thetas[b], pb) {
                         return false;
                     }
                 }
@@ -193,7 +148,6 @@ pub fn lattices(sh: &Shape) -> Vec<Lattice> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::geom::sat_sep;
 
     #[test]
     fn tilings_are_found() {
@@ -207,7 +161,7 @@ mod tests {
 
     #[test]
     fn arrangements_do_not_overlap() {
-        for n in [0usize, 3, 4, 5, 6, 7, 8] {
+        for n in [0usize, 3, 4, 5, 6, 7, 8, 9, 12, 17, 25, 40, 64, 100] {
             let sh = Shape::new(n, 0);
             for l in lattices(&sh) {
                 let mut pts = Vec::new();

@@ -1,7 +1,8 @@
 # fresh-flat
 
 A search for Flat problems (P regular N-gons of side 1, or disks of diameter 1, in the smallest regular
-M-gon or circle), written from scratch for the fresh-solvers experiment (`native/FRESH.md`):
+M-gon or circle; every N and M in 0, 3..100 and P in 2..500), written from scratch for the fresh-solvers
+experiment (`native/FRESH.md`):
 
     fresh-flat --id flat/N/M/P --seconds S --seed K [--evals E]
 
@@ -12,6 +13,24 @@ strict) and the trace of improvements. From `polypack-flat` it uses only the con
 clock and that check, never the port's search code.
 
 ## Method
+
+**Geometry** (`src/geom.rs`). Everything the search asks of a shape costs O(1) per piece or pair, whatever N
+and M, up to a walk over the few vertices or walls that matter:
+
+- The vertex of a regular N-gon farthest along a direction is the one whose angle is nearest the
+  direction's, and the projections fall off on both sides of it, so the vertices beyond a line form one
+  arc around it (`arc_above`); likewise the container walls n_j . c > t form one run around the normal
+  nearest c's direction (`Shape::walls_above_from`). Each walk starts from a guess (an approximate atan2,
+  or where the walk ended at the previous evaluation) and climbs to the true maximum, so its result is
+  exact whatever the guess.
+- The separation the check uses (the largest gap on an outward edge normal of either piece) has a closed
+  form for two congruent regular polygons (`sat_sep`): along a normal u of piece a, a reaches its apothem
+  r and b reaches R cos(delta) with delta = fold(theta_a - theta_b + pi + pi/N, 2 pi/N), the same for every
+  normal of either piece, so sep = |d| cos(angle from d to the nearest normal of a or of -d to b's) - r -
+  R cos(delta). It equals the check's 2N-axis value to about 1e-14 (tested for N up to 100).
+- The container gauge of a point is n_j . p / k_in at the normal nearest p's angle, and the container a
+  piece needs is the largest over the walls near its centre's direction of n_j . c plus the piece's
+  support along n_j (`piece_gauge`).
 
 **Frame.** The container is fixed at the origin with phi = 0 (pieces turn freely, so nothing is lost);
 its size s is a variable. A packing is reported with `container_phi = 0`; the check computes the smallest
@@ -30,23 +49,47 @@ container at that angle, so containment never makes a packing invalid, only pair
 - Walls: for every vertex (or disk centre), max(0, n.v - apothem)^2 over the container's edge normals,
   or max(0, |v| - s/2)^2 for a circle.
 
+Only vertices across a line or a wall contribute. For pieces of up to 12 sides every vertex is projected
+(dense, branch-free loops); for more sides the terms are walked: a pair costs O(1 + vertices across) instead
+of O(N), and a piece at a many-sided container's wall O(walls its bounding circle crosses + vertices across)
+instead of O(N M) (containers of up to 8 sides with pieces of up to 12 keep the dense loop). Every walk
+starts at the vertex (or wall) where it ended at the previous evaluation, kept per pair and per piece, so
+the loop computes no angle. Both paths compute the same function (tested to 1e-11 on random
+configurations). The crossover was measured (single runs of 100 000 evaluations on a loaded machine, us per
+evaluation, dense against walks): 5.4 against 5.9 at N = 10, 5.6 against 4.3 at N = 16, 7.6 against 4.0 at
+N = 25, 12.6 against 4.1 at N = 100, 7.5 against 9.1 at N = 5.
+
 All gradients are analytic (tested against central differences). Near pairs are listed once per local
 minimisation (bounding circles within a skin of R/2) and the list is rebuilt when a piece has moved a
 quarter of R; a stored line is replaced by the separating-axis line of the pair when that one has the
-smaller penalty. Vertices are rebuilt once per evaluation from one `sin_cos` per piece; nothing allocates
-in the loop.
+smaller penalty (the closed form of `sat_sep` gives it in O(1)). An evaluation takes one `sin_cos` per
+piece; the dense path rebuilds every vertex from it, the walks only the vertices they visit; nothing
+allocates in the loop.
 
 **Minimiser** (`src/lbfgs.rs`): L-BFGS, memory 7, Armijo backtracking with quadratic interpolation.
 
+**Units.** The pressures below were tuned for pieces of up to 8 sides in containers of up to 8 sides; two
+factors carry them to the other shapes, and both are 1 there. (1) A piece larger than the octagon (R above
+1.307; R = 15.9 at N = 100) multiplies them by R / 1.307: scaling a packing by D scales the penalty by D^2
+and the pressure term by D, so the same landscape needs the pressure times D. (2) The score of a polygon
+container is its side s, but the walls see the apothem s k_in, and k_in grows like M / (2 pi) (13.5 at
+M = 85): the pressure on the apothem, w / k_in, would be tiny, and the side variable's curvature (k_in^2 per
+wall contact) would dwarf the pieces'. So for k_in above the octagon's (M > 8) the pressures are multiplied
+by k_in / 1.207, the minimiser's container variable is s k_in / 1.207, and the gradient tolerances are
+divided by the same factor (they bound forces on the pieces). Without (2), 29 triangles in an 85-gon
+ended 3.7 % above the port at 5 s (0.16972 against 0.16373), the soft packings barely compressed (a quick
+polish at a 3000 times smaller pressure still shrank them); with it, 0.16553 and 0.16377 (seeds 1, 2).
+
 **Why a pressure.** w trades overlap for container size: the minimiser of G is a slightly overlapping
-packing whose overlap shrinks in proportion to w. A large w (0.03) makes the landscape soft: a local
+packing whose overlap shrinks in proportion to w. A large w (0.03, before the unit factors) makes the landscape soft: a local
 minimisation after a perturbation takes 100 to 400 iterations, where w = 1e-4 took thousands (the
 pieces creep under a tiny force). So the search explores at w = 0.03 and compares candidates by their
 soft size s, and only candidates that beat the best soft size are taken down the pressure ladder.
 
 **Polish, repair, check** (`src/search.rs`). A new best soft packing is minimised once at w = 1e-5 (the
 quick polish), then repaired and checked; the best one is later taken down to w = 1e-11 (deep polish) at
-the end of each epoch and in the last 3 % of the budget. Repair: the solver's own exact separating-axis
+the end of each epoch and in the last 3 % of the budget. Repair: the angles are reduced to one period (as
+the check will see them); the solver's own exact separating-axis
 separation (`geom::sat_sep`) finds the deepest pair; the centres are spread from the origin by a factor
 1 + lambda (orientations kept), doubling lambda until every pair is separated by at least 1e-13. Spreading
 never decreases a pair's separation (the separation along a ray from the origin of a convex body
@@ -81,19 +124,26 @@ of the iterations and lost 4 to 9 % of the accepted hops.
 overrides (environment, development only; defaults in `Params::for_problem`): `FRESH_W` (exploring
 pressure), `FRESH_FAILS`, `FRESH_LAT` (share of lattice starts), `FRESH_LATC`, `FRESH_WQ`, `FRESH_SHARE`,
 `FRESH_HOLE`, `FRESH_GTOL`, `FRESH_SKIN`, `FRESH_MEM`, `FRESH_MOVES`, `FRESH_VNS`, `FRESH_ELITE`,
-`FRESH_ADAPT`, `FRESH_ABORT_IT`, `FRESH_ABORT_M`. `examples/conv.rs` prints the convergence of one local
-minimisation; `examples/lat.rs` the densities of the periodic arrangements.
+`FRESH_ADAPT`, `FRESH_ABORT_IT`, `FRESH_ABORT_M` (the pressures before the unit factors), `FRESH_DENSE_N`,
+`FRESH_DENSE_M` (largest N, and M, evaluated by the dense loops). `examples/conv.rs` prints the convergence of
+one local minimisation; `examples/lat.rs` the densities of the periodic arrangements.
 
 ## Files
 
-- `src/geom.rs`: shapes, container gauge and fit, exact separating-axis separation.
+- `src/geom.rs`: shapes, the vertex and wall walks, container gauge and fit, the closed-form separation.
 - `src/model.rs`: the objective and the local minimisation driver.
 - `src/lbfgs.rs`: the minimiser.
 - `src/lattice.rs`: periodic arrangements for starts.
 - `src/search.rs`: starts, basin hopping, polish, repair, check, trace.
 - `src/main.rs`: the command line and the JSON output.
-- `tests/agreement.rs`: the solver's separation and container fit against `server_check` on random cases,
-  short runs on all 42 shape pairings pass the check, `--evals` runs repeat.
+- `tests/agreement.rs`: the solver's separation against the check's (`pair_separation`) and its verdict,
+  on random and face-to-face near-contact pairs for N up to 100; the container fit against `server_check`
+  for M up to 100, on random packings and on pieces pushed to the wall; short runs on all 42 shape pairings
+  of the first benchmark and 13 with N or M up to 100 pass the check; `--evals` runs repeat. The unit tests
+  check the walks against brute force, the gradient against central differences (N, M up to 100, both
+  paths) and the dense against the sparse evaluation.
+- `tests/fresh.rs`: the client entry point: the stop flag, the wall deadline (also for many-sided pieces
+  and containers), the ids it refuses.
 
 ## Measurements
 

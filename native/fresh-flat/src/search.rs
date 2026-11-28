@@ -4,7 +4,7 @@
 use crate::geom::{min_separation, Shape};
 use crate::lattice::{lattices, Lattice};
 use crate::lbfgs::Lbfgs;
-use crate::model::{Model, Sol};
+use crate::model::{sh_unit, Model, Sol, OCTAGON_R};
 use crate::rng::Rng;
 use polypack_flat::clock::thread_cpu_seconds;
 use polypack_flat::shapes::{Config, Pose, Problem};
@@ -161,7 +161,14 @@ impl<'a> Search<'a> {
     pub fn new(n: usize, m: usize, p: usize, seed: u64, t0: f64) -> Search<'a> {
         let sh = Shape::new(n, m);
         let dim = if n == 0 { 2 } else { 3 };
-        let prm = Params::for_problem(p).with_env();
+        let mut prm = Params::for_problem(p).with_env();
+        // the pressures were tuned for pieces of up to 8 sides in containers of up to 8: a piece
+        // larger than the octagon, or a container whose side is short against its apothem, scales
+        // them so that the overlap they buy keeps its size relative to the pieces and the walls
+        let unit = sh_unit(&sh) * (sh.big_r / OCTAGON_R).max(1.0);
+        prm.w_explore *= unit;
+        prm.w_quick *= unit;
+        prm.w_final *= unit;
         let mut model = Model::new(sh.clone(), p);
         if let Some(v) = std::env::var("FRESH_SKIN").ok().and_then(|v| v.parse::<f64>().ok()) {
             model.skin = v * sh.big_r;
@@ -442,16 +449,6 @@ impl<'a> Search<'a> {
         let sh = &self.sh;
         let (sn, cs) = turn.sin_cos();
         let ne = lat.motif.len();
-        // vertex offsets of each motif element at this turn
-        let n = sh.n;
-        let mut offs = [[0.0f64; 2]; 64];
-        for e in 0..ne {
-            let (ts, tc) = (lat.motif[e][2] + turn).sin_cos();
-            for k in 0..n {
-                let b = sh.base[k];
-                offs[e * n + k] = [sh.big_r * (tc * b[0] - ts * b[1]), sh.big_r * (ts * b[0] + tc * b[1])];
-            }
-        }
         let extent = 1.4 * sh.area_bound(p) * sh.k_out + 2.0 * sh.big_r;
         let rows = (extent / lat.shift[1]).ceil() as i64 + 2;
         let cols = (extent / lat.period).ceil() as i64 + 2;
@@ -468,16 +465,7 @@ impl<'a> Search<'a> {
                     if x.abs() > extent || y.abs() > extent {
                         continue;
                     }
-                    let g = if n == 0 {
-                        sh.gauge(x, y) + 0.5 / sh.k_in
-                    } else {
-                        let mut g = 0.0f64;
-                        for k in 0..n {
-                            let o = offs[e * n + k];
-                            g = g.max(sh.gauge(x + o[0], y + o[1]));
-                        }
-                        g
-                    };
+                    let g = sh.piece_gauge(x, y, c[2] + turn);
                     buf.push((g, [x, y, c[2] + turn]));
                 }
             }
@@ -731,8 +719,15 @@ impl<'a> Search<'a> {
         let p = self.p;
         let dim = self.dim;
         let target = 1e-13;
-        let (ms, _, _) = min_separation(&self.sh, q, p);
         self.tmp_q.copy_from_slice(q);
+        if dim == 3 {
+            // angles in one period, as the check will see them (the separation is then computed
+            // from the same small angles, and rounds as the check's does)
+            for i in 0..p {
+                self.tmp_q[3 * i + 2] = reduce(q[3 * i + 2], self.sh.period);
+            }
+        }
+        let (ms, _, _) = min_separation(&self.sh, &self.tmp_q, p);
         if !(ms >= target) {
             let mut lam = (target - ms).max(1e-15) / (2.0 * self.sh.apo) * 1.5;
             let mut ok = false;
@@ -778,18 +773,19 @@ impl<'a> Search<'a> {
         let dim = self.dim;
         let mut pieces = Vec::with_capacity(p);
         for i in 0..p {
-            let th = if dim == 3 {
-                let t = q[3 * i + 2] % self.sh.period;
-                if t < 0.0 {
-                    t + self.sh.period
-                } else {
-                    t
-                }
-            } else {
-                0.0
-            };
+            let th = if dim == 3 { reduce(q[3 * i + 2], self.sh.period) } else { 0.0 };
             pieces.push(Pose::new(q[dim * i], q[dim * i + 1], th));
         }
         Config::new(Problem::new(self.sh.n as u32, self.sh.m as u32, p), pieces, 0.0)
+    }
+}
+
+/// x modulo period, in [0, period).
+fn reduce(x: f64, period: f64) -> f64 {
+    let t = x % period;
+    if t < 0.0 {
+        t + period
+    } else {
+        t
     }
 }
