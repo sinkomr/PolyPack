@@ -49,6 +49,21 @@ pub struct Params {
     pub skin: f64,
     /// Density of the first random start.
     pub density: f64,
+    /// Exponent of the penalty: 2 or 3.
+    pub power: f64,
+    /// Stopping rule of the polish's relaxations: relative decrease per iteration (late and early trials) and
+    /// the iteration cap.
+    pub polish_rel: f64,
+    pub polish_early_rel: f64,
+    pub polish_iter: u32,
+    /// Largest move of a variable per L-BFGS step: polishing, exploring.
+    pub polish_step: f64,
+    pub explore_step: f64,
+    /// Preconditioner factors: centres, quaternions, plane directions, plane offsets.
+    pub hc: f64,
+    pub hq: f64,
+    pub hw: f64,
+    pub he: f64,
 }
 
 impl Default for Params {
@@ -64,6 +79,16 @@ impl Default for Params {
             explore_patience: 4,
             skin: 0.6,
             density: 0.35,
+            power: 2.0,
+            polish_rel: 1e-13,
+            polish_early_rel: 1e-9,
+            polish_iter: 6000,
+            polish_step: 0.05,
+            explore_step: 0.15,
+            hc: 1.0,
+            hq: 1.0,
+            hw: 1.0,
+            he: 1.0,
         };
         // development only: FRESH_PARAMS="eps=1e-3,skin=0.4" overrides
         if let Ok(v) = std::env::var("FRESH_PARAMS") {
@@ -81,6 +106,16 @@ impl Default for Params {
                     "explore_patience" => p.explore_patience = val as u32,
                     "skin" => p.skin = val,
                     "density" => p.density = val,
+                    "prel" => p.polish_rel = val,
+                    "pearly" => p.polish_early_rel = val,
+                    "piter" => p.polish_iter = val as u32,
+                    "pstep" => p.polish_step = val,
+                    "estep" => p.explore_step = val,
+                    "power" => p.power = val,
+                    "hc" => p.hc = val,
+                    "hq" => p.hq = val,
+                    "hw" => p.hw = val,
+                    "he" => p.he = val,
                     _ => {}
                 }
             }
@@ -100,6 +135,8 @@ pub struct Stats {
     pub hop_iters: u64,
     pub same: u64,
     pub segments: u64,
+    pub polish_trials: u64,
+    pub polish_capped: u64,
     pub moves: [u64; NMOVES],
     pub wins: [u64; NMOVES],
 }
@@ -119,7 +156,7 @@ pub struct Search<'a> {
     pub p: usize,
     pub rng: Rng,
     pub en: Energy,
-    opt: Lbfgs,
+    pub opt: Lbfgs,
     pub budget: Budget<'a>,
     pub params: Params,
     pub best_s: f64,
@@ -133,6 +170,8 @@ pub struct Search<'a> {
     move_wins: [f64; NMOVES],
     move_tries: [f64; NMOVES],
     explore: Tol,
+    polish_early: Tol,
+    polish_tol: Tol,
     best_e: f64,
     hi_state: State,
     hi_pack: Packing,
@@ -145,7 +184,33 @@ impl<'a> Search<'a> {
         let params = Params::default();
         let mut en = Energy::new(&prob.piece, &prob.cont, p);
         en.skin = params.skin;
-        let explore = Tol { rel: params.explore_rel, patience: params.explore_patience, ..EXPLORE };
+        en.cubic = params.power >= 3.0;
+        let pw = en.power();
+        // energies of the overlaps the tolerances aim at: 1e-13 exploring, 1e-14 polishing
+        let explore = Tol {
+            rel: params.explore_rel,
+            patience: params.explore_patience,
+            e_stop: 1e-13f64.powf(pw),
+            gtol: 1e-14f64.powf(pw - 1.0),
+            max_step: params.explore_step,
+            ..EXPLORE
+        };
+        let polish_early = Tol {
+            e_stop: 1e-14f64.powf(pw),
+            gtol: 1e-16f64.powf(pw - 1.0),
+            rel: params.polish_early_rel,
+            max_iter: params.polish_iter,
+            max_step: params.polish_step,
+            ..POLISH_EARLY
+        };
+        let polish_tol = Tol {
+            e_stop: 1e-14f64.powf(pw),
+            gtol: 1e-16f64.powf(pw - 1.0),
+            rel: params.polish_rel,
+            max_iter: params.polish_iter,
+            max_step: params.polish_step,
+            ..POLISH
+        };
         Search {
             prob,
             p,
@@ -164,10 +229,22 @@ impl<'a> Search<'a> {
             move_wins: [1.0; NMOVES],
             move_tries: [2.0; NMOVES],
             explore,
+            polish_early,
+            polish_tol,
             best_e: 0.0,
             hi_state: State::default(),
             hi_pack: Packing::default(),
             debug: std::env::var("FRESH_DEBUG").is_ok(),
+        }
+    }
+
+    /// E^(1/p): close to linear in the size near the jamming size.
+    #[inline]
+    fn root(&self, e: f64) -> f64 {
+        if self.en.cubic {
+            e.cbrt()
+        } else {
+            e.sqrt()
         }
     }
 
@@ -193,6 +270,7 @@ impl<'a> Search<'a> {
         }
         let mut segments = 0;
         loop {
+            self.set_h0(st.x.len());
             std::mem::swap(&mut self.en.pairs, &mut st.pairs);
             let out = self.opt.minimize(&mut self.en, &mut self.budget, &mut st.x, tol);
             std::mem::swap(&mut self.en.pairs, &mut st.pairs);
@@ -203,6 +281,33 @@ impl<'a> Search<'a> {
                 continue;
             }
             return out;
+        }
+    }
+
+    /// The preconditioner: constant factors per kind of variable (development: FRESH_PARAMS hc, hq, hw, he).
+    fn set_h0(&mut self, n: usize) {
+        let pr = &self.params;
+        if pr.hc == 1.0 && pr.hq == 1.0 && pr.hw == 1.0 && pr.he == 1.0 {
+            self.opt.h0.clear();
+            return;
+        }
+        let p = self.p;
+        self.opt.h0.resize(n, 1.0);
+        for i in 0..p {
+            for k in 0..3 {
+                self.opt.h0[7 * i + k] = pr.hc;
+            }
+            for k in 3..7 {
+                self.opt.h0[7 * i + k] = pr.hq;
+            }
+        }
+        let mut k = 7 * p;
+        while k + 4 <= n {
+            self.opt.h0[k] = pr.hw;
+            self.opt.h0[k + 1] = pr.hw;
+            self.opt.h0[k + 2] = pr.hw;
+            self.opt.h0[k + 3] = pr.he;
+            k += 4;
         }
     }
 
@@ -279,13 +384,13 @@ impl<'a> Search<'a> {
         let mut npts = 0usize;
         let mut lo = 0.0f64;
         if let Some((s, e)) = known {
-            if e > POLISH.e_stop && s < hi {
-                pts[0] = (s, e.sqrt());
+            if e > self.polish_tol.e_stop && s < hi {
+                pts[0] = (s, self.root(e));
                 npts = 1;
                 lo = s;
             }
         }
-        let mut eta = 1e-4;
+        let mut eta = if npts > 0 { 1e-4 } else { 2e-3 };
         let mut feas = f64::INFINITY;
         for _ in 0..40 {
             if self.stopped() {
@@ -309,8 +414,21 @@ impl<'a> Search<'a> {
             if !(st > lo && st < top) {
                 st = if feas < hi { lo + 0.5 * (top - lo) } else { hi - 0.2 * (hi - lo) };
             }
-            let tol = if hi - lo > 1e-6 * hi { POLISH_EARLY } else { POLISH };
-            let e = self.relax(x, st, &tol).e;
+            // coarse trials while the bounds are far apart, precise ones at the end
+            let gap = hi.min(feas) - lo;
+            let tol = if gap > 1e-3 * hi {
+                self.explore
+            } else if gap > 1e-6 * hi {
+                self.polish_early
+            } else {
+                self.polish_tol
+            };
+            let out = self.relax(x, st, &tol);
+            let e = out.e;
+            self.stats.polish_trials += 1;
+            if out.iters >= tol.max_iter {
+                self.stats.polish_capped += 1;
+            }
             let r = self.rep.repair(prob, x, 1.0);
             if self.debug {
                 eprintln!("  trial st {st:.15} e {e:.3e} repaired {:.15} hi {hi:.15} lo {lo:.15} evals {}", r.s, self.en.evals);
@@ -320,27 +438,27 @@ impl<'a> Search<'a> {
                 self.hi_pack = r;
                 self.hi_state.clone_from(x);
             }
-            if e > POLISH.e_stop {
+            if e > self.polish_tol.e_stop {
                 if st > lo {
                     lo = st;
                 }
                 if npts == 2 {
                     if st > pts[1].0 {
                         pts[0] = pts[1];
-                        pts[1] = (st, e.sqrt());
+                        pts[1] = (st, self.root(e));
                     } else if st > pts[0].0 {
-                        pts[0] = (st, e.sqrt());
+                        pts[0] = (st, self.root(e));
                     }
                 } else if npts == 1 {
                     if st > pts[0].0 {
-                        pts[1] = (st, e.sqrt());
+                        pts[1] = (st, self.root(e));
                     } else {
                         pts[1] = pts[0];
-                        pts[0] = (st, e.sqrt());
+                        pts[0] = (st, self.root(e));
                     }
                     npts = 2;
                 } else {
-                    pts[0] = (st, e.sqrt());
+                    pts[0] = (st, self.root(e));
                     npts = 1;
                 }
             } else {
@@ -364,6 +482,19 @@ impl<'a> Search<'a> {
             }
         }
         hi
+    }
+
+    /// Development: polishes the best arrangement again (no check) and keeps the result when it is smaller.
+    pub fn repolish_best(&mut self) -> f64 {
+        let mut x = self.best.clone();
+        let hi = self.polish(&mut x, None);
+        if hi < self.best_s {
+            self.best_s = hi;
+            let mut b = std::mem::take(&mut self.best);
+            self.state_of_packing(&self.hi_pack, &self.hi_state, &mut b);
+            self.best = b;
+        }
+        self.best_s
     }
 
     /// Offers `hi_pack` when it beats the best; true when it became the best.
@@ -847,23 +978,27 @@ impl<'a> Search<'a> {
             self.best_s = score;
         }
         // the first packing: valid as built
-        {
-            let mut st = self.new_state();
-            self.constructive(&mut st);
-            self.offer_state(&st, offer);
-        }
+        let mut first = self.new_state();
+        self.constructive(&mut first);
+        self.offer_state(&first, offer);
         if self.stopped() {
             return;
         }
+        // for many pieces the lattice packing is a good arrangement to compress first
+        if p >= 20 {
+            cur.clone_from(&first);
+            self.mark_all_dirty();
+            self.polish(&mut cur, None);
+            self.offer_hi(offer);
+        }
         // a random start compressed at a density guess, polished
-        {
+        if !self.stopped() {
             let st0 = self.prob.size_at_density(self.params.density).max(self.prob.bound * 1.05);
             self.start_random(st0, &mut cur);
             self.mark_all_dirty();
             let tol = self.explore;
             let e = self.relax(&mut cur, st0, &tol).e;
-            let hi = self.polish(&mut cur, Some((st0, e)));
-            let _ = hi;
+            self.polish(&mut cur, (e > self.polish_tol.e_stop).then_some((st0, e)));
             self.offer_hi(offer);
         }
         if self.stopped() || !self.best_s.is_finite() {

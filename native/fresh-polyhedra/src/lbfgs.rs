@@ -105,6 +105,10 @@ pub struct Lbfgs {
     pub anchor_skip: Vec<bool>,
     pub anchor_r2: f64,
     pub p: usize,
+    /// A diagonal preconditioner (the initial inverse Hessian is gamma diag(h0)); empty for the identity.
+    pub h0: Vec<f64>,
+    /// Steps shortened by the cap (diagnostics).
+    pub capped_steps: u64,
 }
 
 #[inline(always)]
@@ -151,6 +155,8 @@ impl Lbfgs {
             anchor_skip: vec![false; p],
             anchor_r2: 0.0,
             p,
+            h0: Vec::new(),
+            capped_steps: 0,
         }
     }
 
@@ -200,8 +206,14 @@ impl Lbfgs {
                 self.alpha[slot] = a;
                 axpy(-a, &self.yv[slot * n..slot * n + n], &mut self.d);
             }
-            for v in self.d.iter_mut() {
-                *v *= gamma;
+            if self.h0.len() == n {
+                for (v, h) in self.d.iter_mut().zip(&self.h0) {
+                    *v *= gamma * h;
+                }
+            } else {
+                for v in self.d.iter_mut() {
+                    *v *= gamma;
+                }
             }
             for t in (0..len).rev() {
                 let slot = (head + m - 1 - t) % m;
@@ -212,8 +224,8 @@ impl Lbfgs {
             if !(dg < 0.0) {
                 len = 0;
                 gamma = 0.05;
-                for (d, g) in self.d.iter_mut().zip(&self.g) {
-                    *d = -gamma * g;
+                for (k, (d, g)) in self.d.iter_mut().zip(&self.g).enumerate() {
+                    *d = -gamma * g * if self.h0.len() == n { self.h0[k] } else { 1.0 };
                 }
                 dg = dot(&self.d, &self.g);
             }
@@ -222,6 +234,7 @@ impl Lbfgs {
                 dmax = dmax.max(v.abs());
             }
             if dmax > tol.max_step {
+                self.capped_steps += 1;
                 let c = tol.max_step / dmax;
                 for v in self.d.iter_mut() {
                     *v *= c;
@@ -266,6 +279,7 @@ impl Lbfgs {
             let slot = head;
             let mut sy = 0.0;
             let mut yy = 0.0;
+            let hy = self.h0.len() == n;
             {
                 let s = &mut self.sv[slot * n..slot * n + n];
                 let y = &mut self.yv[slot * n..slot * n + n];
@@ -278,6 +292,12 @@ impl Lbfgs {
                     *y = yk;
                     sy += sk * yk;
                     yy += yk * yk;
+                }
+                if hy {
+                    yy = 0.0;
+                    for (yk, h) in y.iter().zip(&self.h0) {
+                        yy += yk * yk * h;
+                    }
                 }
             }
             if sy > 1e-300 && yy > 0.0 {

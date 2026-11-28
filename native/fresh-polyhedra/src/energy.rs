@@ -64,6 +64,8 @@ pub struct Energy {
     ref_c: Vec<f64>,
     ref_q: Vec<f64>,
     pub skin: f64,
+    /// Cubic penalties (r^3) instead of quadratic ones (r^2).
+    pub cubic: bool,
     /// Set by an evaluation at which some piece has moved more than skin / 2 since the last build.
     pub stale: bool,
     pub evals: u64,
@@ -75,9 +77,19 @@ pub struct Energy {
     new_planes: Vec<f64>,
 }
 
+/// The penalty of a violation r > 0: r^2, or r^3 when CUBIC; and half its derivative.
 #[inline(always)]
-fn side(vx: &[f64], vy: &[f64], vz: &[f64], ul: [f64; 3], c0: f64) -> (f64, f64, [f64; 3]) {
-    // sum of max(0, c0 + ul . v)^2, sum of 2 max(0, .), sum of 2 max(0, .) v
+fn pen<const CUBIC: bool>(r: f64) -> (f64, f64) {
+    if CUBIC {
+        (r * r * r, 1.5 * r * r)
+    } else {
+        (r * r, r)
+    }
+}
+
+#[inline(always)]
+fn side<const CUBIC: bool>(vx: &[f64], vy: &[f64], vz: &[f64], ul: [f64; 3], c0: f64) -> (f64, f64, [f64; 3]) {
+    // sum of pen(max(0, c0 + ul . v)), sum of its derivatives, and of its derivatives times v
     let mut e = 0.0;
     let mut s = 0.0;
     let mut a = 0.0;
@@ -86,11 +98,12 @@ fn side(vx: &[f64], vy: &[f64], vz: &[f64], ul: [f64; 3], c0: f64) -> (f64, f64,
     for ((x, y), z) in vx.iter().zip(vy).zip(vz) {
         let r = c0 + ul[0] * x + ul[1] * y + ul[2] * z;
         let rp = if r > 0.0 { r } else { 0.0 };
-        e += rp * rp;
-        s += rp;
-        a += rp * x;
-        b += rp * y;
-        c += rp * z;
+        let (pe, w) = pen::<CUBIC>(rp);
+        e += pe;
+        s += w;
+        a += w * x;
+        b += w * y;
+        c += w * z;
     }
     (e, 2.0 * s, [2.0 * a, 2.0 * b, 2.0 * c])
 }
@@ -135,6 +148,7 @@ impl Energy {
             ref_c: vec![0.0; 3 * p],
             ref_q: vec![0.0; 4 * p],
             skin: 0.5,
+            cubic: false,
             stale: false,
             evals: 0,
             rebuilds: 0,
@@ -163,18 +177,35 @@ impl Energy {
 
     /// E and its gradient at x (the pair list `self.pairs`).
     pub fn eval(&mut self, x: &[f64], g: &mut [f64]) -> f64 {
-        self.eval_impl::<false>(x, g)
+        if self.cubic {
+            self.eval_impl::<false, true>(x, g)
+        } else {
+            self.eval_impl::<false, false>(x, g)
+        }
+    }
+
+    /// The exponent of the penalty (2, or 3 when cubic).
+    pub fn power(&self) -> f64 {
+        if self.cubic {
+            3.0
+        } else {
+            2.0
+        }
     }
 
     /// Each piece's share of E at x: its container terms and its side of each pair's terms (into `out`).
     pub fn per_piece(&mut self, x: &[f64], out: &mut [f64]) {
         let mut g = vec![0.0; x.len()];
-        self.eval_impl::<true>(x, &mut g);
+        if self.cubic {
+            self.eval_impl::<true, true>(x, &mut g);
+        } else {
+            self.eval_impl::<true, false>(x, &mut g);
+        }
         out[..self.p].copy_from_slice(&self.per);
         self.evals -= 1;
     }
 
-    fn eval_impl<const PER: bool>(&mut self, x: &[f64], g: &mut [f64]) -> f64 {
+    fn eval_impl<const PER: bool, const CUBIC: bool>(&mut self, x: &[f64], g: &mut [f64]) -> f64 {
         self.evals += 1;
         let p = self.p;
         let half = 0.5 * self.skin;
@@ -236,13 +267,13 @@ impl Energy {
             if ca + 1.0 > 0.0 {
                 let ul = rt_mul(&self.rots[i], u);
                 if ca + self.reach(ul) > 0.0 {
-                    (ea, sa, sva) = side(vx, vy, vz, ul, ca);
+                    (ea, sa, sva) = side::<CUBIC>(vx, vy, vz, ul, ca);
                 }
             }
             if cb + 1.0 > 0.0 {
                 let ul = rt_mul(&self.rots[j], u);
                 if cb + self.reach(ul) > 0.0 {
-                    (eb, sb, svb) = side(vx, vy, vz, [-ul[0], -ul[1], -ul[2]], cb);
+                    (eb, sb, svb) = side::<CUBIC>(vx, vy, vz, [-ul[0], -ul[1], -ul[2]], cb);
                 }
             }
             if sa == 0.0 && sb == 0.0 {
@@ -298,8 +329,9 @@ impl Energy {
                     let n = dot(xx, xx).sqrt();
                     let d = n - rb;
                     if d > 0.0 {
-                        ei += d * d;
-                        let f = 2.0 * d / n;
+                        let (pe, hw) = pen::<CUBIC>(d);
+                        ei += pe;
+                        let f = 2.0 * hw / n;
                         let gx = [f * xx[0], f * xx[1], f * xx[2]];
                         let t = cross(w, gx);
                         for a in 0..3 {
@@ -330,7 +362,7 @@ impl Energy {
                     if c0 + self.reach(ul) <= 0.0 {
                         continue;
                     }
-                    let (ei, si, svi) = side(vx, vy, vz, ul, c0);
+                    let (ei, si, svi) = side::<CUBIC>(vx, vy, vz, ul, c0);
                     if si == 0.0 {
                         continue;
                     }
