@@ -1,0 +1,27 @@
+[package]
+name = "polypack-fresh-torus"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+description = "A search for torus problems (congruent disks or regular polygons on a flat torus) written from scratch, for comparison with the port"
+
+[lib]
+name = "fresh_torus"
+path = "src/lib.rs"
+
+[[bin]]
+name = "fresh-torus"
+path = "src/main.rs"
+
+[dependencies]
+# the CPU clock only
+polypack-flat = { path = "../flat" }
+# the problem ids and the server's check (validate_space_submission)
+polypack-spaces = { path = "../spaces" }
+# the FreshJob / FreshResult interface
+polypack-spaceauto = { path = "../spaceauto" }
+serde_json = { version = "1", features = ["float_roundtrip"] }
+
+[dev-dependencies]
+# the validator's own separation, to compare the solver's geometry with it in the tests
+polypack-torus = { path = "../torus" }

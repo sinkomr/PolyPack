@@ -27,13 +27,13 @@ BIN = ROOT / "native" / "target" / "release"
 
 def family(pid):
     head = pid.split("/")[0]
-    return head if head in ("flat", "curved", "sphere", "balls") else "other"
+    return head if head in ("flat", "curved", "sphere", "balls", "torus") else "other"
 
 
 def command(solver, pid, seconds, seed):
     fam = family(pid)
     if solver == "fresh":
-        exe = {"flat": "fresh-flat", "curved": "fresh-round", "sphere": "fresh-round", "balls": "fresh-balls"}[fam]
+        exe = {"flat": "fresh-flat", "curved": "fresh-round", "sphere": "fresh-round", "balls": "fresh-balls", "torus": "fresh-torus"}[fam]
         return [str(BIN / exe), "--id", pid, "--seconds", str(seconds), "--seed", str(seed)]
     if solver == "port":
         if fam == "flat":
