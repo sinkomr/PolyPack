@@ -209,7 +209,7 @@ Usage: polypack-native [options]
                            from the server's bulk lists, without reading them) (not with --target-holder)
   --engine fresh|port|auto which search runs a problem (default auto). The fresh engines are searches
                            written from scratch, far faster than the ports of the TypeScript searches, for
-                           flat problems with pieces of up to 16 sides (flat/N/M/P), disks at curvature
+                           every flat problem (flat/N/M/P, P of at least 2), disks at curvature
                            +-1 and on the sphere (curved/K/0/M/P, sphere/0/P) and balls in a ball or a
                            solid (balls/ballin<container>/P). auto: a fresh engine where one handles the
                            problem, else the port; fresh: only those problems; port: the ports only.

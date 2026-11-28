@@ -477,11 +477,11 @@ pub mod tests {
         let engines = builtin();
         #[cfg(feature = "fresh-engines")]
         {
-            for id in ["flat/4/6/12", "flat/0/0/5", "sphere/0/20", "curved/-1/0/0/9", "curved/1/0/6/6", "balls/ballinball/13", "balls/ballincub/9"] {
+            for id in ["flat/4/6/12", "flat/0/0/5", "flat/17/4/12", "flat/100/100/500", "flat/3/97/2", "sphere/0/20", "curved/-1/0/0/9", "curved/1/0/6/6", "balls/ballinball/13", "balls/ballincub/9"] {
                 assert!(claimed(&engines, id), "{id}");
             }
-            // the engines' own limits: pieces of up to 16 sides, curvature +-1, balls only as pieces
-            for id in ["flat/17/4/12", "flat/4/6/1", "curved/0.5/0/0/9", "sphere/4/12", "balls/cubinball/5", "polyhedra/cubintet/5", "torus/sq/0/5", "surface/cube/fold/0/3"] {
+            // the engines' own limits: flat P of at least 2, curvature +-1, balls only as pieces
+            for id in ["flat/101/4/12", "flat/4/6/1", "curved/0.5/0/0/9", "sphere/4/12", "balls/cubinball/5", "polyhedra/cubintet/5", "torus/sq/0/5", "surface/cube/fold/0/3"] {
                 assert!(!claimed(&engines, id), "{id}");
             }
         }

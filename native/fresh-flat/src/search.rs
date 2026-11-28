@@ -110,7 +110,7 @@ impl Params {
     }
 
     pub fn for_problem(p: usize) -> Params {
-        Params { w_explore: 3e-2, w_final: 1e-11, max_fails: 40 + 3 * p, p_lattice: 0.5, ladder: 1e-2, w_quick: 1e-5, polish_share: 0.25, p_hole: 0.5, hop_gtol: 1e-2, p_elite: 0.0, adaptive: false, lat_cands: 40, move_w: [1.0; 6], memory: 7, vns: 0, abort_it: 50, abort_margin: 0.02, near_window: 0.0 }
+        Params { w_explore: 3e-2, w_final: 1e-11, max_fails: 40 + 3 * p, p_lattice: 0.5, ladder: 1e-2, w_quick: 1e-5, polish_share: 0.25, p_hole: 0.5, hop_gtol: 1e-2, p_elite: 0.0, adaptive: false, lat_cands: 40, move_w: [1.0; 6], memory: 7, vns: 0, abort_it: 50, abort_margin: 0.02, near_window: 3e-4 }
     }
 }
 

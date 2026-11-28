@@ -95,7 +95,10 @@ separation (`geom::sat_sep`) finds the deepest pair; the centres are spread from
 never decreases a pair's separation (the separation along a ray from the origin of a convex body
 containing the origin is monotone), and it costs about the remaining overlap in score. Only packings that
 pass `server_check` with valid and strict enter the trace. Polishing is capped at a quarter of the
-evaluations (counted, not timed, so runs repeat); a capped candidate waits and is polished later.
+evaluations (counted, not timed, so runs repeat); a capped candidate waits and is polished later. Near ties
+at the exploring pressure can rank either way once hard, so a hop that is not accepted but ends within 3e-4
+of the best soft size (and not at the current packing) is quick-polished and checked as well, within the
+same cap.
 
 **Search.** Monotonic basin hopping in epochs. An epoch starts from
 
@@ -122,10 +125,10 @@ of the iterations and lost 4 to 9 % of the accepted hops.
 
 `FRESH_DEBUG=1` prints the epochs, polishes, hop statistics and move success counts on stderr. Tuning
 overrides (environment, development only; defaults in `Params::for_problem`): `FRESH_W` (exploring
-pressure), `FRESH_FAILS`, `FRESH_LAT` (share of lattice starts), `FRESH_LATC`, `FRESH_WQ`, `FRESH_SHARE`,
-`FRESH_HOLE`, `FRESH_GTOL`, `FRESH_SKIN`, `FRESH_MEM`, `FRESH_MOVES`, `FRESH_VNS`, `FRESH_ELITE`,
-`FRESH_ADAPT`, `FRESH_ABORT_IT`, `FRESH_ABORT_M` (the pressures before the unit factors), `FRESH_DENSE_N`,
-`FRESH_DENSE_M` (largest N, and M, evaluated by the dense loops). `examples/conv.rs` prints the convergence of
+pressure, before the unit factors, as `FRESH_WQ`), `FRESH_FAILS`, `FRESH_LAT` (share of lattice starts),
+`FRESH_LATC`, `FRESH_WQ`, `FRESH_SHARE`, `FRESH_HOLE`, `FRESH_GTOL`, `FRESH_SKIN`, `FRESH_MEM`, `FRESH_MOVES`,
+`FRESH_VNS`, `FRESH_ELITE`, `FRESH_ADAPT`, `FRESH_ABORT_IT`, `FRESH_ABORT_M`, `FRESH_NEAR` (near-tie window,
+0 turns it off), `FRESH_DENSE_N`, `FRESH_DENSE_M` (largest N, and M, evaluated by the dense loops). `examples/conv.rs` prints the convergence of
 one local minimisation; `examples/lat.rs` the densities of the periodic arrangements.
 
 ## Files
@@ -147,13 +150,90 @@ one local minimisation; `examples/lat.rs` the densities of the periodic arrangem
 
 ## Measurements
 
+### Every N and M: the wide set, 20 CPU seconds (2026-11-28)
+
+Machine: a 4-core Linux container shared with four other agents' builds and runs (load averages 3.5 to 6.5).
+All clocks are CPU time; these numbers are preliminary, the coordinator's run on a quiet machine is the
+authoritative one. `native/tools/fresh/problems-flat-wide.json` (`draw-flat-wide.mts`, seed 20261128): 16
+problems, 8 with N >= 17, 8 with M >= 9 (3 with both). `run.py --problems problems-flat-wide.json --solvers
+js,port,fresh --seeds 1,2 --seconds 20 --concurrency 1`, then `validate.mts` and `analyze.py --times 1,5,20`.
+The port and JavaScript runs are from one session, the fresh runs (this version) from a second one an hour
+later on the same machine. All 96 packings are valid for the server's TypeScript validators (and strict).
+R is the best final score of any run.
+
+| solver | reach 1 % | median t (s) | reach 0.1 % | median t (s) | reach 0.01 % | median t (s) | gap at 1 s | gap at 5 s | gap at 20 s |
+|---|---|---|---|---|---|---|---|---|---|
+| fresh | 32/32 | 0.30 | 29/32 | 0.34 | 27/32 | 0.34 | 0.54 % | 0.20 % | 0.033 % |
+| port | 32/32 | 0.73 | 22/32 | 0.98 | 19/32 | 1.00 | 1.51 % | 0.29 % | 0.14 % |
+| js | 20/32 | 3.88 | 15/32 | 3.12 | 13/32 | 6.04 | - | 0.52 % (14 runs) | 0.71 % |
+
+Geometric mean of the speed ratio over the (problem, seed) pairs where both reach the target: fresh is
+4.4x faster than the port to 1 % (32 pairs), 8.0x to 0.1 % (22 pairs; 7 more reached by fresh only, none by
+the port only) and 10.1x to 0.01 % (19 pairs; 8 more by fresh only, none by the port only); against the
+JavaScript 33x, 51x and 76x. Fresh ends best or tied best on all 16 problems (best of its two seeds).
+
+Per problem (score at 20 s; CPU seconds to 1 %, 0.1 %, 0.01 % of R; "-" not reached):
+
+| problem | R | fresh seed 1 | fresh seed 2 | port seed 1 | port seed 2 | js seed 1 | js seed 2 |
+|---|---|---|---|---|---|---|---|
+| flat/97/3/9 | 146.0894920 | 146.0894921 (0.01, 0.01, 0.01) | 146.0894921 (0.01, 0.01, 0.01) | 146.0894920 (0.96, 0.96, 0.96) | 146.0894920 (1.00, 1.00, 1.00) | 146.0932753 (2.37, 2.37, 2.37) | 146.0932618 (2.01, 2.01, 2.01) |
+| flat/91/5/39 | 137.0704120 | 137.1032992 (0.30, 15.50, -) | 137.0704120 (0.35, 0.58, 9.12) | 137.7661866 (2.49, -, -) | 137.7645068 (2.46, -, -) | 140.1621403 (-, -, -) | 137.9820547 (12.74, -, -) |
+| flat/53/3/18 | 112.0614361 | 112.0614361 (0.13, 0.13, 0.13) | 112.0614366 (0.29, 0.29, 0.29) | 112.0689736 (1.96, 8.70, 10.81) | 112.0706687 (1.88, 9.08, 12.30) | 112.0666779 (10.09, 15.01, 15.01) | 113.0312355 (1.87, -, -) |
+| flat/27/0/37 | 57.9870115 | 57.9870115 (0.65, 0.65, 0.65) | 57.9871936 (0.34, 0.34, 0.34) | 57.9901757 (0.50, 0.50, 0.50) | 57.9899931 (0.50, 0.50, 1.50) | 58.0031992 (6.00, 6.00, -) | 57.9916379 (6.00, 6.00, 15.72) |
+| flat/45/4/30 | 78.0671153 | 78.0671155 (0.25, 0.25, 0.25) | 78.0671153 (0.23, 0.23, 0.28) | 78.0713598 (0.50, 1.00, 1.92) | 78.0675893 (0.50, 1.00, 1.98) | 78.0693424 (3.02, 3.02, 11.64) | 78.0721870 (3.12, 3.12, 10.37) |
+| flat/11/96/62 | 0.9928080 | 0.9928080 (0.56, 4.44, 4.44) | 0.9932970 (0.80, 17.35, -) | 0.9955433 (1.51, -, -) | 0.9959620 (1.51, -, -) | 1.0070864 (-, -, -) | 1.0058746 (-, -, -) |
+| flat/8/31/42 | 1.8401266 | 1.8401266 (0.47, 11.64, 11.91) | 1.8430443 (1.17, -, -) | 1.8447770 (0.50, -, -) | 1.8452585 (0.50, -, -) | 1.8503562 (5.86, -, -) | 1.8500545 (5.97, -, -) |
+| flat/3/85/29 | 0.1633451 | 0.1642724 (15.32, -, -) | 0.1633451 (4.21, 14.70, 14.70) | 0.1637407 (1.48, -, -) | 0.1649255 (14.03, -, -) | 0.1662898 (-, -, -) | 0.1662432 (-, -, -) |
+| flat/3/88/43 | 0.1896685 | 0.1901409 (9.33, -, -) | 0.1896685 (6.03, 16.60, 17.40) | 0.1907167 (9.63, -, -) | 0.1907278 (3.53, -, -) | 0.1925582 (-, -, -) | 0.1903924 (16.51, -, -) |
+| flat/5/62/11 | 0.2941071 | 0.2941071 (0.10, 0.10, 0.10) | 0.2941071 (0.07, 0.12, 0.12) | 0.2941112 (0.50, 0.50, 0.50) | 0.2941177 (0.46, 0.46, 0.46) | 0.2941249 (3.72, 3.72, 11.18) | 0.2941438 (4.05, 4.05, -) |
+| flat/22/41/29 | 3.2825052 | 3.2825052 (0.05, 2.84, 3.56) | 3.2825520 (0.05, 0.20, 0.39) | 3.2830053 (0.50, 0.50, -) | 3.2827089 (0.50, 2.01, 10.10) | 3.3264697 (-, -, -) | 3.3201092 (-, -, -) |
+| flat/18/64/31 | 1.7540277 | 1.7540277 (1.01, 1.01, 1.01) | 1.7540277 (0.74, 0.74, 0.74) | 1.7540352 (1.00, 1.00, 1.00) | 1.7540352 (1.01, 1.01, 1.01) | 1.7540886 (6.04, 6.04, 6.04) | 1.7540789 (6.04, 6.04, 6.04) |
+| flat/91/95/40 | 6.8234513 | 6.8234513 (0.30, 0.30, 0.30) | 6.8234574 (1.83, 1.83, 1.83) | 6.8240520 (14.06, 14.06, 15.07) | 6.8252420 (3.57, 4.59, -) | 6.9889178 (-, -, -) | 6.9404313 (-, -, -) |
+| flat/11/8/38 | 9.6939506 | 9.6942174 (0.57, 1.08, 12.45) | 9.6939506 (0.30, 0.56, 5.02) | 9.6945404 (0.50, 0.50, 0.50) | 9.6986703 (0.50, 5.79, -) | 9.8307186 (-, -, -) | 9.8228101 (-, -, -) |
+| flat/15/4/7 | 13.5778569 | 13.5778569 (0.01, 0.01, 0.01) | 13.5778569 (0.01, 0.01, 0.01) | 13.5778569 (0.50, 0.50, 0.50) | 13.5778569 (0.46, 0.46, 0.46) | 13.5778572 (2.98, 2.98, 2.98) | 13.5778570 (2.63, 2.63, 2.63) |
+| flat/16/0/9 | 18.1919162 | 18.1919162 (0.02, 0.02, 0.02) | 18.1919162 (0.03, 0.03, 0.03) | 18.1919162 (0.50, 0.50, 0.50) | 18.1919162 (0.50, 0.50, 0.50) | 18.1919162 (2.31, 2.31, 2.31) | 18.1919162 (2.49, 2.49, 2.49) |
+
+The full report is `native/tools/fresh/report-flat-wide.md`.
+
+### The first set before and after (2026-11-28, same machine)
+
+Six problems of the first benchmark, the previous version (595b832) against this one, 20 CPU seconds, seeds 1
+and 2, one run at a time; all 24 packings valid and strict for the TypeScript validators. R is the best of
+these runs and the first benchmark's R.
+
+| version | reach 1 % | median t (s) | reach 0.1 % | median t (s) | reach 0.01 % | median t (s) | gap at 1 s | gap at 5 s | gap at 20 s |
+|---|---|---|---|---|---|---|---|---|---|
+| this one | 12/12 | 0.38 | 12/12 | 0.90 | 9/12 | 0.23 | 0.83 % | 0.15 % | 0.011 % |
+| previous | 12/12 | 0.33 | 9/12 | 0.19 | 7/12 | 0.18 | 0.49 % | 0.23 % | 0.11 % |
+
+| problem | R | this one, seed 1 | this one, seed 2 | previous, seed 1 | previous, seed 2 |
+|---|---|---|---|---|---|
+| flat/5/8/33 | 3.8219900 | 3.8220065 (4.17, 4.46, 4.46) | 3.8220002 (5.07, 10.17, 10.17) | 3.8414148 (1.48, -, -) | 3.8423321 (3.06, -, -) |
+| flat/7/3/38 | 20.0950854 | 20.0978488 (0.30, 3.62, -) | 20.0950854 (0.46, 0.84, 1.23) | 20.0951630 (0.38, 8.42, 8.59) | 20.1047995 (0.56, 5.86, -) |
+| flat/3/8/32 | 1.8288300 | 1.8299045 (1.79, 14.92, -) | 1.8298582 (1.92, 15.72, -) | 1.8291355 (1.50, 1.84, -) | 1.8325221 (5.94, -, -) |
+| flat/7/0/14 | 9.3176511 | 9.3176519 (0.08, 0.08, 0.08) | 9.3176511 (0.03, 0.14, 0.18) | 9.3176644 (0.04, 0.13, 0.13) | 9.3178167 (0.04, 0.09, 0.18) |
+| flat/8/8/21 | 5.1969488 | 5.1969488 (0.61, 0.97, 0.97) | 5.1969492 (0.06, 0.23, 0.23) | 5.1969491 (0.29, 0.29, 0.29) | 5.1969500 (0.07, 0.19, 0.19) |
+| flat/0/0/27 | 5.9063978 | 5.9063978 (0.01, 0.04, 0.04) | 5.9063978 (0.02, 0.02, 0.02) | 5.9064104 (0.00, 0.03, 0.03) | 5.9064104 (0.02, 0.02, 0.02) |
+
+On the (problem, seed) pairs both reach, this version takes 1.1 to 1.2 times as long (geometric mean 0.88x
+speed to 1 %, 12 pairs; 0.89x to 0.1 %, 9 pairs; 0.81x to 0.01 %, 6 pairs), but it reaches 0.1 % on 3 and
+0.01 % on 3 more runs (the previous version 1 more at 0.01 %), and ends 10 times closer to R at 20 s: the
+near-tie polish finds the better neighbouring optima of `flat/0/0/27` and `flat/7/0/14`, below the first
+benchmark's R for the latter. With two seeds per problem these differences are mostly seed noise: at 3 s on
+6 further seeds the mean score of `flat/3/8/32` was 1.8433 (previous) and 1.8386 (this one), of `flat/5/8/33`
+3.8574 for both. The cost of an evaluation is unchanged for these shapes (the dense loops are the previous
+code; 300 000 evaluations, us per evaluation, previous against this one: 7.8 / 7.3 on `flat/5/8/33`, 9.2 /
+9.7 on `flat/7/3/38`, 0.95 / 0.92 on `flat/0/0/27`, 5.2 / 4.9 on `flat/8/8/21`).
+
+### The first benchmark, on the Mac
+
 Machine: the shared Apple Silicon Mac (6 performance + 2 efficiency cores) with three other benchmark jobs and
 desktop applications running; load averages were 9 to 58 during these runs. All clocks are CPU time, so the
 load mostly stretches wall time, but a thread may also land on an efficiency core or lose cache, which adds
 noise of perhaps tens of percent to any single time below. The coordinator's quiet 60-second run is the
 authoritative one.
 
-### Harness, 20 CPU seconds
+#### Harness, 20 CPU seconds
 
 `native/tools/fresh/run.py --only <the 10 flat problems of problems.json> --solvers js,port,fresh --seeds 1,2
 --seconds 20 --concurrency 2`, then `validate.mts` and `analyze.py --times 1,5,20`. All 60 packings are valid
@@ -207,6 +287,16 @@ the later comparisons ran the two variants side by side so that both saw the sam
 | giving up hopeless hops at iteration 50 | mean gap 0.087 -> 0.051 %, time to 1 % slightly worse; kept |
 | restarts near the best packing, adaptive choice of start, 75 % lattice starts, reweighted moves, longer epochs | not better within the noise; off |
 
+For every N and M (2026-11-28, on the 4-core Linux container, 5 or 10 CPU seconds, seeds 1 and 2):
+
+| change | effect |
+|---|---|
+| pressures times k_in / 1.207 and the container variable s k_in / 1.207 (M > 8) | 5 s: `flat/3/85/29` 0.1700, 0.1709 -> 0.1671, 0.1675; `flat/18/64/31` 1.7909, 1.7747 -> 1.7541, 1.7540; `flat/11/96/62` 1.0096, 1.0117 -> 0.9991, 1.0034 |
+| and the gradient tolerances divided by the same factor | `flat/3/85/29` -> 0.1655, 0.1638; `flat/11/96/62` -> 0.9928, 0.9982; `flat/18/64/31` unchanged |
+| exploring pressure 1/3 or 3 times the scaled one | mixed, no consistent direction on 5 problems with N or M above 8 |
+| polishing hops that end within 3e-4 of the best soft size (near ties; was off) | `flat/18/64/31` (5 s) 1.75413, 1.75417 -> 1.75403, 1.75403; `flat/0/0/27` (10 s) seed 2 5.906410 -> 5.906398; `flat/7/0/14` (10 s) 9.317664, 9.317660 -> 9.317652, 9.317651; 9 other problems equal or within 1e-5 either way; kept |
+| walks for N > 12 and M > 8, dense loops below (cached walk starts) | see Objective; without the cached starts the walks cost 1.5 to 2 times the dense loop for N <= 8 |
+
 ### Weak spots
 
 - `flat/5/8/33` is bimodal: a run either reaches about 3.8220 (better than the port) or stays 0.5 to 0.9 %
@@ -215,7 +305,19 @@ the later comparisons ran the two variants side by side so that both saw the sam
 - `flat/3/8/32` (two tiling patches at slightly different angles) and `flat/7/3/38` vary by 0.1 to 0.3 %
   between seeds, as they do for the port.
 - `flat/0/0/27`: both 20-second runs ended at 5.906410, a neighbouring optimum 2e-6 above the 5.906398 that the
-  port (one seed) and the JavaScript found. At the exploring pressure the two cannot be ranked.
+  port (one seed) and the JavaScript found. At the exploring pressure the two cannot be ranked. (Since the
+  near-tie polish, both seeds reach 5.906398 within 0.04 s.)
+- Triangles in a many-sided, nearly round container (`flat/3/85/29`, `flat/3/88/43`) converge slowly: one
+  seed of each was still 0.57 % and 0.25 % above R at 20 s, the other reached R only after 15 to 17 s (the
+  port ends 0.24 to 0.97 % above). The same holds for triangles in a circle; the tiling patches the optimum
+  is made of are found late.
+- `flat/8/31/42` and `flat/11/96/62` depend on the seed (0.16 % and 0.05 % above R for one of the two).
+- The factor R / 1.307 on the pressures for many-sided pieces follows from scaling, not from tuning: a third
+  or three times the scaled pressure gave mixed results on 5 problems at 5 s. For P = 500 of N = 100 a
+  local minimisation is slow (12 hops in 3 s on `flat/100/100/500`; the first checked packing after 1.3 s).
+- Many-sided pieces still carry a separating line (3 variables) per near pair, although for N above about 30
+  they are within 0.5 % of a disk: L-BFGS works on 3P + 1 + 3 (pairs) variables, about 6 times the disks'
+  2P + 1 (a piece has about 6 near pairs).
 
 ## What to try next
 
@@ -225,5 +327,8 @@ the later comparisons ran the two variants side by side so that both saw the sam
   could run on every candidate and rank near ties exactly.
 - A population (a few epochs kept alive and hopped in turn, with a distance test between them) instead of
   independent epochs, to make the hard problems less seed-dependent.
+- For many-sided pieces, a disk relaxation first (the circumscribed disk is off by R - r, 0.5 % of R at
+  N = 30): explore with disks and switch to the polygons and their lines only near the end of a hop, which
+  would cut the variables by about six.
 - Denser periodic starts for odd N: optimise the two-piece cell of a double lattice with the same penalty
   objective (pentagons reach 0.921 in the literature against 0.864 here, heptagons 0.893 against 0.880).
