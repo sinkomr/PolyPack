@@ -4,6 +4,7 @@
 //! - [`model`]: the smooth penalty objective with separating lines and a pressure on the container;
 //! - [`lbfgs`]: the minimiser;
 //! - [`search`]: starts, basin hopping, polishing, repair and the check.
+pub mod fresh;
 pub mod geom;
 pub mod lattice;
 pub mod lbfgs;

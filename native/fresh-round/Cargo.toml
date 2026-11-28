@@ -15,6 +15,7 @@ path = "src/lib.rs"
 
 [dependencies]
 polypack-flat = { path = "../flat" }
+polypack-spaceauto = { path = "../spaceauto" }
 polypack-spaces = { path = "../spaces" }
 # definitions only (container shapes, curvature functions, max P, sphere centres): the search is in this crate
 polypack-curved = { path = "../curved" }

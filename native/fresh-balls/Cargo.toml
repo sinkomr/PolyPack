@@ -15,6 +15,7 @@ path = "src/main.rs"
 
 [dependencies]
 polypack-flat = { path = "../flat" }
+polypack-spaceauto = { path = "../spaceauto" }
 # definitions only: the problem ids, the solids' face planes (polypack_balls::container_of) and the check
 polypack-balls = { path = "../balls" }
 polypack-spaces = { path = "../spaces" }

@@ -2,6 +2,7 @@
 //! for the fresh-solvers benchmark (native/FRESH.md). The method is in README.md and search.rs.
 
 pub mod energy;
+pub mod fresh;
 pub mod lbfgs;
 pub mod rng;
 pub mod search;
@@ -49,10 +50,31 @@ pub struct RunOutput {
     /// (CPU seconds, best score) at each checked improvement.
     pub trace: Vec<(f64, f64)>,
     pub stats: String,
+    /// Why the run ended: "evals", "cpu", "deadline" or "stop".
+    pub stopped: &'static str,
+}
+
+/// The client's way to end a run early (`fresh::fresh_search`): a flag and a wall-clock end.
+pub struct Halt<'a> {
+    pub stop: &'a std::sync::atomic::AtomicBool,
+    pub wall: std::time::Instant,
 }
 
 /// One run on a problem id (balls/ballin<container>/<P>), from scratch.
 pub fn solve(id: &str, seed: u64, seconds: f64, max_evals: u64, verbose: bool) -> Result<RunOutput, String> {
+    solve_with(id, seed, seconds, max_evals, verbose, None, None)
+}
+
+/// `solve` that also ends at `halt` and reports each checked improvement to `on_improve`.
+pub fn solve_with(
+    id: &str,
+    seed: u64,
+    seconds: f64,
+    max_evals: u64,
+    verbose: bool,
+    halt: Option<Halt>,
+    mut on_improve: Option<&mut dyn FnMut(f64, &Value)>,
+) -> Result<RunOutput, String> {
     use polypack_flat::clock::thread_cpu_seconds;
     let t0 = thread_cpu_seconds();
     let parsed = polypack_balls::parse_balls_id(id)?;
@@ -62,6 +84,10 @@ pub fn solve(id: &str, seed: u64, seconds: f64, max_evals: u64, verbose: bool) -
     let shape = shape::Shape::of_name(&parsed.problem.container)?;
     let p = parsed.p as usize;
     let mut search = search::Search::new(&shape, p, seed, max_evals, seconds);
+    if let Some(h) = &halt {
+        search.budget.stop = Some(h.stop);
+        search.budget.wall = Some(h.wall);
+    }
     let mut trace: Vec<(f64, f64)> = Vec::new();
     let mut best: Option<(f64, Value)> = None;
     {
@@ -72,6 +98,9 @@ pub fn solve(id: &str, seed: u64, seconds: f64, max_evals: u64, verbose: bool) -
                 trace.push((t, score));
                 if verbose {
                     eprintln!("t {t:.3} best {score:.10}");
+                }
+                if let Some(cb) = on_improve.as_mut() {
+                    cb(score, &cfg);
                 }
                 best = Some((score, cfg));
             }
@@ -99,5 +128,6 @@ pub fn solve(id: &str, seed: u64, seconds: f64, max_evals: u64, verbose: bool) -
         Some((s, c)) => (Some(s), Some(c)),
         None => (None, None),
     };
-    Ok(RunOutput { score, config, evaluations: search.en.evals, trace, stats })
+    let stopped = if search.budget.reason.is_empty() { "cpu" } else { search.budget.reason };
+    Ok(RunOutput { score, config, evaluations: search.en.evals, trace, stats, stopped })
 }

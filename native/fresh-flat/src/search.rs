@@ -114,11 +114,11 @@ impl Params {
     }
 }
 
-pub struct Search {
+pub struct Search<'a> {
     pub sh: Shape,
     pub p: usize,
     pub dim: usize,
-    pub model: Model,
+    pub model: Model<'a>,
     lb: Lbfgs,
     pub rng: Rng,
     pub prm: Params,
@@ -153,10 +153,12 @@ pub struct Search {
     cur_g: f64,
     pub aborts: u64,
     pub near_polishes: u64,
+    /// Called with each checked improvement (score and the packing), in time order.
+    pub on_improve: Option<&'a mut dyn FnMut(f64, &Config)>,
 }
 
-impl Search {
-    pub fn new(n: usize, m: usize, p: usize, seed: u64, t0: f64) -> Search {
+impl<'a> Search<'a> {
+    pub fn new(n: usize, m: usize, p: usize, seed: u64, t0: f64) -> Search<'a> {
         let sh = Shape::new(n, m);
         let dim = if n == 0 { 2 } else { 3 };
         let prm = Params::for_problem(p).with_env();
@@ -201,6 +203,7 @@ impl Search {
             cur_g: f64::INFINITY,
             aborts: 0,
             near_polishes: 0,
+            on_improve: None,
             sh,
             p,
         }
@@ -759,6 +762,9 @@ impl Search {
                     self.best_q = self.tmp_q.clone();
                     let t = thread_cpu_seconds() - self.t0;
                     self.trace.push((t, sc));
+                    if let Some(cb) = self.on_improve.as_mut() {
+                        cb(sc, &cfg);
+                    }
                 }
                 return Some(sc);
             }

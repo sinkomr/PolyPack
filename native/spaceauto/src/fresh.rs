@@ -5,6 +5,12 @@
 //!
 //! The client runs one call per thread it gives a problem (different seeds) and keeps the best result.
 //!
+//! Problem ids: a space's own id as the server writes it (`polyhedra/<piece>in<container>/<P>`,
+//! `balls/ballin<container>/<P>`, `sphere/<N>/<P>`, `curved/<K>/<N>/<M>/<P>`, `torus/<family>/<N>/<P>`),
+//! and for a flat problem (polygons or disks in a polygon or circle; N = 0 is a disk, M = 0 a circle)
+//! `flat/<N>/<M>/<P>`. The id is only the engines' and the client's name for it: the flat problem itself
+//! is read and submitted through /api/problems/N/M/P, not the spaces' API.
+//!
 //! Contract of every engine (`FreshSearch`):
 //! - One thread, no global state; two calls may run at once on different threads.
 //! - Budget: stop when this thread's CPU time since the call reaches `cpu_seconds`, when the wall clock

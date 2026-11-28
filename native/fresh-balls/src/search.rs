@@ -89,7 +89,7 @@ pub struct Search<'s> {
     pub rng: Rng,
     pub en: Energy,
     opt: Lbfgs,
-    pub budget: Budget,
+    pub budget: Budget<'s>,
     pub params: Params,
     pub best_s: f64,
     pub best_x: Vec<f64>,

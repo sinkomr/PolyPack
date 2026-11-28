@@ -3,19 +3,26 @@
 
 use crate::energy::Energy;
 use polypack_flat::clock::thread_cpu_seconds;
+use std::sync::atomic::{AtomicBool, Ordering};
+use std::time::Instant;
 
 /// The budget of a run: evaluations and CPU seconds. `poll` reads the clock every 256 evaluations.
-pub struct Budget {
+pub struct Budget<'a> {
     pub max_evals: u64,
     pub seconds: f64,
     pub t0: f64,
     pub stopped: bool,
     next_poll: u64,
+    /// The client's stop flag (read at every poll) and wall-clock end (read every 256 evaluations).
+    pub stop: Option<&'a AtomicBool>,
+    pub wall: Option<Instant>,
+    /// Why it stopped: "evals", "cpu", "deadline" or "stop"; empty while it runs.
+    pub reason: &'static str,
 }
 
-impl Budget {
-    pub fn new(max_evals: u64, seconds: f64) -> Budget {
-        Budget { max_evals, seconds, t0: thread_cpu_seconds(), stopped: false, next_poll: 0 }
+impl<'a> Budget<'a> {
+    pub fn new(max_evals: u64, seconds: f64) -> Budget<'a> {
+        Budget { max_evals, seconds, t0: thread_cpu_seconds(), stopped: false, next_poll: 0, stop: None, wall: None, reason: "" }
     }
     /// CPU seconds since the start.
     pub fn elapsed(&self) -> f64 {
@@ -28,10 +35,18 @@ impl Budget {
         }
         if evals >= self.max_evals {
             self.stopped = true;
+            self.reason = "evals";
+        } else if self.stop.is_some_and(|s| s.load(Ordering::Relaxed)) {
+            self.stopped = true;
+            self.reason = "stop";
         } else if evals >= self.next_poll {
             self.next_poll = evals + 256;
             if self.elapsed() >= self.seconds {
                 self.stopped = true;
+                self.reason = "cpu";
+            } else if self.wall.is_some_and(|w| Instant::now() >= w) {
+                self.stopped = true;
+                self.reason = "deadline";
             }
         }
         self.stopped

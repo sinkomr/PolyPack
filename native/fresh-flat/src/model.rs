@@ -22,6 +22,8 @@
 use crate::geom::Shape;
 use crate::lbfgs::{Exit, Lbfgs, Objective};
 use polypack_flat::clock::thread_cpu_seconds;
+use std::sync::atomic::{AtomicBool, Ordering};
+use std::time::Instant;
 use std::f64::consts::PI;
 
 /// A configuration in the search's own frame (container centred at the origin, phi = 0).
@@ -46,7 +48,7 @@ impl Sol {
     }
 }
 
-pub struct Model {
+pub struct Model<'a> {
     pub sh: Shape,
     pub p: usize,
     pub dim: usize,
@@ -69,6 +71,11 @@ pub struct Model {
     pub evals: u64,
     pub deadline: f64,
     pub eval_limit: u64,
+    /// A flag that ends the search when set, and a wall-clock end (the client's `FreshJob`).
+    pub stop: Option<&'a AtomicBool>,
+    pub wall: Option<Instant>,
+    /// Why the budget ran out: "evals", "cpu", "deadline" or "stop".
+    pub halt: &'static str,
     pub exhausted: bool,
     tick: u32,
     /// Statistics: local minimisations, L-BFGS iterations, list rebuilds, exits [converged, max, stopped, stalled].
@@ -91,8 +98,8 @@ pub struct Model {
     pub last_e: f64,
 }
 
-impl Model {
-    pub fn new(sh: Shape, p: usize) -> Model {
+impl<'a> Model<'a> {
+    pub fn new(sh: Shape, p: usize) -> Model<'a> {
         let n = sh.n;
         let dim = if n == 0 { 2 } else { 3 };
         let nbase = (0..n)
@@ -123,6 +130,9 @@ impl Model {
             evals: 0,
             deadline: f64::INFINITY,
             eval_limit: u64::MAX,
+            stop: None,
+            wall: None,
+            halt: "",
             exhausted: false,
             tick: 0,
             stat_calls: 0,
@@ -544,7 +554,7 @@ impl Model {
     }
 }
 
-impl Objective for Model {
+impl Objective for Model<'_> {
     #[inline]
     fn eval(&mut self, x: &[f64], g: &mut [f64]) -> f64 {
         self.evals += 1;
@@ -586,12 +596,26 @@ impl Objective for Model {
         }
         if self.evals >= self.eval_limit {
             self.exhausted = true;
+            self.halt = "evals";
+            return true;
+        }
+        if self.stop.is_some_and(|s| s.load(Ordering::Relaxed)) {
+            self.exhausted = true;
+            self.halt = "stop";
             return true;
         }
         self.tick = self.tick.wrapping_add(1);
-        if self.tick % 16 == 0 && thread_cpu_seconds() >= self.deadline {
-            self.exhausted = true;
-            return true;
+        if self.tick % 16 == 0 {
+            if thread_cpu_seconds() >= self.deadline {
+                self.exhausted = true;
+                self.halt = "cpu";
+                return true;
+            }
+            if self.wall.is_some_and(|w| Instant::now() >= w) {
+                self.exhausted = true;
+                self.halt = "deadline";
+                return true;
+            }
         }
         false
     }

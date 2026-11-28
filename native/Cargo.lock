@@ -705,6 +705,7 @@ version = "0.1.0"
 dependencies = [
  "polypack-balls",
  "polypack-flat",
+ "polypack-spaceauto",
  "polypack-spaces",
  "serde_json",
 ]
@@ -714,6 +715,7 @@ name = "polypack-fresh-flat"
 version = "0.1.0"
 dependencies = [
  "polypack-flat",
+ "polypack-spaceauto",
  "serde_json",
 ]
 
@@ -723,6 +725,7 @@ version = "0.1.0"
 dependencies = [
  "polypack-curved",
  "polypack-flat",
+ "polypack-spaceauto",
  "polypack-spaces",
  "polypack-sphere",
  "serde_json",

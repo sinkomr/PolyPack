@@ -6,6 +6,7 @@
 // Negated comparisons are deliberate: `!(a < b)` is true for NaN, which must count as failure.
 #![allow(clippy::neg_cmp_op_on_partial_ord, clippy::needless_range_loop, clippy::chunks_exact_to_as_chunks)]
 
+pub mod fresh;
 pub mod kfn;
 pub mod lbfgs;
 pub mod model;
