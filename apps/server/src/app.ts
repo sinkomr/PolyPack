@@ -53,6 +53,7 @@ import {
   sanitizeText,
 } from "./limits";
 import { LoadStats } from "./load";
+import { NAME_REFUSED, nameFilter } from "./name-filter";
 import {
   CONVENTIONS_VERSION,
   UNITS_MISSING_MESSAGE,
@@ -1111,6 +1112,7 @@ export function createApp(opts: AppOptions): Hono {
       return reject(409, [`this problem is closed: its optimum ${lit!.display} is proven (${lit!.source_name})`]);
     const name = sanitizeText(config.name ?? "", MAX_NAME_LENGTH);
     if (!name) return reject(400, ["name is required"]);
+    if (nameFilter().refuses(name)) return reject(400, [NAME_REFUSED]);
 
     // The score is always recomputed here: the smallest container at the container_phi sent (0
     // when none was). The server does not search for a better orientation; clients turn their

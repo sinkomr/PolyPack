@@ -344,3 +344,16 @@ Nothing was taken from glibc: V8 can be built to use glibc's sine and cosine
 (`V8_USE_LIBM_TRIG_FUNCTIONS`), but Node's build does not set that flag and its
 `Math.sin` and `Math.cos` are the fdlibm ones. `Math.pow` in
 `native/js/src/math/pow.rs` is this project's own code.
+
+## List of Dirty, Naughty, Obscene, and Otherwise Bad Words
+
+The `words` of `native/server/data/names.json`, which both servers use to refuse
+names (`apps/server/src/name-filter.ts`, `native/server/src/name_filter.rs`), are
+the English list of LDNOOBW, file `en` at commit
+`5faf2ba42d7b1c0977169ec3611df25a3c08eb13`
+(<https://github.com/LDNOOBW/List-of-Dirty-Naughty-Obscene-and-Otherwise-Bad-Words>),
+copied unchanged. The list is © its contributors, originally Shutterstock, and is
+licensed under the Creative Commons Attribution 4.0 International licence
+(<https://creativecommons.org/licenses/by/4.0/>). PolyPack does not use some of its
+entries; `not_words` in the same file names them, and `more_words` and `within` are
+PolyPack's own additions.

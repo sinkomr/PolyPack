@@ -478,7 +478,7 @@ When the published packing has coordinates they are in <code>literature.pieces</
 </table>
 
 <h3 id="submit"><code>POST /api/submit</code></h3>
-<p>Body: the configuration, a display name and how the packing was found. <code>container_phi</code> defaults to 0, and the score is computed at it: <a href="#orientation">orient your board before submitting</a>. The fields after <code>name</code> are optional (see <a href="#submit-fields">the table below</a>).</p>
+<p>Body: the configuration, a display name and how the packing was found. <code>container_phi</code> defaults to 0, and the score is computed at it: <a href="#orientation">orient your board before submitting</a>. The fields after <code>name</code> are optional (see <a href="#submit-fields">the table below</a>). A name that is a slur or an obscenity is refused with status 400; the same goes for <code>POST /api/spaces/submit</code>.</p>
 <pre><code>${esc(SCHEMA)}</code></pre>
 <p>Any other fields, including a container or a score, are ignored. Response:</p>
 <pre><code>${esc(RESPONSE)}</code></pre>
