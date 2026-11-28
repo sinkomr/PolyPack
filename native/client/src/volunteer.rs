@@ -1099,7 +1099,8 @@ fn flat_check(problem: &Problem, v: &Value, claimed: f64) -> Result<f64, String>
 fn flat_fresh(s: &Arc<Shared>, problem: &Problem, cur: &Arc<Current>, known: Option<&(Known, &'static str)>, lanes: usize, seconds: f64, seed: u32, sub: &str) -> Option<crate::engine::SearchOutcome> {
     use crate::fresh_engines::{search as fresh_search, Event, FreshRun};
     let id = fresh_engines::flat_id(problem.n, problem.m, problem.p);
-    if !fresh_engines::claimed(&s.fresh, &id) {
+    // target mode ends a search early by the port's own early-stop check (--target-margin): it keeps the port
+    if s.target_mode() || !fresh_engines::claimed(&s.fresh, &id) {
         return None;
     }
     let start = known.map(|k| flat_config_json(&k.0.config, problem));

@@ -635,6 +635,9 @@ pub fn parse_options(argv: &[String], machine: &Machine) -> Result<Parsed, Optio
         Some("port") => EngineChoice::Port,
         Some(other) => return Err(OptionError(format!("--engine must be fresh, port or auto, not \"{other}\""))),
     };
+    if target_holder.is_some() && engine == EngineChoice::Fresh {
+        return Err(OptionError("--engine fresh does not apply to --target-holder: target mode searches with the ports (its early stop is theirs); use --engine port or auto".into()));
+    }
     let sweep = parse_sweep(&pairs, &get, &flag, open_only, target_holder.is_some(), dimensions.is_some())?;
     let mut state_dir = match get("state") {
         Some(s) => PathBuf::from(s),
@@ -940,6 +943,8 @@ mod tests {
         assert_eq!(run(&["--engine", "fresh"]).unwrap().engine, EngineChoice::Fresh);
         assert_eq!(run(&["--engine=port"]).unwrap().engine, EngineChoice::Port);
         assert!(run(&["--engine", "fast"]).unwrap_err().contains("fresh, port or auto"));
+        assert!(run(&["--engine", "fresh", "--target-holder", "jg"]).is_err());
+        assert!(run(&["--engine", "auto", "--target-holder", "jg"]).is_ok());
         assert_eq!(run(&[]).unwrap().sweep, None);
         // the 2D sweep
         let o = run(&["--sweep-2d-on-3d"]).unwrap().sweep.unwrap();
