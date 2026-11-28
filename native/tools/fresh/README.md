@@ -40,6 +40,13 @@ best-so-far improvements with CPU time). `run.py` turns the port's flat `bench` 
 - `analyze.py` prints the markdown report: validity counts, runs reaching R(1+eps) for eps 1e-2, 1e-3, 1e-4, medians,
   geometric-mean speed ratios, mean relative gap to R at 5, 15 and 60 s (`--eps`, `--times` change them).
 
+## Torus
+
+`draw-torus.mts` writes `problems-torus.json` (seed 20261128): 14 torus problems over the three families, disks,
+small, medium and many-sided polygons, P mostly at most 50, only open problems (free tori of disks, squares and
+hexagons left out: a lattice settles them). `run.py --problems native/tools/fresh/problems-torus.json` runs them
+(fresh: `fresh-torus`); `report-torus.md` is a preliminary report, `native/fresh-torus/README.md` the details.
+
 ## One problem, quickly (solver authors)
 
     python3 native/tools/fresh/run.py --only sphere/0/30 --solvers port,js --seeds 1 --seconds 20 --out /tmp/one.jsonl
