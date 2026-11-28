@@ -174,10 +174,16 @@ pub fn check_default(id: &str, cfg: &Value) -> Option<f64> {
     }
 }
 
-/// A lower bound on the score: the area bound at the densest packing density known to be an upper bound for the
-/// piece in the plane (Thue for disks; 1 for the polygons, reached by the tiles N = 3, 4, 6).
+/// A lower bound on the score: the area bound at a density that bounds every packing of the piece in the plane.
 pub fn lower_bound(fam: Family, sh: &Shape, p: usize) -> f64 {
-    let dens = if sh.n == 0 { PI / 12f64.sqrt() } else { 1.0 };
+    // the densities of docs/spaces/TORUS.md section 5: Thue for disks, (5 - sqrt 5)/3 for pentagons and
+    // (4 + 4 sqrt 2)/(5 + 4 sqrt 2) for octagons (packings of congruent copies in the plane); 1 otherwise
+    let dens = match sh.n {
+        0 => PI / 12f64.sqrt(),
+        5 => (5.0 - 5f64.sqrt()) / 3.0,
+        8 => (4.0 + 4.0 * 2f64.sqrt()) / (5.0 + 4.0 * 2f64.sqrt()),
+        _ => 1.0,
+    };
     let area = p as f64 * sh.area / dens;
     match fam {
         Family::Hex => (area / (3f64.sqrt() / 2.0)).sqrt(),
@@ -725,22 +731,25 @@ impl<'a, 'c> Search<'a, 'c> {
                 *cur = random_sol(self.fam, &self.sh, self.p, st, shape.as_ref(), &mut self.rng);
             }
             3 if p > 1 => {
-                // odd N: a double lattice; otherwise a lattice of P + 1 pieces with one left out
-                let pp = p + 1;
+                // a lattice of P + k pieces with k left out (k = 0..3); for odd N a double lattice
+                let k = self.rng.below(4);
                 let mut got = None;
                 if self.sh.n % 2 == 1 {
-                    let pd = p + p % 2;
+                    let pd = p + k + (p + k) % 2;
                     if let Some(d) = double_lattice(&self.sh, self.fam, pd, &mut self.rng) {
-                        got = Some(if pd > p { without(&d, self.rng.below(pd)) } else { d });
+                        got = Some(self.drop_pieces(d, pd - p));
                     }
                 }
                 if got.is_none() {
+                    let pp = p + k;
                     let a = if self.free() {
                         free_lattice(&self.sh, pp, Some(&mut self.rng)).sol
                     } else {
-                        superlattice(&self.sh, self.fam, pp, 3, Some(&mut self.rng)).swap_remove(0).sol
+                        let mut ls = superlattice(&self.sh, self.fam, pp, 3, Some(&mut self.rng));
+                        let pick = self.rng.below(ls.len());
+                        ls.swap_remove(pick).sol
                     };
-                    got = Some(without(&a, self.rng.below(pp)));
+                    got = Some(self.drop_pieces(a, k));
                 }
                 let mut d = got.unwrap();
                 normalize_frame(self.fam, &mut d);
@@ -775,29 +784,28 @@ impl<'a, 'c> Search<'a, 'c> {
     fn constructive(&mut self) {
         let p = self.p;
         let mut cands: Vec<Sol> = Vec::new();
-        if self.free() {
-            cands.push(free_lattice(&self.sh, p, None).sol);
-            if p > 1 {
-                let a = free_lattice(&self.sh, p + 1, None);
-                cands.push(without(&a.sol, p));
-            }
-        } else {
-            self.lattices = superlattice(&self.sh, self.fam, p, 6, None);
-            for a in self.lattices.iter().take(3) {
-                cands.push(a.sol.clone());
-            }
-            if p > 1 {
-                for a in superlattice(&self.sh, self.fam, p + 1, 2, None) {
-                    cands.push(without(&a.sol, p));
+        // arrangements of P + k pieces with k left out (vacancies): a perfect arrangement of a nearby count often
+        // beats every arrangement of P itself (triangles: the 5 x 5 tiling of the hexagonal torus minus two for P = 48)
+        let kmax = if p < 2 { 0 } else { 3 };
+        for k in 0..=kmax {
+            let pp = p + k;
+            if self.free() {
+                let a = free_lattice(&self.sh, pp, None);
+                cands.push(self.drop_pieces(a.sol, k));
+            } else {
+                let ls = superlattice(&self.sh, self.fam, pp, if k == 0 { 6 } else { 2 }, None);
+                for a in ls.iter().take(if k == 0 { 3 } else { 2 }) {
+                    cands.push(self.drop_pieces(a.sol.clone(), k));
+                }
+                if k == 0 {
+                    self.lattices = ls;
                 }
             }
-        }
-        if self.sh.n % 2 == 1 && p > 1 {
-            let pp = p + p % 2;
-            for _ in 0..3 {
-                if let Some(d) = double_lattice(&self.sh, self.fam, pp, &mut self.rng) {
-                    let k = self.rng.below(pp);
-                    cands.push(if pp > p { without(&d, k) } else { d });
+            if self.sh.n % 2 == 1 && pp % 2 == 0 {
+                for _ in 0..if k <= 1 { 3 } else { 2 } {
+                    if let Some(d) = double_lattice(&self.sh, self.fam, pp, &mut self.rng) {
+                        cands.push(self.drop_pieces(d, k));
+                    }
                 }
             }
         }
@@ -822,6 +830,15 @@ impl<'a, 'c> Search<'a, 'c> {
                 }
             }
         }
+    }
+
+    /// Leaves k random pieces out.
+    fn drop_pieces(&mut self, mut sol: Sol, k: usize) -> Sol {
+        for _ in 0..k {
+            let i = self.rng.below(sol.p());
+            sol = without(&sol, i);
+        }
+        sol
     }
 
     /// The whole run.

@@ -275,18 +275,111 @@ fn forms_by_roundness(b0: &[f64; 4], q: usize) -> Vec<(f64, usize, usize, usize)
     out
 }
 
+/// The contact factor of the double-lattice motif on Gamma (unit scale): a piece at 0 with angle th and one at
+/// Gamma df with angle th + pi, repeated over Gamma (a torus of two pieces on Gamma has the same image pairs).
+fn motif_scale(sh: &Shape, g: &[f64; 4], th: f64, df: [f64; 2]) -> f64 {
+    let mut m = Sol::new(2);
+    m.s = 1.0;
+    m.b = *g;
+    m.ang[0] = th;
+    m.ang[1] = th + PI;
+    let c = mul(g, df);
+    m.pos[2] = c[0];
+    m.pos[3] = c[1];
+    let a0 = (g[0] * g[3] - g[1] * g[2]).abs();
+    if !crate::geom::scale_to_contact(sh, &mut m) {
+        return f64::INFINITY;
+    }
+    ((m.b[0] * m.b[3] - m.b[1] * m.b[2]).abs() / a0).sqrt()
+}
+
+/// The cell [[e^t, u], [0, e^-t]] g: Gamma deformed at fixed area (the shape variables of a free motif).
+fn deformed(g: &[f64; 4], t: f64, u: f64) -> [f64; 4] {
+    crate::geom::mat_mul(&[t.exp(), 0.0, u, (-t).exp()], g)
+}
+
+/// The densest double lattice on Gamma: a grid over the angle (one period) and the offset (Gamma's cell), then
+/// a pattern search (coordinate moves, then random directions, then halving the steps) from the three best grid
+/// points. With `shape`, Gamma's shape at fixed area is searched too (free tori: the densest double lattice in
+/// the plane). Returns (angle, offset in Gamma's coordinates, Gamma).
+fn best_motif(sh: &Shape, g: &[f64; 4], shape: bool, rng: &mut Rng) -> (f64, [f64; 2], [f64; 4]) {
+    let per = if sh.n > 0 { sh.step } else { 1.0 };
+    let nt = if sh.n == 0 { 1 } else if sh.n <= 12 { 12 } else { 6 };
+    let nd = 6;
+    let t0 = rng.uniform() * per / nt as f64;
+    let d0 = [rng.uniform() / nd as f64, rng.uniform() / nd as f64];
+    // parameters: angle, offset (2), shape (2)
+    let f = |v: &[f64; 5]| motif_scale(sh, &deformed(g, v[3], v[4]), v[0], [v[1], v[2]]);
+    let mut grid: Vec<(f64, [f64; 5])> = Vec::new();
+    for it in 0..nt {
+        let th = t0 + per * it as f64 / nt as f64;
+        for a in 0..nd {
+            for b in 0..nd {
+                let v = [th, d0[0] + a as f64 / nd as f64, d0[1] + b as f64 / nd as f64, 0.0, 0.0];
+                grid.push((f(&v), v));
+            }
+        }
+    }
+    grid.sort_by(|x, y| x.0.partial_cmp(&y.0).unwrap());
+    let nvar = if shape { 5 } else { 3 };
+    let mut best = grid[0];
+    for start in grid.iter().take(3) {
+        let mut cur = *start;
+        let mut steps = [if sh.n > 0 { per / nt as f64 } else { 0.0 }, 1.0 / nd as f64, 1.0 / nd as f64, 0.1, 0.1];
+        for _ in 0..30 {
+            let mut moved = false;
+            for c in 0..nvar {
+                if steps[c] == 0.0 {
+                    continue;
+                }
+                for sgn in [1.0, -1.0] {
+                    let mut v = cur.1;
+                    v[c] += sgn * steps[c];
+                    let fv = f(&v);
+                    if fv < cur.0 {
+                        cur = (fv, v);
+                        moved = true;
+                    }
+                }
+            }
+            if !moved {
+                // a ridge of the max: try random directions before shrinking
+                for _ in 0..8 {
+                    let mut v = cur.1;
+                    for c in 0..nvar {
+                        v[c] += steps[c] * rng.signed();
+                    }
+                    let fv = f(&v);
+                    if fv < cur.0 {
+                        cur = (fv, v);
+                        moved = true;
+                    }
+                }
+            }
+            if !moved {
+                for v in steps.iter_mut() {
+                    *v *= 0.5;
+                }
+            }
+        }
+        if cur.0 < best.0 {
+            best = cur;
+        }
+    }
+    let v = best.1;
+    (v[0], [v[1], v[2]], deformed(g, v[3], v[4]))
+}
+
 /// A double lattice: pairs of pieces, one at angle theta on the points of a lattice Gamma with q = P/2 points
-/// per cell and one at theta + pi on Gamma + delta (delta near the middle of Gamma's cell), as odd-N polygons
-/// pack densely (triangles tile this way). sq and hex: Gamma one of the roundest superlattices of index q of the
-/// cell; free: Gamma square or hexagonal, the torus its roundest sublattice of index q. Scaled to first
-/// contact (`scale_to_contact`); the angle is random, so the caller relaxes and polishes it. P must be even.
+/// per cell and one at theta + pi on Gamma + delta, as odd-N polygons pack densely (triangles tile this way).
+/// sq and hex: Gamma one of the roundest superlattices of index q of the cell; free: Gamma square or hexagonal,
+/// the torus its roundest sublattice of index q. The angle and offset are the densest for Gamma
+/// (`best_motif`); scaled to first contact (`scale_to_contact`). P must be even.
 pub fn double_lattice(sh: &Shape, fam: Family, p: usize, rng: &mut Rng) -> Option<Sol> {
     if p < 2 || p % 2 != 0 {
         return None;
     }
     let q = p / 2;
-    let theta = if sh.n > 0 { rng.uniform() * sh.step } else { 0.0 };
-    let jit = [0.5 + 0.2 * rng.signed(), 0.5 + 0.2 * rng.signed()];
     let mut sol = Sol::new(p);
     let mut k = 0;
     if fam != Family::Free {
@@ -297,6 +390,7 @@ pub fn double_lattice(sh: &Shape, fam: Family, p: usize, rng: &mut Rng) -> Optio
         sol.b = b0;
         let g1 = mul(&b0, [1.0 / a as f64, 0.0]);
         let g2 = mul(&b0, [-(b as f64) / q as f64, 1.0 / d as f64]);
+        let (theta, jit, _) = best_motif(sh, &[g1[0], g1[1], g2[0], g2[1]], false, rng);
         let delta = [jit[0] * g1[0] + jit[1] * g2[0], jit[0] * g1[1] + jit[1] * g2[1]];
         for m1 in 0..a {
             for m2 in 0..d {
@@ -311,7 +405,8 @@ pub fn double_lattice(sh: &Shape, fam: Family, p: usize, rng: &mut Rng) -> Optio
             }
         }
     } else {
-        let g = unit_cell(if rng.chance(0.5) { Family::Hex } else { Family::Sq });
+        let g0 = unit_cell(if rng.chance(0.5) { Family::Hex } else { Family::Sq });
+        let (theta, jit, g) = best_motif(sh, &g0, true, rng);
         let mut pick = (f64::NEG_INFINITY, 1usize, 0usize, q);
         let mut ties = 0.0;
         for a in divisors(q) {
