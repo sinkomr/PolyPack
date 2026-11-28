@@ -1138,6 +1138,7 @@ fn flat_fresh(s: &Arc<Shared>, problem: &Problem, cur: &Arc<Current>, known: Opt
         "halted" if s.stopped() => crate::engine::Stop::Aborted,
         "halted" => crate::engine::Stop::Paused,
         "bound" => crate::engine::Stop::Bound,
+        "stagnation" => crate::engine::Stop::Stagnation,
         _ => crate::engine::Stop::Time,
     };
     Some(crate::engine::SearchOutcome { best, jobs: out.jobs, stopped, memory: s.memory.lock().unwrap().clone(), evaluations: out.evaluations })

@@ -212,7 +212,9 @@ Usage: polypack-native [options]
                            flat problems with pieces of up to 16 sides (flat/N/M/P), disks at curvature
                            +-1 and on the sphere (curved/K/0/M/P, sphere/0/P) and balls in a ball or a
                            solid (balls/ballin<container>/P). auto: a fresh engine where one handles the
-                           problem, else the port; fresh: only those problems; port: the ports only
+                           problem, else the port; fresh: only those problems; port: the ports only.
+                           A fresh engine's problem ends early once its best has not improved (by 1e-6)
+                           for the longest of 5 s, a tenth of the budget and half the time spent
   --dry-run                search, but never submit
   --note TEXT              free text shown with your entries (at most {MAX_NOTE_LENGTH} characters)
   --state DIR              where the client keeps its state (default {state})

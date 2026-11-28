@@ -119,6 +119,7 @@ fn space_fresh(
         "halted" if s.stopped() => "aborted",
         "halted" => "paused",
         "bound" => "bound",
+        "stagnation" => "stagnation",
         _ => "time",
     };
     Some(SpaceOutcome { best, jobs: out.jobs, evaluations: out.evaluations, stopped, crashed: out.crashed })

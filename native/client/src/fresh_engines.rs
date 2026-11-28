@@ -76,7 +76,7 @@ pub struct FreshRun<'a> {
     pub seed: u32,
     /// The problem's time budget: each lane's CPU seconds.
     pub seconds: f64,
-    /// The client's halt flag (stop, pause); also set here when the problem's lower bound is reached.
+    /// The client's halt flag (stop, pause); read, never set, here.
     pub halt: &'a AtomicBool,
     /// The configuration to start from: the site leader's or the research record's.
     pub start: Option<&'a Value>,
@@ -113,10 +113,28 @@ pub struct FreshOutcome {
     /// Lanes run.
     pub jobs: usize,
     pub evaluations: u64,
-    /// "time", "bound", or "halted" (the halt flag was set by the client: a stop or a pause).
+    /// "time", "bound", "stagnation" (no gain for a while: `stalled`), or "halted" (the halt flag was set by
+    /// the client: a stop or a pause).
     pub stopped: &'static str,
     /// Lanes lost to a panic.
     pub crashed: usize,
+}
+
+/// A problem ends early when no lane has improved its best by more than `STALL_MIN_GAIN` (relative) for
+/// the longest of `STALL_FLOOR_SECONDS`, `STALL_BUDGET_SHARE` of the budget and `STALL_ELAPSED_SHARE` of the
+/// time spent (wall clock). The fresh engines converge in a fraction of a second on most small problems, so
+/// without it every problem would take its whole budget; a problem without any packing yet never stalls.
+pub const STALL_FLOOR_SECONDS: f64 = 5.0;
+pub const STALL_BUDGET_SHARE: f64 = 0.1;
+pub const STALL_ELAPSED_SHARE: f64 = 0.5;
+pub const STALL_MIN_GAIN: f64 = 1e-6;
+
+/// True when a search `elapsed` seconds in, whose best last improved at `last_gain`, has stalled.
+pub fn stalled(elapsed: f64, last_gain: Option<f64>, budget: f64) -> bool {
+    match last_gain {
+        None => false,
+        Some(t) => elapsed - t >= STALL_FLOOR_SECONDS.max(STALL_BUDGET_SHARE * budget).max(STALL_ELAPSED_SHARE * elapsed),
+    }
 }
 
 /// The wall-clock end of a job of `seconds` of CPU time: 1.5 times it plus 5 s.
@@ -138,6 +156,8 @@ fn run_lane(engines: &[Engine], job: &FreshJob, on_improve: &mut dyn FnMut(f64, 
 struct Live {
     best: Option<Found>,
     reached_bound: bool,
+    /// Wall seconds since the start at which the best last improved by more than STALL_MIN_GAIN.
+    last_gain: Option<f64>,
 }
 
 fn improves(score: f64, best: &Option<Found>) -> bool {
@@ -148,20 +168,44 @@ fn improves(score: f64, best: &Option<Found>) -> bool {
 /// engine takes it (every lane's engines answered `Err`): the caller falls back to the port.
 pub fn search(engines: &[Engine], run: &FreshRun, on_event: &(dyn Fn(Event) + Sync)) -> Option<FreshOutcome> {
     let lanes = run.lanes.max(1);
-    let live = Mutex::new(Live { best: None, reached_bound: false });
+    let live = Mutex::new(Live { best: None, reached_bound: false, last_gain: None });
     let default_method = engines.iter().find(|e| (e.claims)(run.id)).map_or("fresh", |e| e.method);
-    let deadline = Instant::now() + wall_budget(run.seconds);
+    let started = Instant::now();
+    let deadline = started + wall_budget(run.seconds);
+    // the lanes' own stop: set by the watcher below on the client's halt, at the bound, or when the search stalls
+    let lane_stop = AtomicBool::new(run.halt.load(Ordering::Relaxed));
+    let lanes_done = std::sync::atomic::AtomicUsize::new(0);
+    let stalled_out = AtomicBool::new(false);
     // seed, result of each lane
     let results: Vec<(u32, Result<Result<FreshResult, String>, ()>)> = std::thread::scope(|scope| {
+        {
+            let (live, lane_stop, lanes_done, stalled_out) = (&live, &lane_stop, &lanes_done, &stalled_out);
+            scope.spawn(move || {
+                while lanes_done.load(Ordering::Relaxed) < lanes {
+                    if run.halt.load(Ordering::Relaxed) {
+                        lane_stop.store(true, Ordering::Relaxed);
+                    } else if !lane_stop.load(Ordering::Relaxed) {
+                        let l = live.lock().unwrap();
+                        if l.reached_bound {
+                            lane_stop.store(true, Ordering::Relaxed);
+                        } else if stalled(started.elapsed().as_secs_f64(), l.last_gain, run.seconds) {
+                            stalled_out.store(true, Ordering::Relaxed);
+                            lane_stop.store(true, Ordering::Relaxed);
+                        }
+                    }
+                    std::thread::sleep(Duration::from_millis(50));
+                }
+            });
+        }
         let handles: Vec<_> = (0..lanes)
             .map(|lane| {
                 let seed = mix_seed(run.seed, lane as u32);
-                let (live, on_event) = (&live, on_event);
+                let (live, on_event, lane_stop, lanes_done) = (&live, on_event, &lane_stop, &lanes_done);
                 scope.spawn(move || {
                     if run.low_priority {
                         crate::platform::lower_thread_priority();
                     }
-                    let job = FreshJob { id: run.id, seed: seed as u64, cpu_seconds: run.seconds, deadline, stop: run.halt, start: run.start, max_evals: None };
+                    let job = FreshJob { id: run.id, seed: seed as u64, cpu_seconds: run.seconds, deadline, stop: lane_stop, start: run.start, max_evals: None };
                     let mut on_improve = |claimed: f64, config: &Value| {
                         if !claimed.is_finite() || !improves(claimed, &live.lock().unwrap().best) {
                             return;
@@ -173,7 +217,10 @@ pub fn search(engines: &[Engine], run: &FreshRun, on_event: &(dyn Fn(Event) + Sy
                                     let found = Found { config: config.clone(), score, seed, method: default_method.to_string() };
                                     if run.bound.map_or(false, |b| b > 0.0 && score <= b * (1.0 + 1e-9)) {
                                         l.reached_bound = true;
-                                        run.halt.store(true, Ordering::Relaxed);
+                                        lane_stop.store(true, Ordering::Relaxed);
+                                    }
+                                    if l.best.as_ref().map_or(true, |b| score < b.score * (1.0 - STALL_MIN_GAIN)) {
+                                        l.last_gain = Some(started.elapsed().as_secs_f64());
                                     }
                                     l.best = Some(found.clone());
                                     drop(l);
@@ -191,6 +238,7 @@ pub fn search(engines: &[Engine], run: &FreshRun, on_event: &(dyn Fn(Event) + Sy
                         }
                     }
                     on_event(Event::LaneDone);
+                    lanes_done.fetch_add(1, Ordering::Relaxed);
                     (seed, r)
                 })
             })
@@ -212,7 +260,7 @@ pub fn search(engines: &[Engine], run: &FreshRun, on_event: &(dyn Fn(Event) + Sy
             Ok(Ok(res)) => {
                 handled += 1;
                 evaluations += res.evaluations;
-                halted |= res.stopped == "stop";
+                halted |= res.stopped == "stop" && run.halt.load(Ordering::Relaxed);
                 // the method text of the result of the lane whose packing is the best
                 if let Some(b) = l.best.as_mut() {
                     if b.seed == seed && !res.method.is_empty() {
@@ -230,6 +278,8 @@ pub fn search(engines: &[Engine], run: &FreshRun, on_event: &(dyn Fn(Event) + Sy
         "bound"
     } else if halted || run.halt.load(Ordering::Relaxed) {
         "halted"
+    } else if stalled_out.load(Ordering::Relaxed) {
+        "stagnation"
     } else {
         "time"
     };
@@ -336,12 +386,50 @@ pub mod tests {
         let best = out.best.unwrap();
         assert!(best.score > 3.0 && best.score < 3.01, "{}", best.score);
         assert!(rejected.load(Ordering::Relaxed) >= 3);
-        // a bound the best reaches sets the halt flag
+        // a bound the best reaches ends the problem, without touching the client's halt flag
         let mut r = run_of("fake/2", &halt, None);
         r.bound = Some(2.5);
         let out = search(&registry(), &r, &|_| {}).unwrap();
         assert_eq!(out.stopped, "bound");
-        assert!(halt.load(Ordering::Relaxed));
+        assert!(!halt.load(Ordering::Relaxed));
+    }
+
+    #[test]
+    fn a_search_stalls_only_after_the_longest_of_its_waits() {
+        // no packing yet: never
+        assert!(!stalled(1e6, None, 60.0));
+        // budget 60 s: the wait is max(5, 6, elapsed / 2)
+        assert!(!stalled(10.0, Some(4.5), 60.0));
+        assert!(stalled(10.0, Some(4.0), 60.0));
+        assert!(!stalled(100.0, Some(51.0), 60.0));
+        assert!(stalled(100.0, Some(50.0), 60.0));
+        // budget 600 s: at least 60 s without a gain
+        assert!(!stalled(70.0, Some(20.0), 600.0));
+        assert!(stalled(90.0, Some(20.0), 600.0));
+    }
+
+    /// Improves once at once, then runs until it is stopped.
+    fn idle_after_one(job: &FreshJob, on_improve: &mut dyn FnMut(f64, &Value)) -> Result<FreshResult, String> {
+        on_improve(3.0, &json!({ "s": 3.0 }));
+        while !job.stopped_or_late() {
+            std::thread::sleep(Duration::from_millis(5));
+        }
+        Ok(FreshResult { config: Some(json!({ "s": 3.0 })), score: Some(3.0), evaluations: 1, stopped: "stop".into(), method: "idle".into() })
+    }
+
+    #[test]
+    fn a_stalled_search_ends_long_before_its_budget_and_is_not_a_halt() {
+        let engines = vec![Engine { name: "idle", method: "idle", claims: |id| id.starts_with("idle/"), search: idle_after_one }];
+        let halt = AtomicBool::new(false);
+        let check = |_: &Value, s: f64| -> Result<f64, String> { Ok(s) };
+        let run = FreshRun { id: "idle/1", lanes: 2, seed: 1, seconds: 30.0, halt: &halt, start: None, bound: None, low_priority: false, check: &check };
+        let t = Instant::now();
+        let out = search(&engines, &run, &|_| {}).unwrap();
+        let took = t.elapsed().as_secs_f64();
+        assert_eq!(out.stopped, "stagnation");
+        assert!(took >= STALL_FLOOR_SECONDS && took < STALL_FLOOR_SECONDS + 2.0, "{took}");
+        assert!(!halt.load(Ordering::Relaxed));
+        assert_eq!(out.best.unwrap().score, 3.0);
     }
 
     #[test]
