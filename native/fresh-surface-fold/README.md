@@ -174,6 +174,12 @@ tetrahedron, 100 disks on the tetrahedron and the disdyakis triacontahedron, P =
 tetrahedron, ...) all returned a valid packing, the first one within 1 to 5 ms, and ended within about 0.1 s of
 the budget (wall time, including the final check).
 
+P = 70 to 100, one run each (10 CPU seconds, seed 1, fresh vs port `bench-space`, both valid): tetrahedron/0/100
+7.0887 vs 7.2107; cube/4/80 3.7574 vs 4.2474; snub_dodecahedron/3/100 1.0406 vs 1.3125; prism5/12/70 10.460 vs
+12.459; pentakis_dodecahedron/6/90 1.9236 vs 2.5085; elongated_square_gyrobicupola/100/85 61.896 vs 630.03 (in
+an earlier attempt the port returned no packing there). Fresh's first packing came within 2 ms, the port's after
+2.5 to 5 s.
+
 ## Caveats and what next
 
 - Load and noise: see above. The port's space jobs have wall-clock deadlines (as in the client), so load costs
