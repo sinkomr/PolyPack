@@ -7,13 +7,17 @@
 //!    (exact per pair, `geom::repair_scale`); its score is an upper bound for the arrangement.
 //!  - polish(x): the jamming score s* of the arrangement, approached by relaxing at trial scores: below s* the
 //!    relaxed energy is about k (s* - s)^2, so sqrt(E) is close to linear in s, and two infeasible trials give a
-//!    secant estimate of s*; each trial is just below the estimate, so the trials close in on s* from below and
-//!    every trial's repair is a valid upper bound. It stops when the bounds meet (about 1e-13 relative) or as
-//!    soon as the arrangement cannot beat the best.
+//!    secant estimate of s*; each trial is just below the estimate (shortened after a trial that lands on the
+//!    feasible side), so the trials close in on s* from below and every trial's repair is a valid upper bound.
+//!    Candidates are polished to 1e-9 relative, the best once more to 2e-13 (at each restart and in a reserve at
+//!    the end of the budget); a polish stops early as soon as the arrangement cannot beat the best.
+//!  - constructive phase: lattice arrangements (superlattices of the cell, sublattices of a lattice packing for
+//!    free tori, double lattices for odd N, and arrangements of P + k pieces with k left out), each valid at once;
+//!    the best few are polished.
 //!  - hopping: with s_t = best (1 - eps), the current arrangement is perturbed, relaxed at s_t and accepted when
 //!    its energy is lower; an accepted arrangement whose repair is near the best is polished, and a polished one
-//!    below the best is checked and becomes the best. Long runs of rejections restart the chain (from the best
-//!    shaken, from random places, from a lattice arrangement).
+//!    below the best is checked and becomes the best. Long runs of rejections restart the chain at the same s_t
+//!    (from the best shaken, from random places, from a lattice arrangement, from a vacancy or double lattice).
 //!
 //! Every packing that enters the trace passed the server's check (`polypack_spaces::validate_space_submission`)
 //! at the strict tolerance 1e-11, and the solver's own exact separation test before it.
@@ -34,8 +38,8 @@ pub struct Params {
     /// Consecutive rejections before a restart, as a + b P.
     pub fail_a: f64,
     pub fail_b: f64,
-    /// Relative precision of the polish of candidates, and of the deep polish of the best (once per chain and at
-    /// the end).
+    /// Relative precision of the polish of candidates, and of the deep polish of the best (at restarts and at the
+    /// end).
     pub polish_tol: f64,
     pub deep_tol: f64,
     /// An accepted hop is polished when its repaired score is below best (1 + promise).
@@ -857,7 +861,7 @@ impl<'a, 'c> Search<'a, 'c> {
                 }
             }
             if self.sh.n % 2 == 1 && pp % 2 == 0 {
-                for _ in 0..if k <= 1 { 3 } else { 2 } {
+                for _ in 0..if k <= 1 { 4 } else { 2 } {
                     if let Some(d) = double_lattice(&self.sh, self.fam, pp, &mut self.rng) {
                         cands.push(self.drop_pieces(d, k));
                     }

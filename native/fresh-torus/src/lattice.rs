@@ -406,7 +406,9 @@ pub fn double_lattice(sh: &Shape, fam: Family, p: usize, rng: &mut Rng) -> Optio
         }
     } else {
         let g0 = unit_cell(if rng.chance(0.5) { Family::Hex } else { Family::Sq });
-        let (theta, jit, g) = best_motif(sh, &g0, true, rng);
+        // the cell's shape too, half of the time (the densest double lattice is not always the best start for odd P)
+        let shape = rng.chance(0.5);
+        let (theta, jit, g) = best_motif(sh, &g0, shape, rng);
         let mut pick = (f64::NEG_INFINITY, 1usize, 0usize, q);
         let mut ties = 0.0;
         for a in divisors(q) {
