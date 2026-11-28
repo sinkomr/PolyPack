@@ -76,6 +76,10 @@ pub struct Energy {
     per: Vec<f64>,
     graph: Option<Graph>,
     walk: Walk,
+    /// Local evaluations: when `local` is set, only the terms with an active piece count, and the inactive
+    /// pieces' gradients are zero (they stay where they are).
+    pub local: bool,
+    pub active: Vec<bool>,
     // scratch for rebuild
     new_pairs: Vec<[u32; 2]>,
     new_planes: Vec<f64>,
@@ -282,6 +286,8 @@ impl Energy {
             per: vec![0.0; p],
             graph: build_graph(piece),
             walk: Walk { mark: vec![0; piece.nv], stamp: 0, stack: Vec::new() },
+            local: false,
+            active: vec![true; p],
             new_pairs: Vec::new(),
             new_planes: Vec::new(),
         }
@@ -384,10 +390,18 @@ impl Energy {
         let mut walk = std::mem::take(&mut self.walk);
         let graph = self.graph.as_ref();
         // pairs
+        let local = self.local;
         for (k, pr) in self.pairs.iter().enumerate() {
             let i = pr[0] as usize;
             let j = pr[1] as usize;
             let o = base + 4 * k;
+            if local && !self.active[i] && !self.active[j] {
+                g[o] = 0.0;
+                g[o + 1] = 0.0;
+                g[o + 2] = 0.0;
+                g[o + 3] = 0.0;
+                continue;
+            }
             let w = [x[o], x[o + 1], x[o + 2]];
             let e = x[o + 3];
             let wn = (w[0] * w[0] + w[1] * w[1] + w[2] * w[2]).sqrt();
@@ -466,6 +480,9 @@ impl Energy {
         if self.ball {
             let rb = s * self.beta;
             for i in 0..p {
+                if local && !self.active[i] {
+                    continue;
+                }
                 let c = [x[7 * i], x[7 * i + 1], x[7 * i + 2]];
                 let cn = dot(c, c).sqrt();
                 if cn + 1.0 <= rb {
@@ -503,6 +520,9 @@ impl Energy {
             }
         } else {
             for i in 0..p {
+                if local && !self.active[i] {
+                    continue;
+                }
                 let c = [x[7 * i], x[7 * i + 1], x[7 * i + 2]];
                 for gf in 0..self.nfc {
                     let n = [self.nx[gf], self.ny[gf], self.nz[gf]];
@@ -537,6 +557,12 @@ impl Energy {
         self.walk = walk;
         // the quaternions' gradients from the torques
         for i in 0..p {
+            if local && !self.active[i] {
+                for k in 0..7 {
+                    g[7 * i + k] = 0.0;
+                }
+                continue;
+            }
             let t = self.tq[i];
             let q = &x[7 * i + 3..7 * i + 7];
             let (w, qv) = (q[0], [q[1], q[2], q[3]]);

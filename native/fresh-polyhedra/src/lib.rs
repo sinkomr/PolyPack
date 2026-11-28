@@ -97,7 +97,7 @@ fn run(
     }
     let st = &search.stats;
     let stats = format!(
-        "evals {} (polish {} in {} trials, {} capped) hops {} (same {}, iters {}) accepted {} polishes {} restarts {} improvements {} segments {} rebuilds {} moves {:?} wins {:?} capped steps {} refines {} ({} better) cpu {:.2}",
+        "evals {} (polish {} in {} trials, {} capped) hops {} (same {}, iters {}) accepted {} polishes {} restarts {} improvements {} segments {} rebuilds {} moves {:?} wins {:?} capped steps {} refines {} ({} better) local hops {} cpu {:.2}",
         search.en.evals,
         st.polish_evals,
         st.polish_trials,
@@ -116,6 +116,7 @@ fn run(
         search.opt.capped_steps,
         st.refines,
         st.refined,
+        st.local_hops,
         thread_cpu_seconds() - t0
     );
     let mut stopped = search.budget.reason.to_string();

@@ -82,6 +82,12 @@ pub struct Params {
     pub eps_spread: f64,
     /// A polish offers a trial packing on the way when it beats the best by this much (relative).
     pub interim: f64,
+    /// Local hops (P >= local_min_p): after a move of a few pieces only those within local_r (internal units,
+    /// circumradius 1) of them relax first.
+    pub local_r: f64,
+    pub local_min_p: f64,
+    /// A polish within 1e-9 of its bounds stops after a trial of more evaluations than this.
+    pub polish_dear: u64,
     /// Preconditioner factors: centres, quaternions, plane directions, plane offsets.
     pub hc: f64,
     pub hq: f64,
@@ -116,6 +122,9 @@ impl Default for Params {
             refine_eps: 0.0,
             eps_spread: 4.0,
             interim: 1e-3,
+            local_r: 4.0,
+            local_min_p: 24.0,
+            polish_dear: 1500,
             hc: 1.0,
             hq: 1.0,
             hw: 1.0,
@@ -149,6 +158,9 @@ impl Default for Params {
                     "refine" => p.refine_eps = val,
                     "spread" => p.eps_spread = val,
                     "interim" => p.interim = val,
+                    "local_r" => p.local_r = val,
+                    "local_min_p" => p.local_min_p = val,
+                    "dear" => p.polish_dear = val as u64,
                     "estep" => p.explore_step = val,
                     "power" => p.power = val,
                     "hc" => p.hc = val,
@@ -176,6 +188,7 @@ pub struct Stats {
     pub segments: u64,
     pub polish_trials: u64,
     pub refines: u64,
+    pub local_hops: u64,
     pub refined: u64,
     pub polish_capped: u64,
     pub moves: [u64; NMOVES],
@@ -475,7 +488,9 @@ impl<'a> Search<'a> {
             } else {
                 self.polish_tol
             };
+            let ev_trial = self.en.evals;
             let out = self.relax(x, st, &tol);
+            let trial_evals = self.en.evals - ev_trial;
             let e = out.e;
             self.stats.polish_trials += 1;
             if out.iters >= tol.max_iter {
@@ -525,6 +540,10 @@ impl<'a> Search<'a> {
                 }
             }
             if hi.min(feas) - lo <= tol_rel * hi {
+                break;
+            }
+            // the last digits are dear for many pieces: past 1e-9, stop once a trial takes long
+            if hi.min(feas) - lo <= 1e-9 * hi && trial_evals > self.params.polish_dear {
                 break;
             }
             if lo >= self.best_s {
@@ -1139,10 +1158,19 @@ impl<'a> Search<'a> {
             self.move_tries[kind] += 1.0;
             self.stats.moves[kind] += 1;
             let tol = self.explore;
+            // a move of a few pieces is relaxed locally first: only the pieces near them move
+            let local = self.local_region(&cur, &y);
+            let mut frozen_e = 0.0;
+            if local {
+                self.en.local = true;
+                frozen_e = (cur_e - self.energy_of(&mut cur, st)).max(0.0);
+                self.stats.local_hops += 1;
+            }
             self.opt.anchor_r2 = ANCHOR_R * ANCHOR_R;
             let out = self.relax(&mut y, st, &tol);
             self.opt.anchor_r2 = 0.0;
-            let e = out.e;
+            self.en.local = false;
+            let mut e = out.e + frozen_e;
             if self.stopped() {
                 break;
             }
@@ -1151,6 +1179,10 @@ impl<'a> Search<'a> {
             }
             self.stats.hop_iters += out.iters as u64;
             if !out.same && e < cur_e * (1.0 - self.params.same) {
+                if local {
+                    // settle the whole arrangement
+                    e = self.relax(&mut y, st, &tol).e;
+                }
                 self.stats.accepted += 1;
                 self.stats.wins[kind] += 1;
                 self.move_wins[kind] += 1.0;
@@ -1197,6 +1229,41 @@ impl<'a> Search<'a> {
                 self.set_anchor(&mut cur, st);
             }
         }
+    }
+
+    /// When the last move changed few pieces (the dirty ones) of many, marks the pieces within `local_r` of a
+    /// changed piece (before or after the move) active in the energy and returns true.
+    fn local_region(&mut self, cur: &State, y: &State) -> bool {
+        let p = self.p;
+        if (p as f64) < self.params.local_min_p || !self.any_dirty {
+            return false;
+        }
+        let r2 = self.params.local_r * self.params.local_r;
+        let mut count = 0usize;
+        for i in 0..p {
+            let mut near = self.dirty[i];
+            if !near {
+                for j in 0..p {
+                    if !self.dirty[j] {
+                        continue;
+                    }
+                    for c in [&cur.x[7 * j..7 * j + 3], &y.x[7 * j..7 * j + 3]] {
+                        let dx = y.x[7 * i] - c[0];
+                        let dy = y.x[7 * i + 1] - c[1];
+                        let dz = y.x[7 * i + 2] - c[2];
+                        if dx * dx + dy * dy + dz * dz < r2 {
+                            near = true;
+                        }
+                    }
+                    if near {
+                        break;
+                    }
+                }
+            }
+            self.en.active[i] = near;
+            count += near as usize;
+        }
+        (count as f64) < 0.6 * p as f64
     }
 
     fn mark_all_dirty(&mut self) {
