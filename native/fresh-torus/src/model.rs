@@ -38,6 +38,9 @@ pub struct Pair {
     /// Cached extreme vertices of i (towards j) and j (towards i).
     pub ki: u16,
     pub kj: u16,
+    /// Direction of the pair's line at the build: the line variable tau turns it to
+    /// u = (u0 + t u0') / sqrt(1 + t^2), t = tau / R, u0' = u0 turned by +90 degrees.
+    pub u0: [f64; 2],
 }
 
 /// What one relaxation gave.
@@ -149,6 +152,13 @@ fn walk(base: &[[f64; 2]], r: f64, sn: f64, cs: f64, w: [f64; 2], c0: f64, kc: &
     }
 }
 
+/// The line direction of the chart: u = (u0 + t u0') / sqrt(1 + t^2), and q = 1 / sqrt(1 + t^2).
+#[inline(always)]
+fn line_dir(u0: [f64; 2], t: f64) -> ([f64; 2], f64) {
+    let q = 1.0 / (1.0 + t * t).sqrt();
+    ([(u0[0] - t * u0[1]) * q, (u0[1] + t * u0[0]) * q], q)
+}
+
 /// The vertex index of a piece at angle theta whose direction is nearest the direction w.
 #[inline]
 fn nearest_vertex(sh: &Shape, theta: f64, w: [f64; 2]) -> u16 {
@@ -239,7 +249,7 @@ impl<'a> Model<'a> {
         let pairs = &mut self.pairs;
         near_images(&b, &sol.pos, self.cut, &mut self.cells, |i, j, m, n, _| {
             let e = [m as f64 * b[0] + n as f64 * b[2], m as f64 * b[1] + n as f64 * b[3]];
-            pairs.push(Pair { i: i as u32, j: j as u32, key: pair_key(i, j, m, n), e, ki: 0, kj: 0 });
+            pairs.push(Pair { i: i as u32, j: j as u32, key: pair_key(i, j, m, n), e, ki: 0, kj: 0, u0: [1.0, 0.0] });
         });
         if !self.pairs.windows(2).all(|w| w[0].key < w[1].key) {
             self.pairs.sort_unstable_by_key(|q| q.key);
@@ -319,7 +329,7 @@ impl<'a> Model<'a> {
         self.off_ang = 2 * p;
         self.off_shape = self.off_ang + if self.poly { p } else { 0 };
         self.off_lines = self.off_shape + if self.free { 2 } else { 0 };
-        self.nvar = self.off_lines + if self.poly { 3 * self.pairs.len() } else { 0 };
+        self.nvar = self.off_lines + if self.poly { 2 * self.pairs.len() } else { 0 };
         if self.x.len() < self.nvar {
             self.x.resize(self.nvar, 0.0);
         }
@@ -361,8 +371,10 @@ impl<'a> Model<'a> {
                 }
                 pr.ki = nearest_vertex(&self.sh, ti, [l[0], l[1]]);
                 pr.kj = nearest_vertex(&self.sh, tj, [-l[0], -l[1]]);
-                let o = self.off_lines + 3 * k;
-                x[o..o + 3].copy_from_slice(&l);
+                pr.u0 = [l[0], l[1]];
+                let o = self.off_lines + 2 * k;
+                x[o] = 0.0;
+                x[o + 1] = l[2];
             }
             self.pairs = pairs;
         }
@@ -383,9 +395,11 @@ impl<'a> Model<'a> {
                 sol.ang[i] = x[self.off_ang + i] / r;
             }
             sol.lines.clear();
+            let inv_r = 1.0 / r;
             for (k, pr) in self.pairs.iter().enumerate() {
-                let o = self.off_lines + 3 * k;
-                sol.lines.push((pr.key, [x[o], x[o + 1], x[o + 2]]));
+                let o = self.off_lines + 2 * k;
+                let u = line_dir(pr.u0, x[o] * inv_r).0;
+                sol.lines.push((pr.key, [u[0], u[1], x[o + 1]]));
             }
         }
         if self.free {
@@ -486,6 +500,7 @@ impl Objective for Model<'_> {
         }
         let mut e = 0.0;
         let mut gf = [0.0f64; 4];
+        let inv_r = 1.0 / r;
         let off_ang = self.off_ang;
         let off_lines = self.off_lines;
         let per_on = self.per_on;
@@ -511,10 +526,10 @@ impl Objective for Model<'_> {
                 let h = -2.0 * t / dist;
                 gd = [h * d[0], h * d[1]];
             } else {
-                let o = off_lines + 3 * k;
-                let (la, lb, beta) = (x[o], x[o + 1], x[o + 2]);
-                let inv = 1.0 / (la * la + lb * lb).sqrt();
-                let u = [la * inv, lb * inv];
+                let o = off_lines + 2 * k;
+                let t = x[o] * inv_r;
+                let beta = x[o + 1];
+                let (u, q) = line_dir(pr.u0, t);
                 let hd = 0.5 * (u[0] * d[0] + u[1] * d[1]);
                 let ci = hd + beta;
                 let cj = hd - beta;
@@ -553,10 +568,10 @@ impl Objective for Model<'_> {
                 }
                 gux -= 0.5 * d[0] * hs;
                 guy -= 0.5 * d[1] * hs;
-                let du = gux * u[0] + guy * u[1];
-                g[o] = (gux - du * u[0]) * inv;
-                g[o + 1] = (guy - du * u[1]) * inv;
-                g[o + 2] = hj - hi;
+                // du/dt = q^3 (u0' - t u0)
+                let n0 = [-pr.u0[1], pr.u0[0]];
+                g[o] = q * q * q * (gux * (n0[0] - t * pr.u0[0]) + guy * (n0[1] - t * pr.u0[1])) * inv_r;
+                g[o + 1] = hj - hi;
                 g[off_ang + i] += gti / r;
                 g[off_ang + j] += gtj / r;
                 gd = [-0.5 * u[0] * hs, -0.5 * u[1] * hs];
@@ -658,6 +673,16 @@ pub(crate) mod tests {
                     sol.lines.sort_by_key(|e| e.0);
                     model.build(&sol, false);
                     let nv = model.nvar;
+                    // the line charts away from their centres too
+                    for k in model.off_lines..nv {
+                        if (k - model.off_lines) % 2 == 0 {
+                            model.x[k] = 0.8 * sh.big_r * rng.signed();
+                        }
+                    }
+                    if model.free {
+                        model.x[model.off_shape] += 0.1 * rng.signed();
+                        model.x[model.off_shape + 1] += 0.1 * rng.signed();
+                    }
                     let x0: Vec<f64> = model.x[..nv].to_vec();
                     let mut g = vec![0.0; nv];
                     let f0 = model.eval(&x0, &mut g);

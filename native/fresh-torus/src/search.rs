@@ -39,11 +39,16 @@ pub struct Params {
     /// An accepted hop is polished when its repaired score is below best (1 + promise).
     pub promise: f64,
     pub memory: usize,
+    /// The secant trial stays this fraction of the step below the estimate.
+    pub margin: f64,
+    /// Bracket widths (relative) below which the polish relaxes with the early and the fine tolerance.
+    pub coarse: f64,
+    pub medium: f64,
 }
 
 impl Params {
     pub fn new() -> Params {
-        let mut p = Params { eps: 1e-3, fail_a: 40.0, fail_b: 3.0, polish_tol: 2e-13, promise: 5e-3, memory: 7 };
+        let mut p = Params { eps: 1e-3, fail_a: 40.0, fail_b: 3.0, polish_tol: 2e-13, promise: 5e-3, memory: 7, margin: 2e-3, coarse: 1e-4, medium: 1e-7 };
         // development only: FRESH_PARAMS="eps=1e-3,promise=1e-3"
         if let Ok(v) = std::env::var("FRESH_PARAMS") {
             for kv in v.split(',') {
@@ -56,6 +61,9 @@ impl Params {
                     "polish_tol" => p.polish_tol = val,
                     "promise" => p.promise = val,
                     "memory" => p.memory = val as usize,
+                    "margin" => p.margin = val,
+                    "coarse" => p.coarse = val,
+                    "medium" => p.medium = val,
                     _ => {}
                 }
             }
@@ -118,6 +126,8 @@ pub struct Search<'a, 'c> {
     pub debug: bool,
     lattices: Vec<Arrangement>,
     idx: Vec<usize>,
+    /// The slope of sqrt(E) against the score below the jamming score, from the last polish (0: none yet).
+    slope: f64,
 }
 
 /// The solver frame's invariants: sq and hex have the family's basis at score s; free is upper triangular with
@@ -209,6 +219,7 @@ impl<'a, 'c> Search<'a, 'c> {
             debug: std::env::var("FRESH_DEBUG").is_ok(),
             lattices: Vec::new(),
             idx: Vec::new(),
+            slope: 0.0,
             sh,
         }
     }
@@ -337,31 +348,47 @@ impl<'a, 'c> Search<'a, 'c> {
         }
         let mut eta = 1e-4;
         let mut feas = f64::INFINITY;
+        // after a trial lands on the feasible side, the next secant step is shortened (and lengthened again after
+        // an infeasible one), so that the trials close in on s* from below where sqrt(E) carries information
+        let mut shrink = 1.0f64;
         for _ in 0..40 {
             if self.done() {
                 break;
             }
+            let top = hi.min(feas);
             let mut st = if npts >= 2 {
                 let (s1, g1) = pts[0];
                 let (s2, g2) = pts[1];
                 if g1 > g2 && s2 > s1 {
                     let est = s2 + g2 * (s2 - s1) / (g1 - g2);
-                    est - 0.02 * (est - s2)
+                    s2 + (est - s2) * (1.0 - self.prm.margin) * shrink
+                } else {
+                    lo + 0.5 * (top - lo)
+                }
+            } else if npts == 1 {
+                // one infeasible trial: the slope of sqrt(E) remembered from the last polish, conservatively
+                let (s1, g1) = pts[0];
+                if self.slope > 0.0 {
+                    // far below s* sqrt(E) grows more slowly than near it: at least a quarter of the bracket
+                    (s1 + 0.7 * shrink * g1 / self.slope).max(lo + 0.25 * (top - lo))
                 } else {
                     lo + 0.5 * (hi - lo)
                 }
-            } else if npts == 1 {
-                lo + 0.5 * (hi - lo)
             } else {
                 hi * (1.0 - eta)
             };
-            let top = hi.min(feas);
             if !(st > lo && st < top) {
                 st = if feas < hi { lo + 0.5 * (top - lo) } else { hi - 0.2 * (hi - lo) };
             }
             x.rescale_to(st);
             normalize_frame(self.fam, x);
-            let tol = if hi - lo > 1e-6 * hi { self.polish_early } else { self.polish_fine };
+            let tol = if hi - lo > self.prm.coarse * hi {
+                self.explore
+            } else if hi - lo > self.prm.medium * hi {
+                self.polish_early
+            } else {
+                self.polish_fine
+            };
             let e = self.relax(x, &tol, false).e;
             let r = self.repair(x, &mut rep);
             if self.debug {
@@ -394,8 +421,10 @@ impl<'a, 'c> Search<'a, 'c> {
                     pts[0] = (st, e.sqrt());
                     npts = 1;
                 }
+                shrink = (2.0 * shrink).min(1.0);
             } else {
                 feas = feas.min(st);
+                shrink *= 0.3;
                 if npts == 0 {
                     eta *= 4.0;
                 }
@@ -413,6 +442,9 @@ impl<'a, 'c> Search<'a, 'c> {
                     break;
                 }
             }
+        }
+        if npts == 2 && pts[0].1 > pts[1].1 && pts[1].0 > pts[0].0 {
+            self.slope = (pts[0].1 - pts[1].1) / (pts[1].0 - pts[0].0);
         }
         self.stats.polish_evals += self.model.evals - ev0;
         if hi.is_finite() {

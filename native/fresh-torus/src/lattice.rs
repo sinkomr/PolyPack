@@ -174,7 +174,8 @@ pub fn superlattice(sh: &Shape, fam: Family, p: usize, keep: usize, rng: Option<
         for m1 in 0..a {
             for m2 in 0..d {
                 // B0 H^{-1} (m1, m2) scaled
-                let f = [m1 as f64 / a as f64 - (b * m2) as f64 / p as f64, m2 as f64 / d as f64];
+                let f0 = m1 as f64 / a as f64 - (b * m2) as f64 / p as f64;
+                let f = [f0 - f0.floor(), m2 as f64 / d as f64];
                 let c = mul(&sol.b, f);
                 sol.pos[2 * k] = c[0];
                 sol.pos[2 * k + 1] = c[1];
