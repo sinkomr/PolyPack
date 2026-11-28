@@ -212,7 +212,8 @@ Usage: polypack-native [options]
                            flat problems with pieces of up to 16 sides (flat/N/M/P), disks at curvature
                            +-1 and on the sphere (curved/K/0/M/P, sphere/0/P), balls in a ball or a
                            solid (balls/ballin<container>/P), polyhedra in polyhedra and solids in a ball
-                           (polyhedra/<pair>/P, balls/<solid>inball/P). auto: a fresh engine where one handles the
+                           (polyhedra/<pair>/P, balls/<solid>inball/P), and the torus (torus/F/N/P).
+                           auto: a fresh engine where one handles the
                            problem, else the port; fresh: only those problems; port: the ports only.
                            A fresh engine's problem ends early once its best has not improved (by 1e-6)
                            for the longest of 5 s, a tenth of the budget and half the time spent

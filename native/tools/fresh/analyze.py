@@ -17,7 +17,7 @@ import sys
 from collections import defaultdict
 
 SOLVERS = ["js", "port", "fresh"]
-FAMILIES = ["flat", "curved", "sphere", "balls", "polyhedra"]
+FAMILIES = ["flat", "curved", "sphere", "balls", "polyhedra", "torus"]
 PAIRS = [("fresh", "port"), ("fresh", "js"), ("port", "js")]  # (a, b): ratio = time of b / time of a, > 1 when a is faster
 FLOOR = 1e-3  # seconds: a target reached before the first entry's clock tick counts as 1 ms
 

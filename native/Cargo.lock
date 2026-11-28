@@ -744,6 +744,17 @@ dependencies = [
 ]
 
 [[package]]
+name = "polypack-fresh-torus"
+version = "0.1.0"
+dependencies = [
+ "polypack-flat",
+ "polypack-spaceauto",
+ "polypack-spaces",
+ "polypack-torus",
+ "serde_json",
+]
+
+[[package]]
 name = "polypack-js"
 version = "0.1.0"
 dependencies = [
@@ -773,6 +784,7 @@ dependencies = [
  "polypack-fresh-flat",
  "polypack-fresh-polyhedra",
  "polypack-fresh-round",
+ "polypack-fresh-torus",
  "polypack-ndim",
  "polypack-polyhedra",
  "polypack-spaceauto",
