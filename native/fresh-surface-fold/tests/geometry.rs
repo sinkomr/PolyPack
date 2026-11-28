@@ -6,6 +6,19 @@ use polypack_fresh_surface_fold::model::{wrap_angle, Budget, Model, Pose};
 use polypack_fresh_surface_fold::rng::Rng;
 use polypack_fresh_surface_fold::{check, config_json, Problem};
 
+/// The fast atan2 of the sheet test is within 1e-4 rad of atan2 everywhere.
+#[test]
+fn fast_atan2_is_close() {
+    let mut worst = 0.0f64;
+    for k in 0..100_000 {
+        let a = -std::f64::consts::PI + 2.0 * std::f64::consts::PI * (k as f64 + 0.5) / 100_000.0;
+        let r = 0.1 + (k % 7) as f64;
+        let (y, x) = (r * a.sin(), r * a.cos());
+        worst = worst.max((polypack_fresh_surface_fold::model::fast_atan2(y, x) - y.atan2(x)).abs());
+    }
+    assert!(worst < 1e-4, "worst error {worst}");
+}
+
 const SOLIDS: [&str; 16] = [
     "tetrahedron",
     "cube",

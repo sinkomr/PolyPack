@@ -41,11 +41,13 @@ pub struct Params {
     pub gtol: f64,
     pub climb: bool,
     pub start_polish: bool,
+    /// every k-th round starts from random centres (the others from the best)
+    pub random_every: usize,
 }
 
 impl Params {
     pub fn for_problem(_prob: &Problem) -> Params {
-        Params { delta: 2e-3, delta_min: env_num("FRESH_DMIN", 2e-4), delta_max: env_num("FRESH_DMAX", 0.03), patience0: 30, patience1: 2, hop_iter: 3000, polish_iter: 2500, gtol: 1e-13, climb: env_flag("FRESH_CLIMB", true), start_polish: env_flag("FRESH_STARTPOL", true) }
+        Params { delta: 2e-3, delta_min: env_num("FRESH_DMIN", 2e-4), delta_max: env_num("FRESH_DMAX", 0.03), patience0: env_num("FRESH_PAT0", 15.0) as usize, patience1: env_num("FRESH_PAT1", 0.0) as usize, random_every: env_num("FRESH_REVERY", 2.0) as usize, hop_iter: 3000, polish_iter: 2500, gtol: 1e-13, climb: env_flag("FRESH_CLIMB", true), start_polish: env_flag("FRESH_STARTPOL", true) }
     }
 }
 
@@ -710,7 +712,7 @@ impl<'a, 'b> Search<'a, 'b> {
             round += 1;
             let have = self.best.clone();
             match have {
-                Some(b) if round % 3 != 1 || self.prob.p == 1 => {
+                Some(b) if round % self.params.random_every.max(1) != 1 % self.params.random_every.max(1) || self.prob.p == 1 => {
                     // from the best, shaken hard
                     self.stats.restarts += 1;
                     let mut cfg = b.cfg.clone();

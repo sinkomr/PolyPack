@@ -168,8 +168,8 @@ impl PairImg {
     pub fn real_at(&self, cx: f64, cy: f64, qx: f64, qy: f64, wx: f64, wy: f64) -> bool {
         for k in 0..self.nsheet as usize {
             let sh = &self.sheet[k];
-            let s1 = angle_at(sh.vx, sh.vy, cx, cy, wx, wy);
-            let s2 = angle_at(sh.vx, sh.vy, wx, wy, qx, qy);
+            let s1 = angle_fast(sh.vx, sh.vy, cx, cy, wx, wy);
+            let s2 = angle_fast(sh.vx, sh.vy, wx, wy, qx, qy);
             if (s1 + s2 - sh.sweep).abs() > PI {
                 return false;
             }
@@ -188,8 +188,40 @@ pub struct ConeImg {
     pub cone: f64,
 }
 
-/// Signed angle at v from a to b, in (-pi, pi].
+/// Signed angle at v from a to b, in (-pi, pi], to about 1e-5 rad.
 #[inline]
+pub fn angle_fast(vx: f64, vy: f64, ax: f64, ay: f64, bx: f64, by: f64) -> f64 {
+    let (ux, uy) = (ax - vx, ay - vy);
+    let (wx, wy) = (bx - vx, by - vy);
+    fast_atan2(ux * wy - uy * wx, ux * wx + uy * wy)
+}
+
+/// atan2 to about 1e-5 rad (the sheet test only tells a sweep from one a full turn away).
+#[inline]
+pub fn fast_atan2(y: f64, x: f64) -> f64 {
+    let (ax, ay) = (x.abs(), y.abs());
+    let mx = ax.max(ay);
+    if mx == 0.0 {
+        return 0.0;
+    }
+    let a = ax.min(ay) / mx;
+    let s = a * a;
+    // minimax polynomial for atan on [0, 1]
+    let mut r = ((((-0.0117212 * s + 0.05265332) * s - 0.11643287) * s + 0.19354346) * s - 0.33262347) * s * a + 0.99997726 * a;
+    if ay > ax {
+        r = PI / 2.0 - r;
+    }
+    if x < 0.0 {
+        r = PI - r;
+    }
+    if y < 0.0 {
+        -r
+    } else {
+        r
+    }
+}
+
+/// Signed angle at v from a to b, in (-pi, pi] (exact).
 pub fn angle_at(vx: f64, vy: f64, ax: f64, ay: f64, bx: f64, by: f64) -> f64 {
     let (ux, uy) = (ax - vx, ay - vy);
     let (wx, wy) = (bx - vx, by - vy);
