@@ -272,6 +272,10 @@ impl<'a, 'c> Search<'a, 'c> {
         self.best_s = score;
         self.best = sol;
         self.best_cfg = Some(cfg.clone());
+        if score <= self.bound * (1.0 + 1e-9) {
+            self.model.budget.done = true;
+            self.model.budget.reason = "bound";
+        }
         true
     }
 
